@@ -1,8 +1,8 @@
 import type { CaptureTaskInput, CompleteEffect, LocatorInput, MutationOk, Refusal, UndoInput } from './api.ts';
 import { EMOJI_BY_PRIORITY } from './fields.ts';
-import { assertContext, sanitizeCaptureText } from './sanitize.ts';
+import { isValidContext, sanitizeCaptureText } from './sanitize.ts';
 import { analyse, analyseDoc, captureInsertionPoint, matchTaskLine, type Analysis, type IndexedTask } from './todo-list.ts';
-import { assertIsoDate, isBlank, isListItem, isWellFormed, joinDoc, refuse, type Doc } from './text.ts';
+import { ISO_DATE, isBlank, isListItem, isWellFormed, joinDoc, refuse, type Doc } from './text.ts';
 
 /** Thrown when a post-condition of a splice does not hold: a kernel bug, never written to the vault. */
 export class KernelInvariantError extends Error {
@@ -44,7 +44,7 @@ function completedLine(t: IndexedTask, doneDate: string): string {
 
 /** docs/vault-contract.md §3 + §4.1. `doneDate` is YYYY-MM-DD. */
 export function completeTask(text: string, locator: LocatorInput, doneDate: string): MutationOk<CompleteEffect> | Refusal {
-  assertIsoDate(doneDate, 'doneDate');
+  if (!ISO_DATE.test(doneDate)) return refuse('invalid', 'doneDate must be YYYY-MM-DD.');
   const a = analyse(text);
   if ('ok' in a) return a;
   if (a.writeBlock) return a.writeBlock;
@@ -236,10 +236,8 @@ function verifiedUndo(
   return { ok: true, text: joinDoc(doc, out), effect: { openLineText: c.openLineText } };
 }
 
-/** docs/vault-contract.md §4.3 line format. */
-export function captureLine(input: CaptureTaskInput): string {
-  const text = sanitizeCaptureText(input.text);
-  if (text === '') throw new RangeError('capture text is empty after sanitisation');
+/** docs/vault-contract.md §4.3 line format; `text` already sanitised and non-empty. */
+function captureLine(text: string, input: CaptureTaskInput): string {
   let line = `- [ ] ${text}`;
   if (input.context !== undefined) line += ` ${input.context}`;
   line += ' #todo';
@@ -250,11 +248,15 @@ export function captureLine(input: CaptureTaskInput): string {
 
 /** docs/vault-contract.md §4.3–4.4. */
 export function captureTask(text: string, input: CaptureTaskInput): MutationOk<{ lineText: string }> | Refusal {
-  assertIsoDate(input.createdDate, 'createdDate');
-  if (input.due !== undefined) assertIsoDate(input.due, 'due');
-  if (input.context !== undefined) assertContext(input.context);
+  if (!ISO_DATE.test(input.createdDate)) return refuse('invalid', 'createdDate must be YYYY-MM-DD.');
+  if (input.due !== undefined && !ISO_DATE.test(input.due)) return refuse('invalid', 'due must be YYYY-MM-DD.');
+  if (input.context !== undefined && !isValidContext(input.context)) {
+    return refuse('invalid', 'context must be a [[wikilink]] or http(s) URL.');
+  }
   if (!isWellFormed(input.text)) return refuse('refused:encoding', 'Capture text is not well-formed Unicode.');
-  const lineText = captureLine(input);
+  const clean = sanitizeCaptureText(input.text);
+  if (clean === '') return refuse('invalid', 'Capture text is empty.');
+  const lineText = captureLine(clean, input);
 
   const a = analyse(text);
   if ('ok' in a) return a;

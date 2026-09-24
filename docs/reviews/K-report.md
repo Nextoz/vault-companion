@@ -94,3 +94,20 @@ next to LF is also caught by the mixed check), so a CR-only file test was added.
   `@vault-companion/test-vault` (`workspace:*`). No external packages were added.
 - `packages/vault-markdown/tsconfig.json` references `../test-vault` (tests live in `src/`, as in `domain`).
   `index.ts` also exports `KernelInvariantError` and `sanitizeCaptureText` (additive; `api.ts` is untouched).
+
+## Follow-up (Lead review)
+
+- `api.ts`: `'invalid'` added to `RefusalCode`.
+- `completeTask` returns `invalid` for a malformed `doneDate`. `captureTask` returns `invalid` for a malformed
+  `createdDate`/`due`, a malformed `context` (shape, control or separator chars, lone surrogates) and text that is
+  empty after sanitisation. None of these throw any more.
+- `noteFileName` and `renderNote` return `string` by signature, so they cannot return a Refusal and still throw
+  `TypeError` on bad input. New non-throwing `checkNoteInput(input): Refusal | null` (exported) covers every case
+  `renderNote` rejects: `invalid` for date/`capturedAt`/context/NUL, `refused:encoding` for ill-formed text. The
+  domain should call it first; `renderNote` uses it internally, so the two cannot drift.
+- `KernelInvariantError` is unchanged (still a throw: bug signal).
+- Tests: the throw expectations became `invalid` refusal assertions, and cases were added for empty and
+  whitespace-only text, `due`, and more context shapes. `checkNoteInput` has its own test. Total **176 tests**, lint and
+  typecheck green.
+- Merge note: domain code on `main` that switches exhaustively over `RefusalCode` must handle `'invalid'`
+  (maps 1:1 to the contracts `ErrorCode` `'invalid'`).

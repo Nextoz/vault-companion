@@ -147,9 +147,9 @@ describe('completeTask effect', () => {
     }
   });
 
-  it('rejects a malformed doneDate (assertIsoDate)', () => {
+  it('malformed doneDate ⇒ invalid refusal, not a throw (completeTask ISO_DATE check)', () => {
     const input = loadVariant('lf', 'todo-list.md');
-    expect(() => completeTask(input, locate(input, WATER), '24-09-2026')).toThrow(TypeError);
+    expect(code(completeTask(input, locate(input, WATER), '24-09-2026'))).toBe('invalid');
   });
 });
 
@@ -455,19 +455,25 @@ describe('captureTask sanitisation and guards', () => {
     expect(completeTask(text, locate(text, WATER), D).ok).toBe(true);
   });
 
-  it('empty after sanitisation throws (no "invalid" RefusalCode in api.ts)', () => {
-    expect(() => captureTask(input, { text: ` \u0000${LS} `, createdDate: D })).toThrow(RangeError);
+  it('empty after sanitisation ⇒ invalid refusal, not a throw (captureTask clean === "")', () => {
+    for (const text of ['', '   ', ` \u0000${LS} \r\n\t`]) {
+      expect(code(captureTask(input, { text, createdDate: D }))).toBe('invalid');
+    }
   });
 
   it('lone surrogate in the capture text ⇒ refused:encoding', () => {
     expect(code(captureTask(input, { text: 'Bad \uDE00 text', createdDate: D }))).toBe('refused:encoding');
   });
 
-  it('context with a line break or of the wrong shape throws (assertContext)', () => {
-    expect(() => captureTask(input, { text: 'x', context: '[[a]]\n- [ ] injected #todo', createdDate: D })).toThrow(TypeError);
-    expect(() => captureTask(input, { text: 'x', context: `[[a${LS}b]]`, createdDate: D })).toThrow(TypeError);
-    expect(() => captureTask(input, { text: 'x', context: 'javascript:alert(1)', createdDate: D })).toThrow(TypeError);
-    expect(() => captureTask(input, { text: 'x', createdDate: '2026-9-24' })).toThrow(TypeError);
+  it('context with a line break or of the wrong shape ⇒ invalid (isValidContext)', () => {
+    for (const context of ['[[a]]\n- [ ] injected #todo', `[[a${LS}b]]`, '[[a\u0085b]]', 'javascript:alert(1)', '[[]]', 'https://']) {
+      expect(code(captureTask(input, { text: 'x', context, createdDate: D }))).toBe('invalid');
+    }
+  });
+
+  it('malformed createdDate or due ⇒ invalid (ISO_DATE checks)', () => {
+    expect(code(captureTask(input, { text: 'x', createdDate: '2026-9-24' }))).toBe('invalid');
+    expect(code(captureTask(input, { text: 'x', createdDate: D, due: '1 Oct' }))).toBe('invalid');
   });
 
   it('A8 + undo interplay: capture then complete the captured task then exact-undo restores the capture result', () => {

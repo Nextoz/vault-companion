@@ -1,6 +1,6 @@
 // Note capture: docs/vault-contract.md §4.5, docs/testing.md A9, A30, A31.
 import { describe, expect, it } from 'vitest';
-import { noteFileName, renderNote } from './note.ts';
+import { checkNoteInput, noteFileName, renderNote } from './note.ts';
 
 const D = '2026-09-24';
 const LS = String.fromCharCode(0x2028);
@@ -104,7 +104,19 @@ describe('renderNote (§4.5 content)', () => {
     expect(renderNote({ text: 'a', date: D, capturedAt: at })).not.toContain('\r');
   });
 
-  it('rejects NUL, ill-formed text, bad context and malformed dates (never writes a broken note)', () => {
+  it('checkNoteInput returns typed refusals for every input renderNote would reject', () => {
+    const at = '2026-09-24T21:05:00+02:00';
+    const good = { text: 'a', date: D, capturedAt: at };
+    expect(checkNoteInput(good)).toBeNull();
+    expect(checkNoteInput({ ...good, context: '[[a|b "c": d]]' })).toBeNull();
+    expect(checkNoteInput({ ...good, text: 'a\u0000b' })?.code).toBe('invalid');
+    expect(checkNoteInput({ ...good, text: 'a\uD800' })?.code).toBe('refused:encoding');
+    expect(checkNoteInput({ ...good, context: '[[a]]\nevil: true' })?.code).toBe('invalid');
+    expect(checkNoteInput({ ...good, capturedAt: '2026-09-24 21:05' })?.code).toBe('invalid');
+    expect(checkNoteInput({ ...good, date: '24/09/2026' })?.code).toBe('invalid');
+  });
+
+  it('renderNote/noteFileName (string return type) still throw on the same inputs (never writes a broken note)', () => {
     const at = '2026-09-24T21:05:00+02:00';
     expect(() => renderNote({ text: 'a\u0000b', date: D, capturedAt: at })).toThrow(TypeError);
     expect(() => renderNote({ text: 'a\uD800', date: D, capturedAt: at })).toThrow(TypeError);

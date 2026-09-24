@@ -15,8 +15,8 @@ export function sanitizeCaptureText(text: string): string {
  * `context` is validated upstream (contracts); the kernel re-checks because it is spliced into a single
  * vault line or a YAML scalar: it must be `[[wikilink]]` or an http(s) URL with no control/separator chars.
  */
-export function assertContext(context: string): void {
+export function isValidContext(context: string): boolean {
   const hasControl = new RegExp(CONTROL_OR_SEPARATOR.source).test(context);
   const shape = /^\[\[[^[\]]+\]\]$/.test(context) || /^https?:\/\/\S+$/.test(context);
-  if (hasControl || !shape || !isWellFormed(context)) throw new TypeError('context must be a [[wikilink]] or http(s) URL');
+  return !hasControl && shape && isWellFormed(context);
 }

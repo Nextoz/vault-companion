@@ -1,6 +1,6 @@
-import type { NoteInput } from './api.ts';
-import { assertContext, sanitizeCaptureText } from './sanitize.ts';
-import { assertIsoDate, isWellFormed } from './text.ts';
+import type { NoteInput, Refusal } from './api.ts';
+import { isValidContext, sanitizeCaptureText } from './sanitize.ts';
+import { assertIsoDate, ISO_DATE, isWellFormed, refuse } from './text.ts';
 
 const TITLE_MAX_CODE_POINTS = 60;
 // §4.5 list, plus `%`: docs/vault-contract.md §1 / domain `parseVaultPath` reject any path containing `%`.
@@ -67,13 +67,25 @@ export function yamlDoubleQuoted(value: string): string {
   return out + '"';
 }
 
-/** Full LF-terminated note file content per §4.5. */
+/**
+ * Non-throwing validation of a note capture, for callers to run before `noteFileName` / `renderNote` (whose
+ * `string` return types cannot carry a Refusal, so they throw `TypeError` on the same inputs).
+ */
+export function checkNoteInput(input: NoteInput): Refusal | null {
+  if (!ISO_DATE.test(input.date)) return refuse('invalid', 'date must be YYYY-MM-DD.');
+  if (!ISO_INSTANT.test(input.capturedAt)) return refuse('invalid', 'capturedAt must be an ISO-8601 instant with offset.');
+  if (input.context !== undefined && !isValidContext(input.context)) {
+    return refuse('invalid', 'context must be a [[wikilink]] or http(s) URL.');
+  }
+  if (!isWellFormed(input.text)) return refuse('refused:encoding', 'Note text is not well-formed Unicode.');
+  if (input.text.includes('\u0000')) return refuse('invalid', 'Note text contains NUL.');
+  return null;
+}
+
+/** Full LF-terminated note file content per §4.5. Throws `TypeError` where `checkNoteInput` refuses. */
 export function renderNote(input: NoteInput): string {
-  assertIsoDate(input.date, 'date');
-  if (!ISO_INSTANT.test(input.capturedAt)) throw new TypeError('capturedAt must be an ISO-8601 instant with offset');
-  if (input.context !== undefined) assertContext(input.context);
-  if (!isWellFormed(input.text)) throw new TypeError('note text is not well-formed Unicode');
-  if (input.text.includes('\u0000')) throw new TypeError('note text contains NUL');
+  const problem = checkNoteInput(input);
+  if (problem) throw new TypeError(problem.message);
   const front = [
     '---',
     `date: ${input.date}`,
