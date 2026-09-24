@@ -212,7 +212,11 @@ importers:
         specifier: workspace:*
         version: link:../vault-markdown
 
-  packages/github: {}
+  packages/github:
+    dependencies:
+      '@vault-companion/domain':
+        specifier: workspace:*
+        version: link:../domain
 
   packages/test-vault: {}
 

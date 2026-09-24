@@ -4,6 +4,7 @@
     { "path": "packages/contracts" },
     { "path": "packages/vault-markdown" },
     { "path": "packages/domain" },
-    { "path": "apps/worker" }
+    { "path": "apps/worker" },
+    { "path": "packages/github" }
   ]
 }

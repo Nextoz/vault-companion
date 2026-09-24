@@ -3,7 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/in-memory-store.ts"
+  },
   "dependencies": {
     "@vault-companion/contracts": "workspace:*",
     "@vault-companion/vault-markdown": "workspace:*"
