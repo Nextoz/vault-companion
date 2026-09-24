@@ -217,6 +217,9 @@ importers:
       '@vault-companion/domain':
         specifier: workspace:*
         version: link:../domain
+      jose:
+        specifier: ^6.2.12
+        version: 6.2.12
 
   packages/test-vault: {}
 

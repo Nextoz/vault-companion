@@ -8,6 +8,7 @@
     "./local-git": "./src/local-git-store.ts"
   },
   "dependencies": {
-    "@vault-companion/domain": "workspace:*"
+    "@vault-companion/domain": "workspace:*",
+    "jose": "^6.2.12"
   }
 }
