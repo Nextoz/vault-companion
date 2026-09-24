@@ -39,7 +39,8 @@ afterEach(() => current?.cleanup());
 const write = (store: VaultStore, path: VaultPath, expected: string | null, text: string, op = 'op-1', hash = 'sha256:x') =>
   store.writeFile({ path, expectedBlobSha: expected, bytes: enc(text), message: 'Vault Companion: test', trailers: { [TRAILER_OP]: op, [TRAILER_PAYLOAD]: hash } });
 
-describe.each(Object.keys(harnesses))('VaultStore contract: %s', (name) => {
+// Real git on Windows spawns many processes per case (3–5 s observed); allow headroom under parallel load.
+describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_000 }, (name) => {
   const make = async (limit?: number) => (current = await harnesses[name]!(limit));
 
   it('reads exact bytes (CRLF, Unicode) and reports the real Git blob SHA', async () => {
