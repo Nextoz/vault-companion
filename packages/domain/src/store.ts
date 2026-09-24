@@ -64,6 +64,11 @@ export class StoreUnknownOutcome extends Error {
   override readonly name = 'StoreUnknownOutcome';
 }
 
+/** File exceeds what the adapter can read with byte fidelity (> 1 MB via Contents API). */
+export class FileTooLarge extends Error {
+  override readonly name = 'FileTooLarge';
+}
+
 export const TRAILER_OP = 'Vault-Companion-Op';
 /** Value format: `sha256:<lowercase hex>` of the JCS-canonical submitted envelope. */
 export const TRAILER_PAYLOAD = 'Vault-Companion-Payload';
