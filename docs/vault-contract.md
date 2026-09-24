@@ -135,7 +135,8 @@ blank line if present). No subheadings allowed (§2).
 ### 4.5 Capture note
 
 Path `Inbox/<Title> - <YYYY-MM-DD>.md`, collision suffix `Inbox/<Title> - <YYYY-MM-DD> (n).md`, n ≥ 2.
-- Title = first non-empty line, sanitised as §4.3, then `\/:*?"<>|#^[]` removed, leading dots removed,
+- Title = first non-empty line, sanitised as §4.3, then `\/:*?"<>|#^[]%` removed (`%`: the path policy rejects it,
+  K report gap 12), leading dots removed,
   truncated to 60 code points at a word boundary; empty ⇒ `Note`.
 - **Collision (review F7):** list `Inbox/` at X and treat any existing name equal under
   `casefold(NFC(name))` as taken (Windows desktop is case-insensitive). Create-without-sha is still the

@@ -27,7 +27,9 @@ export type Priority = z.infer<typeof Priority>;
 const Context = z
   .string()
   .max(2000)
-  .refine((s) => /^\[\[[^[\]\r\n]+\]\]$/.test(s) || /^https?:\/\/\S+$/.test(s), 'must be [[wikilink]] or http(s) URL');
+  // No control characters or Unicode line/paragraph separators anywhere (K report gap 16, review F8).
+  .refine((s) => !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(s), 'must not contain control or separator characters')
+  .refine((s) => /^\[\[[^[\]]+\]\]$/.test(s) || /^https?:\/\/\S+$/.test(s), 'must be [[wikilink]] or http(s) URL');
 
 export const CaptureTaskPayload = z.strictObject({
   text: z.string().min(1).max(2000),
