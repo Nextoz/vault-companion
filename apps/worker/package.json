@@ -1,0 +1,15 @@
+{
+  "name": "@vault-companion/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@vault-companion/contracts": "workspace:*",
+    "@vault-companion/domain": "workspace:*",
+    "hono": "^4.13.8",
+    "jose": "^6.2.12"
+  }
+}
