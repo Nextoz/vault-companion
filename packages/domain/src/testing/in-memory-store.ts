@@ -167,6 +167,13 @@ export class InMemoryStore implements VaultStore {
     return { kind: 'not-found' };
   }
 
+  async isAncestor(commit: string, head: string): Promise<boolean> {
+    for (let sha: string | null = head; sha !== null; sha = this.commits.get(sha)?.parent ?? null) {
+      if (sha === commit) return true;
+    }
+    return false;
+  }
+
   async parentOf(commitSha: string): Promise<string> {
     const parent = this.commits.get(commitSha)?.parent;
     if (!parent) throw new StoreUnavailable(`no parent for ${commitSha}`);

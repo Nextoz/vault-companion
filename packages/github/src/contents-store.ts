@@ -133,6 +133,11 @@ export class GitHubContentsStore implements VaultStore {
     return { kind: 'not-found' };
   }
 
+  async isAncestor(commit: string, head: string): Promise<boolean> {
+    const cmp = await this.getJson<{ status: string }>(`/compare/${commit}...${head}?per_page=1`);
+    return cmp !== null && (cmp.status === 'ahead' || cmp.status === 'identical');
+  }
+
   async parentOf(commitSha: string): Promise<string> {
     const c = await this.getJson<{ parents: { sha: string }[] }>(`/git/commits/${commitSha}`);
     const parent = c?.parents[0]?.sha;

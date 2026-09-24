@@ -36,7 +36,7 @@ export type ExecuteResult<E> =
 
 const fail = <E>(code: ErrorCode, message: string, retryable = false): ExecuteResult<E> => ({ ok: false, code, message, retryable });
 
-async function replayOnParent<E>(plan: WritePlan<E>, store: VaultStore, commitSha: string, changedPaths: readonly string[]): Promise<Derived<E>> {
+export async function replayOnParent<E>(plan: WritePlan<E>, store: VaultStore, commitSha: string, changedPaths: readonly string[]): Promise<Derived<E>> {
   const parent = await store.parentOf(commitSha);
   const replay = await plan.compute(store, parent);
   if (!replay.ok) return { ok: false, reason: `replay refused: ${replay.code}` };

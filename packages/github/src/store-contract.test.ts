@@ -90,6 +90,9 @@ describe.each(Object.keys(harnesses))('VaultStore contract: %s', (name) => {
     expect(await store.findOperation(base, head, 'op-B')).toEqual({ kind: 'not-found' });
     expect(await store.findOperation(head, head, 'op-A')).toEqual({ kind: 'not-found' }); // window excludes base
     expect(await store.parentOf(head)).toBe(base);
+    expect(await store.isAncestor(base, head)).toBe(true);
+    expect(await store.isAncestor(head, head)).toBe(true);
+    expect(await store.isAncestor(head, base)).toBe(false);
   });
 
   it('findOperation: unknown for an unknown base and for a truncated window', async () => {

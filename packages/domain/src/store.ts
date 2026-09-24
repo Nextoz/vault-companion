@@ -50,6 +50,8 @@ export interface VaultStore {
   writeFile(req: WriteRequest): Promise<WriteResult>;
   /** Find a commit in `baseCommitSha..untilCommit` whose trailers carry `operationId`. */
   findOperation(baseCommitSha: string, untilCommit: string, operationId: string): Promise<FindOperationResult>;
+  /** True when `commit` is `head` or an ancestor of it; false when not or unknown. */
+  isAncestor(commit: string, head: string): Promise<boolean>;
   /** Parent commit SHA (first parent), used to replay an operation on `C^` when deriving effects. */
   parentOf(commitSha: string): Promise<string>;
 }

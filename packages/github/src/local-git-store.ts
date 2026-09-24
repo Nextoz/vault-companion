@@ -164,6 +164,10 @@ export class LocalGitStore implements VaultStore {
     return { kind: 'not-found' };
   }
 
+  async isAncestor(commit: string, head: string): Promise<boolean> {
+    return (await this.run(['merge-base', '--is-ancestor', commit, head])).code === 0;
+  }
+
   async parentOf(commitSha: string): Promise<string> {
     return this.line(['rev-parse', '--verify', `${commitSha}^`]);
   }
