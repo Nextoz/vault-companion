@@ -36,6 +36,12 @@ Rules:
 - Git Bash rewrites a leading `/word` argument into a Windows path: prefix Herdr calls that send slash
   commands with `MSYS_NO_PATHCONV=1`.
 - `herdr agent prompt … --timeout` requires `--wait`; a syntax error exits 2 and sends nothing.
-- A reviewer whose context was touched by anything but its brief is restarted (`/exit`, then `agent start`),
-  not reused, to keep the review fresh-context.
+- A reviewer whose context was touched by anything but its brief is replaced, not reused.
+- **Never end a Claude agent with `/exit`** (Claude Code ≥ 2.1.282): it moves the conversation to a
+  background-sessions dashboard, and any text later sent to the pane *starts a new background session*.
+  The dashboard also lists the owner's unrelated sessions and `ctrl+x` deletes the selected one — do not
+  navigate it. To retire an agent, `herdr pane close <pane-id>` on a pane the Lead created, and start new
+  agents in fresh panes.
+- Worker panes: `herdr pane split --pane <id> --direction down|right --cwd <worktree> --no-focus`, then
+  `agent start`; confirm the model from the startup banner (`Opus 5.5`) before prompting.
 - Hand briefs/diffs over as files; reviewers reply with a one-line verdict and write details to a file.
