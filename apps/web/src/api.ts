@@ -1,0 +1,38 @@
+// Same-origin HTTP API (packages/contracts). `redirect: 'manual'` makes an expired Access session visible as an
+// opaque redirect instead of silently following it to a login page (F11).
+import { SessionResponse, TasksResponse } from '@vault-companion/contracts';
+import type { z } from 'zod';
+
+export type Fetched<T> =
+  | { kind: 'ok'; data: T }
+  | { kind: 'signed-out' }
+  | { kind: 'offline' }
+  | { kind: 'error'; message: string };
+
+const base: RequestInit = { redirect: 'manual', credentials: 'same-origin', cache: 'no-store' };
+
+async function getJson<S extends z.ZodType>(url: string, schema: S): Promise<Fetched<z.infer<S>>> {
+  let res: Response;
+  try {
+    res = await fetch(url, { ...base, headers: { Accept: 'application/json' } });
+  } catch {
+    return { kind: 'offline' };
+  }
+  if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403) return { kind: 'signed-out' };
+  if (!res.ok) return { kind: 'error', message: `The server answered ${res.status}.` };
+  const parsed = schema.safeParse(await res.json().catch(() => undefined));
+  return parsed.success ? { kind: 'ok', data: parsed.data } : { kind: 'error', message: 'Unexpected reply from the server.' };
+}
+
+export const getSession = () => getJson('/api/session', SessionResponse);
+
+export const getTasks = (known: readonly string[]) =>
+  getJson(known.length ? `/api/tasks?known=${known.join(',')}` : '/api/tasks', TasksResponse);
+
+export const postCommand = (body: string) =>
+  fetch('/api/commands', {
+    ...base,
+    method: 'POST',
+    body,
+    headers: { 'Content-Type': 'application/json', 'X-VC-Request': '1', Accept: 'application/json' },
+  });

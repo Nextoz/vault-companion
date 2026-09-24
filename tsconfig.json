@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/contracts" },
     { "path": "packages/vault-markdown" },
-    { "path": "packages/domain" }
+    { "path": "packages/domain" },
+    { "path": "apps/web" }
   ]
 }
