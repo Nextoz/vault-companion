@@ -18,7 +18,9 @@ export type RefusalCode =
   | 'refused:duplicate-field'
   | 'refused:already-completed'
   | 'conflict:task-changed'
-  | 'conflict:ambiguous';
+  | 'conflict:ambiguous'
+  /** Malformed command input (bad date/context, capture text empty after sanitisation, NUL in note text). */
+  | 'invalid';
 
 export interface Refusal {
   readonly ok: false;
