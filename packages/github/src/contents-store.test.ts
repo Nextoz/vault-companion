@@ -1,5 +1,5 @@
-// Adapter tests against a fake fetch. Read shapes are the ones captured live in Phase 0; write/conflict
-// responses are ASSUMED until gate G1 and must be replaced by recorded fixtures then.
+// Adapter tests against a fake fetch replaying response bodies recorded from the real API
+// (docs/discovery/github-api-probe-2026-09-24.md).
 import { FileTooLarge, StoreUnknownOutcome, type VaultPath } from '@vault-companion/domain';
 import { describe, expect, it } from 'vitest';
 import { GitHubContentsStore, parseTrailers } from './contents-store.ts';
@@ -39,12 +39,18 @@ describe('GitHubContentsStore', () => {
     await expect(s.readFile('Tasks/To-Do List.md' as VaultPath, SHA('a'))).rejects.toBeInstanceOf(FileTooLarge);
   });
 
-  it('PUT sends base64 content, branch, sha and trailers; maps 409/422', async () => {
-    const results = [json(409, { message: 'conflict' }), json(422, { message: 'sha wasnt supplied' })];
+  it('PUT sends base64 content, branch, sha and trailers; maps recorded 409/422 bodies', async () => {
+    const results = [
+      json(409, { message: 'Inbox/n.md does not match cccccccccccccccccccccccccccccccccccccccc', status: '409' }),
+      json(422, { message: 'Invalid request.\n\n"sha" wasn\'t supplied.', status: '422' }),
+      json(409, { message: 'is at c30497f6265d5437fd32a384079d1cafe5938a3b but expected 05b9ce4ee3ce265bf32057041889dd18bc0fcfdc' }),
+    ];
     const { s, calls } = store(() => results.shift()!);
     const req = { path: 'Inbox/n.md' as VaultPath, bytes: new TextEncoder().encode('æ\n'), message: 'Vault Companion: capture note', trailers: { 'Vault-Companion-Op': 'op', 'Vault-Companion-Payload': 'sha256:h' } };
     expect(await s.writeFile({ ...req, expectedBlobSha: SHA('c') })).toEqual({ ok: false, reason: 'cas-mismatch' });
     expect(await s.writeFile({ ...req, expectedBlobSha: null })).toEqual({ ok: false, reason: 'exists' });
+    // Ref race on a different file (G1 P12): not applied, must re-dedupe like a CAS loss.
+    expect(await s.writeFile({ ...req, expectedBlobSha: null })).toEqual({ ok: false, reason: 'cas-mismatch' });
     const body = JSON.parse(calls[0]!.init.body as string);
     expect(body).toEqual({ message: 'Vault Companion: capture note\n\nVault-Companion-Op: op\nVault-Companion-Payload: sha256:h\n', content: 'w6YK', branch: 'main', sha: SHA('c') });
     expect(JSON.parse(calls[1]!.init.body as string).sha).toBeUndefined();

@@ -48,7 +48,8 @@ A27 Undo while Complete is pending/unknown, and Undo sent before Complete ⇒ fi
 A28 Undo with a forged/altered target envelope ⇒ rejected by payload-hash check (F5) ·
 A29 conflict markers in To-Do List ⇒ all writes `refused:vault-conflict` (F6) ·
 A30 note capture where `Inbox/` has a case-variant name ⇒ ` (2)` (F7) ·
-A31 capture text with lone ``, U+2028, NUL; note `context` with `[[a|b]]`, `: `, quotes ⇒ file stays single-EOL, valid YAML (F8) ·
+A31 capture text with lone `
+`, U+2028, NUL; note `context` with `[[a|b]]`, `: `, quotes ⇒ file stays single-EOL, valid YAML (F8) ·
 A32 findOperation unknown (truncated/non-ancestor base) ⇒ no write, `dedupe-unknown` (F9) ·
 A33 read served at a revision not containing a receipt ⇒ client overlay, not authoritative open (F10) ·
 A34 trailing block ID kept last after `✅`; `🏁` task refused (F13) · A35 duplicate `## Open`/`## Done`, subheading in Open ⇒ `refused:structure` (F14) ·
@@ -59,9 +60,10 @@ A40 double-tap Save ⇒ one envelope (F19).
 N/A by refusal in the first release (replaced by the refusal test A7/A34): recurrence successor generation,
 unchanged/edited successor on Undo, duplicate `🆔` handling beyond read-only display.
 
-GitHub adapter semantics (409 vs 422 bodies, create-over-existing, compare pagination, read-after-write between
-Contents and Compare) are **assumed** in `InMemoryStore` until probed against a disposable repo (gate G1, review F15);
-recorded shapes will be added to `docs/discovery/` and the contract tests pinned to them.
+GitHub adapter semantics were probed on the private sandbox (gate G1): `docs/discovery/github-api-probe-2026-09-24.md`.
+Adapter tests replay the recorded bodies. Note: 409 also signals a branch **ref race** between PUTs to different
+files; `InMemoryStore` does not model ref races (its writes are serialised), so the executor's handling of that
+case is covered by the adapter mapping (409 ⇒ cas-mismatch) plus the executor's CAS-loss tests.
 
 ## Disposable end-to-end (Phase 2 gate)
 

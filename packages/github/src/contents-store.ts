@@ -1,6 +1,6 @@
 // VaultStore over the GitHub REST API (Contents, Git refs/commits, Compare). Runs on Workers (fetch only).
-// Response shapes for reads were captured in Phase 0 (docs/discovery/phase-0-findings.md). Write/conflict
-// semantics marked ASSUMED are unverified until gate G1 (disposable private repo) — see docs/testing.md.
+// Response shapes and write/conflict semantics were probed against the real API (Phase 0 and gate G1):
+// docs/discovery/phase-0-findings.md, docs/discovery/github-api-probe-2026-09-24.md.
 import {
   FileTooLarge,
   StoreUnavailable,
@@ -108,9 +108,9 @@ export class GitHubContentsStore implements VaultStore {
       const json = (await res.json()) as { content: { sha: string }; commit: { sha: string } };
       return { ok: true, commitSha: json.commit.sha, blobSha: json.content.sha };
     }
-    // ASSUMED (G1): 409 = sha does not match the file's current blob.
+    // G1: 409 = blob sha mismatch OR branch ref race ("is at X but expected Y"); neither was applied.
     if (res.status === 409) return { ok: false, reason: 'cas-mismatch' };
-    // ASSUMED (G1): 422 without sha = file already exists; with sha, treat as a CAS loss to force re-dedupe.
+    // G1: 422 without sha = file already exists. 422 with sha was not observed; treat as CAS loss (re-dedupe).
     if (res.status === 422) return { ok: false, reason: req.expectedBlobSha === null ? 'exists' : 'cas-mismatch' };
     if (res.status >= 500) throw new StoreUnknownOutcome(`GitHub PUT status ${res.status}`);
     throw new StoreUnavailable(`GitHub PUT status ${res.status}`);
