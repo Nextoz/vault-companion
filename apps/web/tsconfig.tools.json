@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "outDir": ".tsc/tools",
+    "rootDir": ".",
+    "tsBuildInfoFile": ".tsc/tools.tsbuildinfo"
+  },
+  "references": [{ "path": "../../packages/contracts" }],
+  "include": ["vite.config.ts", "playwright.config.ts", "e2e"]
+}
