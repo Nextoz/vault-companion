@@ -45,3 +45,25 @@ Rules:
 - Worker panes: `herdr pane split --pane <id> --direction down|right --cwd <worktree> --no-focus`, then
   `agent start`; confirm the model from the startup banner (`Opus 5.5`) before prompting.
 - Hand briefs/diffs over as files; reviewers reply with a one-line verdict and write details to a file.
+
+## Resumability (owner requirement, 2026-09-24)
+
+Progress must survive usage limits, Herdr restarts, compaction, sleep and reboot. Conversation context is never
+the only record.
+
+- `docs/plan.md` always states: active milestone, done, in progress, delegated agents (pane, branch, commit),
+  unresolved issues, failed QA, and **exact next actions**.
+- `docs/checkpoint.md` is overwritten (not appended) at stable points and before any long pause, compaction or
+  usage-limit boundary: completed, remaining, risks, branches/worktrees, tests run + results, exact next action.
+- Commit at every stable checkpoint; never accumulate a large uncommitted tree. Workers commit on their branch
+  before being idle or retired; a worktree is removed only after its branch is merged or recorded as abandoned.
+- Consequential decisions go into ADRs, not only into conversation.
+- If usage is about to run out: stop at a safe point, commit, update plan + checkpoint, leave no half-applied edit.
+
+### Resume procedure (any Lead, fresh context)
+
+1. `git status`, `git log --oneline -15`, `git worktree list`, `git branch -vv`.
+2. Read `docs/checkpoint.md`, then `docs/plan.md`, then only the ADRs/docs the next action names.
+3. `herdr agent list` (inside Herdr) — reconcile with the plan's delegated-agents table; read a worker's report file
+   before re-prompting it. Never re-dispatch work whose branch already contains it.
+4. Run `pnpm check` to confirm the recorded test state, then continue with the checkpoint's exact next action.
