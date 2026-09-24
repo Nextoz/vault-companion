@@ -1,0 +1,72 @@
+
+### S0 blob sha == Contents API sha
+980a0d5f19a64b4b30a87d4206aade58726b60e3
+
+### S1 seed bare remote with vault-like .gitattributes and synthetic To-Do
+warning: in the working copy of '.gitattributes', LF will be replaced by CRLF the next time Git touches it
+
+### S2 desktop clone; write CRLF into working tree (as observed in snapshot); status + what gets committed
+Tasks/To-Do List.md: Unicode text, UTF-8 text, with CRLF line terminators
+ M "Tasks/To-Do List.md"
+i/lf    w/crlf  attr/text eol=lf      	Tasks/To-Do List.md
+warning: in the working copy of 'Tasks/To-Do List.md', CRLF will be replaced by LF the next time Git touches it
+
+### S3 app clone performs completion commit (move Gamma to Done) and pushes; desktop edit is CRLF-only (no content change)
+98a39da340d4d784dae03e23d158bf8135a9e4d3 Complete task
+
+### S4 snapshot worker algorithm on desktop with CRLF-only 'dirty' file: fetch; rev-list; merge --ff-only
+1	0
+error: Your local changes to the following files would be overwritten by merge:
+	Tasks/To-Do List.md
+Please commit your changes or stash them before you merge.
+Aborting
+Updating 8c59f1e..98a39da
+merge exit=1
+Tasks/To-Do List.md: Unicode text, UTF-8 text, with CRLF line terminators
+ M "Tasks/To-Do List.md"
+
+### S5 desktop has REAL uncommitted edit to To-Do (QuickAdd-style append to end of Open); app appends too
+1	0
+error: Your local changes to the following files would be overwritten by merge:
+	Tasks/To-Do List.md
+Please commit your changes or stash them before you merge.
+Aborting
+Updating 98a39da..faa6d6d
+S5 ff-merge with dirty same file exit=1
+
+### S5b old worker never reaches commit; what would a local commit + 3-way merge do (append/append at same anchor)?
+1	1
+S5b 3-way merge exit=1
+Tasks/To-Do List.md
+
+### S6 desktop edits a DIFFERENT task line (not adjacent) while app completes another task
+S6 3-way merge exit=0
+
+### S7 compare-and-swap push semantics: stale app clone pushes (analogue of Contents API sha mismatch)
+hint: use 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+stale push exit=1
+
+### S7b explicit lease on expected ref
+error: failed to push some refs to '<spike-root>/work/remote.git'
+
+### S8 lost-response dedupe: find op trailer in history after base
+761982fa05628e57c319f91f2fc01ede38fbaf87 op-0003
+faa6d6d9f6334b1892cee873966e6dc575e1415b op-0002
+98a39da340d4d784dae03e23d158bf8135a9e4d3 op-0001
+
+### S9 UTF-8 bytes of task markers
+➕  e2 9e 95
+✅  e2 9c 85
+❌  e2 9d 8c
+📅  f0 9f 93 85
+⏳  e2 8f b3
+🛫  f0 9f 9b ab
+🔁  f0 9f 94 81
+🆔  f0 9f 86 94
+⛔  e2 9b 94
+🔺  f0 9f 94 ba
+⏫  e2 8f ab
+🔼  f0 9f 94 bc
+🔽  f0 9f 94 bd
+⏬  e2 8f ac

@@ -1,0 +1,73 @@
+# Product contract
+
+Distilled from the accepted build contract (bootstrap §2–3, 2026-09-24). The
+product owner is the final decision-maker; change this file only on an explicit
+owner decision. Historical background: `docs/bootstrap/`.
+
+## One sentence
+
+A private, mobile-first execution layer over the existing Obsidian vault.
+**Markdown + Git are authoritative**; the app never becomes a second store.
+
+## First daily-use release (the only committed scope)
+
+From a real phone, without AI:
+
+1. See **Today** and **All tasks**.
+2. **Complete** a task with one tap; immediate acknowledgement; calm feedback.
+3. **Undo** a completion safely.
+4. See **Done today**.
+5. **Capture a task** (appended to the canonical To-Do List).
+6. **Capture a note/thought** (new file under `Inbox/`).
+7. Open/read linked note context where useful (read-only, sanitised).
+8. Always see the honest state of each action:
+   `draft (on this device)` → `saving` → `saved to GitHub` | `needs attention / conflict`.
+   "Saved to GitHub" never implies the desktop has it.
+
+### Acceptance story
+
+> With the computer switched off, I open the phone app, see my tasks, finish one
+> and capture a thought. A dropped connection does not lose or duplicate my
+> action. When the computer returns and synchronization runs, both changes reach
+> the vault. Any conflict is visible and preserves both versions.
+
+### Today (first release definition)
+
+Today is derived, not stored. An open task appears in Today when any of:
+its deadline `📅` ≤ today, its scheduled date `⏳` ≤ today, its start date `🛫` ≤ today,
+or its priority is `🔺`/`⏫`. Everything open appears in All tasks. Overdue items are
+marked, not dumped: Today shows them in a separate "Overdue" group.
+(Mirrors the vault's own `## Due soon` query intent without the 3-day window;
+revisit after real-phone use.)
+
+### Done today
+
+Tasks whose Tasks-parsed done date `✅` equals today's date in `Europe/Copenhagen`,
+derived from Markdown on every read. No streaks, targets or scores.
+Cancelled (`❌`) tasks are not "done".
+
+## Explicitly not in the first release
+
+Journal capture/UI, Waiting/Someday writes, Focus selection, scheduling edits,
+Upcoming/Anytime/Someday views, Areas/Projects, Quick Find, Needs You, calendar,
+recurrence editing, push notifications, AI, D1 index (unless justified by measured need),
+bulk task IDs, archiving of old completed tasks.
+
+## Invariants
+
+- Completed tasks are retained in Markdown. The app never trims `## Done`.
+- Completing a task ≠ completing a project/outcome.
+- Completion state, priority, scheduled/start date, deadline, Focus and Waiting/Someday
+  are distinct concepts; the app does not create app-only durable metadata for any of them.
+- A retried action has exactly one durable effect.
+- Undo is a new validated inverse command against current state, never a file restore.
+- Unsupported or ambiguous Markdown ⇒ explicit refusal, never a guess.
+- Recurring tasks are read-only for completion until recurrence is implemented and tested.
+- Capture never requires AI or classification. Original text and URLs are preserved.
+- Time: user timezone `Europe/Copenhagen`; `capturedAt` (user action instant) and `uploadedAt`
+  are distinct; durable dates derive from `capturedAt` (see `vault-contract.md#time-policy`).
+- The phone keeps only a small pending/draft queue — not an offline vault.
+
+## Owner decisions still open (non-blocking)
+
+Recorded in `docs/plan.md#open-owner-decisions`.
