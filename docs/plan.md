@@ -33,11 +33,11 @@ plus a **GPT-6 Astra** cross-model review of kernel + retry/dedupe diffs; findin
 | D1 | Today definition | due/scheduled/start ≤ today or 🔺/⏫; overdue as own group | Phase 4 (non-blocking) |
 | D2 | Linked-note allowlist | `Projects/`, `Tasks/`, `Inbox/` only | Phase 4 (non-blocking) |
 | D3 | Task IDs (ADR-0003) | no `🆔` writes in first release | non-blocking |
-| D4 | App task-capture anchor vs QuickAdd end-of-Open (most common textual conflict, spike S5b) | end of Open (same as QuickAdd) | **before Phase 2** |
+| D4 | App task-capture anchor | **Decided 2026-09-24: top of Open** (ADR-0010) | done |
 
 ## Human gates
 
-- **G1** Disposable private GitHub repo for adapter probing (external account action) — **requested now**
-  (review F15); needed before the GitHub store contract freezes (late Phase 1).
+- **G1** Disposable private repo `Nextoz/vault-companion-sandbox` — **approved 2026-09-24 (create and keep)**;
+  synthetic content only.
 - G2 GitHub App, Cloudflare account/Access/Worker, `main` ruleset (credentials, external services) — Phase 3.
 - G3 First live vault write (canary) — end of Phase 3.

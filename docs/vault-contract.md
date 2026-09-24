@@ -125,9 +125,12 @@ Line: `- [ ] <text>[ <context>] #todo[ <priority>][ 📅 <due>] ➕ <createdDate
 Emoji fields typed inside `<text>` are kept verbatim (QuickAdd behaviour). `context` (optional) is a wikilink
 `[[…]]` or an http(s) URL, validated.
 
-### 4.4 Capture insertion point
+### 4.4 Capture insertion point (owner decision D4, 2026-09-24 — ADR-0010)
 
-After the last non-blank line of the `## Open` section (QuickAdd `insertAtEnd`). No subheadings allowed (§2).
+**Top of Open:** immediately before the first non-blank line of the `## Open` section, so desktop QuickAdd
+(which appends at the end) and phone captures touch distant lines and merge cleanly (spike S6 vs S5b).
+If Open has no non-blank line: after the heading, preceded by exactly one blank line (reusing an existing
+blank line if present). No subheadings allowed (§2).
 
 ### 4.5 Capture note
 
