@@ -17,3 +17,12 @@ GitHub adapter: Git Data API (blob, tree with `base_tree`, commit, `PATCH ref fo
 **Consequences.** Exactly-once holds across inverses; the Inbox listing at X is authoritative for the create.
 More conflicts under concurrent unrelated commits (each costs one retry); retry budget raised from 3 to 5.
 Four API calls per write instead of one. Dangling blobs/trees/commits from failed attempts are harmless.
+
+**Precision (rerun review Opus N2, 2026-09-25).** GitHub's `PATCH ref force:false` accepts any fast-forward, so it also
+succeeds if the branch was *rewound* to an ancestor of X during the attempt (force-push/reset), re-publishing the
+rewound commits. The local and in-memory adapters are stricter (head must equal X). Rewinds are outside the sync
+contract (`docs/sync.md` W1) and are to be blocked by the `main` ruleset at gate G2; accepted as a residual.
+
+**Create/update precondition (rerun review Astra N1 / Opus N1, N7).** A supplied tree entry replaces whatever is at the
+path in `base_tree`, so every write also carries `expect: 'absent' | 'regular-file'`, verified by the adapter in the
+pinned tree before any object is created; directory listings include all entry types and fail closed.

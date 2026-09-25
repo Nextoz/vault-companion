@@ -5,7 +5,7 @@ import * as md from '@vault-companion/vault-markdown';
 import { executeWrite, replayOnParent, type Planned, type WritePlan } from './execute.ts';
 import { canWrite, INBOX_DIR, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 import { payloadHash } from './payload-hash.ts';
-import { FileTooLarge, type VaultPath, type VaultStore } from './store.ts';
+import { FileTooLarge, TRAILER_UNDOES, type VaultPath, type VaultStore } from './store.ts';
 import { checkOccurredAt, userDate } from './time.ts';
 
 export interface CommandServiceDeps {
@@ -46,7 +46,7 @@ async function readTodo(store: VaultStore, at: string): Promise<{ ok: true; text
 
 function fromKernel<E, R>(r: md.MutationOk<E> | md.Refusal, path: VaultPath, map: (e: E) => R): Planned<R> {
   if (!r.ok) return refuse(r.code, r.message);
-  return { ok: true, path, bytes: encoder.encode(r.text), effect: map(r.effect) };
+  return { ok: true, path, expect: 'regular-file', bytes: encoder.encode(r.text), effect: map(r.effect) };
 }
 
 export function completePlan(cmd: CompleteTaskCommand, timeZone: string): WritePlan<md.CompleteEffect> {
@@ -80,12 +80,17 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
       const rawTarget = (raw as { payload: { target: unknown } }).payload.target;
       return {
         message: 'Vault Companion: undo completion',
+        trailers: { [TRAILER_UNDOES]: target.operationId },
         async compute(store, at) {
           // Authenticate the target by its commit trailer and re-derive its effect (review F4/F5).
           const found = await store.findOperation(target.baseRevision, at, target.operationId);
           if (found.kind === 'unknown') return refuse('dedupe-unknown', 'cannot locate the completion to undo');
           if (found.kind === 'not-found') return refuse('conflict:task-changed', 'that completion is not in the vault');
           if (found.op.payloadHash !== (await payloadHash(rawTarget))) return refuse('invalid', 'undo target does not match the recorded completion');
+          // Rerun review Opus N6: a completion can be undone once; a stale second Undo would reopen a LATER completion.
+          const undone = await store.findOperation(found.op.commitSha, at, target.operationId, TRAILER_UNDOES);
+          if (undone.kind === 'unknown') return refuse('dedupe-unknown', 'cannot establish whether this completion was already undone');
+          if (undone.kind === 'found') return refuse('conflict:task-changed', 'that completion was already undone');
           const derived = await replayOnParent(completePlan(target, deps.timeZone), store, found.op.commitSha, found.op.paths);
           if (!derived.ok) return refuse('dedupe-unknown', 'the completion cannot be verified');
           const f = await readTodo(store, at);
@@ -96,7 +101,7 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
             // original — replayOnParent just proved completing them yields exactly the current file.
             const original = await store.readFile(TODO, await store.parentOf(found.op.commitSha));
             if (!original) return refuse('dedupe-unknown', 'the original task list cannot be read');
-            return { ok: true, path: TODO, bytes: original.bytes, effect: { kind: 'reopened', openLineText: derived.effect.openLineText } };
+            return { ok: true, path: TODO, expect: 'regular-file', bytes: original.bytes, effect: { kind: 'reopened', openLineText: derived.effect.openLineText } };
           }
           const r = md.undoCompleteTask(f.text, { completion: derived.effect, unchangedSinceCompletion: false });
           return fromKernel(r, TODO, (e) => ({ kind: 'reopened' as const, openLineText: e.openLineText }));
@@ -132,12 +137,19 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
         message: 'Vault Companion: capture note',
         async compute(store, at) {
           if (invalid) return refuse(invalid.code, invalid.message);
-          const names = await store.listDir(INBOX_DIR, at);
+          let names: readonly string[];
+          try {
+            names = await store.listDir(INBOX_DIR, at);
+          } catch (e) {
+            // Rerun review Astra N5 / Opus N3: a truncated listing is permanent, not a retryable outage.
+            if (e instanceof FileTooLarge) return refuse('refused:too-large', 'the Inbox folder is too large to check for name collisions');
+            throw e;
+          }
           const path = parseVaultPath(md.noteFileName(cmd.payload.text, date, names));
           if (!path || !canWrite(path, 'create')) return refuse('refused:path', 'note path is not allowed');
           // The Inbox listing and the create refer to the same X; head-CAS publishes only if nothing landed since
           // (review A4). Exact-path existence is covered by the listing too.
-          return { ok: true, path, bytes, effect: { kind: 'note-captured', path } };
+          return { ok: true, path, expect: 'absent', bytes, effect: { kind: 'note-captured', path } };
         },
         // The chosen name depends on Inbox/ contents at write time, so verify by content, not replay.
         async deriveApplied(store, commitSha, paths) {

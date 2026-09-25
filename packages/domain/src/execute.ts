@@ -8,7 +8,7 @@ export const MAX_ATTEMPTS = 5;
 
 /** A computed change against the vault at one commit. */
 export type Planned<E> =
-  | { readonly ok: true; readonly path: VaultPath; readonly bytes: Uint8Array; readonly effect: E }
+  | { readonly ok: true; readonly path: VaultPath; readonly expect: 'absent' | 'regular-file'; readonly bytes: Uint8Array; readonly effect: E }
   | { readonly ok: false; readonly code: ErrorCode; readonly message: string };
 
 export interface WritePlan<E> {
@@ -21,6 +21,8 @@ export interface WritePlan<E> {
   deriveApplied?(store: VaultStore, commitSha: string, changedPaths: readonly string[]): Promise<Derived<E>>;
   /** Commit subject; must not contain personal text. */
   readonly message: string;
+  /** Extra commit trailers (IDs only, never personal text). */
+  readonly trailers?: Readonly<Record<string, string>>;
 }
 
 export type Derived<E> = { readonly ok: true; readonly path: string; readonly effect: E } | { readonly ok: false; readonly reason: string };
@@ -78,9 +80,10 @@ export async function executeWrite<E>(store: VaultStore, input: ExecuteInput, pl
         written = await store.writeFile({
           path: planned.path,
           baseCommit: x,
+          expect: planned.expect,
           bytes: planned.bytes,
           message: plan.message,
-          trailers: { [TRAILER_OP]: input.operationId, [TRAILER_PAYLOAD]: input.payloadHash },
+          trailers: { ...plan.trailers, [TRAILER_OP]: input.operationId, [TRAILER_PAYLOAD]: input.payloadHash },
         });
       } catch (err) {
         // Unknown outcome: never re-send blindly; the next attempt's dedupe decides.
@@ -89,6 +92,9 @@ export async function executeWrite<E>(store: VaultStore, input: ExecuteInput, pl
           continue;
         }
         throw err;
+      }
+      if (!written.ok && written.reason === 'precondition-failed') {
+        return fail('refused:structure', 'the target in the vault is not what this change expects; nothing was written');
       }
       if (written.ok) {
         return { ok: true, status: 'applied', path: planned.path, commitSha: written.commitSha, blobSha: written.blobSha, effect: planned.effect };

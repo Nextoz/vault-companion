@@ -5,7 +5,7 @@ import { Command } from '@vault-companion/contracts';
 import { createCommandService } from '@vault-companion/domain';
 import { InMemoryStore } from '@vault-companion/domain/testing';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.ts';
 import { configProblems, createProductionApp, type Env } from './index.ts';
 import type { LogRecord } from './log.ts';
@@ -20,8 +20,13 @@ const SEED =
   `- [ ] Take out the ${SENTINEL} recycling #todo 🔁 every week\n` +
   '\n## Done\n\n- [x] Old #todo ✅ 2026-09-01\n';
 
+afterEach(() => vi.restoreAllMocks());
+
 describe('A18 through the real command stack (review A10/R10)', () => {
   it('no command, refusal or outage logs task text, note text or a clear-text path', async () => {
+    // Rerun review Astra N4: also watch the console, so a stray console.* in any layer cannot leak unnoticed.
+    const printed: unknown[][] = [];
+    for (const m of ['log', 'info', 'warn', 'error', 'debug'] as const) vi.spyOn(console, m).mockImplementation((...a: unknown[]) => void printed.push(a));
     const store = await InMemoryStore.create({ [TODO]: SEED });
     const services = createCommandService({ store, now: () => new Date('2026-09-24T12:00:00Z'), timeZone: 'Europe/Copenhagen' });
     const logs: LogRecord[] = [];
@@ -67,7 +72,31 @@ describe('A18 through the real command stack (review A10/R10)', () => {
     expect(logs.length).toBeGreaterThanOrEqual(7);
     expect(JSON.stringify(logs)).not.toContain(SENTINEL);
     expect(JSON.stringify(logs)).not.toContain('Inbox/');
+    expect(JSON.stringify(printed)).not.toContain(SENTINEL);
     expect(logs.find((l) => l.commandType === 'CaptureNote')?.pathHash).toMatch(/^[0-9a-f]{16}$/);
+  });
+});
+
+describe('unexpected service failure (rerun review Opus N4)', () => {
+  it('answers 503 upstream-unavailable, retryable, without detail', async () => {
+    const app = createApp({
+      verify: async () => ({ ok: true, email: 'owner@example.com', accountKey: ACCOUNT }),
+      appOrigin: ORIGIN,
+      services: {
+        readTasks: async () => {
+          throw new Error(`boom ${SENTINEL}`);
+        },
+        execute: async () => {
+          throw new Error('boom');
+        },
+      },
+      log: () => {},
+    });
+    const res = await app.request('/api/tasks');
+    expect(res.status).toBe(503);
+    const body = await res.text();
+    expect(JSON.parse(body)).toEqual({ code: 'upstream-unavailable', message: 'internal error', retryable: true });
+    expect(body).not.toContain(SENTINEL);
   });
 });
 

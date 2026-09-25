@@ -134,7 +134,10 @@ export class InMemoryStore implements VaultStore {
     const commit = this.commits.get(atCommit);
     if (!commit) throw new StoreUnavailable(`unknown commit ${atCommit}`);
     const prefix = `${dir}/`;
-    return [...commit.tree.keys()].filter((p) => p.startsWith(prefix) && !p.slice(prefix.length).includes('/')).map((p) => p.slice(prefix.length));
+    // All entry types: a nested path contributes its first segment as a directory name.
+    const names = new Set<string>();
+    for (const p of commit.tree.keys()) if (p.startsWith(prefix)) names.add(p.slice(prefix.length).split('/')[0]!);
+    return [...names];
   }
 
   async writeFile(req: WriteRequest): Promise<WriteResult> {
@@ -149,6 +152,10 @@ export class InMemoryStore implements VaultStore {
     // Head-CAS (ADR-0011): publish only as a fast-forward from the pinned commit.
     if (this.headSha !== req.baseCommit) return { ok: false, reason: 'head-moved' };
     const head = this.commits.get(this.headSha)!;
+    // Precondition against the pinned tree (rerun Astra N1 / Opus N1): no file AND no directory for 'absent'.
+    const isFile = head.tree.has(req.path);
+    const isDir = [...head.tree.keys()].some((p) => p.startsWith(`${req.path}/`));
+    if (req.expect === 'absent' ? isFile || isDir : !isFile) return { ok: false, reason: 'precondition-failed' };
     this.blobs.set(blobSha, req.bytes);
     const tree = new Map(head.tree);
     tree.set(req.path, blobSha);
@@ -157,14 +164,14 @@ export class InMemoryStore implements VaultStore {
     return { ok: true, commitSha, blobSha };
   }
 
-  async findOperation(baseCommitSha: string, untilCommit: string, operationId: string): Promise<FindOperationResult> {
+  async findOperation(baseCommitSha: string, untilCommit: string, operationId: string, key: string = TRAILER_OP): Promise<FindOperationResult> {
     if (!this.commits.has(baseCommitSha)) return { kind: 'unknown', reason: 'base commit unknown' };
     let sha: string | null = untilCommit;
     let inspected = 0;
     while (sha !== null && sha !== baseCommitSha) {
       if (++inspected > this.dedupeWindowLimit) return { kind: 'unknown', reason: 'window truncated' };
       const c: Commit = this.commits.get(sha)!;
-      if (c.trailers[TRAILER_OP] === operationId) {
+      if (c.trailers[key] === operationId) {
         return { kind: 'found', op: { commitSha: c.sha, payloadHash: c.trailers[TRAILER_PAYLOAD] ?? '', paths: c.changed } };
       }
       sha = c.parent;

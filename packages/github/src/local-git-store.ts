@@ -103,14 +103,32 @@ export class LocalGitStore implements VaultStore {
   async listDir(dir: string, atCommit: string): Promise<readonly string[]> {
     guardPath(dir);
     const r = await this.run(['ls-tree', '-z', `${atCommit}:${dir}`]);
-    if (r.code !== 0) return [];
+    if (r.code !== 0) {
+      // Fail closed (rerun Opus N1): `[]` only when the commit exists and the directory is provably absent.
+      if ((await this.run(['cat-file', '-e', `${atCommit}^{commit}`])).code !== 0) throw new StoreUnavailable('unknown commit');
+      if ((await this.run(['cat-file', '-e', `${atCommit}:${dir}`])).code === 0) throw new StoreUnavailable('directory listing failed');
+      return [];
+    }
+    // All entry types (files, directories, links): any existing name is taken (rerun Astra N1).
     return r.stdout
       .toString('utf8')
       .split('\0')
       .filter((e) => e.length > 0)
-      .map((e) => e.split('\t') as [string, string])
-      .filter(([meta]) => meta.split(' ')[1] === 'blob')
-      .map(([, name]) => name);
+      .map((e) => e.split('\t')[1]!);
+  }
+
+  /** Mode and type of the exact `path` entry in `commit`'s tree, or null when nothing is there. */
+  private async entryAt(commit: string, path: string): Promise<{ mode: string; type: string } | null> {
+    const r = await this.run(['ls-tree', '-z', commit, '--', path]);
+    if (r.code !== 0) throw new StoreUnavailable('tree lookup failed');
+    const hit = r.stdout
+      .toString('utf8')
+      .split('\0')
+      .map((e) => e.split('\t'))
+      .find(([, name]) => name === path);
+    if (!hit) return null;
+    const [mode, type] = hit[0]!.split(' ') as [string, string];
+    return { mode, type };
   }
 
   async writeFile(req: WriteRequest): Promise<WriteResult> {
@@ -118,6 +136,10 @@ export class LocalGitStore implements VaultStore {
     const blob = (await this.ok(['hash-object', '-w', '--stdin'], req.bytes)).toString('utf8').trim();
     const trailers = Object.entries(req.trailers).map(([k, v]) => `${k}: ${v}`).join('\n');
     const message = `${req.message}\n\n${trailers}\n`;
+    // Precondition against the pinned tree (rerun Astra N1 / Opus N1, N7).
+    const entry = await this.entryAt(req.baseCommit, req.path);
+    const satisfied = req.expect === 'absent' ? entry === null : entry?.type === 'blob' && entry.mode === '100644';
+    if (!satisfied) return { ok: false, reason: 'precondition-failed' };
     // Head-CAS (ADR-0011): commit parented on the pinned base; `update-ref <new> <old>` refuses unless the branch is
     // still exactly at the base, atomically (same as GitHub's non-force ref update).
     const indexFile = join(tmpdir(), `vc-index-${randomUUID()}`);
@@ -134,7 +156,7 @@ export class LocalGitStore implements VaultStore {
     }
   }
 
-  async findOperation(baseCommitSha: string, untilCommit: string, operationId: string): Promise<FindOperationResult> {
+  async findOperation(baseCommitSha: string, untilCommit: string, operationId: string, key: string = TRAILER_OP): Promise<FindOperationResult> {
     if ((await this.run(['cat-file', '-e', `${baseCommitSha}^{commit}`])).code !== 0) return { kind: 'unknown', reason: 'base commit unknown' };
     if ((await this.run(['merge-base', '--is-ancestor', baseCommitSha, untilCommit])).code !== 0) {
       return { kind: 'unknown', reason: 'base is not an ancestor' };
@@ -143,7 +165,7 @@ export class LocalGitStore implements VaultStore {
       'log',
       '-z',
       `--max-count=${this.windowLimit + 1}`,
-      `--format=%H%x1f%(trailers:key=${TRAILER_OP},valueonly,separator=%x1e)%x1f%(trailers:key=${TRAILER_PAYLOAD},valueonly,separator=%x1e)`,
+      `--format=%H%x1f%(trailers:key=${key},valueonly,separator=%x1e)%x1f%(trailers:key=${TRAILER_PAYLOAD},valueonly,separator=%x1e)`,
       `${baseCommitSha}..${untilCommit}`,
     ]);
     const entries = out.toString('utf8').split('\0').filter((e) => e.trim().length > 0);

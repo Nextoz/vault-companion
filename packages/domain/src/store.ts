@@ -16,9 +16,16 @@ export interface WriteRequest {
   readonly path: VaultPath;
   /**
    * The pinned commit X the change was computed against (ADR-0011). The new commit is parented on X and the branch
-   * only advances if its head is still exactly X; any later commit — even one restoring identical bytes — fails.
+   * only advances as a fast-forward from X; any later commit — even one restoring identical bytes — fails. (GitHub also
+   * accepts a fast-forward from an ancestor of X after a rewind; out of contract, see ADR-0011.)
    */
   readonly baseCommit: string;
+  /**
+   * What must be at `path` in the base tree (rerun review Astra N1 / Opus N1, N7). A Git Data write replaces whatever is
+   * at the path, so creation must prove absence (no file, no directory, any case is the caller's job) and updates must
+   * prove a regular file (mode 100644). Checked by the adapter against `baseCommit`, never against a listing.
+   */
+  readonly expect: 'absent' | 'regular-file';
   readonly bytes: Uint8Array;
   /** Commit subject/body. Must never contain task or note text. */
   readonly message: string;
@@ -27,7 +34,7 @@ export interface WriteRequest {
 
 export type WriteResult =
   | { readonly ok: true; readonly commitSha: string; readonly blobSha: string }
-  | { readonly ok: false; readonly reason: 'head-moved' };
+  | { readonly ok: false; readonly reason: 'head-moved' | 'precondition-failed' };
 
 export interface FoundOperation {
   readonly commitSha: string;
@@ -47,12 +54,15 @@ export interface VaultStore {
   head(): Promise<{ commitSha: string }>;
   /** Read `path` at commit `atCommit`. `null` when absent. */
   readFile(path: VaultPath, atCommit: string): Promise<StoredFile | null>;
-  /** Names (not paths) of files directly inside `dir` at `atCommit`. */
+  /**
+   * Names of ALL entries (files and directories) directly inside `dir` at `atCommit`; `[]` only when `dir` is confirmed
+   * absent. Any other failure throws (fail closed — rerun review Opus N1).
+   */
   listDir(dir: string, atCommit: string): Promise<readonly string[]>;
   /** Single-file commit parented on `baseCommit`; publishes only as a fast-forward from it (head-CAS, ADR-0011). */
   writeFile(req: WriteRequest): Promise<WriteResult>;
-  /** Find a commit in `baseCommitSha..untilCommit` whose trailers carry `operationId`. */
-  findOperation(baseCommitSha: string, untilCommit: string, operationId: string): Promise<FindOperationResult>;
+  /** Find a commit in `baseCommitSha..untilCommit` whose trailer `key` (default `Vault-Companion-Op`) equals `value`. */
+  findOperation(baseCommitSha: string, untilCommit: string, value: string, key?: string): Promise<FindOperationResult>;
   /** True when `commit` is `head` or an ancestor of it; false when not or unknown. */
   isAncestor(commit: string, head: string): Promise<boolean>;
   /** Parent commit SHA (first parent), used to replay an operation on `C^` when deriving effects. */
@@ -75,5 +85,7 @@ export class FileTooLarge extends Error {
 }
 
 export const TRAILER_OP = 'Vault-Companion-Op';
+/** On an Undo commit: the operation ID of the completion it undid (rerun review Opus N6). */
+export const TRAILER_UNDOES = 'Vault-Companion-Undoes';
 /** Value format: `sha256:<lowercase hex>` of the JCS-canonical submitted envelope. */
 export const TRAILER_PAYLOAD = 'Vault-Companion-Payload';

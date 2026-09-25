@@ -14,7 +14,7 @@ function appendPlan(line: string): WritePlan<{ appended: string }> {
     async compute(store: VaultStore, at: string) {
       const file = await store.readFile(PATH, at);
       if (!file) return { ok: false, code: 'refused:structure', message: 'missing' };
-      return { ok: true, path: PATH, expectedBlobSha: file.blobSha, bytes: enc.encode(dec.decode(file.bytes) + line + '\n'), effect: { appended: line } };
+      return { ok: true, path: PATH, expect: 'regular-file', bytes: enc.encode(dec.decode(file.bytes) + line + '\n'), effect: { appended: line } };
     },
   };
 }
@@ -69,6 +69,7 @@ describe('executeWrite', () => {
       await store.writeFile({
         path: PATH,
         baseCommit: store.headCommit,
+        expect: 'regular-file',
         bytes: enc.encode(dec.decode(f!.bytes) + '- [ ] two\n'),
         message: 'Vault Companion: test append',
         trailers: { [TRAILER_OP]: OP, [TRAILER_PAYLOAD]: HASH },

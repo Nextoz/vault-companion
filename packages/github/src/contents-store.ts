@@ -30,6 +30,12 @@ export interface GitHubStoreOptions {
 
 const MAX_CONTENT_BYTES = 1024 * 1024;
 
+interface TreeEntry {
+  readonly path: string;
+  readonly mode: string;
+  readonly type: string;
+}
+
 export class GitHubContentsStore implements VaultStore {
   private readonly branch: string;
   private readonly f: typeof fetch;
@@ -94,13 +100,26 @@ export class GitHubContentsStore implements VaultStore {
 
   async listDir(dir: string, atCommit: string): Promise<readonly string[]> {
     guardPath(dir);
-    // Trees API at <commit>:<dir> (probe 2026-09-25 Q5); unlike Contents listings it reports truncation (R8).
-    const t = await this.getJson<{ truncated: boolean; tree: { path: string; type: string }[] }>(
-      `/git/trees/${atCommit}:${dir.split('/').map(encodeURIComponent).join('/')}`,
-    );
-    if (!t) return [];
-    if (t.truncated) throw new FileTooLarge('directory listing truncated');
-    return t.tree.filter((e) => e.type === 'blob').map((e) => e.path);
+    // All entry types: an existing directory name is as taken as a file name (rerun Astra N1).
+    return ((await this.treeEntries(atCommit, dir)) ?? []).map((e) => e.path);
+  }
+
+  /**
+   * Entries directly inside `dir` at `commit` (Trees API at `<commit>:<dir>`, probe 2026-09-25 Q5), or `null` only when
+   * `dir` is **confirmed absent** from its parent tree. Any other 404 or failure throws — fail closed (rerun Opus N1).
+   */
+  private async treeEntries(commit: string, dir: string): Promise<TreeEntry[] | null> {
+    const ref = dir === '' ? commit : `${commit}:${dir.split('/').map(encodeURIComponent).join('/')}`;
+    const t = await this.getJson<{ truncated: boolean; tree: TreeEntry[] }>(`/git/trees/${ref}`);
+    if (t) {
+      if (t.truncated) throw new FileTooLarge('directory listing truncated');
+      return t.tree;
+    }
+    if (dir === '') throw new StoreUnavailable('commit tree not found');
+    const cut = dir.lastIndexOf('/');
+    const parent = await this.treeEntries(commit, cut < 0 ? '' : dir.slice(0, cut));
+    if (parent === null || !parent.some((e) => e.path === dir.slice(cut + 1))) return null;
+    throw new StoreUnavailable('directory listing failed although the directory exists');
   }
 
   /** POST to the Git object endpoints: failures here leave only unreachable objects, never a durable effect. */
@@ -117,6 +136,13 @@ export class GitHubContentsStore implements VaultStore {
 
   async writeFile(req: WriteRequest): Promise<WriteResult> {
     guardPath(req.path);
+    // Precondition against the pinned tree (rerun Astra N1 / Opus N1, N7): a supplied tree entry REPLACES whatever is at
+    // the path in `base_tree`, so creation must prove absence and updates must prove a regular 100644 file.
+    const cut = req.path.lastIndexOf('/');
+    const siblings = await this.treeEntries(req.baseCommit, cut < 0 ? '' : req.path.slice(0, cut));
+    const entry = siblings?.find((e) => e.path === req.path.slice(cut + 1));
+    const satisfied = req.expect === 'absent' ? entry === undefined : entry?.type === 'blob' && entry.mode === '100644';
+    if (!satisfied) return { ok: false, reason: 'precondition-failed' };
     // Head-CAS (ADR-0011, probe 2026-09-25): blob → tree on X's tree → commit parented on X → fast-forward ref.
     const base = await this.getJson<{ tree: { sha: string } }>(`/git/commits/${req.baseCommit}`);
     if (!base) throw new StoreUnavailable('base commit not found');
@@ -140,7 +166,7 @@ export class GitHubContentsStore implements VaultStore {
     throw new StoreUnavailable(`GitHub ref update status ${res.status}`);
   }
 
-  async findOperation(baseCommitSha: string, untilCommit: string, operationId: string): Promise<FindOperationResult> {
+  async findOperation(baseCommitSha: string, untilCommit: string, operationId: string, key: string = TRAILER_OP): Promise<FindOperationResult> {
     // Probe 2026-09-25 Q6: unpaged compare returns the NEWEST 250 commits; `per_page=250&page=n` pages oldest-first.
     let seen = 0;
     for (let page = 1; page <= this.maxPages; page++) {
@@ -151,7 +177,7 @@ export class GitHubContentsStore implements VaultStore {
       if (cmp.status !== 'ahead' && cmp.status !== 'identical') return { kind: 'unknown', reason: `base is not an ancestor (${cmp.status})` };
       for (const c of cmp.commits) {
         const t = parseTrailers(c.commit.message);
-        if (t[TRAILER_OP] === operationId) {
+        if (t[key] === operationId) {
           const detail = await this.getJson<{ files?: { filename: string }[] }>(`/commits/${c.sha}`);
           return { kind: 'found', op: { commitSha: c.sha, payloadHash: t[TRAILER_PAYLOAD] ?? '', paths: (detail?.files ?? []).map((f) => f.filename) } };
         }

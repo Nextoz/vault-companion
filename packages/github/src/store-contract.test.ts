@@ -36,8 +36,8 @@ const harnesses: Record<string, (limit?: number) => Promise<Harness>> = {
 let current: Harness | null = null;
 afterEach(() => current?.cleanup());
 
-const write = (store: VaultStore, path: VaultPath, baseCommit: string, text: string, op = 'op-1', hash = 'sha256:x') =>
-  store.writeFile({ path, baseCommit, bytes: enc(text), message: 'Vault Companion: test', trailers: { [TRAILER_OP]: op, [TRAILER_PAYLOAD]: hash } });
+const write = (store: VaultStore, path: VaultPath, baseCommit: string, text: string, op = 'op-1', hash = 'sha256:x', expect: 'absent' | 'regular-file' = path.startsWith('Inbox/new') ? 'absent' : 'regular-file') =>
+  store.writeFile({ path, baseCommit, expect, bytes: enc(text), message: 'Vault Companion: test', trailers: { [TRAILER_OP]: op, [TRAILER_PAYLOAD]: hash } });
 
 // Real git on Windows spawns many processes per case (3–5 s observed); allow headroom under parallel load.
 describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_000 }, (name) => {
@@ -53,10 +53,10 @@ describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_0
     expect(await store.readFile('Inbox/missing.md' as VaultPath, commitSha)).toBeNull();
   });
 
-  it('lists direct file children only, with Unicode names', async () => {
+  it('lists all direct children, files and directories, with Unicode names (rerun Astra N1)', async () => {
     const { store } = await make();
     const names = await store.listDir('Inbox', (await store.head()).commitSha);
-    expect([...names].sort()).toEqual(['Første note - 2026-09-20.md']);
+    expect([...names].sort()).toEqual(['Første note - 2026-09-20.md', 'sub']);
   });
 
   it('head-CAS (ADR-0011): writes from the current head succeed; any later commit makes a write from the old head fail', async () => {
@@ -72,6 +72,26 @@ describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_0
     const head = (await store.head()).commitSha;
     expect(dec((await store.readFile(TODO, head))!.bytes)).toBe('v2');
     expect(await store.readFile(TODO, x)).toMatchObject({ blobSha: blob }); // history is immutable
+  });
+
+  it('precondition (rerun Astra N1 / Opus N1): create never replaces a file or a directory; update needs a regular file', async () => {
+    const { store } = await make();
+    const x = (await store.head()).commitSha;
+    const fail = { ok: false, reason: 'precondition-failed' };
+    expect(await write(store, 'Inbox/Første note - 2026-09-20.md' as VaultPath, x, 'x', 'op', 'h', 'absent')).toEqual(fail);
+    expect(await write(store, 'Inbox/sub' as VaultPath, x, 'x', 'op', 'h', 'absent')).toEqual(fail); // a directory
+    expect(await write(store, 'Inbox/missing.md' as VaultPath, x, 'x', 'op', 'h', 'regular-file')).toEqual(fail);
+    expect(await write(store, 'Inbox/sub' as VaultPath, x, 'x', 'op', 'h', 'regular-file')).toEqual(fail);
+    expect((await store.head()).commitSha).toBe(x); // nothing written
+    expect(dec((await store.readFile('Inbox/sub/nested.md' as VaultPath, x))!.bytes)).toBe(SEED['Inbox/sub/nested.md']);
+    expect((await write(store, 'Inbox/new.md' as VaultPath, x, 'x', 'op', 'h', 'absent')).ok).toBe(true);
+  });
+
+  it('listing fails closed: [] only for a directory that is provably absent', async () => {
+    const { store } = await make();
+    const x = (await store.head()).commitSha;
+    expect(await store.listDir('Nowhere', x)).toEqual([]);
+    await expect(store.listDir('Inbox', 'f'.repeat(40))).rejects.toThrow();
   });
 
   it('A2 ABA: identical bytes restored after X do not let a delayed write from X land', async () => {

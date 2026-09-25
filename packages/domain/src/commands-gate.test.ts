@@ -3,7 +3,7 @@
 import { Command, type Receipt, type TaskView } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
 import { createCommandService } from './commands.ts';
-import type { WriteRequest } from './store.ts';
+import { FileTooLarge, type WriteRequest } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 const TODO = 'Tasks/To-Do List.md';
@@ -12,7 +12,11 @@ let n = 0;
 const uuid = () => `00000000-0000-4000-9000-${(++n).toString(16).padStart(12, '0')}`;
 
 async function setup(todo: string) {
-  const store = await InMemoryStore.create({ [TODO]: todo });
+  return setupFiles({ [TODO]: todo });
+}
+
+async function setupFiles(files: Record<string, string>) {
+  const store = await InMemoryStore.create(files);
   const svc = createCommandService({ store, now: () => NOW, timeZone: 'Europe/Copenhagen' });
   const base = store.headCommit;
   const env = (type: string, payload: unknown) => ({ schemaVersion: 1, operationId: uuid(), type, occurredAt: '2026-09-24T14:00:00+02:00', baseRevision: base, payload });
@@ -54,6 +58,58 @@ describe('Phase 1 gate regressions', () => {
     expect(store.commitsWithOp(complete.operationId)).toHaveLength(1);
     expect(store.commitsWithOp(undo.operationId)).toHaveLength(1);
     expect(store.text(TODO)).toBe(original); // the Undo stands
+  });
+
+  it('rerun Astra N1 (Critical): an Inbox DIRECTORY with the note name is a taken name; its children survive', async () => {
+    const { store, env, run } = await setupFiles({ [TODO]: '## Open\n\n## Done\n', 'Inbox/Alpha - 2026-09-24.md/keep.md': 'keep\n' });
+    const r = ok(await run(env('CaptureNote', { text: 'Alpha' })));
+    expect(r.path).toBe('Inbox/Alpha - 2026-09-24 (2).md');
+    expect(store.text('Inbox/Alpha - 2026-09-24.md/keep.md')).toBe('keep\n');
+  });
+
+  it('rerun Opus N1: even with a wrong (empty) listing, create never overwrites an existing note', async () => {
+    const { store, env, run } = await setupFiles({ [TODO]: '## Open\n\n## Done\n', 'Inbox/Alpha - 2026-09-24.md': 'PRECIOUS desktop note\n' });
+    store.listDir = async () => []; // e.g. a transient 404 that a buggy adapter mapped to "empty"
+    const head = store.headCommit;
+    expect(await run(env('CaptureNote', { text: 'Alpha' }))).toMatchObject({ code: 'refused:structure' });
+    expect(store.headCommit).toBe(head);
+    expect(store.text('Inbox/Alpha - 2026-09-24.md')).toBe('PRECIOUS desktop note\n');
+  });
+
+  it('rerun Opus N6: a stale second Undo of an already-undone completion is refused and does not reopen a later completion', async () => {
+    const { store, env, run, openTask } = await setup('## Open\n\n- [ ] A #todo\n\n## Done\n');
+    const c1 = env('CompleteTask', { task: (await openTask('A')).locator });
+    ok(await run(c1));
+    ok(await run(env('UndoCompleteTask', { target: c1 })));
+    const c2 = env('CompleteTask', { task: (await openTask('A')).locator });
+    ok(await run(c2)); // same bytes as after c1
+    const afterC2 = store.text(TODO);
+    expect(await run(env('UndoCompleteTask', { target: c1 }))).toMatchObject({ code: 'conflict:task-changed' });
+    expect(store.text(TODO)).toBe(afterC2);
+  });
+
+  it('rerun Astra N5 / Opus N3: a truncated Inbox listing is a non-retryable refusal, not an endless retry', async () => {
+    const { store, env, run } = await setupFiles({ [TODO]: '## Open\n\n## Done\n' });
+    store.listDir = async () => {
+      throw new FileTooLarge('directory listing truncated');
+    };
+    expect(await run(env('CaptureNote', { text: 'Alpha' }))).toMatchObject({ code: 'refused:too-large', retryable: false });
+  });
+
+  it('rerun Opus N8 / A4: a case-variant note landing between planning and the write ends in (2), nothing overwritten', async () => {
+    const { store, env, run } = await setupFiles({ [TODO]: '## Open\n\n## Done\n' });
+    const realWrite = store.writeFile.bind(store);
+    let injected = false;
+    store.writeFile = async (req: WriteRequest) => {
+      if (!injected) {
+        injected = true;
+        await store.commitFiles({ 'Inbox/alpha - 2026-09-24.md': 'desktop\n' });
+      }
+      return realWrite(req);
+    };
+    const r = ok(await run(env('CaptureNote', { text: 'Alpha' })));
+    expect(r.path).toBe('Inbox/Alpha - 2026-09-24 (2).md');
+    expect(store.text('Inbox/alpha - 2026-09-24.md')).toBe('desktop\n');
   });
 
   it.each([

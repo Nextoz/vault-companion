@@ -40,9 +40,11 @@ describe('GitHubContentsStore', () => {
   });
 
   // Recorded shapes: docs/discovery/github-gitdata-probe-2026-09-25.md (Q1–Q6).
-  function gitData(refStatus: number | 'throw', refBody: unknown = {}) {
+  const TASKS_TREE = { truncated: false, tree: [{ path: 'To-Do List.md', mode: '100644', type: 'blob' }] };
+  function gitData(refStatus: number | 'throw', refBody: unknown = {}, tasksTree: unknown = TASKS_TREE) {
     return store((url, init) => {
       const m = init.method ?? 'GET';
+      if (m === 'GET' && url.includes('/git/trees/')) return json(200, tasksTree);
       if (m === 'GET' && url.includes('/git/commits/')) return json(200, { sha: SHA('a'), tree: { sha: SHA('7') } });
       if (m === 'POST' && url.endsWith('/git/blobs')) return json(201, { sha: SHA('b') });
       if (m === 'POST' && url.endsWith('/git/trees')) return json(201, { sha: SHA('e') });
@@ -57,6 +59,7 @@ describe('GitHubContentsStore', () => {
   const req = {
     path: 'Tasks/To-Do List.md' as VaultPath,
     baseCommit: SHA('a'),
+    expect: 'regular-file' as const,
     bytes: new TextEncoder().encode('æ'),
     message: 'Vault Companion: complete task',
     trailers: { 'Vault-Companion-Op': 'op', 'Vault-Companion-Payload': 'sha256:h' },
@@ -65,6 +68,7 @@ describe('GitHubContentsStore', () => {
   it('head-CAS write: blob, tree on the base tree, commit parented on the base, non-force ref update', async () => {
     const { s, calls } = gitData(200, { object: { sha: SHA('c') } });
     expect(await s.writeFile(req)).toEqual({ ok: true, commitSha: SHA('c'), blobSha: SHA('b') });
+    expect(calls[0]!.url).toBe(`https://api.github.com/repos/o/r/git/trees/${SHA('a')}:Tasks`); // precondition at the pinned tree
     const bodies = calls.filter((c) => c.init.body).map((c) => [c.init.method, c.url.replace('https://api.github.com/repos/o/r', ''), JSON.parse(c.init.body as string)]);
     expect(bodies).toEqual([
       ['POST', '/git/blobs', { content: 'w6Y=', encoding: 'base64' }],
@@ -72,6 +76,26 @@ describe('GitHubContentsStore', () => {
       ['POST', '/git/commits', { message: 'Vault Companion: complete task\n\nVault-Companion-Op: op\nVault-Companion-Payload: sha256:h\n', tree: SHA('e'), parents: [SHA('a')] }],
       ['PATCH', '/git/refs/heads/main', { sha: SHA('c'), force: false }],
     ]);
+  });
+
+  it.each([
+    ['update: target is a directory', 'regular-file', [{ path: 'To-Do List.md', mode: '040000', type: 'tree' }]],
+    ['update: target is executable (mode would change, Opus N7)', 'regular-file', [{ path: 'To-Do List.md', mode: '100755', type: 'blob' }]],
+    ['update: target missing', 'regular-file', []],
+    ['create: a file exists', 'absent', [{ path: 'To-Do List.md', mode: '100644', type: 'blob' }]],
+    ['create: a DIRECTORY exists (rerun Astra N1)', 'absent', [{ path: 'To-Do List.md', mode: '040000', type: 'tree' }]],
+  ] as const)('precondition fails before any object is created — %s', async (_n, expectKind, entries) => {
+    const { s, calls } = gitData(200, {}, { truncated: false, tree: entries });
+    expect(await s.writeFile({ ...req, expect: expectKind })).toEqual({ ok: false, reason: 'precondition-failed' });
+    expect(calls.filter((c) => c.init.method === 'POST' || c.init.method === 'PATCH')).toHaveLength(0);
+  });
+
+  it('listing fails closed: a 404 counts as empty only when the parent tree proves the directory absent (Opus N1)', async () => {
+    const root = (withInbox: boolean) => ({ truncated: false, tree: withInbox ? [{ path: 'Inbox', mode: '040000', type: 'tree' }] : [] });
+    const make = (withInbox: boolean) =>
+      store((url) => (url.endsWith(':Inbox') ? json(404, { message: 'Not Found' }) : json(200, root(withInbox)))).s;
+    expect(await make(false).listDir('Inbox', SHA('a'))).toEqual([]);
+    await expect(make(true).listDir('Inbox', SHA('a'))).rejects.toBeInstanceOf(StoreUnavailable);
   });
 
   it('maps the recorded 422 "Update is not a fast forward" to head-moved (A2 ABA rejection)', async () => {
@@ -83,7 +107,7 @@ describe('GitHubContentsStore', () => {
     await expect(gitData('throw').s.writeFile(req)).rejects.toBeInstanceOf(StoreUnknownOutcome);
     await expect(gitData(502).s.writeFile(req)).rejects.toBeInstanceOf(StoreUnknownOutcome);
     const early = store((url, init) => {
-      if ((init.method ?? 'GET') === 'GET') return json(200, { tree: { sha: SHA('7') } });
+      if ((init.method ?? 'GET') === 'GET') return url.includes('/git/trees/') ? json(200, TASKS_TREE) : json(200, { tree: { sha: SHA('7') } });
       throw new TypeError('network connection lost'); // blob creation never reached GitHub
     }).s;
     await expect(early.writeFile(req)).rejects.toBeInstanceOf(StoreUnavailable);
@@ -112,7 +136,7 @@ describe('GitHubContentsStore', () => {
 
   it('lists a directory through the trees API at a commit and refuses a truncated listing (R8)', async () => {
     const { s, calls } = store(() => json(200, { truncated: false, tree: [{ path: 'Note 1 - 2026-09-25.md', type: 'blob' }, { path: 'sub', type: 'tree' }] }));
-    expect(await s.listDir('Inbox', SHA('a'))).toEqual(['Note 1 - 2026-09-25.md']);
+    expect(await s.listDir('Inbox', SHA('a'))).toEqual(['Note 1 - 2026-09-25.md', 'sub']); // directories count as taken names
     expect(calls[0]!.url).toBe(`https://api.github.com/repos/o/r/git/trees/${SHA('a')}:Inbox`);
     const cut = store(() => json(200, { truncated: true, tree: [] })).s;
     await expect(cut.listDir('Inbox', SHA('a'))).rejects.toBeInstanceOf(FileTooLarge);
