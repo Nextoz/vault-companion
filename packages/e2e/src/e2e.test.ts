@@ -14,6 +14,9 @@ import { Phone, type CommandAnswer } from './phone.ts';
 import { armRefCollision, disarmRefCollision } from './ref-gate.ts';
 import { startServer, type HarnessServer } from './server.ts';
 
+// Real git processes and a real server: a cold Windows CI runner took 10.7 s for the first scenario, over Vitest's 5 s default.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
+
 vi.mock('node:child_process', async (importOriginal) => {
   const real = await importOriginal<typeof import('node:child_process')>();
   const { gateExecFile } = await import('./ref-gate.ts');
