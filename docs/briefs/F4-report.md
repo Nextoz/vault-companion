@@ -106,4 +106,4 @@ mutation run was a single sequential vitest process.
 - Acknowledged receipts beyond 20 that the current read does not answer about are kept (retention may briefly exceed
   20) rather than evicted without proof.
 
-F4 DONE <commit-sha> — docs/briefs/F4-report.md
+F4 DONE 5fb564d — docs/briefs/F4-report.md
