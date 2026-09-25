@@ -8,6 +8,7 @@ import type { PendingQueue } from '../queue/queue.ts';
 import { knownCommits, renderable, TaskReads, type RenderedRead } from '../reads.ts';
 import { plainWikilinks } from '../text.ts';
 import { buildView, occurrenceKey } from '../view.ts';
+import { FROZEN_NOTE, taskListLock } from '../writeBlock.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { TaskList } from './TaskList.tsx';
@@ -155,6 +156,7 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
         setNotice('Connect once to set up this device.');
         return;
       }
+      if (tasks.writeBlock) return; // every task-list write would be refused (writeBlock.ts)
       tappedRef.current.add(key);
       setTapped(new Set(tappedRef.current));
       try {
@@ -174,10 +176,12 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
 
   // Completions with an Undo being minted: the toast and the Done today row cannot mint a second one (P4-B).
   const undoingRef = useRef(new Set<string>());
+  const lock = taskListLock(tasks);
   const undo = useCallback(
     async (target: CompleteTaskCommand, label: string) => {
       setToast(null);
-      if (!accountKey || !revision) return;
+      // The server refuses every task-list write while it is blocked (writeBlock.ts).
+      if (!accountKey || !revision || tasks?.writeBlock) return;
       const undone = queue
         .getSnapshot()
         .items.some((i) => i.envelope.type === 'UndoCompleteTask' && i.envelope.payload.target.operationId === target.operationId);
@@ -192,10 +196,11 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
         undoingRef.current.delete(target.operationId);
       }
     },
-    [accountKey, queue, revision],
+    [accountKey, queue, revision, tasks],
   );
 
-  const writeBlocked = tasks?.writeBlock ?? null;
+  const writeBlocked = lock !== null;
+  const frozen = lock?.conflict ?? false;
   // Calm by default: the actions list sits below the tasks unless something needs the user.
   const needsAttention = snapshot.items.some((i) => i.state === 'attention');
 
@@ -213,6 +218,11 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
       </header>
 
       <main className="content">
+        {lock && (
+          <div className="banner banner-warn" role="alert">
+            {lock.banner}
+          </div>
+        )}
         {signedOut && (
           <div className="banner banner-warn" role="alert">
             <span>Signed out — reload to sign in. Your pending actions stay on this device.</span>
@@ -234,11 +244,6 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
             Refreshing…
           </div>
         )}
-        {writeBlocked && (
-          <div className="banner banner-warn" role="alert">
-            {writeBlocked.message}
-          </div>
-        )}
         {notice && (
           <div className="banner" role="status">
             <span>{notice}</span>
@@ -255,15 +260,16 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
           <p className="muted">Refreshing…</p>
         )}
 
+        {tasks && lock?.conflict && <p className="muted small">{FROZEN_NOTE}</p>}
         {tasks &&
           (tab === 'today' ? (
             <>
-              <TaskList title="Overdue" rows={view.overdue} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} overdue />
-              <TaskList title="Today" rows={view.today} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} empty="Nothing due today." />
-              <TaskList title="Done today" rows={view.doneToday} tapped={tapped} blocked onComplete={complete} onUndo={undo} />
+              <TaskList title="Overdue" rows={view.overdue} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} overdue />
+              <TaskList title="Today" rows={view.today} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} empty="Nothing due today." />
+              <TaskList title="Done today" rows={view.doneToday} tapped={tapped} blocked frozen={frozen} onComplete={complete} onUndo={undo} />
             </>
           ) : (
-            <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} empty="No open tasks." />
+            <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} empty="No open tasks." />
           ))}
 
         {!needsAttention && <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={refreshTasks} />}
@@ -278,6 +284,7 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
           queue={queue}
           accountKey={accountKey}
           baseRevision={revision}
+          taskBlocked={lock ? lock.banner : null}
           onClose={() => setCaptureOpen(false)}
         />
       )}
@@ -285,10 +292,14 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
       {toast && (
         <div className="toast" role="status">
           <span>Done</span>
-          <span aria-hidden="true">·</span>
-          <button type="button" onClick={() => void undo(toast.target, toast.label)}>
-            Undo
-          </button>
+          {!writeBlocked && (
+            <>
+              <span aria-hidden="true">·</span>
+              <button type="button" onClick={() => void undo(toast.target, toast.label)}>
+                Undo
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

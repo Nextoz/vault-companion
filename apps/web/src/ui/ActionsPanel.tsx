@@ -20,10 +20,12 @@ export function attentionText(item: QueueItem): string | null {
 
 /**
  * Whether sending the same bytes again can succeed. A refusal known not to have applied (`refused:*`, `conflict:*`,
- * …) is final for these bytes: the server will refuse them again, so Retry is not offered (P4-B).
+ * …) is final for these bytes: the server will refuse them again, so Retry is not offered (P4-B). Except a refusal
+ * for Git conflict markers in the file: once the owner resolves the conflict on the desktop, the same bytes may apply.
  */
 export function canRetry(item: QueueItem): boolean {
-  return !item.accountMismatch && !knownNotApplied(item.error);
+  if (item.accountMismatch) return false;
+  return item.error?.code === 'refused:vault-conflict' || !knownNotApplied(item.error);
 }
 
 /** Every action on this device with its honest state. Saved entries can be cleared. */

@@ -250,6 +250,14 @@ describe('Undo from Done today (P4-B)', () => {
     expect(undoing.doneToday).toMatchObject([{ undo: null }]);
   });
 
+  it('offers none while the task list is write-blocked (a sync conflict refuses every write)', () => {
+    const blocked = TasksResponse.parse({
+      ...included,
+      writeBlock: { code: 'refused:vault-conflict', message: 'File contains Git conflict markers.', retryable: false },
+    });
+    expect(buildView(blocked, [saved], ACCOUNT).doneToday).toMatchObject([{ action: { operationId: complete.operationId }, undo: null }]);
+  });
+
   it('offers none for a done line the device did not complete, or a completion not yet in the read', () => {
     expect(buildView(included, [], ACCOUNT).doneToday).toMatchObject([{ action: null, undo: null }]);
     const notYet = buildView(read([openTask], [], { [COMMIT]: 'not-included' }), [saved], ACCOUNT);

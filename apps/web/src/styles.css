@@ -295,6 +295,10 @@ textarea:focus-visible {
   font-size: 0.85rem;
 }
 
+.group-frozen .task {
+  opacity: 0.6;
+}
+
 .task .link {
   align-self: center;
   min-height: var(--tap);

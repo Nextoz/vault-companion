@@ -36,8 +36,8 @@ describe('attention next steps (P4-B)', () => {
     expect(canRetry(attention('account-mismatch', { accountMismatch: true }))).toBe(false);
   });
 
-  it('keeps Retry where resending may still succeed', () => {
-    for (const code of ['dedupe-unknown', 'http-418', 'forbidden']) expect(canRetry(attention(code)), code).toBe(true);
+  it('keeps Retry where resending may still succeed, including after a sync conflict is resolved', () => {
+    for (const code of ['dedupe-unknown', 'http-418', 'forbidden', 'refused:vault-conflict']) expect(canRetry(attention(code)), code).toBe(true);
   });
 
   it('explains a changed task in plain words; other errors keep the server message', () => {

@@ -93,6 +93,8 @@ export function buildView(
   }
 
   const allOpen = tasks?.allOpen ?? [];
+  // A write-blocked list refuses every mutation, Undo included (writeBlock.ts).
+  const writable = !tasks?.writeBlock;
   const rowKey = (t: TaskView) => `${t.locator.lineIndex}:${t.locator.lineText}`;
   const row = (t: TaskView, action: QueueItem | null, done = false, undo: CompleteTaskCommand | null = null): Row => ({
     key: rowKey(t),
@@ -172,7 +174,8 @@ export function buildView(
       a === completion &&
       a.envelope.type === 'CompleteTask' &&
       accountKey !== null &&
-      a.accountKey === accountKey;
+      a.accountKey === accountKey &&
+      writable;
     view.doneToday.push(row(t, a, true, undoable && a.envelope.type === 'CompleteTask' ? a.envelope : null));
   }
 

@@ -296,7 +296,9 @@ for (const which of ['session', 'tasks'] as const) {
     await page.clock.install();
     if (which === 'session') api.sessionMode = 'hang';
     else api.tasksMode = 'hang';
+    const hung = page.waitForRequest(which === 'session' ? '**/api/session' : '**/api/tasks**');
     await page.goto('/');
+    await hung;
     await expect(page.getByText('Loading…')).toBeVisible();
     await page.clock.fastForward(10_000);
     const banner = page.getByRole('status').filter({ hasText: "Couldn't reach your vault" });
@@ -308,3 +310,31 @@ for (const which of ['session', 'tasks'] as const) {
     await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   });
 }
+
+test('a sync conflict in the task list: banner first, no task writes, notes still work', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
+  await expect.poll(() => api.applied.length).toBe(1);
+  await expect(region(page, 'Done today').getByText('Saved to GitHub')).toBeVisible();
+
+  // The desktop committed a conflict: the read lists both sides of a conflicted line, plus a done copy.
+  api.writeBlock = { code: 'refused:vault-conflict', message: 'File contains Git conflict markers.', retryable: false };
+  api.open = [taskView(10, 'Call the bike shop'), taskView(12, 'Call the bike shop at noon')];
+  api.doneToday.push({ ...taskView(20, 'Call the bike shop'), status: 'done', section: 'done', done: '2026-09-24' });
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+
+  await expect(page.getByRole('alert').first()).toContainText(
+    'Your task list has a sync conflict — resolve it in Obsidian on your computer',
+  );
+  await expect(page.getByText('may include both sides of the conflict')).toBeVisible();
+  await expect(region(page, 'Today').getByTestId('task')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: /^Complete:/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Undo/ })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Capture' }).click();
+  await expect(page.getByRole('button', { name: 'Task', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Note', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByLabel('Note text').fill('A synthetic thought');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['CompleteTask', 'CaptureNote']);
+});

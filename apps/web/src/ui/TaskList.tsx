@@ -16,12 +16,14 @@ interface Props {
   onUndo?: (target: CompleteTaskCommand, label: string) => void;
   overdue?: boolean;
   empty?: string;
+  /** The task list has a sync conflict: rows are shown as last read, not as actionable tasks (writeBlock.ts). */
+  frozen?: boolean;
 }
 
-export function TaskList({ title, rows, tapped, blocked, onComplete, onUndo, overdue = false, empty }: Props) {
+export function TaskList({ title, rows, tapped, blocked, onComplete, onUndo, overdue = false, empty, frozen = false }: Props) {
   if (rows.length === 0 && !empty) return null;
   return (
-    <section className="group" aria-label={title}>
+    <section className={frozen ? 'group group-frozen' : 'group'} aria-label={title}>
       <h2>{title}</h2>
       {rows.length === 0 ? (
         <p className="muted">{empty}</p>

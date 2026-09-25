@@ -51,6 +51,8 @@ export class MockApi {
   session: 'ok' | 'signed-out' = 'ok';
   sessionMode: ReadMode = 'ok';
   tasksMode: ReadMode = 'ok';
+  /** The read's writeBlock, e.g. a committed Git conflict in the task list. */
+  writeBlock: ApiError | null = null;
   /** Blob of the task file in every read; change it to model a desktop edit. */
   blobSha = '2'.repeat(40);
   commandMode: CommandMode = 'ok';
@@ -109,7 +111,7 @@ export class MockApi {
       blobSha: this.blobSha,
       today: TODAY,
       timeZone: 'Europe/Copenhagen',
-      writeBlock: null,
+      writeBlock: this.writeBlock,
       known,
       todayTasks: open.filter((t) => t.due === TODAY),
       overdue: [],
