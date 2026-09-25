@@ -24,7 +24,7 @@ Model routing: Codex **GPT-6 Astra at reasoning effort `medium`** (owner decisio
 
 ## Must not change
 
-Everything else. No `git push`, no remote, no network writes. Do not create GitHub repositories.
+Everything else. Push only branch `agent/ci`. No other network writes. Do not create repositories or PRs.
 
 ## Verify
 
@@ -34,5 +34,5 @@ Run `pnpm ci:local` in your worktree (all green). Validate the workflow YAML wit
 ## Report
 
 `docs/briefs/C-report.md`: what was added, action SHAs and how each was resolved, local run results, and anything
-that could not be verified without a remote. Commit on `agent/ci`. Print one line at the end:
+that could not be verified without a remote. Commit and push `agent/ci`. Print one line at the end:
 `C DONE <commit-sha> — docs/briefs/C-report.md`.
