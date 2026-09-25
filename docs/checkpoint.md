@@ -2,21 +2,18 @@
 
 **HEAD:** `main`, clean. CI (GitHub Actions) gates every PR. Plan, milestones, workers, targets: `docs/plan.md`.
 
-## In flight (all Claude Code Cloud; branches appear on origin when pushed)
+## In flight
 
-P2-A fixes (PR #4) · P2-B offline e2e · P3-A deploy scaffold · P4-A linked notes · P4-B client correctness ·
-P4-C draft recovery. Session IDs in `docs/plan.md`. Watcher: `tools/wait-for-work.sh` (background) wakes the Lead on
-new branches, CodeRabbit reviews, finished CI and finished Codex logs.
+Merged: PRs #1–#12 (CI, harness, Today rule, fixtures, offline SW, linked notes, client correctness, drafts, deploy).
+Cloud: P4-D Active Work Now (`agent/active-work-now`, P4-A session) and P4-E token Undo (`agent/token-undo`, P4-B
+session). Watcher: `tools/wait-for-work.sh` in the background.
 
 ## Exact next actions
 
-1. For each pushed branch: open PR → CodeRabbit loop → CI green → read `.agent/handoffs/<brief>.md` and disposition
-   every discovery in the PR comment → merge. P4-A also gets an Astra adversarial review first.
-2. After **all** milestone-1 streams merge: run the whole-system review on the combined build (Phase 2 gate (`docs/reviews/phase-2-review-brief.md`, Cloud Opus + Astra) and
-   reconcile. Note for the gate: the real desktop worker never writes conflict markers (harness models a stricter case).
-3. After P3-A merges: owner does G2 with `docs/deploy.md` (owner has a Cloudflare account); Lead deploys and verifies
-   read-only against the live vault; then milestone 2 canary (G3).
-4. T1 Today: domain rule (Astra), layout (P4-B), Active Work Now card (P4-D after P4-A).
+1. P4-D and P4-E: PR → CodeRabbit → CI → handoff dispositions → merge (P4-E: Astra high review — identity/concurrency).
+2. Then the whole-system review of the combined build (`docs/reviews/phase-2-review-brief.md`, Cloud Opus + Astra high).
+3. Owner G2 now possible with `docs/deploy.md` §1–§7 (skip §0: P1 on hold, token Undo fits Free). Lead then runs §8–§9.
+4. Canary (G3) needs the desktop sync worker patch applied first.
 
 ## Desktop sync worker broken — canary dependency. Tested patch ready (Lead scratchpad `syncfix/`); awaiting owner approval to apply to the vault.
 
