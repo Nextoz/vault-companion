@@ -36,5 +36,8 @@ exists; `main` pushed. Claude tokens are running low: implementation is routed t
   `agent/e2e-harness`) — **done but unpushed** (sessions were bundle uploads, no `origin`). Owner installs the Claude
   GitHub App on the repo, then Lead sends each session `claude -p "<push instruction>" --cloud <id>`; then PRs as usual.
 
+- P3-A deploy scaffolding — Cloud `session_01BtqCxHaRkAXZ53YDZ4QSe4`, branch `agent/deploy-scaffold` (launched after the
+  App install; first stub push proves the session cloned rather than bundled).
+
 **Exact next action:** `git fetch`; handle whichever of the above is ready first. Keep the Lead lean (Claude tokens low):
 offload implementation and PR follow-ups to Cloud / Astra low.
