@@ -38,10 +38,16 @@ storage changes overlap, so no stream is reviewed only in isolation).
 | P4-A linked note context (contract item 7) | Cloud `session_012WDdnkDZjTWRF4956Mjaoz`, `agent/linked-notes` | in flight; Astra adversarial review before merge |
 | P4-B client correctness: duplicate-task identity, read timeouts/error state, conflict next step, Undo in Done today | Cloud `session_01TLT6gLxkoKtDHSy8CcCpmb`, `agent/client-correctness` | in flight |
 | P4-C capture draft recovery (account-aware, separate from the queue) | Cloud `session_01H7tmZxTqo9BDE7UHb5esX1`, `agent/draft-recovery` | in flight |
-| T1 Today rule (domain read model) | Codex Astra low, clone `…-clones/today-rule` | in flight |
+| T1 Today rule (domain read model) | Astra low → **PR #5** (495 tests, mutation-checked) | CodeRabbit/CI |
+| Hermetic git fixtures (P2-A follow-up) | Astra low → **PR #6** (55 package tests) | CodeRabbit/CI |
 | T1 Today layout (Overdue below, collapsed) | P4-B addendum | in flight |
 | P4-D Active Work Now read-only card | Cloud, after P4-A merges (reuses its renderer) | queued |
 | Whole-system review (Phase 2 gate + milestone 1 exit) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after **all** milestone-1 streams merge |
+
+**Worker reality check (14:45):** the five newer Cloud sessions (P2-B, P3-A, P4-A/B/C) have pushed nothing and are
+not observable from the Lead. Suspected cause: sessions wait for repo attach/push approval (as C and P2-A did). A probe
+session (`session_01RxiYA5FV3eo79DQb7qSY1R`, branch `agent/cloud-probe`) tests the current launch path before any
+replacement is created. Codex quota exhausted until 18:55.
 
 Every branch: PR → CodeRabbit loop → CI → handoff dispositions (`.agent/handoffs/`) → merge.
 
