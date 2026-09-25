@@ -109,6 +109,8 @@ export const ErrorCode = z.enum([
   'conflict:stale',
   'operation-id-reused',
   'dedupe-unknown',
+  /** POST's X-VC-Account differs from the authenticated identity (review A7). Not retryable. */
+  'account-mismatch',
   'unauthorized',
   'forbidden',
   'invalid',
