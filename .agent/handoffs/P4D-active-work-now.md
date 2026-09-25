@@ -31,7 +31,8 @@
 - Leave alone: absent-as-state and the symlink-as-absent behaviour.
 
 ## Verification
-- `pnpm check`: lint and typecheck clean; 34 files, 589 tests passed.
+- After merging the updated `agent/linked-notes` (which includes main's P4-B, P4-C and P2-A work): `pnpm check` is
+  clean, 43 files, 711 tests passed, and web e2e passes 32/32 on Chromium. Before that merge: 34 files, 589 tests passed.
 - Web e2e (production build, iPhone 15 viewport, **Chromium** via a temporary uncommitted config): 11/11 passed,
   including two new Active work tests:
   - card above Today, XSS case inert, collapse survives a reload, nothing about the card in IndexedDB, Cache Storage or
@@ -50,4 +51,5 @@
   - D10: unsanitised insert (e2e)
 
 ## Commit
-Branch `agent/active-work-now`. See the final SHA in the session's last line.
+Branch `agent/active-work-now`, based on `agent/linked-notes` `922cd88` (already merged with main). See the final SHA
+in the session's last line.
