@@ -399,3 +399,101 @@ textarea:focus-visible {
 .sheet-buttons {
   justify-content: flex-end;
 }
+
+/* Wikilinks in a task line open the linked note (P4-A). Inline, so the row keeps its text flow. */
+.task-text .wikilink {
+  display: inline;
+  min-height: 0;
+  min-width: 0;
+  padding: 6px 0;
+  margin: -6px 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font: inherit;
+}
+
+.note-view {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow-y: auto;
+  background: var(--bg);
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+.note-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.note-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 1.05rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-head h2:focus {
+  outline: none;
+}
+
+.note-badge {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.note-message {
+  padding: 16px;
+}
+
+.note-body {
+  padding: 4px 16px;
+  overflow-wrap: anywhere;
+}
+
+.note-body a {
+  color: var(--accent);
+}
+
+.note-body .wikilink {
+  color: var(--accent);
+}
+
+.note-body pre {
+  overflow-x: auto;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.note-body blockquote {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+}
+
+.note-body table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.note-body th,
+.note-body td {
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+}

@@ -3,6 +3,10 @@
 import {
   ApiError,
   Command,
+  decodeLinkedNoteHeader,
+  LINKED_NOTE_HEADER,
+  LinkedNoteResponse,
+  type LinkedNoteRequest,
   Receipt,
   SessionResponse,
   TasksResponse,
@@ -52,6 +56,10 @@ export class MockApi {
   /** Every POST body exactly as received, including failed attempts. */
   readonly bodies: string[] = [];
   readonly applied: Command[] = [];
+  /** Linked-note answers by target; the mock resolves `links[linkIndex]` of the requested task like the server. */
+  notes = new Map<string, { path: string; markdown: string }>();
+  /** Every decoded linked-note request, and the raw URL it came on (must never carry task text). */
+  readonly noteRequests: { req: LinkedNoteRequest; url: string }[] = [];
   readonly #receipts = new Map<string, Receipt>();
   #held: (() => void)[] = [];
   #revision = sha();
@@ -60,6 +68,7 @@ export class MockApi {
     await page.route('**/api/session', (route) => this.#session(route));
     await page.route('**/api/tasks**', (route) => this.#tasks(route));
     await page.route('**/api/commands', (route) => this.#command(route));
+    await page.route('**/api/linked-note**', (route) => this.#linkedNote(route));
   }
 
   #json(route: Route, status: number, body: unknown) {
@@ -69,6 +78,21 @@ export class MockApi {
   #session(route: Route) {
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     return this.#json(route, 200, SessionResponse.parse({ accountKey: ACCOUNT }));
+  }
+
+  #linkedNote(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    const request = route.request();
+    const req = decodeLinkedNoteHeader(request.headers()[LINKED_NOTE_HEADER.toLowerCase()]);
+    if (!req) return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'invalid linked-note request', retryable: false }));
+    this.noteRequests.push({ req, url: request.url() });
+    const task = [...this.open, ...this.doneToday].find((t) => t.locator.lineText === req.taskLocator.lineText);
+    const target = task?.links[req.linkIndex];
+    const note = target === undefined ? undefined : this.notes.get(target);
+    const body = note
+      ? { status: 'ok', revision: this.#revision, path: note.path, blobSha: '4'.repeat(40), markdown: note.markdown }
+      : { status: 'refused', revision: this.#revision, code: task ? 'not-found' : 'task-changed', message: 'refused' };
+    return this.#json(route, 200, LinkedNoteResponse.parse(body));
   }
 
   #tasks(route: Route) {

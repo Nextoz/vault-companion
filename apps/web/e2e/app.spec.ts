@@ -163,3 +163,75 @@ test('a second tab never re-sends a completion in flight in the first, and Undo 
   await expect(region(second, 'Today').getByText('Water the plants')).toBeVisible();
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
 });
+
+test('open a linked note from a task: read-only, sanitised, and nothing about it stored on the device', async ({ page }) => {
+  api.open = [taskView(14, 'Prepare [[Projects/Garden/Plan|the garden plan]] and [[Missing]]', { links: ['Projects/Garden/Plan', 'Missing'] })];
+  api.notes.set('Projects/Garden/Plan', {
+    path: 'Projects/Garden/Plan.md',
+    markdown: [
+      '# Beds',
+      '',
+      'Sow **carrots** in row 3. See [[Seeds]] and [the almanac](https://example.com/almanac).',
+      '',
+      '<img src=x onerror="window.pwned=1"> [bad](javascript:window.pwned=2) ![x](javascript:window.pwned=3)',
+      '',
+      '<svg onload="window.pwned=4"></svg>',
+    ].join('\n'),
+  });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Open note: the garden plan' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'Plan' })).toBeVisible();
+  await expect(dialog).toContainText('Read-only');
+  const body = dialog.getByTestId('note-body');
+  await expect(body.getByRole('heading', { name: 'Beds' })).toBeVisible();
+  await expect(body.locator('strong')).toHaveText('carrots');
+  await expect(body.locator('.wikilink')).toHaveText('Seeds');
+  const almanac = body.getByRole('link', { name: 'the almanac' });
+  await expect(almanac).toHaveAttribute('href', 'https://example.com/almanac');
+  await expect(almanac).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(body.getByRole('link')).toHaveCount(1);
+  await expect(body.locator('img, svg, script')).toHaveCount(0);
+  await expect(body).toContainText('<img src=x onerror="window.pwned=1">');
+  expect(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned)).toBeUndefined();
+
+  // The request named the task and link index only; task text never travelled in the URL.
+  expect(api.noteRequests).toHaveLength(1);
+  expect(api.noteRequests[0]!.req.linkIndex).toBe(0);
+  expect(api.noteRequests[0]!.url).not.toContain('garden');
+  expect(new URL(api.noteRequests[0]!.url).search).toBe('');
+
+  // No note content in IndexedDB or Cache Storage.
+  const stored = await page.evaluate(async () => {
+    const dump: string[] = [];
+    for (const info of await indexedDB.databases()) {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const r = indexedDB.open(info.name!);
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      });
+      for (const name of db.objectStoreNames) {
+        const all = await new Promise<unknown[]>((resolve, reject) => {
+          const r = db.transaction(name).objectStore(name).getAll();
+          r.onsuccess = () => resolve(r.result);
+          r.onerror = () => reject(r.error);
+        });
+        dump.push(JSON.stringify(all));
+      }
+      db.close();
+    }
+    for (const key of await caches.keys()) {
+      for (const req of await (await caches.open(key)).keys()) dump.push(req.url);
+    }
+    return dump.join('\n');
+  });
+  expect(stored).not.toContain('carrots');
+  expect(stored).not.toContain('linked-note');
+
+  await page.getByRole('button', { name: 'Back to tasks' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Open note: Missing' }).click();
+  await expect(page.getByRole('dialog')).toContainText('No note with this name was found.');
+});

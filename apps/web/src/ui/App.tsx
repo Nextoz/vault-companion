@@ -9,6 +9,7 @@ import { plainWikilinks } from '../text.ts';
 import { buildView } from '../view.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
+import { NoteView, type OpenLink } from './NoteView.tsx';
 import { TaskList } from './TaskList.tsx';
 
 type Tab = 'today' | 'all';
@@ -31,6 +32,8 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
   const [accountKey, setAccountKey] = useState<string | null>(() => prefs.lastAccountKey());
   const [tab, setTab] = useState<Tab>('today');
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [openLink, setOpenLink] = useState<OpenLink | null>(null);
+  const closeNote = useCallback(() => setOpenLink(null), []);
   const [toast, setToast] = useState<Toast | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Tasks whose checkbox was tapped: disabled synchronously, before the envelope is even persisted (F19).
@@ -249,12 +252,12 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
         {tasks &&
           (tab === 'today' ? (
             <>
-              <TaskList title="Overdue" rows={view.overdue} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} overdue />
-              <TaskList title="Today" rows={view.today} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} empty="Nothing due today." />
-              <TaskList title="Done today" rows={view.doneToday} tapped={tapped} blocked onComplete={complete} />
+              <TaskList title="Overdue" rows={view.overdue} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} onOpenLink={setOpenLink} overdue />
+              <TaskList title="Today" rows={view.today} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} onOpenLink={setOpenLink} empty="Nothing due today." />
+              <TaskList title="Done today" rows={view.doneToday} tapped={tapped} blocked onComplete={complete} onOpenLink={setOpenLink} />
             </>
           ) : (
-            <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} empty="No open tasks." />
+            <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} onOpenLink={setOpenLink} empty="No open tasks." />
           ))}
 
         {!needsAttention && <ActionsPanel queue={queue} items={snapshot.items} read={tasks} />}
@@ -272,6 +275,8 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
           onClose={() => setCaptureOpen(false)}
         />
       )}
+
+      {openLink && <NoteView link={openLink} onClose={closeNote} />}
 
       {toast && (
         <div className="toast" role="status">
