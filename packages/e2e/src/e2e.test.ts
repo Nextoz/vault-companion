@@ -1,15 +1,24 @@
 // Phase 2 disposable end-to-end (docs/testing.md, roadmap Phase 2): the real Worker app on Node, the real command
 // service over LocalGitStore on a temp bare repo, a desktop clone synced by the W1–W5 model, and a phone speaking the
 // real contracts over HTTP. No mocks. Every scenario ends by asserting the exact bytes in the desktop clone.
+// The only interposition is `ref-gate.ts` (review P2A-Astra #1): it orders the completion of the store's REAL git
+// processes so a head-CAS collision is guaranteed; it never fabricates a git result.
 import { rename } from 'node:fs/promises';
-import { rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Receipt } from '@vault-companion/contracts';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Desktop } from './desktop.ts';
 import { createRemote, git, logWithOps, tryGit, type RemoteFixture } from './git.ts';
 import { Phone, type CommandAnswer } from './phone.ts';
+import { armRefCollision } from './ref-gate.ts';
 import { startServer, type HarnessServer } from './server.ts';
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const real = await importOriginal<typeof import('node:child_process')>();
+  const { gateExecFile } = await import('./ref-gate.ts');
+  return { ...real, execFile: gateExecFile(real.execFile) };
+});
 
 const TODO = 'Tasks/To-Do List.md';
 const NOW = new Date('2026-09-24T10:00:00Z');
@@ -43,14 +52,46 @@ interface Harness {
   bareHead(): string;
 }
 
-let current: Harness | null = null;
+/** Resources are registered the moment they exist and released LIFO; one failing step never skips the rest (review #4). */
+class Cleanup {
+  private steps: (() => void | Promise<void>)[] = [];
+  add(step: () => void | Promise<void>): void {
+    this.steps.push(step);
+  }
+  async run(): Promise<void> {
+    const steps = this.steps.reverse();
+    this.steps = [];
+    const errors: unknown[] = [];
+    for (const step of steps) {
+      try {
+        await step();
+      } catch (e) {
+        errors.push(e);
+      }
+    }
+    if (errors.length > 0) throw new AggregateError(errors, 'harness cleanup failed');
+  }
+}
 
-async function setup(seed: string = todo(OPEN)): Promise<Harness> {
+const cleanup = new Cleanup();
+/** Servers whose logs the A18 check inspects after the test. */
+let servers: HarnessServer[] = [];
+/** What the most recent setup created, even if it later failed (for the setup-failure scenario). */
+let created: { root?: string; baseUrl?: string } = {};
+
+async function setup(seed: string = todo(OPEN), opts: { email?: string; cleanup?: Cleanup } = {}): Promise<Harness> {
+  const registry = opts.cleanup ?? cleanup;
+  created = {};
   const remote = createRemote({ [TODO]: seed });
+  created.root = remote.root;
+  registry.add(() => rmSync(remote.root, { recursive: true, force: true }));
   const server = await startServer({ bare: remote.bare, gitEnv: remote.env, now: () => NOW, timeZone: 'Europe/Copenhagen' });
-  const phone = await Phone.signIn(server.baseUrl, await server.token(), OCCURRED_AT);
+  created.baseUrl = server.baseUrl;
+  registry.add(() => server.close());
+  servers.push(server);
+  const phone = await Phone.signIn(server.baseUrl, await server.token(opts.email), OCCURRED_AT);
   const desktop = Desktop.clone(remote.env, remote.bare, join(remote.root, 'desktop'));
-  current = {
+  return {
     remote,
     server,
     phone,
@@ -58,20 +99,20 @@ async function setup(seed: string = todo(OPEN)): Promise<Harness> {
     commitsFor: (op) => logWithOps(remote.env, remote.bare).filter((c) => c.operationId === op).map((c) => c.sha),
     bareHead: () => git(remote.env, remote.bare, 'rev-parse', 'main'),
   };
-  return current;
 }
 
 afterEach(async () => {
-  if (!current) return;
-  const { server, remote } = current;
-  current = null;
-  await server.close();
-  // A18 across the whole harness: no task or note text, no clear-text vault path reaches the log sink.
-  const logged = JSON.stringify(server.logs);
-  for (const word of ['Water', 'bike', 'receipts', 'garden', 'permit', 'dentist', 'bakery', 'insurance', 'stamps', 'Inbox/', 'To-Do']) {
-    expect(logged).not.toContain(word);
+  const inspected = servers;
+  servers = [];
+  try {
+    // A18 across the whole harness: no task or note text, no clear-text vault path reaches the log sink.
+    const logged = JSON.stringify(inspected.map((s) => s.logs));
+    for (const word of ['Water', 'bike', 'receipts', 'garden', 'permit', 'dentist', 'bakery', 'insurance', 'stamps', 'Inbox/', 'To-Do']) {
+      expect(logged).not.toContain(word);
+    }
+  } finally {
+    await cleanup.run();
   }
-  rmSync(remote.root, { recursive: true, force: true });
 });
 
 function receiptOf(answer: CommandAnswer): Receipt {
@@ -97,7 +138,7 @@ describe.each([
     expect(receipt.status).toBe('applied');
     expect(receipt.effect).toEqual({ kind: 'completed', completedLineText: done(WATER), openLineText: WATER, completedInPlace: false, doneDate: '2026-09-24' });
 
-    expect(h.desktop.sync()).toEqual({ committedLocal: false, integrated: 'fast-forward', conflicts: [], pushed: false });
+    expect(h.desktop.sync()).toEqual({ committedLocal: false, integrated: 'fast-forward', conflicts: [], pushed: false, pushRejections: 0 });
     expect(h.desktop.read(TODO)).toBe(todo([BIKE, RECEIPTS, GARDEN, PERMIT, DENTIST], [done(WATER), OLD_DONE], eol));
     expect(h.desktop.head()).toBe(receipt.commitSha);
     expect(h.desktop.git('rev-parse', `HEAD:${TODO}`)).toBe(receipt.blobSha);
@@ -114,7 +155,7 @@ describe('desktop → app', () => {
     const before = await h.phone.read();
     const permitDue = PERMIT.replace('#todo', '#todo 📅 2026-10-01');
     h.desktop.edit(TODO, (t) => t.replace(PERMIT, permitDue));
-    expect(h.desktop.sync()).toEqual({ committedLocal: true, integrated: 'up-to-date', conflicts: [], pushed: true });
+    expect(h.desktop.sync()).toEqual({ committedLocal: true, integrated: 'up-to-date', conflicts: [], pushed: true, pushRejections: 0 });
 
     const after = await h.phone.read();
     expect(after.revision).toBe(h.desktop.head());
@@ -180,7 +221,12 @@ describe('retries', () => {
     const tasks = await h.phone.read();
     const cmd = h.phone.envelope('CompleteTask', { task: locatorOf(tasks, WATER) }, tasks.revision);
 
+    const collision = armRefCollision();
     const [a, b] = (await Promise.all([h.phone.send(cmd), h.phone.send(cmd)])).map(receiptOf) as [Receipt, Receipt];
+    // Both executions prepared a commit on the same head; the real update-ref let exactly one publish.
+    const writes = await collision;
+    expect(writes.map((w) => w.parent)).toEqual([tasks.revision, tasks.revision]);
+    expect(writes.map((w) => w.updateRefCode === 0)).toEqual([true, false]);
     expect([a.status, b.status].sort()).toEqual(['already-applied', 'applied']);
     expect(a.commitSha).toBe(b.commitSha);
     expect(h.commitsFor(cmd.operationId)).toEqual([a.commitSha]);
@@ -198,7 +244,7 @@ describe('divergence', () => {
     h.desktop.edit(TODO, (t) => t.replace(PERMIT, permitDue)); // uncommitted, like Obsidian mid-session
     const receipt = receiptOf(await h.phone.send(h.phone.envelope('CompleteTask', { task: locatorOf(tasks, WATER) }, tasks.revision)));
 
-    expect(h.desktop.sync()).toEqual({ committedLocal: true, integrated: 'merged', conflicts: [], pushed: true });
+    expect(h.desktop.sync()).toEqual({ committedLocal: true, integrated: 'merged', conflicts: [], pushed: true, pushRejections: 0 });
     expect(h.desktop.read(TODO)).toBe(todo([BIKE, RECEIPTS, GARDEN, permitDue, DENTIST], [done(WATER), OLD_DONE]));
     expect(h.bareHead()).toBe(h.desktop.head());
     expect(tryGit(h.remote.env, h.remote.bare, 'merge-base', '--is-ancestor', receipt.commitSha, 'main').code).toBe(0); // W1
@@ -213,7 +259,7 @@ describe('divergence', () => {
     const completed = receiptOf(await h.phone.send(h.phone.envelope('CompleteTask', { task: locatorOf(tasks, WATER) }, tasks.revision)));
     const capturedTask = receiptOf(await h.phone.send(h.phone.envelope('CaptureTask', { text: 'Call the bakery' }, tasks.revision)));
 
-    expect(h.desktop.sync()).toEqual({ committedLocal: false, integrated: 'merged', conflicts: [], pushed: true });
+    expect(h.desktop.sync()).toEqual({ committedLocal: false, integrated: 'merged', conflicts: [], pushed: true, pushRejections: 0 });
     expect(h.desktop.read(TODO)).toBe(todo([captured('Call the bakery'), BIKE, RECEIPTS, GARDEN, PERMIT, dentistDue], [done(WATER), OLD_DONE]));
     for (const sha of [desktopCommit, completed.commitSha, capturedTask.commitSha]) {
       expect(tryGit(h.remote.env, h.remote.bare, 'merge-base', '--is-ancestor', sha, 'main').code).toBe(0);
@@ -229,7 +275,7 @@ describe('divergence', () => {
     h.desktop.edit(TODO, (t) => t.replace(`${DENTIST}\n`, `${DENTIST}\n${stamps}\n`));
     receiptOf(await h.phone.send(h.phone.envelope('CaptureTask', { text: 'Call the bakery' }, tasks.revision)));
 
-    expect(h.desktop.sync()).toEqual({ committedLocal: true, integrated: 'merged', conflicts: [], pushed: true });
+    expect(h.desktop.sync()).toEqual({ committedLocal: true, integrated: 'merged', conflicts: [], pushed: true, pushRejections: 0 });
     expect(h.desktop.read(TODO)).toBe(todo([captured('Call the bakery'), ...OPEN, stamps]));
   });
 });
@@ -259,7 +305,7 @@ describe('same-task conflict', () => {
     h.desktop.edit(TODO, (t) => t.replace(WATER, waterDue)); // not yet synced
     const completed = receiptOf(await h.phone.send(h.phone.envelope('CompleteTask', { task: locatorOf(tasks, WATER) }, tasks.revision)));
 
-    expect(h.desktop.sync()).toEqual({ committedLocal: true, integrated: 'conflict', conflicts: [TODO], pushed: true });
+    expect(h.desktop.sync()).toEqual({ committedLocal: true, integrated: 'conflict', conflicts: [TODO], pushed: true, pushRejections: 0 });
     // Nothing lost: the desktop's edited line (ours) and the app's completion (Done) are both in the file.
     const expected =
       '---\ntitle: To-Do List\n---\n\n## Open\n\n' +
@@ -349,5 +395,118 @@ describe('concurrency and upstream', () => {
 
     expect(h.desktop.sync().integrated).toBe('fast-forward');
     expect(h.desktop.read(TODO)).toBe(todo([oil, BIKE, RECEIPTS, GARDEN, PERMIT, DENTIST], [done(WATER), OLD_DONE]));
+  });
+});
+
+describe('review P2A-Astra fixes', () => {
+  it('head-CAS collision: two commands prepared on the same head; the real update-ref lets one publish, the other replans', async () => {
+    const h = await setup();
+    const tasks = await h.phone.read();
+    const bakery = h.phone.envelope('CaptureTask', { text: 'Call the bakery' }, tasks.revision);
+    const stamps = h.phone.envelope('CaptureTask', { text: 'Buy stamps' }, tasks.revision);
+
+    const collision = armRefCollision();
+    const receipts = (await Promise.all([h.phone.send(bakery), h.phone.send(stamps)])).map(receiptOf);
+    const writes = await collision;
+    expect(writes.map((w) => w.parent)).toEqual([tasks.revision, tasks.revision]);
+    expect(writes.map((w) => w.updateRefCode === 0)).toEqual([true, false]); // observed collision: #2 lost the CAS
+
+    // Both commands still applied exactly once; the loser was re-planned on top of the winner, never over it.
+    expect(receipts.map((r) => r.status)).toEqual(['applied', 'applied']);
+    const log = logWithOps(h.remote.env, h.remote.bare);
+    expect(log.map((c) => c.parents.length)).toEqual([0, 1, 1]);
+    const [, winner, loser] = log as [unknown, (typeof log)[number], (typeof log)[number]];
+    expect(winner.parents).toEqual([tasks.revision]);
+    expect(loser.parents).toEqual([winner.sha]);
+    for (const c of [bakery, stamps]) expect(h.commitsFor(c.operationId)).toHaveLength(1);
+
+    const text = (op: string) => (op === bakery.operationId ? 'Call the bakery' : 'Buy stamps');
+    h.desktop.sync();
+    expect(h.desktop.read(TODO)).toBe(todo([captured(text(loser.operationId)), captured(text(winner.operationId)), ...OPEN]));
+  });
+
+  it('same-anchor conflict: empty Open, desktop and app both capture; both lines kept inside markers; app then refuses', async () => {
+    const h = await setup(todo([]));
+    const tasks = await h.phone.read();
+    const stamps = '- [ ] Buy stamps #todo ➕ 2026-09-24';
+    h.desktop.edit(TODO, (t) => t.replace('## Open\n\n', `## Open\n\n${stamps}\n`)); // QuickAdd into the empty section
+    const desktopCommit = h.desktop.commit('desktop: quick add');
+    const app = receiptOf(await h.phone.send(h.phone.envelope('CaptureTask', { text: 'Call the bakery' }, tasks.revision)));
+
+    expect(h.desktop.sync()).toEqual({ committedLocal: false, integrated: 'conflict', conflicts: [TODO], pushed: true, pushRejections: 0 });
+    const expected =
+      '---\ntitle: To-Do List\n---\n\n## Open\n\n' +
+      `<<<<<<< HEAD\n${stamps}\n=======\n${captured('Call the bakery')}\n>>>>>>> origin/main\n` +
+      `\n## Done\n\n${OLD_DONE}\n`;
+    expect(h.desktop.read(TODO)).toBe(expected);
+
+    // Both sides stay reachable from the published branch (W1) as the parents of the preserved merge (W4).
+    expect(h.bareHead()).toBe(h.desktop.head());
+    expect(h.desktop.git('log', '-1', '--format=%P').split(' ')).toEqual([desktopCommit, app.commitSha]);
+    for (const sha of [desktopCommit, app.commitSha]) {
+      expect(tryGit(h.remote.env, h.remote.bare, 'merge-base', '--is-ancestor', sha, 'main').code).toBe(0);
+    }
+
+    const after = await h.phone.read();
+    expect(after.writeBlock).toMatchObject({ code: 'refused:vault-conflict', retryable: false });
+    const headBefore = h.bareHead();
+    for (const cmd of [
+      h.phone.envelope('CaptureTask', { text: 'Book the insurance call' }, after.revision),
+      h.phone.envelope('CompleteTask', { task: locatorOf(after, stamps) }, after.revision),
+    ]) {
+      const refused = await h.phone.send(cmd);
+      expect(refused.status).toBe(422);
+      expect('error' in refused && refused.error.code).toBe('refused:vault-conflict');
+    }
+    expect(h.bareHead()).toBe(headBefore);
+    expect(h.desktop.sync().integrated).toBe('up-to-date');
+    expect(h.desktop.read(TODO)).toBe(expected);
+  });
+
+  it('desktop push race: a second writer publishes between fetch and push; the push is rejected, re-integrated, retried', async () => {
+    const h = await setup();
+    // A second real writer (another machine's clone). desktop.sync() is synchronous, so the Node-hosted app cannot answer
+    // inside the window; a separate git clone is the competing publisher.
+    const laptop = Desktop.clone(h.remote.env, h.remote.bare, join(h.remote.root, 'laptop'));
+    const waterDue = WATER.replace('#todo', '#todo 📅 2026-09-30');
+    const permitDue = PERMIT.replace('#todo', '#todo 📅 2026-10-01');
+    h.desktop.edit(TODO, (t) => t.replace(PERMIT, permitDue));
+
+    const rounds: number[] = [];
+    let racer = '';
+    const report = h.desktop.sync({
+      beforePush(round) {
+        rounds.push(round);
+        if (round !== 1) return;
+        laptop.edit(TODO, (t) => t.replace(WATER, waterDue));
+        expect(laptop.sync().pushed).toBe(true); // the remote moves after the desktop fetched
+        racer = laptop.head();
+      },
+    });
+
+    expect(rounds).toEqual([1, 2]);
+    expect(report).toEqual({ committedLocal: true, integrated: 'merged', conflicts: [], pushed: true, pushRejections: 1 });
+    expect(h.bareHead()).toBe(h.desktop.head());
+    const [firstParent, secondParent] = h.desktop.git('log', '-1', '--format=%P').split(' ');
+    expect(secondParent).toBe(racer);
+    for (const sha of [firstParent!, racer]) {
+      expect(tryGit(h.remote.env, h.remote.bare, 'merge-base', '--is-ancestor', sha, 'main').code).toBe(0);
+    }
+    expect(h.desktop.read(TODO)).toBe(todo([waterDue, BIKE, RECEIPTS, GARDEN, permitDue, DENTIST]));
+
+    // The app reads the integrated result.
+    const tasks = await h.phone.read();
+    expect(tasks.revision).toBe(h.desktop.head());
+    expect(tasks.allOpen.map((t) => t.locator.lineText)).toEqual([waterDue, BIKE, RECEIPTS, GARDEN, permitDue, DENTIST]);
+  });
+
+  it('a setup that fails at sign-in leaves no server or repository behind (review #4)', async () => {
+    const local = new Cleanup();
+    await expect(setup(todo(OPEN), { email: 'intruder@example.invalid', cleanup: local })).rejects.toThrow('session failed: 401');
+    const { root, baseUrl } = created;
+    expect(root && existsSync(root)).toBe(true);
+    await local.run();
+    expect(existsSync(root!)).toBe(false);
+    await expect(fetch(`${baseUrl}/api/session`)).rejects.toThrow();
   });
 });

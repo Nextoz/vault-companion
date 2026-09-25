@@ -42,10 +42,14 @@ export async function startServer(opts: HarnessServerOptions): Promise<HarnessSe
 
   // LocalGitStore copies process.env at construction; scope the hermetic git environment to that moment.
   const saved = { ...process.env };
-  Object.assign(process.env, opts.gitEnv);
-  const store = new LocalGitStore({ repo: opts.bare, author: { name: 'Vault Companion', email: 'vault-companion@example.invalid' } });
-  for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
-  Object.assign(process.env, saved);
+  let store: LocalGitStore;
+  try {
+    Object.assign(process.env, opts.gitEnv);
+    store = new LocalGitStore({ repo: opts.bare, author: { name: 'Vault Companion', email: 'vault-companion@example.invalid' } });
+  } finally {
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+    Object.assign(process.env, saved);
+  }
 
   const services = createCommandService({ store, now: opts.now, timeZone: opts.timeZone });
   const logs: LogRecord[] = [];

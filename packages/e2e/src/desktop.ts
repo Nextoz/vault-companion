@@ -22,6 +22,16 @@ export interface SyncReport {
   /** Files committed with conflict markers (W4). Empty unless `integrated === 'conflict'`. */
   readonly conflicts: readonly string[];
   readonly pushed: boolean;
+  /** Plain pushes the remote rejected because it moved after this run fetched (then re-integrated, W1/W3). */
+  readonly pushRejections: number;
+}
+
+export interface SyncHooks {
+  /**
+   * Harness-only coordination point: runs synchronously right before each push attempt (`round` starts at 1), after
+   * fetch/merge. Tests use it to let a real second writer advance the remote in exactly that window.
+   */
+  readonly beforePush?: (round: number) => void;
 }
 
 const MAX_PUSH_ROUNDS = 3;
@@ -73,7 +83,7 @@ export class Desktop {
   }
 
   /** One sync run: commit local → fetch → merge (conflicts preserved) → push. See header for W1–W5. */
-  sync(): SyncReport {
+  sync(hooks: SyncHooks = {}): SyncReport {
     const g = (...args: string[]) => git(this.env, this.dir, ...args);
     // W2: commit first.
     g('add', '-A');
@@ -82,6 +92,7 @@ export class Desktop {
 
     let integrated: SyncReport['integrated'] = 'up-to-date';
     let conflicts: string[] = [];
+    let pushRejections = 0;
     for (let round = 1; round <= MAX_PUSH_ROUNDS; round++) {
       g('fetch', '-q', 'origin', 'main');
       const remote = g('rev-parse', 'origin/main');
@@ -102,11 +113,13 @@ export class Desktop {
           integrated = 'conflict';
         }
       }
-      if (g('rev-parse', 'HEAD') === remote) return { committedLocal: dirty, integrated, conflicts, pushed: false };
+      if (g('rev-parse', 'HEAD') === remote) return { committedLocal: dirty, integrated, conflicts, pushed: false, pushRejections };
       // W1: plain push (fast-forward only). A concurrent app commit rejects it; integrate again.
+      hooks.beforePush?.(round);
       if (tryGit(this.env, this.dir, 'push', '-q', 'origin', 'HEAD:main').code === 0) {
-        return { committedLocal: dirty, integrated, conflicts, pushed: true };
+        return { committedLocal: dirty, integrated, conflicts, pushed: true, pushRejections };
       }
+      pushRejections++;
     }
     throw new Error('desktop sync could not publish after repeated remote races');
   }

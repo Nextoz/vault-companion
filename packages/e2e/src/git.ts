@@ -1,7 +1,7 @@
 // Git CLI helpers for the disposable end-to-end harness. Every repository the harness touches is configured by the
 // harness itself; machine-level Git configuration (signing, hooks, negotiation settings) is shut out.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -45,6 +45,15 @@ export interface RemoteFixture {
 /** A temp root with a bare repository whose `main` holds exactly `seed` (one commit). */
 export function createRemote(seed: Readonly<Record<string, string>>): RemoteFixture {
   const root = mkdtempSync(join(tmpdir(), 'vc-e2e-'));
+  try {
+    return seedRemote(root, seed);
+  } catch (e) {
+    rmSync(root, { recursive: true, force: true }); // never leak a half-built fixture
+    throw e;
+  }
+}
+
+function seedRemote(root: string, seed: Readonly<Record<string, string>>): RemoteFixture {
   const env = hermeticGitEnv(root);
   const bare = join(root, 'remote.git');
   const seeder = join(root, 'seeder');
