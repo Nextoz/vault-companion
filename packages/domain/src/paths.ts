@@ -5,6 +5,9 @@ export const TODO_LIST_PATH = 'Tasks/To-Do List.md';
 export const INBOX_DIR = 'Inbox';
 
 const DENIED_ROOTS = new Set(['.git', '.obsidian', '.trash', 'Tools', 'tmp', 'output']);
+// Case-folded: the owner's desktop (Windows) treats `TMP/` and `tmp/` as the same folder.
+const DENIED_FOLDED = new Set([...DENIED_ROOTS].map((r) => r.toLowerCase()));
+const isDenied = (segment: string): boolean => DENIED_FOLDED.has(segment.toLowerCase());
 /** Owner decision D2 default: linked notes are readable only under these roots (vault-contract §1, review A8). */
 const LINKED_NOTE_ALLOWED_ROOTS = new Set(['Projects', 'Tasks', 'Inbox']);
 
@@ -33,7 +36,7 @@ export function parseVaultPath(raw: string): VaultPath | null {
   if (!isStructurallySafePath(raw)) return null;
   const path = raw.normalize('NFC');
   if (!isStructurallySafePath(path)) return null;
-  if (DENIED_ROOTS.has(path.split('/')[0]!)) return null;
+  if (isDenied(path.split('/')[0]!)) return null;
   if (!path.endsWith('.md')) return null;
   return path as VaultPath;
 }
@@ -51,7 +54,7 @@ export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
 export function canReadLinkedNote(path: VaultPath): boolean {
   const segments = path.split('/');
   if (!LINKED_NOTE_ALLOWED_ROOTS.has(segments[0]!)) return false;
-  return segments.slice(1, -1).every((s) => !s.startsWith('.') && !DENIED_ROOTS.has(s)) && !segments.at(-1)!.startsWith('.');
+  return segments.slice(1, -1).every((s) => !s.startsWith('.') && !isDenied(s)) && !segments.at(-1)!.startsWith('.');
 }
 
 export const LINKED_NOTE_ROOTS: readonly string[] = [...LINKED_NOTE_ALLOWED_ROOTS];

@@ -55,6 +55,9 @@ describe('linked-note read policy', () => {
     for (const root of ['Finance', 'Personal', 'Area Example', 'Daily']) expect(canReadLinkedNote(parseVaultPath(`${root}/x.md`)!)).toBe(false);
     expect(canReadLinkedNote(parseVaultPath('Inbox/x.md')!)).toBe(true);
     expect(canReadLinkedNote(parseVaultPath('Tasks/Active Work Now.md')!)).toBe(true);
+    // Denied folders are matched case-insensitively (Windows desktop: `TMP/` is `tmp/`) — security review of P4-A.
+    for (const p of ['Projects/TMP/x.md', 'Projects/tools/x.md', 'Inbox/Output/x.md']) expect(canReadLinkedNote(parseVaultPath(p)!)).toBe(false);
+    for (const p of ['TMP/x.md', 'tools/x.md', 'OUTPUT/x.md']) expect(parseVaultPath(p)).toBeNull();
     // P4-A: hidden or denied folders are off-limits at any depth, not only as roots.
     for (const p of ['Projects/.obsidian/x.md', 'Projects/a/.trash/x.md', 'Inbox/tmp/x.md', 'Tasks/output/x.md', 'Projects/.x.md']) {
       expect(canReadLinkedNote(parseVaultPath(p)!)).toBe(false);
