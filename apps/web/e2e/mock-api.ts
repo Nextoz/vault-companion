@@ -114,7 +114,7 @@ export class MockApi {
       writeBlock: this.writeBlock,
       known,
       todayTasks: open.filter((t) => t.due === TODAY),
-      overdue: [],
+      overdue: open.filter((t) => t.due !== null && t.due < TODAY),
       allOpen: open,
       doneToday: this.doneToday.map(located),
     });

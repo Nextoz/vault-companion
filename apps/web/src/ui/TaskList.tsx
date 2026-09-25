@@ -18,14 +18,36 @@ interface Props {
   empty?: string;
   /** The task list has a sync conflict: rows are shown as last read, not as actionable tasks (writeBlock.ts). */
   frozen?: boolean;
+  /** A group that starts collapsed behind a summary such as "3 overdue" (ADR-0012). */
+  collapsible?: { open: boolean; summary: string; onToggle: () => void };
 }
 
-export function TaskList({ title, rows, tapped, blocked, onComplete, onUndo, overdue = false, empty, frozen = false }: Props) {
+export function TaskList({
+  title,
+  rows,
+  tapped,
+  blocked,
+  onComplete,
+  onUndo,
+  overdue = false,
+  empty,
+  frozen = false,
+  collapsible,
+}: Props) {
   if (rows.length === 0 && !empty) return null;
+  const shown = collapsible?.open ?? true;
   return (
     <section className={frozen ? 'group group-frozen' : 'group'} aria-label={title}>
-      <h2>{title}</h2>
-      {rows.length === 0 ? (
+      {collapsible ? (
+        <h2>
+          <button type="button" className="link group-toggle" aria-expanded={collapsible.open} onClick={collapsible.onToggle}>
+            {collapsible.summary}
+          </button>
+        </h2>
+      ) : (
+        <h2>{title}</h2>
+      )}
+      {!shown ? null : rows.length === 0 ? (
         <p className="muted">{empty}</p>
       ) : (
         <ul className="tasks">

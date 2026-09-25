@@ -338,3 +338,27 @@ test('a sync conflict in the task list: banner first, no task writes, notes stil
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['CompleteTask', 'CaptureNote']);
 });
+
+test('Today comes first; Overdue is a collapsed group below it, with its count, that expands (ADR-0012)', async ({ page }) => {
+  api.open = [
+    taskView(10, 'Water the plants'),
+    taskView(11, 'Renew the library card', { due: '2026-09-20' }),
+    taskView(12, 'Return the drill', { due: '2026-09-22' }),
+  ];
+  await page.goto('/');
+  const groups = page.locator('main section.group');
+  await expect(groups.first()).toHaveAttribute('aria-label', 'Today');
+  await expect(groups.nth(1)).toHaveAttribute('aria-label', 'Overdue');
+
+  const overdue = region(page, 'Overdue');
+  const toggle = overdue.getByRole('button', { name: '2 overdue' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(overdue.getByTestId('task')).toHaveCount(0);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(overdue.getByTestId('task')).toHaveCount(2);
+  await overdue.getByRole('button', { name: 'Complete: Return the drill' }).click();
+  await expect.poll(() => api.applied.length).toBe(1);
+  await expect(overdue.getByRole('button', { name: '1 overdue' })).toBeVisible();
+});

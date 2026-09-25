@@ -7,7 +7,7 @@ import { prefs } from '../prefs.ts';
 import type { PendingQueue } from '../queue/queue.ts';
 import { knownCommits, renderable, TaskReads, type RenderedRead } from '../reads.ts';
 import { plainWikilinks } from '../text.ts';
-import { buildView, occurrenceKey } from '../view.ts';
+import { buildView, occurrenceKey, overdueSummary } from '../view.ts';
 import { FROZEN_NOTE, taskListLock } from '../writeBlock.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
@@ -31,6 +31,8 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
   const [accountKey, setAccountKey] = useState<string | null>(() => prefs.lastAccountKey());
   const [tab, setTab] = useState<Tab>('today');
   const [captureOpen, setCaptureOpen] = useState(false);
+  // ADR-0012: Overdue is its own group below Today, collapsed until the user opens it.
+  const [overdueOpen, setOverdueOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Task occurrences whose checkbox was tapped: disabled synchronously, before the envelope is even persisted (F19).
@@ -264,8 +266,21 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
         {tasks &&
           (tab === 'today' ? (
             <>
-              <TaskList title="Overdue" rows={view.overdue} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} overdue />
               <TaskList title="Today" rows={view.today} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} empty="Nothing due today." />
+              <TaskList
+                title="Overdue"
+                rows={view.overdue}
+                tapped={tapped}
+                blocked={writeBlocked}
+                frozen={frozen}
+                onComplete={complete}
+                overdue
+                collapsible={{
+                  open: overdueOpen,
+                  summary: overdueSummary(view.overdue.length),
+                  onToggle: () => setOverdueOpen((open) => !open),
+                }}
+              />
               <TaskList title="Done today" rows={view.doneToday} tapped={tapped} blocked frozen={frozen} onComplete={complete} onUndo={undo} />
             </>
           ) : (

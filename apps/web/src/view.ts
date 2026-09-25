@@ -42,6 +42,11 @@ export function occurrenceKey(locator: TaskLocator): string {
   return `${locator.blobSha}:${locator.lineIndex}:${locator.lineText}`;
 }
 
+/** The collapsed Overdue group's summary (ADR-0012: Overdue sits below Today, collapsed, with its count). */
+export function overdueSummary(count: number): string {
+  return `${count} overdue`;
+}
+
 const isTaskAction = (i: QueueItem) => i.type === 'CompleteTask' || i.type === 'UndoCompleteTask';
 
 /** The open line an action is about: a completion's task, or the task an Undo re-opens. */

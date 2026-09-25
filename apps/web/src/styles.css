@@ -295,6 +295,20 @@ textarea:focus-visible {
   font-size: 0.85rem;
 }
 
+.group-toggle {
+  min-height: var(--tap);
+  padding: 0;
+  font-size: inherit;
+}
+
+.group-toggle::after {
+  content: ' ▸';
+}
+
+.group-toggle[aria-expanded='true']::after {
+  content: ' ▾';
+}
+
 .group-frozen .task {
   opacity: 0.6;
 }

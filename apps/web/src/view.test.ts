@@ -2,7 +2,7 @@ import { TasksResponse, type Receipt, type TaskView } from '@vault-companion/con
 import { describe, expect, it } from 'vitest';
 import { completeTask, undoCompleteTask } from './commands.ts';
 import type { ItemState, QueueItem } from './queue/queue.ts';
-import { buildView, occurrenceKey } from './view.ts';
+import { buildView, occurrenceKey, overdueSummary } from './view.ts';
 
 const REV = '1'.repeat(40);
 const ACCOUNT = 'a'.repeat(64);
@@ -262,5 +262,12 @@ describe('Undo from Done today (P4-B)', () => {
     expect(buildView(included, [], ACCOUNT).doneToday).toMatchObject([{ action: null, undo: null }]);
     const notYet = buildView(read([openTask], [], { [COMMIT]: 'not-included' }), [saved], ACCOUNT);
     expect(notYet.doneToday).toMatchObject([{ task: null, undo: null }]);
+  });
+});
+
+describe('overdueSummary (ADR-0012)', () => {
+  it('names the collapsed group by its count', () => {
+    expect(overdueSummary(1)).toBe('1 overdue');
+    expect(overdueSummary(3)).toBe('3 overdue');
   });
 });
