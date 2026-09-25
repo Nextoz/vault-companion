@@ -46,13 +46,15 @@ Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef4
 Next: review + merge F4, D1, C (cloud: `git fetch`, review `origin/agent/ci`, verify locally, merge); then Phase 2
 (disposable end-to-end) — to be decomposed into Cloud briefs (repo-contained) + Astra-low tasks.
 
-### Path to the phone (Lead, 2026-09-25)
+### Path to the phone (owner decision 2026-09-25: live vault directly, no sandbox deploy)
 
-1. Merge P3-A (deploy scaffold) ⇒ `docs/deploy.md` runbook.
-2. **Owner G2** (credentials, no vault risk): Cloudflare account (free plan is expected to suffice — P3-A sizing),
-   Access app + policy, a GitHub App installed **only on `Nextoz/vault-companion-sandbox`**, `wrangler secret put`.
-3. Deploy against the **sandbox** vault ⇒ real iPhone: install PWA, complete/undo/capture, offline queue.
-4. Phase 2 gate + Phase 3 canary prep ⇒ owner G3 approval ⇒ switch secrets to the live vault (canary write).
+1. Merge P3-A (deploy scaffold) ⇒ `docs/deploy.md` runbook. Finish Phase 2 gate (review of PR #4 harness) in parallel.
+2. **Owner G2**: Cloudflare account + Access app/policy; GitHub App with Contents read/write installed **only on the
+   live vault repo**; `wrangler secret put`. Lead deploys and verifies reads (read-only use of the live vault is fine).
+3. **Canary (G3, owner approves the single first write)**: `docs/testing.md` "Canary evidence" — pre-canary SHA on
+   GitHub and desktop, Drive backup timestamp, exact target + expected diff, rollback = `git revert`. Must confirm the
+   real desktop sync worker meets W1–W4 (`docs/sync.md`; spike S4/S5: a snapshot-style worker blocks on local changes).
+4. After a clean canary: daily use from the iPhone; remaining Phase 4 acceptance on the real phone.
 
 P3-A dispositions (Lead): `allowBuilds` accepted as an explicit minimal list; identifying settings are Wrangler
 **secrets**, never committed vars (public repo); static pages get security headers via `apps/web/public/_headers`
