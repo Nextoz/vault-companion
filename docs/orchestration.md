@@ -102,3 +102,10 @@ the only record.
 - **Routing under Claude-token pressure (owner, 2026-09-25):** most implementation goes to Claude Code Cloud; small or
   low-risk tasks to Codex GPT-6 Astra at effort `low` (`cmd /c "codex exec -m gpt-6-astra -c model_reasoning_effort=low …"`).
   The local Lead stays lean: decompose, review, integrate.
+
+## Pull requests and CodeRabbit (owner, 2026-09-25)
+
+The repo is public and CodeRabbit reviews pull requests (not direct pushes). Every finished worker branch is merged
+through a PR opened by the Lead: open PR → wait for CodeRabbit → reconcile its comments like any review (fix with a test,
+or reject with a reason in the PR) → verify locally (`pnpm check`, e2e where relevant) → merge. Workers never open PRs.
+Config: `.coderabbit.yaml`.

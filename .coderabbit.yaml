@@ -1,0 +1,21 @@
+# CodeRabbit reviews pull requests on this public repo (owner request, 2026-09-25).
+language: en-US
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!pnpm-lock.yaml"
+    - "!packages/test-vault/fixtures/**"
+  path_instructions:
+    - path: "**/*"
+      instructions: >-
+        Follow AGENTS.md. Priorities: data integrity of Markdown/Git writes (minimal span edits, byte-exact EOL/BOM,
+        idempotent retries, head-CAS writes), security (auth, origin checks, path validation, no personal text in logs),
+        and tests that would fail if the guarded production line were broken. Flag any real personal data, secrets or
+        vault content; fixtures must be synthetic.
+    - path: "docs/**"
+      instructions: "Check docs against the code they describe; flag contradictions with docs/commands.md or docs/vault-contract.md."
