@@ -83,6 +83,7 @@ Observations: none yet (recorded privately in milestone 2–3).
 | # | Decision | Status |
 |---|---|---|
 | T1 | Today meaning | **decided** (provisional) — ADR-0012 |
+| P1 | **Cloudflare Workers plan** — Undo needs 3 paged dedupe scans/attempt: shallow ≈ 92, worst ≈ 377 subrequests; Free allows 50, **Paid ($5/mo) 1,000** | **open** (Lead recommends Paid; a follow-up merges the three scans into one to cut latency either way) |
 | D2 | Linked-note allowlist | default `Projects/`, `Tasks/`, `Inbox/` (P4-A implements it) |
 | D3 | Task IDs | no `🆔` writes in first release |
 | D4 | Capture anchor | decided: top of Open (ADR-0010) |
@@ -93,7 +94,6 @@ Observations: none yet (recorded privately in milestone 2–3).
   on device by design). Stated in the UI copy by P4-B/P2-B.
 - Desktop conflicts are surfaced only in the sync log/status file; the app cannot see them until the owner resolves.
 - R7 residue (Low): semantic Undo leaves a blank line in Done when Done has other content (needs vault-contract §4.2).
-- Workers subrequest budget for Undo dedupe paging × 5 attempts — P3-A sizing note decides the plan.
 - Phone accessibility (keyboard visibility, long text, dictation, large text, focus, VoiceOver, one-handed) is
   verified only on the installed iPhone app in milestone 2.
 
