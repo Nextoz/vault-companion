@@ -94,6 +94,8 @@ export interface CompleteEffect {
   readonly blockLineCount: number;
   /** Line index the block starts at in the output text. */
   readonly insertedAt: number;
+  /** A blank line was inserted directly before the block (Done had no task line; §4.1 step 3, review R7). */
+  readonly blankInserted: boolean;
   /** Nearest preceding non-blank line in Open before removal (may be the `## Open` heading). */
   readonly anchorBefore: string;
   readonly blankLinesAfterAnchor: number;

@@ -89,6 +89,7 @@ const COMPLETE_CASES: readonly CompleteCase[] = [
   { name: 'complete-empty-done', input: 'todo-empty-done.md', lineText: '- [ ] Water the plants #todo ➕ 2026-09-01', blockLineCount: 2, blankInserted: true, protects: 'Done without task line: after last non-blank line, one blank line first' },
   { name: 'complete-done-last', input: 'todo-done-last.md', lineText: '- [ ] Call the bike shop #todo ➕ 2026-09-02', blockLineCount: 1, blankInserted: true, protects: 'F16: insert after last line of a file without final newline' },
   { name: 'complete-open-last', input: 'todo-open-last.md', lineText: '- [ ] Water the plants #todo ➕ 2026-09-01', blockLineCount: 1, protects: 'F16: remove last line of a file without final newline; Done above Open' },
+  { name: 'complete-done-above-open', input: 'todo-done-above-open.md', lineText: '- [ ] Water the plants #todo ➕ 2026-09-01', blockLineCount: 1, blankInserted: true, protects: 'R1/A1: empty Done above Open (exact inverse must not accept the in-place reading)' },
 ];
 
 describe('completeTask golden files (LF and CRLF)', () => {
@@ -103,6 +104,7 @@ describe('completeTask golden files (LF and CRLF)', () => {
         expect(r.effect.removedAt).toBe(loc.lineIndex);
         expect(r.effect.blockLineCount).toBe(c.blockLineCount);
         expect(r.effect.openLineText).toBe(c.lineText);
+        expect(r.effect.blankInserted).toBe(c.blankInserted ?? false);
         expect(linesOf(r.text)[r.effect.insertedAt]).toBe(r.effect.completedLineText);
         expectOnlyBlockMoved(input, r.text, r.effect, c.blankInserted ?? false);
       });
@@ -343,7 +345,8 @@ describe('undoCompleteTask semantic inverse (§4.2 step 2)', () => {
     const done = ok(completeTask(src, locate(src, '- [ ] Call the bike shop #todo ➕ 2026-09-02'), D));
     const anchorGone = { ...done.effect, anchorBefore: 'A line that is not in the file' };
     const r = ok(undoCompleteTask(done.text, { completion: anchorGone, unchangedSinceCompletion: false }));
-    expect(r.text).toBe('## Open\n\n- [ ] Call the bike shop #todo ➕ 2026-09-02\n## Done\n');
+    // The blank completion inserted into the empty Done is removed again (R7): no trailing "\n" residue.
+    expect(r.text).toBe('## Open\n\n- [ ] Call the bike shop #todo ➕ 2026-09-02\n## Done');
   });
 });
 
