@@ -75,6 +75,8 @@ export function gateExecFile(real: typeof ExecFile): typeof ExecFile {
     if (sub === 'commit-tree' && a.writes.length < 2) {
       const index = a.writes.push({ parent: args[args.indexOf('-p') + 1]! }) - 1;
       return call((error, stdout, stderr) => {
+        // Disarmed (timeout or test teardown) while this git process ran: deliver its result directly, never park it.
+        if (armed !== a) return callback(error, stdout, stderr);
         a.held[index] = () => callback(error, stdout, stderr);
         if (a.held.filter(Boolean).length === 2) release(a, 0);
       });

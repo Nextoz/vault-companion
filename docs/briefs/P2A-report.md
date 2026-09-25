@@ -24,7 +24,8 @@ only exports its Workers entry; the tsconfig project reference to `apps/worker` 
 ## Scenarios and results
 
 Fixed clock `2026-09-24T10:00Z` (Copenhagen date 2026-09-24); synthetic seed (frontmatter, `## Open` with six tasks,
-`## Done` with one). Every scenario asserts the **exact bytes** of the file(s) in the desktop clone after sync.
+`## Done` with one). Every scenario that creates a desktop clone asserts the **exact bytes** of the file(s) in it after sync (scenario 19
+fails during sign-in by design and checks cleanup only).
 An `afterEach` also asserts that no task/note word or clear-text vault path reached the server log sink (A18).
 
 | # | Scenario | Result |

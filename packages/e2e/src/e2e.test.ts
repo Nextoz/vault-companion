@@ -111,7 +111,7 @@ afterEach(async () => {
   try {
     // A18 across the whole harness: no task or note text, no clear-text vault path reaches the log sink.
     const logged = JSON.stringify(inspected.map((s) => s.logs));
-    for (const word of ['Water', 'bike', 'receipts', 'garden', 'permit', 'dentist', 'bakery', 'insurance', 'stamps', 'Inbox/', 'To-Do']) {
+    for (const word of ['Water', 'bike', 'receipts', 'garden', 'permit', 'dentist', 'bakery', 'insurance', 'stamps', 'Oil', 'chain', 'Bikes', 'Inbox/', 'To-Do']) {
       expect(logged).not.toContain(word);
     }
   } finally {
