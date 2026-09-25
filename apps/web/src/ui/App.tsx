@@ -1,10 +1,10 @@
-import type { CompleteTaskCommand, TaskView, TasksResponse } from '@vault-companion/contracts';
+import type { CompleteTaskCommand, TaskView } from '@vault-companion/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { getSession, getTasks } from '../api.ts';
 import { completeTask, undoCompleteTask } from '../commands.ts';
 import { prefs } from '../prefs.ts';
 import type { PendingQueue } from '../queue/queue.ts';
-import { knownCommits, ReadSequencer } from '../reads.ts';
+import { knownCommits, renderable, TaskReads, type RenderedRead } from '../reads.ts';
 import { plainWikilinks } from '../text.ts';
 import { buildView } from '../view.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
@@ -12,17 +12,20 @@ import { CaptureSheet } from './CaptureSheet.tsx';
 import { TaskList } from './TaskList.tsx';
 
 type Tab = 'today' | 'all';
-type Connection = 'loading' | 'online' | 'offline' | 'error';
+/** `refreshing`: the last read was stale against the watermark (G3-1); the last good read stays, if any. */
+type Connection = 'loading' | 'online' | 'offline' | 'error' | 'refreshing';
 interface Toast {
   target: CompleteTaskCommand;
   label: string;
 }
 
 const UNDO_WINDOW_MS = 8000;
+/** Re-reads after a stale response that predates the watermark; each asks about the newest one. */
+const STALE_REREADS = 3;
 
 export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventTarget }) {
   const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
-  const [tasks, setTasks] = useState<TasksResponse | null>(null);
+  const [rendered, setRendered] = useState<RenderedRead | null>(null);
   const [connection, setConnection] = useState<Connection>('loading');
   const [sessionSignedOut, setSessionSignedOut] = useState(false);
   const [accountKey, setAccountKey] = useState<string | null>(() => prefs.lastAccountKey());
@@ -35,14 +38,21 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
   const tappedRef = useRef(new Set<string>());
 
   const signedOut = sessionSignedOut || snapshot.signedOut;
+  // A read checked against an older watermark than the snapshot's may predate receipts evicted since (G3-1).
+  const fresh = rendered !== null && renderable(rendered, snapshot.watermark);
+  const tasks = fresh ? rendered.data : null;
   const revision = tasks?.revision ?? prefs.lastRevision();
 
   const knownRef = useRef<string[]>([]);
   // Every retained receipt: the rendered read alone says whether it reflects them (A9, N3).
   knownRef.current = knownCommits(snapshot.items);
-  // Overlapping reads: only a response newer than the last applied one may replace the screen (N3).
-  const readsRef = useRef<ReadSequencer | null>(null);
-  readsRef.current ??= new ReadSequencer();
+  // Out-of-order responses (N3) and the shared watermark (G3-1): see reads.ts.
+  const readsRef = useRef<TaskReads | null>(null);
+  readsRef.current ??= new TaskReads({
+    getTasks,
+    watermark: () => queue.readWatermark(),
+    receipts: () => knownRef.current,
+  });
 
   const refreshSession = useCallback(async () => {
     const res = await getSession();
@@ -60,19 +70,30 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
 
   const refreshTasks = useCallback(async () => {
     const reads = readsRef.current;
-    const ticket = reads?.begin() ?? 0;
-    const res = await getTasks(knownRef.current);
-    if (reads && !reads.accept(ticket)) return;
-    if (res.kind === 'ok') {
-      prefs.setLastRevision(res.data.revision);
-      setTasks(res.data);
-      void queue.acknowledge(res.data.known);
-      setConnection('online');
-    } else if (res.kind === 'signed-out') {
-      setSessionSignedOut(true);
-      queue.setSignedOut();
-    } else {
-      setConnection(res.kind === 'offline' ? 'offline' : 'error');
+    if (!reads) return;
+    for (let attempt = 0; ; attempt++) {
+      const out = await reads.read();
+      switch (out.kind) {
+        case 'apply':
+          prefs.setLastRevision(out.read.data.revision);
+          setRendered(out.read);
+          void queue.acknowledge(out.read.data);
+          setConnection('online');
+          return;
+        case 'superseded':
+          return;
+        case 'stale':
+          setConnection('refreshing');
+          if (out.retry && attempt < STALE_REREADS) continue;
+          return;
+        case 'signed-out':
+          setSessionSignedOut(true);
+          queue.setSignedOut();
+          return;
+        default:
+          setConnection(out.kind === 'offline' ? 'offline' : 'error');
+          return;
+      }
     }
   }, [queue]);
 
@@ -111,6 +132,11 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
     receipts.addEventListener('receipt', onReceipt);
     return () => receipts.removeEventListener('receipt', onReceipt);
   }, [receipts, refreshTasks]);
+
+  // Another tab evicted receipts under a newer watermark than the screen was checked against: read again.
+  useEffect(() => {
+    if (rendered && !fresh) void refreshTasks();
+  }, [rendered, fresh, refreshTasks]);
 
   useEffect(() => {
     if (!toast) return;
@@ -194,6 +220,11 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
             </button>
           </div>
         )}
+        {!signedOut && connection === 'refreshing' && tasks && (
+          <div className="banner" role="status">
+            Refreshing…
+          </div>
+        )}
         {writeBlocked && (
           <div className="banner banner-warn" role="alert">
             {writeBlocked.message}
@@ -208,9 +239,12 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
           </div>
         )}
 
-        {needsAttention && <ActionsPanel queue={queue} items={snapshot.items} />}
+        {needsAttention && <ActionsPanel queue={queue} items={snapshot.items} read={tasks} />}
 
         {connection === 'loading' && !tasks && <p className="muted">Loading…</p>}
+        {connection !== 'loading' && !tasks && (connection === 'refreshing' || rendered) && (
+          <p className="muted">Refreshing…</p>
+        )}
 
         {tasks &&
           (tab === 'today' ? (
@@ -223,7 +257,7 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
             <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} empty="No open tasks." />
           ))}
 
-        {!needsAttention && <ActionsPanel queue={queue} items={snapshot.items} />}
+        {!needsAttention && <ActionsPanel queue={queue} items={snapshot.items} read={tasks} />}
       </main>
 
       <button type="button" className="fab" onClick={() => setCaptureOpen(true)} aria-label="Capture">
