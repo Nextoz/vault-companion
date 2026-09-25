@@ -20,5 +20,13 @@ decided with real probe evidence. K2 (`w3:p8`) and F2 (`w3:p9`) fix workers runn
 **Gate rerun:** Astra BLOCK (1 Critical: create could replace a file/directory), Opus PASS WITH FIXES. Lead fixes done
 (`a9800c2`, 424 tests). F3 (queue/view) in flight in pane `w3:pC`, branch `agent/queue-rerun-fixes`.
 
-**Exact next action:** when F3 reports (`docs/briefs/F3-report.md` on its branch), review + merge, run `pnpm check` and
-WebKit e2e, then launch gate run 3 (Opus pane + Astra `codex exec`) with report names `phase-1-rereview2-*.md`.
+**State at last check (2026-09-25, memory-pressure event #2):** F3 has UNCOMMITTED changes in
+`C:\Devault-companion-worktrees\queue-rerun-fixes` (api.ts, queue/db.ts, queue/queue.ts, queue/queue.gate.test.ts,
+ui/App.tsx, view.test.ts, new reads.ts + reads.test.ts) and is waiting on its own background mutation script — a
+mutant may be applied to the source at any moment. No F3 report yet. The Lead's waiter was reaped by Claude Code for
+low memory (2.4 GB free); not restarted.
+
+**Exact next action:** do NOT edit that worktree while F3's mutation script may be running. Check `herdr agent read f3`:
+when it has committed on `agent/queue-rerun-fixes` and written `docs/briefs/F3-report.md`, review + merge, run
+`pnpm check` + WebKit e2e, then launch gate run 3 (`phase-1-rereview2-*.md`). If F3's session died with changes
+uncommitted, first restore any mutant (F3 used backups under its temp dir; diff against expectations) before committing.
