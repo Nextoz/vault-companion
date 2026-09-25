@@ -1,10 +1,11 @@
 import type { CompleteTaskCommand, TaskView } from '@vault-companion/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { getSession, getTasks } from '../api.ts';
+import { notRedoneBy, stillUnresolved, UNRESOLVED_TEXT, unresolvedFrom, type Unresolved } from '../attention.ts';
 import { completeTask, undoCompleteTask } from '../commands.ts';
 import { unreachableText, wake as wakeUp, type Connection } from '../connection.ts';
 import { prefs } from '../prefs.ts';
-import type { PendingQueue } from '../queue/queue.ts';
+import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { knownCommits, renderable, TaskReads, type RenderedRead } from '../reads.ts';
 import { plainWikilinks } from '../text.ts';
 import { buildView, occurrenceKey, overdueSummary } from '../view.ts';
@@ -35,6 +36,8 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Discarded refusals whose tasks still need attention (attention.ts).
+  const [unresolved, setUnresolved] = useState<readonly Unresolved[]>([]);
   // Task occurrences whose checkbox was tapped: disabled synchronously, before the envelope is even persisted (F19).
   // Keyed by occurrence, so an identical line elsewhere stays tappable (P4-B).
   const [tapped, setTapped] = useState<ReadonlySet<string>>(new Set());
@@ -148,7 +151,26 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
     return () => clearTimeout(id);
   }, [toast]);
 
-  const view = useMemo(() => buildView(tasks, snapshot.items, accountKey), [tasks, snapshot.items, accountKey]);
+  // A fresh read that shows the task changed state settles it for good.
+  const pending = useMemo(() => unresolved.filter((u) => stillUnresolved(u, tasks)), [unresolved, tasks]);
+  useEffect(() => {
+    if (pending.length !== unresolved.length) setUnresolved(pending);
+  }, [pending, unresolved]);
+
+  const view = useMemo(
+    () => buildView(tasks, snapshot.items, accountKey, pending),
+    [tasks, snapshot.items, accountKey, pending],
+  );
+
+  const discard = useCallback(
+    async (item: QueueItem) => {
+      if (!(await queue.discard(item.operationId))) return;
+      const envelope = item.envelope;
+      if (envelope.type !== 'CompleteTask') return;
+      setUnresolved((list) => [...list.filter((u) => u.operationId !== item.operationId), unresolvedFrom(envelope, item.label, tasks)]);
+    },
+    [queue, tasks],
+  );
 
   const complete = useCallback(
     async (task: TaskView) => {
@@ -159,6 +181,8 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
         return;
       }
       if (tasks.writeBlock) return; // every task-list write would be refused (writeBlock.ts)
+      // Redoing the action on the task settles a discarded refusal of it.
+      setUnresolved((list) => list.filter((u) => notRedoneBy(u, task, tasks.allOpen)));
       tappedRef.current.add(key);
       setTapped(new Set(tappedRef.current));
       try {
@@ -255,7 +279,17 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
           </div>
         )}
 
-        {needsAttention && <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={refreshTasks} />}
+        {view.unresolved.map((u) => (
+          <div key={u.operationId} className="banner banner-warn" role="status">
+            <span>
+              “{u.label}”: {UNRESOLVED_TEXT}
+            </span>
+          </div>
+        ))}
+
+        {needsAttention && (
+          <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={refreshTasks} onDiscard={discard} />
+        )}
 
         {connection === 'loading' && !tasks && <p className="muted">Loading…</p>}
         {connection !== 'loading' && !tasks && (connection === 'refreshing' || rendered) && (
@@ -287,7 +321,9 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
             <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} empty="No open tasks." />
           ))}
 
-        {!needsAttention && <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={refreshTasks} />}
+        {!needsAttention && (
+          <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={refreshTasks} onDiscard={discard} />
+        )}
       </main>
 
       <button type="button" className="fab" onClick={() => setCaptureOpen(true)} aria-label="Capture">

@@ -264,6 +264,7 @@ test('a conflict: Refresh tasks, then complete the current row', async ({ page }
   api.commandMode = 'ok';
   api.open = [taskView(10, 'Water the plants today'), taskView(11, 'Call the bike shop')];
   api.blobSha = '9'.repeat(40);
+  // A safe next step within three taps: Refresh tasks, then complete the current row (2 taps).
   await actions.getByRole('button', { name: 'Refresh tasks' }).click();
   await region(page, 'Today').getByRole('button', { name: 'Complete: Water the plants today' }).click();
   await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['CompleteTask']);
@@ -357,8 +358,65 @@ test('Today comes first; Overdue is a collapsed group below it, with its count, 
 
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(toggle).toBeVisible(); // the count stays visible, collapsed or expanded
   await expect(overdue.getByTestId('task')).toHaveCount(2);
   await overdue.getByRole('button', { name: 'Complete: Return the drill' }).click();
   await expect.poll(() => api.applied.length).toBe(1);
   await expect(overdue.getByRole('button', { name: '1 overdue' })).toBeVisible();
+});
+
+test('discarding a refused completion does not resolve the task: its row keeps a needs-attention note', async ({ page }) => {
+  api.commandMode = { refuse: { code: 'conflict:task-changed', message: 'Changed.', retryable: false } };
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
+  const actions = region(page, 'Actions on this device');
+  await expect(actions).toContainText('the task will still need attention');
+  await actions.getByRole('button', { name: 'Discard' }).click();
+  await expect(actions).toHaveCount(0);
+
+  const row = region(page, 'Today').getByTestId('task').filter({ hasText: 'Water the plants' });
+  await expect(row).toContainText('Not completed — this task still needs attention.');
+  // A re-read of the same revision cannot show a change: the note stays.
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(row).toContainText('still needs attention');
+
+  // Redoing the action on the task settles it.
+  api.commandMode = 'ok';
+  await row.getByRole('button', { name: 'Complete: Water the plants' }).click();
+  await expect.poll(() => api.applied.length).toBe(1);
+  await expect(page.getByText('still needs attention')).toHaveCount(0);
+});
+
+test('a discarded refusal is settled by a fresh read that shows the task changed on the desktop', async ({ page }) => {
+  api.commandMode = { refuse: { code: 'conflict:task-changed', message: 'Changed.', retryable: false } };
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
+  await region(page, 'Actions on this device').getByRole('button', { name: 'Discard' }).click();
+  await expect(page.getByText('still needs attention')).toHaveCount(1);
+
+  api.desktopEdit([taskView(10, 'Water the plants and the herbs'), taskView(11, 'Call the bike shop')]);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(region(page, 'Today').getByText('Water the plants and the herbs')).toBeVisible();
+  await expect(page.getByText('still needs attention')).toHaveCount(0);
+});
+
+test('discarding a refused capture shows its text first; nothing typed is lost unseen', async ({ page }) => {
+  api.commandMode = { refuse: { code: 'refused:vault-conflict', message: 'File contains Git conflict markers.', retryable: false } };
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Capture' }).click();
+  await page.getByRole('button', { name: 'Task', exact: true }).click();
+  await page.getByLabel('Task text').fill('Order more compost');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+  const actions = region(page, 'Actions on this device');
+  await expect(actions).toContainText('Needs attention');
+  await actions.getByRole('button', { name: 'Discard' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Discard this capture?' });
+  await expect(dialog.getByLabel('Exported text')).toHaveValue('Order more compost');
+  await dialog.getByRole('button', { name: 'Keep' }).click();
+  await expect(actions.getByTestId('action')).toHaveCount(1);
+
+  await actions.getByRole('button', { name: 'Discard' }).click();
+  await page.getByRole('dialog', { name: 'Discard this capture?' }).getByRole('button', { name: 'Discard' }).click();
+  await expect(actions).toHaveCount(0);
 });

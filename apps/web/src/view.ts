@@ -12,6 +12,7 @@
 // server resolves it (vault-contract §3): only a unique line with identical text, and only if it was unique when
 // read. When that cannot tell which row an action belongs to, the action gets a row of its own and no task is hidden.
 import type { CompleteTaskCommand, TaskLocator, TaskView, TasksResponse } from '@vault-companion/contracts';
+import type { Unresolved } from './attention.ts';
 import type { QueueItem } from './queue/queue.ts';
 
 export interface Row {
@@ -24,6 +25,8 @@ export interface Row {
   action: QueueItem | null;
   /** The saved app completion this Done today row can undo (its receipt is still on the device); else null. */
   undo: CompleteTaskCommand | null;
+  /** A refused action on this task was discarded, and the task still needs attention (attention.ts). */
+  unresolved: boolean;
 }
 
 export interface ScreenView {
@@ -31,6 +34,8 @@ export interface ScreenView {
   today: Row[];
   all: Row[];
   doneToday: Row[];
+  /** Discarded refusals no single open row can carry: shown on their own. */
+  unresolved: Unresolved[];
 }
 
 /**
@@ -57,10 +62,10 @@ function locatorOf(item: QueueItem): TaskLocator | null {
   return null;
 }
 
-type Match = { kind: 'row'; task: TaskView } | { kind: 'none' } | { kind: 'ambiguous' };
+export type Match = { kind: 'row'; task: TaskView } | { kind: 'none' } | { kind: 'ambiguous' };
 
 /** Which open row `locator` names in this read, by the server's resolution rule; never a guess. */
-function resolve(locator: TaskLocator, open: readonly TaskView[]): Match {
+export function resolve(locator: TaskLocator, open: readonly TaskView[]): Match {
   const exact = open.find(
     (t) =>
       t.locator.blobSha === locator.blobSha &&
@@ -79,6 +84,8 @@ export function buildView(
   items: readonly QueueItem[],
   /** The confirmed session's account: only its own saved completions can be undone from Done today. */
   accountKey: string | null = null,
+  /** Discarded refusals whose tasks still need attention (already pruned by `stillUnresolved`). */
+  unresolved: readonly Unresolved[] = [],
 ): ScreenView {
   const reflected = (i: QueueItem) =>
     i.state === 'saved' && i.receipt !== null && tasks?.known[i.receipt.commitSha] === 'included';
@@ -108,6 +115,7 @@ export function buildView(
     done,
     action,
     undo,
+    unresolved: false,
   });
   const overlay = (a: QueueItem, done: boolean): Row => ({
     key: `op:${a.operationId}`,
@@ -116,6 +124,7 @@ export function buildView(
     done,
     action: a,
     undo: null,
+    unresolved: false,
   });
 
   // Each action (latest per occurrence) attached to the open row it names; a later action wins a shared row.
@@ -143,10 +152,18 @@ export function buildView(
     else ownOpen.push(overlay(a, false));
   }
 
+  const flagged = new Set<string>();
+  const ownUnresolved: Unresolved[] = [];
+  for (const u of unresolved) {
+    const match = resolve(u.locator, allOpen);
+    if (match.kind === 'row') flagged.add(rowKey(match.task));
+    else ownUnresolved.push(u);
+  }
+
   const openRow = (t: TaskView): Row | null => {
     const a = onRow.get(rowKey(t)) ?? null;
     if (a?.type === 'CompleteTask' && live(a)) return null;
-    return row(t, a);
+    return { ...row(t, a), unresolved: flagged.has(rowKey(t)) };
   };
   const openRows = (list: readonly TaskView[]) => list.map(openRow).filter((r): r is Row => r !== null);
 
@@ -155,6 +172,7 @@ export function buildView(
     today: [...ownOpen, ...openRows(tasks?.todayTasks ?? [])],
     all: [...ownOpen, ...openRows(allOpen)],
     doneToday: ownDone,
+    unresolved: ownUnresolved,
   };
 
   // Done today: a done line and a completion receipt are paired only when each is the only one with that text.

@@ -148,6 +148,13 @@ export class MockApi {
     return this.#json(route, 200, receipt);
   }
 
+  /** A desktop commit to the task list: new revision and blob, these open tasks. */
+  desktopEdit(open: TaskView[]): void {
+    this.#revision = sha();
+    this.blobSha = sha();
+    this.open = open;
+  }
+
   /** Answer every held request (as `ok`) and stop holding new ones. */
   release(): void {
     this.commandMode = 'ok';

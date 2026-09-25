@@ -1,4 +1,5 @@
 import type { CompleteTaskCommand, TaskView } from '@vault-companion/contracts';
+import { UNRESOLVED_TEXT } from '../attention.ts';
 import { plainWikilinks, readOnlyText } from '../text.ts';
 import { occurrenceKey, type Row } from '../view.ts';
 import { attentionText } from './ActionsPanel.tsx';
@@ -112,7 +113,11 @@ function TaskRow({
           {readOnly && <span className="readonly">{readOnlyText(readOnly)}</span>}
           {action && <StateChip state={action.state} />}
         </span>
-        {action?.state === 'attention' && action.error && <span className="error">{attentionText(action)}</span>}
+        {action?.state === 'attention' && action.error ? (
+          <span className="error">{attentionText(action)}</span>
+        ) : (
+          row.unresolved && <span className="error">{UNRESOLVED_TEXT}</span>
+        )}
       </div>
       {undo && onUndo && (
         <button
