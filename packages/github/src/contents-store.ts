@@ -9,6 +9,7 @@ import {
   TRAILER_OP,
   TRAILER_PAYLOAD,
   type FindOperationResult,
+  type ListedFile,
   type StoredFile,
   type VaultPath,
   type VaultStore,
@@ -34,6 +35,7 @@ interface TreeEntry {
   readonly path: string;
   readonly mode: string;
   readonly type: string;
+  readonly sha: string;
 }
 
 export class GitHubContentsStore implements VaultStore {
@@ -104,13 +106,23 @@ export class GitHubContentsStore implements VaultStore {
     return ((await this.treeEntries(atCommit, dir)) ?? []).map((e) => e.path);
   }
 
+  async listFiles(dir: string, atCommit: string): Promise<readonly ListedFile[]> {
+    guardPath(dir);
+    // Recursive tree of `<commit>:<dir>`; a truncated tree throws FileTooLarge (fail closed). Regular files only: the
+    // Contents API follows a symlink to its target, so a symlink here could read a note outside the allowlist.
+    return ((await this.treeEntries(atCommit, dir, true)) ?? [])
+      .filter((e) => e.type === 'blob' && (e.mode === '100644' || e.mode === '100755'))
+      .map((e) => ({ path: `${dir}/${e.path}`, blobSha: e.sha }));
+  }
+
   /**
-   * Entries directly inside `dir` at `commit` (Trees API at `<commit>:<dir>`, probe 2026-09-25 Q5), or `null` only when
+   * Entries directly inside `dir` at `commit` (Trees API at `<commit>:<dir>`, probe 2026-09-25 Q5; with `recursive`,
+   * every entry below it, paths relative to `dir`), or `null` only when
    * `dir` is **confirmed absent** from its parent tree. Any other 404 or failure throws — fail closed (rerun Opus N1).
    */
-  private async treeEntries(commit: string, dir: string): Promise<TreeEntry[] | null> {
+  private async treeEntries(commit: string, dir: string, recursive = false): Promise<TreeEntry[] | null> {
     const ref = dir === '' ? commit : `${commit}:${dir.split('/').map(encodeURIComponent).join('/')}`;
-    const t = await this.getJson<{ truncated: boolean; tree: TreeEntry[] }>(`/git/trees/${ref}`);
+    const t = await this.getJson<{ truncated: boolean; tree: TreeEntry[] }>(`/git/trees/${ref}${recursive ? '?recursive=1' : ''}`);
     if (t) {
       if (t.truncated) throw new FileTooLarge('directory listing truncated');
       return t.tree;

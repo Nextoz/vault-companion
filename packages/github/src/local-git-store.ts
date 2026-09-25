@@ -12,6 +12,7 @@ import {
   TRAILER_OP,
   TRAILER_PAYLOAD,
   type FindOperationResult,
+  type ListedFile,
   type StoredFile,
   type VaultPath,
   type VaultStore,
@@ -115,6 +116,28 @@ export class LocalGitStore implements VaultStore {
       .split('\0')
       .filter((e) => e.length > 0)
       .map((e) => e.split('\t')[1]!);
+  }
+
+  async listFiles(dir: string, atCommit: string): Promise<readonly ListedFile[]> {
+    guardPath(dir);
+    const r = await this.run(['ls-tree', '-r', '-z', `${atCommit}:${dir}`]);
+    if (r.code !== 0) {
+      if ((await this.run(['cat-file', '-e', `${atCommit}^{commit}`])).code !== 0) throw new StoreUnavailable('unknown commit');
+      if ((await this.run(['cat-file', '-e', `${atCommit}:${dir}`])).code === 0) throw new StoreUnavailable('directory listing failed');
+      return [];
+    }
+    // `<mode> <type> <sha>\t<path>`: regular files only — a symlink (120000) could point outside the allowlist.
+    return r.stdout
+      .toString('utf8')
+      .split('\0')
+      .filter((e) => e.length > 0)
+      .map((e) => {
+        const [meta, path] = e.split('\t') as [string, string];
+        const [mode, type, sha] = meta.split(' ') as [string, string, string];
+        return { mode, type, sha, path };
+      })
+      .filter((e) => e.type === 'blob' && (e.mode === '100644' || e.mode === '100755'))
+      .map((e) => ({ path: `${dir}/${e.path}`, blobSha: e.sha }));
   }
 
   /** Mode and type of the exact `path` entry in `commit`'s tree, or null when nothing is there. */

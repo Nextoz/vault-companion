@@ -1,6 +1,16 @@
 // HTTP layer: authentication, request guards, validation and mapping to application services.
 // No domain logic lives here (docs/architecture.md).
-import { Command, type ApiError, type ErrorCode, type Receipt, type TasksResponse } from '@vault-companion/contracts';
+import {
+  Command,
+  decodeLinkedNoteHeader,
+  LINKED_NOTE_HEADER,
+  type ApiError,
+  type ErrorCode,
+  type LinkedNoteRequest,
+  type LinkedNoteResponse,
+  type Receipt,
+  type TasksResponse,
+} from '@vault-companion/contracts';
 import { Hono } from 'hono';
 import type { Identity } from './auth.ts';
 import { hashPath, sanitize, type LogSink } from './log.ts';
@@ -9,6 +19,8 @@ export interface Services {
   readTasks(known: readonly string[]): Promise<TasksResponse | ApiError>;
   /** `command` is schema-valid; `raw` is the exact parsed body used for the payload hash. */
   execute(command: Command, raw: unknown): Promise<Receipt | ApiError>;
+  /** Read-only linked note (P4-A). Optional: without it the route answers 404. */
+  readLinkedNote?(req: LinkedNoteRequest): Promise<LinkedNoteResponse | ApiError>;
 }
 
 export interface AppDeps {
@@ -42,7 +54,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -84,6 +96,24 @@ export function createApp(deps: AppDeps) {
       c.get('logMeta').errorCode = result.code;
       return c.json(result, statusFor(result.code) as 400);
     }
+    return c.json(result);
+  });
+
+  // Read-only linked note. The request (task locator + link index) travels base64url in a header, never in the URL, so
+  // task text stays out of URLs and access logs; there is no client path. Logs carry neither note text nor its path.
+  app.get('/api/linked-note', async (c) => {
+    const read = deps.services.readLinkedNote;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const req = decodeLinkedNoteHeader(c.req.header(LINKED_NOTE_HEADER));
+    if (!req) return c.json(err('invalid', 'invalid linked-note request'), 400);
+    const meta = c.get('logMeta');
+    const result = await read(req);
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    if (result.status === 'refused') meta.errorCode = `linked-note:${result.code}`;
+    meta.commitSha = result.revision;
     return c.json(result);
   });
 

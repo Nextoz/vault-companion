@@ -7,6 +7,7 @@ const s = (path: string, method = 'GET', mode = 'cors') => strategyFor(new URL(p
 describe('service worker policy', () => {
   it('never intercepts the API, even for navigations', () => {
     expect(s('/api/tasks')).toBe('bypass');
+    expect(s('/api/linked-note')).toBe('bypass'); // P4-A: note text is never cached
     expect(s('/api/session', 'GET', 'navigate')).toBe('bypass');
     expect(s('/api')).toBe('bypass');
     expect(s('/api/commands', 'POST')).toBe('bypass');
