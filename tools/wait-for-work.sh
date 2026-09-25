@@ -2,6 +2,7 @@
 # Blocks until there is Lead work: a CodeRabbit review/comment on an open PR newer than the start time,
 # or a new agent/* branch on origin. Prints what changed and exits. Run in the background; the exit wakes the Lead.
 # Also exits when a Codex log (*-run.log in $WATCH_LOGS) gains a final `VERDICT:` / `<X> DONE` / `<X> BLOCKED` line.
+# Also exits when every check on an open PR's head completes (and was not complete at start).
 # Usage: WATCH_LOGS=<dir> tools/wait-for-work.sh [interval-seconds] [max-hours]
 set -u
 interval=${1:-300}
@@ -11,6 +12,10 @@ start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 deadline=$(( $(date +%s) + max_hours * 3600 ))
 branches() { git ls-remote --heads origin 'agent/*' | awk '{print $2}' | sort; }
 known=$(branches)
+ci_done() { # "<pr>:<sha>" for open PRs whose checks have all completed
+  gh pr list --repo "$repo" --state open --json number,headRefOid,statusCheckRollup --jq     '.[] | select((.statusCheckRollup|length) > 0 and ([.statusCheckRollup[] | (.conclusion // .state // "") | select(. == "" or . == "PENDING")] | length) == 0) | "\(.number):\(.headRefOid)"' 2>/dev/null | sort
+}
+ci_known=$(ci_done)
 touch "$0.started" 2>/dev/null || true
 
 while [ "$(date +%s)" -lt "$deadline" ]; do
@@ -24,6 +29,8 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
   now=$(branches)
   new=$(comm -13 <(echo "$known") <(echo "$now"))
   if [ -n "$new" ]; then echo "NEW BRANCH: $new"; exit 0; fi
+  ci_new=$(comm -13 <(echo "$ci_known") <(ci_done))
+  if [ -n "$ci_new" ]; then echo "CI COMPLETE: $ci_new"; exit 0; fi
   for n in $(gh pr list --repo "$repo" --state open --json number --jq '.[].number'); do
     # A finished review: a review object, or a comment edited after $start that is no longer a placeholder/ack.
     f=".[] | select(.user.login==\"coderabbitai[bot]\") | select((.updated_at // .submitted_at) > \"$start\")"
