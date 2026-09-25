@@ -21,7 +21,7 @@
   an orphaned preview that later runs silently reused. Fixed in the config.
 - Reloading while a send is in flight leaves the item "Saving…" for up to 60 s (the lease, A3). This is by design,
   but it's a UX edge.
-- This cloud session had **no `origin` remote** (bundle upload), so it could not push. See Commit.
+- This cloud session started with **no `origin` remote** (bundle upload). It pushed only after the repository was attached with push access.
 - No WebKit binary exists in this sandbox; Chromium is at `/opt/pw-browsers/chromium` (Playwright 1.63 expects a newer
   revision, hence the env override).
 
@@ -46,6 +46,5 @@
 
 - `5a7517b` test(web): service-worker offline shell e2e on the production build (P2-B), on
   `agent/offline-shell-e2e`, plus this handoff commit.
-- **Not pushed:** this session has no `origin`. The branch is in the git bundle
-  `P2B-offline-shell-e2e.bundle` in the session scratchpad. To push it:
-  `git fetch <bundle> agent/offline-shell-e2e:agent/offline-shell-e2e && git push -u origin agent/offline-shell-e2e`.
+- Pushed to `origin/agent/offline-shell-e2e` once the repository was attached with push access. The session
+  started without an `origin` remote (bundle upload).
