@@ -8,7 +8,11 @@ export interface OpenLink {
   linkIndex: number;
   /** What the link shows in the task (alias or target): the heading until the note arrives. */
   label: string;
+  /** The control that opened the note; focus returns to it on close when it is still on the page. */
+  invoker?: HTMLElement | null;
 }
+
+const FOCUSABLE = 'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
 const REFUSED: Record<LinkedNoteRefusalCode, string> = {
   'not-found': 'No note with this name was found.',
@@ -30,6 +34,7 @@ export function NoteView({ link, onClose }: { link: OpenLink; onClose: () => voi
   const [res, setRes] = useState<Fetched<LinkedNoteResponse> | null>(null);
   const [render, setRender] = useState<NoteRenderer | 'failed' | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let live = true;
@@ -46,14 +51,30 @@ export function NoteView({ link, onClose }: { link: OpenLink; onClose: () => voi
     };
   }, [link]);
 
+  // Modal focus (aria-modal): focus starts on the title, Tab/Shift+Tab cycle through the dialog's controls only (the
+  // page behind is `inert` as well), and focus returns to the invoking link when the dialog goes away for any reason.
   useEffect(() => {
+    const invoker = link.invoker ?? null;
     heading.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !dialog.current) return;
+      const items = [...dialog.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
+      e.preventDefault();
+      if (items.length === 0) return heading.current?.focus();
+      const at = items.indexOf(document.activeElement as HTMLElement);
+      const next = at < 0 ? (e.shiftKey ? items.length - 1 : 0) : (at + (e.shiftKey ? -1 : 1) + items.length) % items.length;
+      items[next]!.focus();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (invoker?.isConnected) invoker.focus();
+    };
+  }, [onClose, link]);
 
   const note = res?.kind === 'ok' && res.data.status === 'ok' ? res.data : null;
   // Raw HTML disabled + allowlist sanitiser (render.ts); the only HTML this app ever inserts.
@@ -69,7 +90,7 @@ export function NoteView({ link, onClose }: { link: OpenLink; onClose: () => voi
   else if (res.data.status === 'refused') message = REFUSED[res.data.code];
 
   return (
-    <div className="note-view" role="dialog" aria-modal="true" aria-labelledby="note-title">
+    <div className="note-view" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="note-title">
       <header className="note-head">
         <button type="button" onClick={onClose} aria-label="Back to tasks">
           ‹ Back
