@@ -30,9 +30,8 @@ exists; `main` pushed. Claude tokens are running low: implementation is routed t
 **Repo is PUBLIC (owner, 2026-09-25)**; merges now go through PRs so CodeRabbit reviews them (`docs/orchestration.md`).
 
 **Open work (2026-09-25):**
-- PR #1 merged (`4915e36`). Lead merges PRs itself when checks pass (owner, 2026-09-25).
-- PR #2 `agent/public-scrub` (D2) — merges cleanly; CodeRabbit had not reviewed, re-requested 10:27 UTC. When it
-  comments: CodeRabbit loop (Astra low, clone) → `pnpm check` → merge.
+- PRs #1 (D1) and #2 (D2 scrub) merged (`4915e36`, `7316ea2`). Lead merges PRs itself when checks pass.
+- Watcher `tools/wait-for-work.sh` runs in the background and wakes the Lead on CodeRabbit reviews / new `agent/*` branches.
 - Cloud C (`session_01WxbFmRJdtnNWyYPcqLkmvt`, `agent/ci`) and P2-A (`session_01FyLWeGWnPruL9dXefaVGf3`,
   `agent/e2e-harness`) — when pushed with reports: open PRs, CodeRabbit loop (Cloud for P2-A), verify locally, merge.
 

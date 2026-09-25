@@ -111,6 +111,8 @@ through a PR opened by the Lead: open PR → wait for CodeRabbit → hand the Co
 - **The Lead pushes and merges PRs itself** once CodeRabbit's comments are resolved and all checks/local verification pass (owner, 2026-09-25). If CodeRabbit has not reviewed a PR, comment `@coderabbitai review`.
 - **Waking the Lead:** before stopping with delegated work outstanding, run `bash tools/wait-for-work.sh` as a
   background command. It exits on a finished CodeRabbit review or a new `agent/*` branch on origin, which re-invokes the Lead.
+- Run `gh pr merge` from the main checkout: from a temporary worktree it merges remotely, then fails the local
+  `main` checkout (`'main' is already used by worktree`).
 Config: `.coderabbit.yaml`.
 - Codex `--sandbox workspace-write` cannot write a git **worktree's** git dir (it lives in the main repo's `.git`), so
   Codex tasks run in a **full clone** under `C:\Devault-companion-clones\<task>` and push their own branch.
