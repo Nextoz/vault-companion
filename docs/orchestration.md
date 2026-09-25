@@ -109,6 +109,9 @@ the only record.
 - **Routing under Claude-token pressure (owner, 2026-09-25):** most implementation goes to Claude Code Cloud; small or
   low-risk tasks to Codex GPT-6 Astra at effort `low` (`cmd /c "codex exec -m gpt-6-astra -c model_reasoning_effort=low …"`).
   The local Lead stays lean: decompose, review, integrate.
+- **Local Qwen** (tiny deterministic tasks, one at a time): `cmd /c "codex exec --oss --local-provider ollama -m qwen3.5:4b
+  --sandbox workspace-write - < <prompt> > <log> 2>&1"` in a full clone. Only with **≥ 5 GB free RAM** (the 4B model
+  needs ~3.4 GB; at 1.2 GB free on 2026-09-25 background work was reaped). No Qwen CLI is installed.
 
 ## Pull requests and CodeRabbit (owner, 2026-09-25)
 
