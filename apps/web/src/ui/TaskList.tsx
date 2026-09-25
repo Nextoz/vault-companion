@@ -125,7 +125,7 @@ function TaskRow({
                     type="button"
                     className="wikilink"
                     aria-label={`Open note: ${seg.text}`}
-                    onClick={() => onOpenLink({ task, linkIndex: seg.linkIndex, label: seg.text })}
+                    onClick={(e) => onOpenLink({ task, linkIndex: seg.linkIndex, label: seg.text, invoker: e.currentTarget })}
                   >
                     {seg.text}
                   </button>

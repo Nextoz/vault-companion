@@ -607,3 +607,62 @@ test('Active work failures are quiet: the task lists still render; an absent fil
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   await expect(region(page, 'Active work')).toHaveCount(0);
 });
+
+test.describe('linked note dialog: session binding and modal focus', () => {
+  const NOTE = { path: 'Projects/Garden/Plan.md', markdown: '# Beds\n\nSee [the almanac](https://example.com/almanac) and [more](https://example.com/more).' };
+
+  test.beforeEach(async ({ page }) => {
+    api.open = [taskView(15, 'Prepare [[Projects/Garden/Plan|the garden plan]]', { links: ['Projects/Garden/Plan'] })];
+    api.notes.set('Projects/Garden/Plan', NOTE);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Open note: the garden plan' }).click();
+    await expect(page.getByTestId('note-body')).toContainText('Beds');
+  });
+
+  test('an open note disappears when the session signs out', async ({ page }) => {
+    api.session = 'signed-out';
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.getByRole('alert').filter({ hasText: 'Signed out' })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByText('Beds')).toHaveCount(0);
+  });
+
+  test('an open note disappears when the account changes', async ({ page }) => {
+    api.account = 'b'.repeat(64);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByText('Beds')).toHaveCount(0);
+  });
+
+  test('focus is trapped in the dialog (Tab and Shift+Tab cycle) and returns to the link on close', async ({ page }) => {
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: 'Plan' })).toBeFocused();
+    const back = dialog.getByRole('button', { name: 'Back to tasks' });
+    const almanac = dialog.getByRole('link', { name: 'the almanac' });
+    const more = dialog.getByRole('link', { name: 'more' });
+    await page.keyboard.press('Tab');
+    await expect(back).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(almanac).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(more).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(back).toBeFocused(); // wraps, never reaches the page behind
+    await page.keyboard.press('Shift+Tab');
+    await expect(more).toBeFocused(); // wraps backwards
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press('Tab');
+      expect(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))).toBe(true);
+    }
+    await expect(page.getByRole('main')).toHaveAttribute('inert', '');
+
+    await back.click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open note: the garden plan' })).toBeFocused();
+
+    await page.getByRole('button', { name: 'Open note: the garden plan' }).click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open note: the garden plan' })).toBeFocused();
+  });
+});

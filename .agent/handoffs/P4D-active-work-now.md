@@ -32,7 +32,7 @@
 
 ## Verification
 - After merging the updated `agent/linked-notes` (which includes main's P4-B, P4-C and P2-A work): `pnpm check` is
-  clean, 43 files, 711 tests passed, and web e2e passes 37/37 on Chromium (after linked-notes `37b0f1e`, which includes PR #7). Before that merge: 34 files, 589 tests passed.
+  clean, 43 files, 711 tests passed, and web e2e passes 40/40 on Chromium (after linked-notes `fe2a2a7`: PR #7 plus the CodeRabbit fixes for session-bound notes and dialog focus). Before that merge: 34 files, 589 tests passed.
 - Web e2e (production build, iPhone 15 viewport, **Chromium** via a temporary uncommitted config): 11/11 passed,
   including two new Active work tests:
   - card above Today, XSS case inert, collapse survives a reload, nothing about the card in IndexedDB, Cache Storage or
@@ -51,5 +51,5 @@
   - D10: unsanitised insert (e2e)
 
 ## Commit
-Branch `agent/active-work-now`, based on `agent/linked-notes` `37b0f1e` (already merged with main). See the final SHA
+Branch `agent/active-work-now`, based on `agent/linked-notes` `fe2a2a7` (already merged with main). See the final SHA
 in the session's last line.

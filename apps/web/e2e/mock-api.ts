@@ -54,6 +54,8 @@ export type ReadMode = 'ok' | 'error' | 'offline' | 'hang';
 
 export class MockApi {
   session: 'ok' | 'signed-out' = 'ok';
+  /** The account the session reports (switch it to simulate signing in as someone else). */
+  account = ACCOUNT;
   /** `down`: every request fails as a network error and is not recorded (it never reached the server). */
   network: 'up' | 'down' = 'up';
   sessionMode: ReadMode = 'ok';
@@ -105,7 +107,7 @@ export class MockApi {
   async #session(route: Route) {
     if (await this.#readFailure(route, this.sessionMode)) return;
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
-    return this.#json(route, 200, SessionResponse.parse({ accountKey: ACCOUNT }));
+    return this.#json(route, 200, SessionResponse.parse({ accountKey: this.account }));
   }
 
   #activeWork(route: Route) {

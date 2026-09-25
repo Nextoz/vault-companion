@@ -472,6 +472,13 @@ textarea:focus-visible {
   outline: none;
 }
 
+.note-head h2:focus-visible,
+.note-view a:focus-visible,
+.task-text .wikilink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .note-badge {
   font-size: 0.8rem;
   color: var(--muted);
