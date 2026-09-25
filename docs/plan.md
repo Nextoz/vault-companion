@@ -39,8 +39,8 @@ Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef4
 | C CI + `pnpm ci:local` | **Claude Code Cloud** session `session_01WxbFmRJdtnNWyYPcqLkmvt`, branch `agent/ci` (pushed by the cloud) | in flight (first cloud trial) |
 | P2-A Phase 2 e2e harness (real Git, Node server, desktop clone, scenarios) | **Claude Code Cloud** session `session_01FyLWeGWnPruL9dXefaVGf3`, branch `agent/e2e-harness`, brief `docs/briefs/P2A-e2e-harness.md` | in flight |
 | P3-A Cloudflare deploy scaffolding (wrangler, assets, dry-run, runbook) | **Claude Code Cloud**, branch `agent/deploy-scaffold`, session `session_01BtqCxHaRkAXZ53YDZ4QSe4`, brief `docs/briefs/P3A-deploy-scaffold.md` | in flight (pushes a stub early) |
-| P4-A linked note context (contract item 7) | **Claude Code Cloud**, branch `agent/linked-notes`, brief `docs/briefs/P4A-linked-notes.md` | launching |
-| P2-B service-worker offline shell e2e | **Claude Code Cloud**, branch `agent/offline-shell-e2e`, brief `docs/briefs/P2B-offline-shell-e2e.md` | launching |
+| P4-A linked note context (contract item 7) | **Claude Code Cloud**, branch `agent/linked-notes`, session `session_012WDdnkDZjTWRF4956Mjaoz`, brief `docs/briefs/P4A-linked-notes.md` | in flight |
+| P2-B service-worker offline shell e2e | **Claude Code Cloud**, branch `agent/offline-shell-e2e`, session `session_01LWfCSsJj1eCeWtXgpcYspN`, brief `docs/briefs/P2B-offline-shell-e2e.md` | in flight |
 | F4-sizing (server deadline, concurrent `known=`) | — | Phase 3 sizing |
 
 Next: review + merge F4, D1, C (cloud: `git fetch`, review `origin/agent/ci`, verify locally, merge); then Phase 2

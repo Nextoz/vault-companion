@@ -102,6 +102,8 @@ the only record.
 - First use is one small task to verify the workflow. Verified 2026-09-25 (brief C).
 - `claude --cloud` needs an interactive TTY: launch it with `herdr pane run <pane> "claude --cloud '…'"` and read the
   `Created cloud session: … session_<id>` line from the pane.
+  Launch **one at a time** and wait for the shell prompt to return before the next: text typed while `claude --cloud`
+  provisions is queued as messages to that session (`herdr pane wait-output` also matches old screen text).
 - **Routing under Claude-token pressure (owner, 2026-09-25):** most implementation goes to Claude Code Cloud; small or
   low-risk tasks to Codex GPT-6 Astra at effort `low` (`cmd /c "codex exec -m gpt-6-astra -c model_reasoning_effort=low …"`).
   The local Lead stays lean: decompose, review, integrate.

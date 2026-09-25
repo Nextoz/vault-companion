@@ -38,5 +38,9 @@ exists; `main` pushed. Claude tokens are running low: implementation is routed t
 - P3-A deploy scaffolding — Cloud `session_01BtqCxHaRkAXZ53YDZ4QSe4`, branch `agent/deploy-scaffold` (launched after the
   App install; first stub push proves the session cloned rather than bundled).
 
+- P4-A linked notes (Cloud `session_012WDdnkDZjTWRF4956Mjaoz`, `agent/linked-notes`) and P2-B offline-shell e2e
+  (Cloud `session_01LWfCSsJj1eCeWtXgpcYspN`, `agent/offline-shell-e2e`). P4-A is security-relevant: add an Astra
+  adversarial review of its PR besides CodeRabbit.
+
 **Exact next action:** `git fetch`; handle whichever of the above is ready first. Keep the Lead lean (Claude tokens low):
 offload implementation and PR follow-ups to Cloud / Astra low.
