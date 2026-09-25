@@ -6,6 +6,10 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-20",
   "send_metrics": false,
+  // Only hostname: the owner's custom domain behind Cloudflare Access (docs/deploy.md). No *.workers.dev and no
+  // per-version preview URLs — either would be an unprotected second origin unless Access also covers it.
+  "workers_dev": false,
+  "preview_urls": false,
   // No `nodejs_compat`: the dry-run bundle builds without it (P3A report).
   // `account_id` is deliberately absent: wrangler reads CLOUDFLARE_ACCOUNT_ID from the owner's shell.
 
@@ -24,7 +28,7 @@
     "USER_TIME_ZONE": "Europe/Copenhagen",
   },
 
-  // Everything else in REQUIRED is set per account with `wrangler secret put <NAME>` (docs/deploy.md step 4), never
+  // Everything else in REQUIRED is set per account with `wrangler secret put <NAME>` (docs/deploy.md step 7), never
   // committed. Identifiers are secrets too so that the public repo carries no real account, domain or email:
   //   wrangler secret put ACCESS_TEAM_DOMAIN       # https://<team>.cloudflareaccess.com
   //   wrangler secret put ACCESS_AUD               # Access application audience (AUD) tag

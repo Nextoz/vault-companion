@@ -28,6 +28,8 @@ function stripJsonc(text: string): string {
 }
 
 interface WranglerConfig {
+  workers_dev?: boolean;
+  preview_urls?: boolean;
   vars?: Record<string, string>;
   secrets?: { required?: string[] };
   assets?: { directory?: string; run_worker_first?: boolean | string[] };
@@ -48,6 +50,12 @@ describe('wrangler.jsonc', () => {
 
   it('pins production auth to Cloudflare Access', () => {
     expect(vars['AUTH_MODE']).toBe('access');
+  });
+
+  it('exposes no hostname besides the Access-protected custom domain', () => {
+    // Wrangler defaults both to true when absent, so they must be present and false.
+    expect(config.workers_dev).toBe(false);
+    expect(config.preview_urls).toBe(false);
   });
 
   it('commits only non-identifying vars (public repo); everything else is a secret', () => {

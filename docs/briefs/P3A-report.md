@@ -61,19 +61,24 @@ Not changed: `apps/web/vite.config.ts` (root-relative paths already right), any 
 
 Detail in `docs/deploy.md` §0. Worst case `UndoCompleteTask`: 75 subrequests per attempt (three 20-page compare
 scans — own dedupe, target lookup, "already undone" — plus reads and the 6-call Git write), × 5 attempts + token +
-JWKS = **377**. Shallow case: 92 for five attempts, 20 for one. Free (50) is insufficient; **Workers Paid (1,000)
-suffices** with ~2.6× headroom. `docs/plan.md` "Unresolved issues" says two paged dedupes per attempt; the code has
-three — Lead may want to update that line (plan.md was outside this brief).
+JWKS = **377**. Shallow case: 92 for five attempts, 20 for one. Free (50 per invocation) is insufficient for the
+current code; **Workers Paid (10,000 subrequests per invocation,
+[Workers limits](https://developers.cloudflare.com/workers/platform/limits/)) suffices** by a wide margin.
+**ADR-0013** (token-based Undo: ≈ 10 calls per attempt, ≤ 3 attempts, no paging) makes the **Free plan sufficient
+once merged**; other commands keep ADR-0005 paging, so a very deep completion dedupe window can still exceed 50
+(failing as `upstream-unavailable`, never a partial write).
 
 ## Open points / unverifiable without an account
 
 1. Real deploy, secrets, Access JWT verification against a live team domain, GitHub App token exchange.
-2. Plan limits quoted from memory (Free 50 / Paid 1,000) — owner re-checks Cloudflare's current limits page at G2.
+2. Plan limits (Free 50 / Paid 10,000 subrequests per invocation) per the Cloudflare limits page above — owner
+   re-checks it at G2.
 3. ~~Security headers on static assets~~ — fixed by `_headers` (see Files). Verified locally with `wrangler dev`:
    `/` and `/assets/*.js` carry all seven security headers plus `Cache-Control: no-store`; `/_headers` returns the
    SPA `index.html`, not the rules. Consequence of copying `Cache-Control: no-store` exactly: hashed assets are not
    HTTP-cached; the service worker's precache (Cache Storage ignores that header) still serves the app offline.
-4. Access on `workers.dev` vs a custom domain is the owner's choice at G2; `APP_ORIGIN` must match exactly.
-5. **Push:** this session has no `origin` remote (bundle upload); `git push` fails with
-   `fatal: 'origin' does not appear to be a git repository`. Commits are local only until the session is given
-   push access.
+4. Hostname (CodeRabbit PR #10): `workers_dev: false` and `preview_urls: false`, asserted by `config.test.ts`; the
+   only hostname is the custom domain behind Access, attached with `wrangler deploy --domain <host>` so it never
+   enters the repo. `APP_ORIGIN` must match it exactly. Dashboard check: `docs/deploy.md` step 8.
+5. Runbook order (CodeRabbit PR #10): dry run → `wrangler login --use-keyring` → first deploy → secrets. Each
+   `secret put` deploys a live version; `/api/*` answers `503` (`configProblems`) until all nine are set.
