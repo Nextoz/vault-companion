@@ -73,3 +73,5 @@ the only record.
 3. `herdr agent list` (inside Herdr) — reconcile with the plan's delegated-agents table; read a worker's report file
    before re-prompting it. Never re-dispatch work whose branch already contains it.
 4. Run `pnpm check` to confirm the recorded test state, then continue with the checkpoint's exact next action.
+- `MSYS_NO_PATHCONV=1` also disables Git Bash path translation for git: pass Windows paths (`C:/Dev/...`) to git while
+  it is set, or `/c/Dev/...` becomes `C:/c/Dev/...` (happened once; empty leftover dirs under `C:\c\` for the owner to delete).
