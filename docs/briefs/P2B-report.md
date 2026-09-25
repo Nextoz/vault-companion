@@ -1,14 +1,14 @@
 # P2-B report — Service-worker offline shell e2e
 
-Branch `agent/offline-shell-e2e`. Status: **tests written and verified; they expose a real SW bug (left unfixed,
-per brief), so the new suite is intermittently red on `vite preview` until it is fixed.**
+Branch `agent/offline-shell-e2e` (PR #7). Status: **done.** The tests exposed a real SW bug (`Vary: Origin`). The Lead
+committed the fix in `9605255`, and test 5 is a deterministic regression test for it.
 
 ## What was added
 
 | File | Change |
 | --- | --- |
-| `apps/web/e2e/offline-shell.spec.ts` | 4 tests, one per brief objective (below). |
-| `apps/web/e2e/static-server.ts` | Tiny static server with a swappable root, so a second build can be "deployed" to the same origin. |
+| `apps/web/e2e/offline-shell.spec.ts` | 4 tests, one per brief objective, and a regression test for the bug they found (below). |
+| `apps/web/e2e/static-server.ts` | Tiny static server with a swappable root, so a second build can be "deployed" to the same origin. It can add response headers and logs each request's `Origin`. |
 | `apps/web/e2e/mock-api.ts` | `install()` accepts a `BrowserContext` (only context routes see service-worker requests); `network: 'up' \| 'down'` fails every API request as a network error without recording it. |
 | `apps/web/playwright.config.ts` | Second project `pixel-7-chromium-sw` (SW spec only, `serviceWorkers: 'allow'`); WebKit project ignores the SW spec; optional `PW_CHROMIUM_EXECUTABLE`; `webServer.gracefulShutdown: SIGINT`. |
 
@@ -26,33 +26,42 @@ Tests (all against the production build via `vite build` + `vite preview`, excep
    reload: B runs immediately (network-first shell), the Cache Storage ends with only B's `vc-shell-<version>`, and an
    offline reload serves B's shell with all of B's assets. Tests `policy.ts`/`sw.ts` as they are.
 
+5. **`Vary: Origin` regression (deterministic).** The test builds its own copy of the current source and serves it with
+   `Vary: Origin` and `Cache-Control: no-store`. It asserts that the precache requests carried no `Origin` and that the
+   cached responses have `Vary: Origin`. Then, offline, it requests every precached asset twice: once with a plain
+   `fetch()` (no `Origin`, same cache key) and once with a `crossorigin` `<link rel=preload>`, which Chromium always
+   sends with `Origin`. Both must load.
+
 ## WebKit / Chromium split
 
 Playwright routes service-worker network traffic, and applies `setOffline` to it, in Chromium only; the WebKit build
 does not support these. So the SW spec runs in a Chromium project (Pixel 7 profile) with service workers allowed, and
 the existing `iphone-15-webkit` project keeps everything else, with service workers blocked as before.
 
-## Bug found (not fixed — `apps/web/src/**` is out of scope)
+## Bug found — fixed in `9605255`
 
-**The offline shell fails to load intermittently when the host sends `Vary: Origin` on assets.**
+**The offline shell failed to load intermittently when the host sent `Vary: Origin` on assets.**
 
-- `sw.ts` `asset()` looks assets up with `cache.match(request)`, which honours `Vary`. Precache entries are stored via
-  `cache.addAll()` from the worker, with requests that carry no `Origin`. `index.html` loads the entry script and CSS
-  with `crossorigin`; when that request carries `Origin`, the lookup misses, the worker goes to the network, and offline
-  the load fails (`net::ERR_FAILED` on `/assets/index-*.js`), leaving a blank page.
-- `vite preview` sends `Vary: Origin` on every file (its CORS middleware). Production asset headers are not decided yet
-  (P3-A); any host or proxy that adds `Vary: Origin` triggers the same failure.
-- Evidence (test 1 repeated 40× with 4 workers, same `dist/`): **15/40 failed** served by `vite preview`, **0/40**
-  served by `static-server.ts` (no `Vary`). While offline, Cache Storage demonstrably held both assets.
-- Suggested fix (for the owner of `sw.ts`): `cache.match(request, { ignoreVary: true })` in `asset()` (the keys are
-  content-hashed URLs, so `Vary` carries no information). With exactly that one-line change applied temporarily: the SW
-  suite passed 3/3 consecutive runs and 40/40 repeats; the change was reverted and is not on this branch.
-
-Tests 1–3 run on `vite preview` as the brief requires and are **kept failing-when-it-happens**; test 4 uses the
-`Vary`-free static server, so it does not hit the bug.
+- `sw.ts` `asset()` looked assets up with `cache.match(request)`, which honours `Vary`. Precache entries are stored
+  via `cache.addAll()` from the worker, with requests that carry no `Origin`. When a page asset request reached the
+  worker carrying `Origin`, the lookup missed, the worker went to the network, and offline the load failed with a
+  blank page.
+- `vite preview` sends `Vary: Origin` on every file. Production asset headers are a P3-A follow-up.
+- Why it was intermittent: parser-inserted `<script type=module crossorigin>` and `<link crossorigin>` requests
+  usually reach the worker *without* `Origin`. With `vite preview` and page reloads, 15/40 loads failed; against a
+  server without `Vary`, 0/40. A probe showed that dynamically inserted `crossorigin` elements and `import()` always
+  send `Origin` to the worker, while `fetch()` never does. Test 5 relies on that difference, so it does not depend on
+  timing.
+- The fix, committed by the Lead in `9605255`, is `cache.match(request, { ignoreVary: true })`. The keys are
+  content-hashed URLs, so `Vary` carries no information here.
+- Proof, with `--repeat-each 20 --retries 0`: **20/20 pass with the fix, 20/20 fail with `cache.match(request)`**.
+  Each failure shows both assets' `crossorigin` requests failing while the plain `fetch()` still returns 200.
 
 ## Other findings
 
+- **`dist/` can be stale between back-to-back runs.** The `webServer` reuses a server still shutting down on port
+  4173, which skips `pnpm build`. Tests 4 and 5 therefore make their own builds, and tests 1–3 test whatever `dist/`
+  holds.
 - **Playwright never exited** after the suite: it hung at "Terminating the WebServer" (the `pnpm build && pnpm preview`
   tree ignores SIGTERM), leaving an orphaned preview that later runs silently reused. This predates P2-B.
   `gracefulShutdown: { signal: 'SIGINT', timeout: 5_000 }` fixes it (clean exit, no orphan; pnpm prints `ELIFECYCLE`).
@@ -69,12 +78,13 @@ Environment: Linux cloud sandbox, Node 22, Playwright 1.63 with the preinstalled
 
 | Check | Result |
 | --- | --- |
-| `pnpm check` (lint + typecheck + 454 unit tests) | pass |
-| SW suite, unmodified source, 3 consecutive runs | 4/4, 3/4, 3/4 — failures are the `Vary` bug above |
-| SW suite, with the temporary `ignoreVary` control patch | 3/3 consecutive runs green; 40/40 on `--repeat-each 10` |
-| `app.spec.ts` (8 tests) under a temporary Chromium config, new mock | 3/3 runs green (same as with the old mock) |
+| `pnpm check` (lint + typecheck + 454 unit tests), after the fix | pass |
+| SW suite (5 tests), after the fix, 3 consecutive runs | 5/5, 5/5, 5/5 |
+| Test 5, `--repeat-each 20`: with the fix / with `cache.match(request)` | 20/20 pass / 20/20 fail |
+| `app.spec.ts` (8 tests) under a temporary Chromium config, after the fix | 3/3 runs green |
+| Before the fix: SW suite (tests 1–4), 3 consecutive runs | 4/4, 3/4, 3/4 (the `Vary` bug) |
 
-Guard-break mutations (each applied alone on top of the control patch, then reverted; `--retries 0`):
+Guard-break mutations (tests 1–4; each applied alone on top of the `ignoreVary` fix, then reverted; `--retries 0`):
 
 | Guard broken | Failing tests |
 | --- | --- |
@@ -83,5 +93,6 @@ Guard-break mutations (each applied alone on top of the control patch, then reve
 | `queue.ts`: a failed (retry) send is dropped (no offline queue) | 2 only |
 | `sw.ts`: shell cache-first (stale shell) | 4 only |
 | `sw.ts`: no `skipWaiting()` (new worker waits) | 4 only |
+| `sw.ts`: `ignoreVary` removed | 5 only (20/20) |
 
 Run locally: `cd apps/web && pnpm e2e` (install Chromium once with `pnpm exec playwright install chromium`).

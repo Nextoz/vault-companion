@@ -66,6 +66,26 @@ const pendingRecords = (page: Page) =>
       }),
   );
 
+const WEB = fileURLToPath(new URL('..', import.meta.url));
+
+/** A real production build of the app, plus one statement that tags it and so changes the entry asset hash. */
+async function buildTagged(outDir: string, tag: string): Promise<void> {
+  const tagEntry: Plugin = {
+    name: 'e2e-build-tag',
+    renderChunk(code, chunk) {
+      if (!chunk.isEntry || !chunk.fileName.startsWith('assets/')) return null;
+      return `${code}\n;globalThis.__vcBuild=${JSON.stringify(tag)};\n`;
+    },
+  };
+  await build({
+    root: WEB,
+    configFile: join(WEB, 'vite.config.ts'),
+    logLevel: 'warn',
+    build: { outDir, emptyOutDir: true },
+    plugins: [tagEntry],
+  });
+}
+
 test('after one online visit the shell loads offline and shows the offline state', async ({ page, context }) => {
   await page.goto('/');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
@@ -140,28 +160,9 @@ test('/api/* is never answered from the service-worker cache', async ({ page, co
 });
 
 test.describe('a new build', () => {
-  const WEB = fileURLToPath(new URL('..', import.meta.url));
   let dirs: { a: string; b: string };
   let server: StaticServer;
   let origin: string;
-
-  /** A real production build of the app, plus one statement that tags it and so changes the entry asset hash. */
-  async function buildTagged(outDir: string, tag: string): Promise<void> {
-    const tagEntry: Plugin = {
-      name: 'e2e-build-tag',
-      renderChunk(code, chunk) {
-        if (!chunk.isEntry || !chunk.fileName.startsWith('assets/')) return null;
-        return `${code}\n;globalThis.__vcBuild=${JSON.stringify(tag)};\n`;
-      },
-    };
-    await build({
-      root: WEB,
-      configFile: join(WEB, 'vite.config.ts'),
-      logLevel: 'warn',
-      build: { outDir, emptyOutDir: true },
-      plugins: [tagEntry],
-    });
-  }
 
   /** The cache name the built sw.js will use (`vc-shell-<version>`, version injected by vite.config.ts). */
   async function cacheOf(dir: string): Promise<string> {
@@ -216,5 +217,65 @@ test.describe('a new build', () => {
     await page.reload();
     await expect(offlineBanner(page)).toBeVisible();
     expect(await buildOf(page)).toBe('b');
+  });
+});
+
+test.describe('a host that sends Vary: Origin', () => {
+  let dir: string;
+  let server: StaticServer;
+  let origin: string;
+
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    // Its own build of the current source, not whatever dist/ holds.
+    dir = await mkdtemp(join(tmpdir(), 'vc-sw-vary-'));
+    await buildTagged(dir, 'vary');
+    // no-store: nothing but the worker's cache can answer an offline request.
+    server = new StaticServer(dir, { Vary: 'Origin', 'Cache-Control': 'no-store' });
+    await server.listen(0);
+    origin = `http://localhost:${(server.address() as AddressInfo).port}`;
+  });
+
+  test.afterAll(async () => {
+    await server?.close();
+    if (dir) await rm(dir, { recursive: true, force: true });
+  });
+
+  test('a precached asset requested with an Origin header is still served offline', async ({ page, context }) => {
+    await page.goto(`${origin}/`);
+    await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+    await controlled(page);
+
+    // The worker precached every asset with requests that carry no Origin header.
+    const precached = (await cachedPaths(page)).filter((p) => p.startsWith('/assets/'));
+    expect(precached.length).toBeGreaterThan(0);
+    for (const path of precached) {
+      expect(server.requests.filter((r) => r.path === path).map((r) => r.origin), path).toContain(null);
+    }
+    const vary = await page.evaluate((paths) => Promise.all(paths.map(async (p) => (await caches.match(p))?.headers.get('Vary'))), precached);
+    expect(vary).toEqual(precached.map(() => 'Origin'));
+
+    await setNetwork(context, false);
+    const offline = await page.evaluate(async (paths) => {
+      const out: Record<string, { plain: string; withOrigin: string }> = {};
+      for (const path of paths) {
+        // A same-origin fetch() sends no Origin: the same cache key as the precache request.
+        const plain = await fetch(path).then((r) => `status ${r.status}`, () => 'network error');
+        // A crossorigin element always sends Origin, so under `Vary: Origin` it is a different cache key.
+        const withOrigin = await new Promise<string>((resolve) => {
+          const link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = path.endsWith('.css') ? 'style' : 'script';
+          link.crossOrigin = 'anonymous';
+          link.href = path;
+          link.onload = () => resolve('loaded');
+          link.onerror = () => resolve('network error');
+          document.head.append(link);
+        });
+        out[path] = { plain, withOrigin };
+      }
+      return out;
+    }, precached);
+    expect(offline).toEqual(Object.fromEntries(precached.map((p) => [p, { plain: 'status 200', withOrigin: 'loaded' }])));
   });
 });

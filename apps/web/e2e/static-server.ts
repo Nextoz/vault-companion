@@ -18,18 +18,26 @@ const TYPES: Record<string, string> = {
 
 export class StaticServer {
   root: string;
+  /** Every request, with its `Origin` header (null when absent). */
+  readonly requests: { path: string; origin: string | null }[] = [];
   readonly #server: Server;
 
-  constructor(root: string) {
+  /** `headers` are added to every response (and override the defaults below). */
+  constructor(root: string, headers: Record<string, string> = {}) {
     this.root = root;
     this.#server = createServer((req, res) => {
       const path = new URL(req.url ?? '/', 'http://x').pathname;
+      this.requests.push({ path, origin: req.headers.origin ?? null });
       const file = normalize(join(this.root, path === '/' ? 'index.html' : path));
       if (!file.startsWith(normalize(this.root))) return res.writeHead(403).end();
       readFile(file).then(
         (body) => {
           // Revalidate every time: what a load sees is decided by the service worker, not the HTTP cache.
-          res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-cache' });
+          res.writeHead(200, {
+            'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream',
+            'Cache-Control': 'no-cache',
+            ...headers,
+          });
           res.end(body);
         },
         () => res.writeHead(404).end(),
