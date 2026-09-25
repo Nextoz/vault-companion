@@ -26,8 +26,8 @@ Exit: all streams below merged, `pnpm check` + e2e + CI green, Phase 2 gate pass
 | P2-B service-worker offline shell e2e | Cloud `session_01LWfCSsJj1eCeWtXgpcYspN`, `agent/offline-shell-e2e` | in flight |
 | P3-A Cloudflare deploy scaffold + `docs/deploy.md` | Cloud `session_01BtqCxHaRkAXZ53YDZ4QSe4`, `agent/deploy-scaffold` | in flight; Lead dispositions sent (minimal `allowBuilds`, identifying values as secrets, `_headers` + drift test) |
 | P4-A linked note context (contract item 7) | Cloud `session_012WDdnkDZjTWRF4956Mjaoz`, `agent/linked-notes` | in flight; Astra adversarial review before merge |
-| P4-B client correctness: duplicate-task identity, read timeouts/error state, conflict next step, Undo in Done today | Cloud, `agent/client-correctness`, `docs/briefs/P4B-client-correctness.md` | launching |
-| P4-C capture draft recovery (account-aware, separate from the queue) | Cloud, `agent/draft-recovery`, `docs/briefs/P4C-draft-recovery.md` | launching |
+| P4-B client correctness: duplicate-task identity, read timeouts/error state, conflict next step, Undo in Done today | Cloud `session_01TLT6gLxkoKtDHSy8CcCpmb`, `agent/client-correctness` | in flight |
+| P4-C capture draft recovery (account-aware, separate from the queue) | Cloud `session_01H7tmZxTqo9BDE7UHb5esX1`, `agent/draft-recovery` | in flight |
 | Today definition | **owner decision** (below) | blocks only the Today change, nothing else |
 | Phase 2 gate (whole-system review) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after PR #4 merges |
 
