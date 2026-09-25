@@ -50,6 +50,11 @@ describe('wrangler.jsonc', () => {
     expect(vars['AUTH_MODE']).toBe('access');
   });
 
+  it('commits only non-identifying vars (public repo); everything else is a secret', () => {
+    expect(Object.keys(vars).sort()).toEqual(['AUTH_MODE', 'USER_TIME_ZONE', 'VAULT_BRANCH']);
+    expect(required.filter((k) => !secrets.includes(k))).toEqual([]);
+  });
+
   it('never gives a secret a committed value', () => {
     expect(secrets.filter((k) => k in vars)).toEqual([]);
   });

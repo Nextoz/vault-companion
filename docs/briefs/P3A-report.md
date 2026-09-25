@@ -23,20 +23,29 @@ Changed:
   `wrangler` pinned `4.138.0` (what pnpm resolved; 4.140.0 is on npm but newer than the resolver allowed).
 - `package.json` — `deploy:dry` → `pnpm --filter @vault-companion/worker build`.
 - `pnpm-lock.yaml` — wrangler install.
-- `pnpm-workspace.yaml` — **outside the brief's "May change" list, but required by the install:** pnpm 12 wrote an
-  `allowBuilds` block with placeholders for `esbuild` and `workerd` install scripts. Set both to `false`: the dry run
-  and `wrangler dev` work without them (platform binaries come from optional dependencies). Lead: accept or
-  revert with an alternative.
+- `pnpm-workspace.yaml` — `allowBuilds` (Lead decision 1): explicit list `esbuild: true`, `workerd: true`, nothing
+  else. Both are wrangler's native-binary packages; their `postinstall` (`node install.js`) verifies/selects the
+  platform binary and falls back to downloading it if the optional platform package is missing.
+- `apps/worker/src/app.ts` — `SECURITY_HEADERS` exported (was module-private); no behaviour change.
+- `apps/web/public/_headers` (added, Lead decision 3) — `/*` gets exactly `SECURITY_HEADERS`; Vite copies it to
+  `dist/`, Workers static assets apply it and do not serve the file.
+- `apps/worker/src/headers.test.ts` (added) — parsed `_headers` must equal `{ "/*": SECURITY_HEADERS }`.
+- `apps/web/test/dist.test.ts` (added) — runs the real Vite build into a temp dir and requires `_headers` in it,
+  byte-identical to `public/_headers`. `apps/web/tsconfig.tools.json` now includes `test` so it is typechecked.
 
-Not changed: `apps/web/vite.config.ts` (root-relative paths already right), any `src` logic, other docs.
+Not changed: `apps/web/vite.config.ts` (root-relative paths already right), any runtime logic, other docs.
 
 ## Verification
 
-- `pnpm check`: green — lint, typecheck, 29 files / 459 tests.
+- `pnpm check`: green — lint, typecheck, 31 files / 462 tests.
 - Guard proof: temporarily appended `'VAULT_BRANCH_X'` to `REQUIRED` in `index.ts` → `config.test.ts` failed with
   `undeclared = ["VAULT_BRANCH_X"]`; reverted (`git diff` of `index.ts` empty).
+- Header guards: removing `frame-ancestors 'none'` from `_headers` fails `headers.test.ts`; removing `_headers`
+  fails `dist.test.ts` (ENOENT in the built dir). Both restored.
+- Vars allowlist (Lead decision 2): `config.test.ts` also requires `vars` to be exactly
+  `AUTH_MODE`/`USER_TIME_ZONE`/`VAULT_BRANCH` and every other `REQUIRED` name to be a required secret.
 - `pnpm deploy:dry`: succeeds, **no `nodejs_compat` needed**. Worker bundle `dist/index.js` **975,340 bytes
-  (171,439 gzip)** (+ source map 1.77 MB, not uploaded as code). Wrangler: "Read 11 files from the assets directory",
+  (171,439 gzip)** (+ source map 1.77 MB, not uploaded as code). Wrangler: "Read 11 files from the assets directory" (12 with `_headers`),
   Total Upload 952.48 KiB / gzip 167.49 KiB. The asset manifest (debug log) lists `/index.html`, `/sw.js`,
   `/manifest.webmanifest`, `/assets/index-*.{js,css}`, `/icons/*`.
 - Local `wrangler dev` (no account, workerd locally): `/` 200 text/html; `/sw.js` 200 text/javascript (root scope);
@@ -60,10 +69,10 @@ three — Lead may want to update that line (plan.md was outside this brief).
 
 1. Real deploy, secrets, Access JWT verification against a live team domain, GitHub App token exchange.
 2. Plan limits quoted from memory (Free 50 / Paid 1,000) — owner re-checks Cloudflare's current limits page at G2.
-3. **Security headers on static assets:** with `run_worker_first: ["/api/*"]`, HTML/JS are served by the asset
-   layer, so `app.ts`'s `SECURITY_HEADERS` (HSTS, `frame-ancestors 'none'`, nosniff, COOP…) are **not** on the PWA
-   responses; only the `<meta>` CSP from `vite.config.ts` applies, and `frame-ancestors` cannot be set by meta.
-   Suggested follow-up: `apps/web/public/_headers` (Workers assets honour it) — outside this brief's scope.
+3. ~~Security headers on static assets~~ — fixed by `_headers` (see Files). Verified locally with `wrangler dev`:
+   `/` and `/assets/*.js` carry all seven security headers plus `Cache-Control: no-store`; `/_headers` returns the
+   SPA `index.html`, not the rules. Consequence of copying `Cache-Control: no-store` exactly: hashed assets are not
+   HTTP-cached; the service worker's precache (Cache Storage ignores that header) still serves the app offline.
 4. Access on `workers.dev` vs a custom domain is the owner's choice at G2; `APP_ORIGIN` must match exactly.
 5. **Push:** this session has no `origin` remote (bundle upload); `git push` fails with
    `fatal: 'origin' does not appear to be a git repository`. Commits are local only until the session is given

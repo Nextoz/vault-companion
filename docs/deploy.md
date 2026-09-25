@@ -78,13 +78,16 @@ pnpm exec wrangler secret put VAULT_OWNER              # <owner>
 pnpm exec wrangler secret put VAULT_REPO               # <vault-repo>
 ```
 
-The first `secret put` creates the Worker if it does not exist yet. Committed vars (`AUTH_MODE="access"`,
-`VAULT_BRANCH`, `USER_TIME_ZONE`) live in `wrangler.jsonc`; edit `VAULT_BRANCH`/`USER_TIME_ZONE` there if yours
-differ. Any missing or invalid setting makes `/api/*` answer `503 Service not configured` (`configProblems`).
+The first `secret put` creates the Worker if it does not exist yet. The repository is public, so **every identifying
+setting is a secret** — the nine above, not only the private key. Only three non-identifying vars are committed in
+`wrangler.jsonc`: `AUTH_MODE="access"`, `VAULT_BRANCH`, and a placeholder `USER_TIME_ZONE` (the domain default).
+Never move a secret into `vars`; `apps/worker/src/config.test.ts` fails if `vars` holds anything else. To use your own
+branch or zone without committing it, override at deploy time
+(`wrangler deploy --var USER_TIME_ZONE:<zone>`). Any missing or invalid setting makes `/api/*` answer `503 Service not configured` (`configProblems`).
 
 ## 5. Dry run
 
-From the repository root: `pnpm install && pnpm check && pnpm deploy:dry`. Expect the web build, "Read 11 files
+From the repository root: `pnpm install && pnpm check && pnpm deploy:dry`. Expect the web build, "Read 12 files
 from the assets directory" (count varies with the build) and `--dry-run: exiting now.`
 
 ## 6. First deploy
@@ -102,5 +105,12 @@ web app changed since.)
 2. `https://<host>/api/session` → `200` with `{"accountKey":"…"}`. `401` = Access JWT rejected (check
    `ACCESS_AUD`/`ACCESS_TEAM_DOMAIN`/`ALLOWED_EMAILS`); `503` = a secret is missing or invalid.
 3. `curl -i https://<host>/api/session` without a session → blocked by Access (redirect/403), never `200`.
-4. The task list loads (read path through the GitHub App). Do **not** complete a task yet: the first live write is
+4. Security headers on static pages (served by the asset layer from `apps/web/public/_headers`, not by the Worker):
+   in the browser's DevTools → Network, select the document request for `/` and one `/assets/*.js` — both must carry
+   `Content-Security-Policy` (with `frame-ancestors 'none'`), `Strict-Transport-Security`,
+   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy`,
+   `Cross-Origin-Opener-Policy` and `Cache-Control: no-store`, matching an `/api/session` response. (A plain `curl`
+   is stopped by Access; with a service token or the `CF_Authorization` cookie, `curl -sI https://<host>/` shows
+   the same.) `https://<host>/_headers` must return the app's HTML, never the rules file.
+5. The task list loads (read path through the GitHub App). Do **not** complete a task yet: the first live write is
    gate G3.

@@ -31,7 +31,7 @@ export function statusFor(code: ErrorCode): number {
   return 409; // conflict:*, operation-id-reused, dedupe-unknown
 }
 
-const SECURITY_HEADERS: Record<string, string> = {
+export const SECURITY_HEADERS: Record<string, string> = {
   'Cache-Control': 'no-store',
   'Content-Security-Policy':
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
