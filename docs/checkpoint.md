@@ -27,6 +27,9 @@ exists; `main` pushed. Claude tokens are running low: implementation is routed t
 `agent/spec-drift`); C (Cloud `session_01WxbFmRJdtnNWyYPcqLkmvt`, branch `agent/ci` on origin); P2-A (Cloud
 `session_01FyLWeGWnPruL9dXefaVGf3`, branch `agent/e2e-harness`, report `docs/briefs/P2A-report.md`).
 
-**Exact next action:** for each finished stream: read its report (F4: `docs/briefs/F4-report.md`; D1: `D1 DONE` line in
-`d1-run.log`; C: `git fetch` then `docs/briefs/C-report.md` on `origin/agent/ci`), review the diff, run `pnpm check`
-(+ web e2e for F4), merge, push `main`. Then decompose Phase 2 into Cloud briefs.
+**Repo is PUBLIC (owner, 2026-09-25)**; merges now go through PRs so CodeRabbit reviews them (`docs/orchestration.md`).
+
+**Exact next action:** when D1 finishes (`D1 DONE` in `d1-run.log`): push `agent/spec-drift`, open a PR, wait for
+CodeRabbit, reconcile, merge. Then launch D2 (`docs/briefs/D2-public-scrub.md`, Astra low) the same way. For cloud
+C / P2-A: `git fetch`; when `origin/agent/ci` / `origin/agent/e2e-harness` carry their reports, open PRs, wait for
+CodeRabbit, review, verify locally, merge. F4 already merged (454 tests).
