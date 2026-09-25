@@ -14,5 +14,12 @@ review. Herdr workers `kernel` (`w3:p4`), `frontend` (`w3:p3`) idle.
 
 **Risks:** `docs/plan.md` → Unresolved issues / risks.
 
-**Exact next action:** wait for the two Phase 1 gate reports (`docs/reviews/phase-1-review-{opus,astra}.md`); if a
-reviewer died, re-launch it from `docs/reviews/phase-1-review-brief.md` (see `docs/plan.md` item 4); then reconcile.
+**Memory event (2026-09-25 ~02:40):** Claude Code reaped the Lead's background waiter because system memory was
+critically low (0.6 GB free of 15.4 GB). Not a review failure. The idle `kernel` pane (`w3:p4`, work merged) was
+closed to relieve pressure. Still running: `review-opus` (`w3:p5`), Astra `codex exec` (`w3:p6`), Sol `codex exec`
+(`w3:p7`). No automatic re-waiting was started.
+
+**Exact next action:** check for `docs/reviews/phase-1-review-opus.md` and `docs/reviews/phase-1-review-astra.md`
+(Astra/Sol progress: `astra-run.log`/`sol-run.log` in the Lead scratchpad, UTF-16). If a reviewer process died,
+re-launch it from `docs/reviews/phase-1-review-brief.md` per `docs/plan.md` item 4 — only when memory allows.
+Then reconcile into `docs/reviews/phase-1-reconciliation.md`; then review and merge `agent/ci` (brief C).
