@@ -15,10 +15,20 @@ priorities are the owner's choice, informed by observed use (milestone 3).
 - Desktop sync worker (live, read-only inspection 2026-09-25): commits local edits before fetch, merges compatible
   divergence via `merge-tree`, never force-pushes, on overlap preserves both commits **without** conflict markers and
   records `conflict` in `.git/vault-sync-status.json` ⇒ W1–W4 met by design. Surfacing to the owner is log/status only.
+- **Desktop sync worker is broken (found 2026-09-25, read-only):** the module version installed 2026-09-24 ~21:00 has
+  failed every hourly run. Its `git add -A -- . ':(exclude)<path>'` names paths that `.gitignore` also covers; Git exits
+  1 on those after staging the other changes, and the add sits outside the worker's unstage-on-error block, so the
+  staged leftovers make every later run refuse. Its tests use repos without `.gitignore`. Recurs on every run until
+  fixed. **Canary prerequisite** (W2). Proposed fix (owner-approved vault change): stage with only non-ignored
+  excludes, then `restore --staged` the tracked-but-ignored paths; put the add inside the unstage-on-error block; add a
+  `.gitignore` + tracked-ignored-file case to its test script. Clear the current state with `git restore --staged -- .`
+  (working files untouched). Verified on a copied index, never the live one.
 
 ## Milestone 1 — Integrated first-release build (current)
 
-Exit: all streams below merged, `pnpm check` + e2e + CI green, Phase 2 gate passed, known limitations listed here.
+Exit: all streams below merged, `pnpm check` + e2e + CI green, known limitations listed here, **and** the whole-system
+review passed against the **combined merged build** (P2-A, P2-B, P3-A, P4-A/B/C/D and T1 together — their UI and
+storage changes overlap, so no stream is reviewed only in isolation).
 
 | Stream | Worker | Status |
 |---|---|---|
@@ -26,10 +36,18 @@ Exit: all streams below merged, `pnpm check` + e2e + CI green, Phase 2 gate pass
 | P2-B service-worker offline shell e2e | Cloud `session_01LWfCSsJj1eCeWtXgpcYspN`, `agent/offline-shell-e2e` | in flight |
 | P3-A Cloudflare deploy scaffold + `docs/deploy.md` | Cloud `session_01BtqCxHaRkAXZ53YDZ4QSe4`, `agent/deploy-scaffold` | in flight; Lead dispositions sent (minimal `allowBuilds`, identifying values as secrets, `_headers` + drift test) |
 | P4-A linked note context (contract item 7) | Cloud `session_012WDdnkDZjTWRF4956Mjaoz`, `agent/linked-notes` | in flight; Astra adversarial review before merge |
-| P4-B client correctness: duplicate-task identity, read timeouts/error state, conflict next step, Undo in Done today | Cloud, `agent/client-correctness`, `docs/briefs/P4B-client-correctness.md` | launching |
-| P4-C capture draft recovery (account-aware, separate from the queue) | Cloud, `agent/draft-recovery`, `docs/briefs/P4C-draft-recovery.md` | launching |
-| Today definition | **owner decision** (below) | blocks only the Today change, nothing else |
-| Phase 2 gate (whole-system review) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after PR #4 merges |
+| P4-B client correctness: duplicate-task identity, read timeouts/error state, conflict next step, Undo in Done today | Cloud `session_01TLT6gLxkoKtDHSy8CcCpmb`, `agent/client-correctness` | in flight |
+| P4-C capture draft recovery (account-aware, separate from the queue) | Cloud `session_01H7tmZxTqo9BDE7UHb5esX1`, `agent/draft-recovery` | in flight |
+| T1 Today rule (domain read model) | Astra low → **PR #5** (495 tests, mutation-checked) | CodeRabbit/CI |
+| Hermetic git fixtures (P2-A follow-up) | Astra low → **PR #6** (55 package tests) | CodeRabbit/CI |
+| T1 Today layout (Overdue below, collapsed) | P4-B addendum | in flight |
+| P4-D Active Work Now read-only card | Cloud, after P4-A merges (reuses its renderer) | queued |
+| Whole-system review (Phase 2 gate + milestone 1 exit) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after **all** milestone-1 streams merge |
+
+**Worker reality check (14:45):** the five newer Cloud sessions (P2-B, P3-A, P4-A/B/C) have pushed nothing and are
+not observable from the Lead. Suspected cause: sessions wait for repo attach/push approval (as C and P2-A did). Probe confirmed
+(14:45): CLI-launched sessions have no `origin` and cannot push ⇒ owner connects GitHub to claude.ai (`/web-setup`) and
+approves repo attach in each session; no new cloud tasks until a probe push succeeds. Codex quota exhausted until 18:55.
 
 Every branch: PR → CodeRabbit loop → CI → handoff dispositions (`.agent/handoffs/`) → merge.
 
@@ -56,7 +74,7 @@ repo), then the owner chooses the next improvement from observed use.
 | Tap Capture → keyboard ready | ≤ 0.5 s |
 | Tap complete/save → local acknowledgement (state chip) | ≤ 100 ms |
 | Online → "saved to GitHub" | ≤ 5 s typical |
-| Refused/conflicted action → resolved (refresh + redo, or discard) | ≤ 3 taps, no lost text |
+| Refused/conflicted action → clear, safe next step | ≤ 3 taps, no lost text; dismissing is **not** resolving the conflict |
 
 Observations: none yet (recorded privately in milestone 2–3).
 
@@ -64,7 +82,8 @@ Observations: none yet (recorded privately in milestone 2–3).
 
 | # | Decision | Status |
 |---|---|---|
-| T1 | **Today meaning** — recommendation in `docs/checkpoint.md`; repo contract says `≤ today`, vault Build Contract says `= today` | **open** |
+| T1 | Today meaning | **decided** (provisional) — ADR-0012 |
+| P1 | **Cloudflare Workers plan** — Undo needs 3 paged dedupe scans/attempt: shallow ≈ 92, worst ≈ 377 subrequests; Free allows 50, **Paid ($5/mo) 1,000** | **open** (Lead recommends Paid; a follow-up merges the three scans into one to cut latency either way) |
 | D2 | Linked-note allowlist | default `Projects/`, `Tasks/`, `Inbox/` (P4-A implements it) |
 | D3 | Task IDs | no `🆔` writes in first release |
 | D4 | Capture anchor | decided: top of Open (ADR-0010) |
@@ -75,7 +94,6 @@ Observations: none yet (recorded privately in milestone 2–3).
   on device by design). Stated in the UI copy by P4-B/P2-B.
 - Desktop conflicts are surfaced only in the sync log/status file; the app cannot see them until the owner resolves.
 - R7 residue (Low): semantic Undo leaves a blank line in Done when Done has other content (needs vault-contract §4.2).
-- Workers subrequest budget for Undo dedupe paging × 5 attempts — P3-A sizing note decides the plan.
 - Phone accessibility (keyboard visibility, long text, dictation, large text, focus, VoiceOver, one-handed) is
   verified only on the installed iPhone app in milestone 2.
 

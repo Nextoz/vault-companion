@@ -121,6 +121,10 @@ effect and shows the view as `refreshing` — a saved completion never reappears
 ## Client pending queue (PWA)
 
 - IndexedDB store `pending`, key `operationId`: envelope + `accountKey` + `everSent` + attempts + lastError.
+- IndexedDB store `drafts`, key `accountKey`: `{ kind, text, version, updatedAt }` — the user's unsent capture text,
+  never vault content. Autosave is conditional on the version it started from (a stale or deleted draft is never
+  rewritten); Save runs one `readwrite` transaction over `drafts` + `pending` that checks the draft version, enqueues
+  the envelope and deletes the draft, so exactly one window can submit a given draft (ADR-0014).
 - Envelope and op ID are created and persisted **before** the first send; the control is disabled
   synchronously on tap (F19).
 - `accountKey` = SHA-256 of the Access identity (`sub`) from `/api/session`. Items are sent only when the

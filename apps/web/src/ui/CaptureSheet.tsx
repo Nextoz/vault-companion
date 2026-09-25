@@ -18,6 +18,8 @@ interface Props {
   /** Drafts are kept under this account; on a change to another account the sheet shows only that one's draft. */
   accountKey: string | null;
   baseRevision: string | null;
+  /** Why tasks cannot be captured now (the task list is write-blocked); notes still can. */
+  taskBlocked?: string | null;
   onClose: () => void;
 }
 
@@ -26,8 +28,10 @@ interface Props {
  * as this account's draft (P4-C) and restored on reopen; closing keeps it, only "Discard draft" or Save removes it.
  * With several windows open, each draft is saved at most once: see draft.ts.
  */
-export function CaptureSheet({ queue, drafts, accountKey, baseRevision, onClose }: Props) {
-  const [kind, setKind] = useState<CaptureKind>(prefs.captureKind);
+export function CaptureSheet({ queue, drafts, accountKey, baseRevision, taskBlocked = null, onClose }: Props) {
+  const [chosen, setKind] = useState<CaptureKind>(prefs.captureKind);
+  // The remembered choice stays; only this sheet falls back to a note while tasks cannot be written.
+  const kind: CaptureKind = taskBlocked ? 'note' : chosen;
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -135,7 +139,7 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, onClose 
     <div className="sheet-backdrop" role="presentation" onClick={() => text.length === 0 && onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Capture" onClick={(e) => e.stopPropagation()}>
         <div className="segmented" role="group" aria-label="Capture type">
-          <button type="button" aria-pressed={kind === 'task'} onClick={() => choose('task')}>
+          <button type="button" aria-pressed={kind === 'task'} disabled={taskBlocked !== null} onClick={() => choose('task')}>
             Task
           </button>
           <button type="button" aria-pressed={kind === 'note'} onClick={() => choose('note')}>
@@ -151,6 +155,7 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, onClose 
           autoFocus
           onChange={(e) => edit(e.target.value)}
         />
+        {taskBlocked && <p className="muted small">{taskBlocked} Notes still work.</p>}
         {!ready && <p className="muted small">Connect once to set up this device before capturing.</p>}
         {DRAFT_NOTICE[draftStatus] && (
           <p className={draftStatus === 'superseded' ? 'error' : 'muted small'} role="status">
