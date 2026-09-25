@@ -111,3 +111,7 @@ through a PR opened by the Lead: open PR → wait for CodeRabbit → hand the Co
 Config: `.coderabbit.yaml`.
 - Codex `--sandbox workspace-write` cannot write a git **worktree's** git dir (it lives in the main repo's `.git`), so
   Codex tasks run in a **full clone** under `C:\Devault-companion-clones\<task>` and push their own branch.
+- Codex `workspace-write` keeps `.git` **read-only** and has no GitHub credentials (verified 2026-09-25): Astra edits
+  files only; the Lead reviews the diff, commits, pushes and comments. Workers must not edit `docs/plan.md`.
+- Visibility: `pwsh -NoProfile -File tools/status.ps1` in its own pane shows agents, Codex logs, cloud session links,
+  worker branches and open PRs (refresh 30 s).
