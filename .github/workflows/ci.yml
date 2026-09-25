@@ -52,7 +52,7 @@ jobs:
 
       - name: Install Playwright WebKit
         if: runner.os == 'Linux'
-        run: pnpm --filter @vault-companion/web exec playwright install --with-deps webkit
+        run: pnpm --filter @vault-companion/web exec playwright install --with-deps webkit chromium
 
       - name: Web e2e
         if: runner.os == 'Linux'

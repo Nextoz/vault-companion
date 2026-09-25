@@ -12,15 +12,16 @@ async function start() {
   void navigator.storage?.persist?.().catch(() => false);
 
   const receipts = new EventTarget();
+  const store = await openPendingStore();
   const queue = await PendingQueue.open({
-    store: await openPendingStore(),
+    store,
     send: postCommand,
     onReceipt: () => receipts.dispatchEvent(new Event('receipt')),
   });
 
   root.render(
     <StrictMode>
-      <App queue={queue} receipts={receipts} />
+      <App queue={queue} drafts={store} receipts={receipts} />
     </StrictMode>,
   );
 

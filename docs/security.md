@@ -38,7 +38,7 @@ Plus `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
 
 API responses: `Cache-Control: no-store`. Service worker caches the **app shell only**
 (hashed static assets); it never caches `/api/*`. No vault content in IndexedDB except the user's
-own pending captures (`docs/commands.md`).
+own pending captures and one unsent capture draft per account (`drafts` store, ADR-0014; `docs/commands.md`).
 
 ## Secrets
 
