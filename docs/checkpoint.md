@@ -32,7 +32,7 @@ exists; `main` pushed. Claude tokens are running low: implementation is routed t
 **Open work (2026-09-25):**
 - PRs #1 (D1) and #2 (D2 scrub) merged (`4915e36`, `7316ea2`). Lead merges PRs itself when checks pass.
 - Watcher `tools/wait-for-work.sh` runs in the background and wakes the Lead on CodeRabbit reviews / new `agent/*` branches.
-- PR #3 `agent/ci` (C): CodeRabbit fixed (2) and clean on `e41a029`; Windows CI green, Ubuntu running ⇒ merge when green.
+- PR #3 (CI) **merged** `716edf7`: GitHub Actions (ubuntu + windows, e2e, audit, gitleaks) now gate every PR.
 - PR #4 `agent/e2e-harness` (P2-A): Astra PASS WITH FIXES (`docs/reviews/P2A-review-astra.md`, 3 Medium + 1 Low) sent back
   to its Cloud session; CodeRabbit review pending. After fixes + CodeRabbit + `pnpm check` ⇒ merge ⇒ launch the Phase 2
   gate (`docs/reviews/phase-2-review-brief.md`: Cloud Opus + Astra).
