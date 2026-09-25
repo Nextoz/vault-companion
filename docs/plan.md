@@ -43,7 +43,7 @@ storage changes overlap, so no stream is reviewed only in isolation).
 | T1 Today rule (domain read model) | Astra low → **PR #5** (495 tests, mutation-checked) | CodeRabbit/CI |
 | Hermetic git fixtures (P2-A follow-up) | Astra low → **PR #6** (55 package tests) | CodeRabbit/CI |
 | T1 Today layout (Overdue below, collapsed) | P4-B addendum | in flight |
-| P4-D Active Work Now read-only card | Cloud, after P4-A merges (reuses its renderer) | queued |
+| P4-D Active Work Now read-only card | Cloud (P4-A session, repo attached), `agent/active-work-now` from `agent/linked-notes` | in flight |
 | P4-E token-based Undo (ADR-0013: no paging, ≤ 10 calls/attempt, ≤ 3 attempts) | Cloud (P4-B session, repo attached), `agent/token-undo` | launching |
 | Whole-system review (Phase 2 gate + milestone 1 exit) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after **all** milestone-1 streams merge |
 
