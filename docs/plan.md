@@ -45,9 +45,9 @@ storage changes overlap, so no stream is reviewed only in isolation).
 | Whole-system review (Phase 2 gate + milestone 1 exit) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after **all** milestone-1 streams merge |
 
 **Worker reality check (14:45):** the five newer Cloud sessions (P2-B, P3-A, P4-A/B/C) have pushed nothing and are
-not observable from the Lead. Suspected cause: sessions wait for repo attach/push approval (as C and P2-A did). A probe
-session (`session_01RxiYA5FV3eo79DQb7qSY1R`, branch `agent/cloud-probe`) tests the current launch path before any
-replacement is created. Codex quota exhausted until 18:55.
+not observable from the Lead. Suspected cause: sessions wait for repo attach/push approval (as C and P2-A did). Probe confirmed
+(14:45): CLI-launched sessions have no `origin` and cannot push ⇒ owner connects GitHub to claude.ai (`/web-setup`) and
+approves repo attach in each session; no new cloud tasks until a probe push succeeds. Codex quota exhausted until 18:55.
 
 Every branch: PR → CodeRabbit loop → CI → handoff dispositions (`.agent/handoffs/`) → merge.
 

@@ -95,6 +95,11 @@ the only record.
 - Precondition 2: the **Claude GitHub App is installed on `Nextoz/vault-companion`** (github.com/apps/claude). Without it
   `claude --cloud` uploads a local *bundle* instead of cloning: the session has no `origin` and cannot push (C and P2-A,
   2026-09-25, finished but never pushed). The launch output should say it is cloning, not bundling.
+- **Probe 2026-09-25 14:45:** even with the App installed, a CLI-launched session had no `origin` (bundle upload) and
+  could not push. Needed as well: the owner's claude.ai account connected to GitHub with push access — run `/web-setup`
+  in a terminal Claude Code session (sends the local `gh` token), or connect GitHub at claude.ai/code. Existing
+  sessions recover when the owner approves "attach repository with push access" in the session UI; then the Lead
+  sends `claude -p "push now" --cloud <id>`. **Never launch a new cloud task before a probe push succeeds.**
 - Every cloud brief says **push early**: a report stub pushed in the first minutes, then the final push. The Lead only
   sees GitHub, never the container; no branch after ~15 min ⇒ ask the session (`claude -p … --cloud <id>`).
 - Launch: commit + push the brief, then
