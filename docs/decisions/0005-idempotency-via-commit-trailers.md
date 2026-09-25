@@ -7,8 +7,10 @@ evidence of what was committed.
 
 **Decision.** Each app commit carries `Vault-Companion-Op` and `Vault-Companion-Payload` trailers.
 Undo commits also carry `Vault-Companion-Undoes` with the target completion's operation ID, preventing a second Undo.
-Each attempt pins one commit X; the dedupe searches `baseRevision..X` and the file is read at X, so any later
-commit (including our own) fails head-CAS and forces a new attempt. The search
+Each attempt pins one commit X; the dedupe searches `baseRevision..X` and the file is read at X.
+A commit that advances the branch after X and before this attempt's publication makes head-CAS fail and
+forces a new attempt. An unknown ref-update outcome starts a new attempt, which repeats dedupe at the
+newly resolved head before deciding whether to write. The search
 returns found / not-found / **unknown**; unknown never writes. Same payload ⇒ `already-applied` receipt; different ⇒
 `operation-id-reused`. Algorithm in `docs/commands.md`.
 

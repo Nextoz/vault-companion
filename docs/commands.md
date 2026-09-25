@@ -65,9 +65,11 @@ All reads and the dedupe of one attempt refer to **one immutable commit X** (F1)
    - unavailable before the ref update → upstream-unavailable (retryable).
 ```
 
-Why this is airtight: the ref can only advance from X, so **any** commit after X — our own earlier attempt, a
-desktop sync, or an Undo that restored identical bytes (review A2, the ABA case) — makes step 5 fail and step 3
-runs again against a newer X that contains it. Blob CAS alone was insufficient (ADR-0011).
+Why this is airtight: the ref can only advance from X, so a commit that advances the branch after X and before
+this attempt's publication — such as a desktop sync or an Undo that restored identical bytes (review A2, the ABA
+case) — makes step 5 fail. If the ref update has an unknown outcome, `executeWrite` starts another attempt; step 3
+dedupes at the newly resolved X before any new write. If the earlier update succeeded, dedupe can return
+`already-applied`. Blob CAS alone was insufficient (ADR-0011).
 Dedupe pages the compare API (`per_page=250&page=n`) until `total_commits` are seen; the unpaged response returns
 only the newest 250 (probe 2026-09-25). More than 20 pages ⇒ `unknown`.
 
