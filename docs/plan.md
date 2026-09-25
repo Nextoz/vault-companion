@@ -38,6 +38,7 @@ Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef4
 | D1 spec drift (F6) | Codex **Astra low**, pane `w3:pG`, branch `agent/spec-drift` (local worktree), log `d1-run.log` in Lead scratchpad | in flight |
 | C CI + `pnpm ci:local` | **Claude Code Cloud** session `session_01WxbFmRJdtnNWyYPcqLkmvt`, branch `agent/ci` (pushed by the cloud) | in flight (first cloud trial) |
 | P2-A Phase 2 e2e harness (real Git, Node server, desktop clone, scenarios) | **Claude Code Cloud** session `session_01FyLWeGWnPruL9dXefaVGf3`, branch `agent/e2e-harness`, brief `docs/briefs/P2A-e2e-harness.md` | in flight |
+| P3-A Cloudflare deploy scaffolding (wrangler, assets, dry-run, runbook) | **Claude Code Cloud**, branch `agent/deploy-scaffold`, brief `docs/briefs/P3A-deploy-scaffold.md` | launching |
 | F4-sizing (server deadline, concurrent `known=`) | — | Phase 3 sizing |
 
 Next: review + merge F4, D1, C (cloud: `git fetch`, review `origin/agent/ci`, verify locally, merge); then Phase 2
