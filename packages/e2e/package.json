@@ -1,0 +1,15 @@
+{
+  "name": "@vault-companion/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@vault-companion/contracts": "workspace:*",
+    "@vault-companion/domain": "workspace:*",
+    "@vault-companion/github": "workspace:*",
+    "@vault-companion/worker": "workspace:*",
+    "hono": "^4.13.8",
+    "jose": "^6.2.12"
+  }
+}

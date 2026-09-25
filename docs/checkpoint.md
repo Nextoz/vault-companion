@@ -18,6 +18,6 @@ new branches, CodeRabbit reviews, finished CI and finished Codex logs.
    read-only against the live vault; then milestone 2 canary (G3).
 4. T1 Today: domain rule (Astra), layout (P4-B), Active Work Now card (P4-D after P4-A).
 
-## Desktop sync worker broken — see `docs/plan.md` "Done" (root cause, fix proposal); awaiting owner approval to change the vault.
+## Desktop sync worker broken — canary dependency. Tested patch ready (Lead scratchpad `syncfix/`); awaiting owner approval to apply to the vault.
 
 ## T1 Today — decided 2026-09-25 (ADR-0012), provisional; implementation split per `docs/plan.md`.

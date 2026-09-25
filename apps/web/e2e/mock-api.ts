@@ -48,8 +48,17 @@ export function taskView(lineIndex: number, description: string, extra: Partial<
 /** `hold`: the request stays in flight until `release()`, then is answered as `ok`. */
 export type CommandMode = 'ok' | 'offline' | 'unavailable' | 'hold' | { refuse: ApiError };
 
+/** How a read (`/api/session`, `/api/tasks`) is answered; `hang`: never, until the page gives up. */
+export type ReadMode = 'ok' | 'error' | 'offline' | 'hang';
+
 export class MockApi {
   session: 'ok' | 'signed-out' = 'ok';
+  sessionMode: ReadMode = 'ok';
+  tasksMode: ReadMode = 'ok';
+  /** The read's writeBlock, e.g. a committed Git conflict in the task list. */
+  writeBlock: ApiError | null = null;
+  /** Blob of the task file in every read; change it to model a desktop edit. */
+  blobSha = '2'.repeat(40);
   commandMode: CommandMode = 'ok';
   open: TaskView[] = [];
   doneToday: TaskView[] = [];
@@ -75,7 +84,17 @@ export class MockApi {
     return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
   }
 
-  #session(route: Route) {
+  /** Answers a read that is not `ok`; false means serve it normally. */
+  async #readFailure(route: Route, mode: ReadMode): Promise<boolean> {
+    if (mode === 'ok') return false;
+    if (mode === 'offline') await route.abort('internetdisconnected');
+    else if (mode === 'error') await route.fulfill({ status: 502, body: 'Bad gateway' });
+    // `hang`: never answered; the page aborts it.
+    return true;
+  }
+
+  async #session(route: Route) {
+    if (await this.#readFailure(route, this.sessionMode)) return;
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     return this.#json(route, 200, SessionResponse.parse({ accountKey: ACCOUNT }));
   }
@@ -95,21 +114,33 @@ export class MockApi {
     return this.#json(route, 200, LinkedNoteResponse.parse(body));
   }
 
-  #tasks(route: Route) {
+  async #tasks(route: Route) {
+    if (await this.#readFailure(route, this.tasksMode)) return;
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     const asked = new URL(route.request().url()).searchParams.get('known')?.split(',').filter(Boolean) ?? [];
     const known = Object.fromEntries(asked.map((c) => [c, 'included' as const]));
+    // Locators as the Worker builds them: this read's blob, and how many indexed lines share the text.
+    const lines = [...this.open, ...this.doneToday].map((t) => t.locator.lineText);
+    const located = (t: TaskView): TaskView => ({
+      ...t,
+      locator: {
+        ...t.locator,
+        blobSha: this.blobSha,
+        occurrencesAtRead: lines.filter((l) => l === t.locator.lineText).length,
+      },
+    });
+    const open = this.open.map(located);
     const body = TasksResponse.parse({
       revision: this.#revision,
-      blobSha: '2'.repeat(40),
+      blobSha: this.blobSha,
       today: TODAY,
       timeZone: 'Europe/Copenhagen',
-      writeBlock: null,
+      writeBlock: this.writeBlock,
       known,
-      todayTasks: this.open.filter((t) => t.due === TODAY),
-      overdue: [],
-      allOpen: this.open,
-      doneToday: this.doneToday,
+      todayTasks: open.filter((t) => t.due === TODAY),
+      overdue: open.filter((t) => t.due !== null && t.due < TODAY),
+      allOpen: open,
+      doneToday: this.doneToday.map(located),
     });
     return this.#json(route, 200, body);
   }
@@ -141,6 +172,13 @@ export class MockApi {
     return this.#json(route, 200, receipt);
   }
 
+  /** A desktop commit to the task list: new revision and blob, these open tasks. */
+  desktopEdit(open: TaskView[]): void {
+    this.#revision = sha();
+    this.blobSha = sha();
+    this.open = open;
+  }
+
   /** Answer every held request (as `ok`) and stop holding new ones. */
   release(): void {
     this.commandMode = 'ok';
@@ -154,16 +192,19 @@ export class MockApi {
   #apply(command: Command): Receipt {
     this.#revision = sha();
     const base = { operationId: command.operationId, status: 'applied' as const, commitSha: this.#revision, blobSha: sha() };
+    if (command.type !== 'CaptureNote') this.blobSha = base.blobSha;
     switch (command.type) {
       case 'CompleteTask': {
-        const { lineText } = command.payload.task;
-        const task = this.open.find((t) => t.locator.lineText === lineText);
+        const { lineText, lineIndex } = command.payload.task;
+        // The line the locator names (identical lines are different tasks), else the only one with its text.
+        const same = this.open.filter((t) => t.locator.lineText === lineText);
+        const task = same.find((t) => t.locator.lineIndex === lineIndex) ?? (same.length === 1 ? same[0] : undefined);
         if (!task) throw new Error('mock: completing an unknown task');
         const completedLineText = `${lineText.replace('- [ ]', '- [x]')} ✅ ${TODAY}`;
         this.open = this.open.filter((t) => t !== task);
         this.doneToday.unshift({
           ...task,
-          locator: { ...task.locator, lineText: completedLineText, lineIndex: 40 },
+          locator: { ...task.locator, lineText: completedLineText, lineIndex: 40 + this.doneToday.length },
           status: 'done',
           section: 'done',
           done: TODAY,

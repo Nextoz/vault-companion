@@ -16,7 +16,7 @@
 //   IndexedDB can no longer be needed to overlay a stale read in any tab.
 import type { Command, CommandType, CompleteTaskCommand, Receipt, TasksResponse } from '@vault-companion/contracts';
 import { backoffMs, classify, knownNotApplied, type Outcome } from './classify.ts';
-import type { PendingError, PendingRecord, PendingStore, ReceiptRecord, Watermark } from './db.ts';
+import type { DraftBasis, PendingError, PendingRecord, PendingStore, ReceiptRecord, Watermark } from './db.ts';
 
 export type ItemState = 'pending' | 'saving' | 'saved' | 'attention';
 
@@ -27,6 +27,8 @@ export interface QueueItem {
   envelope: Command;
   label: string;
   taskKey: string | null;
+  /** The account the item was created under (A7). */
+  accountKey: string;
   state: ItemState;
   error: PendingError | null;
   everSent: boolean;
@@ -57,6 +59,11 @@ export interface EnqueueOptions {
   label: string;
   taskKey?: string | null;
   dependsOn?: string | null;
+  /**
+   * Capture Save of a draft (P4-C): in the transaction that persists the item, the account's stored draft must still
+   * be this version and is deleted; otherwise nothing is persisted and `enqueue` answers `'draft-conflict'`.
+   */
+  draft?: DraftBasis;
 }
 
 /** The part of `navigator.locks` the queue uses: an exclusive lock held for the callback's duration. */
@@ -182,10 +189,14 @@ export class PendingQueue {
 
   // ---- user actions ------------------------------------------------------------------------------------------
 
-  /** Persists the envelope, then schedules a send. Resolves once the item is durable on the device. */
-  async enqueue(envelope: Command, options: EnqueueOptions): Promise<void> {
-    await this.#locked(() => this.#enqueueLocked(envelope, options));
-    void this.flush();
+  /**
+   * Persists the envelope, then schedules a send. Resolves once the item is durable on the device, or with
+   * `'draft-conflict'` (nothing persisted) if `options.draft` is no longer the stored draft.
+   */
+  async enqueue(envelope: Command, options: EnqueueOptions): Promise<'enqueued' | 'draft-conflict'> {
+    const result = await this.#locked(() => this.#enqueueLocked(envelope, options));
+    if (result === 'enqueued') void this.flush();
+    return result;
   }
 
   /**
@@ -509,11 +520,11 @@ export class PendingQueue {
     this.#emit();
   }
 
-  async #enqueueLocked(envelope: Command, options: EnqueueOptions): Promise<void> {
-    if (this.#records.has(envelope.operationId) || this.#receipts.has(envelope.operationId)) return;
+  async #enqueueLocked(envelope: Command, options: EnqueueOptions): Promise<'enqueued' | 'draft-conflict'> {
+    if (this.#records.has(envelope.operationId) || this.#receipts.has(envelope.operationId)) return 'enqueued';
     const last = this.#ordered().at(-1);
     const now = this.#now();
-    await this.#persist({
+    const record: PendingRecord = {
       operationId: envelope.operationId,
       seq: Math.max(now, (last?.seq ?? 0) + 1),
       type: envelope.type,
@@ -530,7 +541,12 @@ export class PendingQueue {
       createdAt: now,
       leaseUntil: 0,
       claimId: null,
-    });
+    };
+    const draft = options.draft === undefined ? null : { accountKey: options.accountKey, basis: options.draft };
+    if ((await this.#store.add(record, draft)) === 'draft-conflict') return 'draft-conflict';
+    this.#records.set(record.operationId, record);
+    this.#emit();
+    return 'enqueued';
   }
 
   /** Durable first, in one transaction; the cache and listeners see the records only once it has committed. */
@@ -571,6 +587,7 @@ export class PendingQueue {
       envelope: this.#envelopeOf(record),
       label: record.label,
       taskKey: record.taskKey,
+      accountKey: record.accountKey,
       state,
       error: mismatch ? ACCOUNT_MISMATCH : record.lastError,
       everSent: record.everSent,
@@ -588,6 +605,7 @@ export class PendingQueue {
       envelope: this.#envelopeOf(saved),
       label: saved.label,
       taskKey: saved.taskKey,
+      accountKey: saved.accountKey,
       state: 'saved',
       error: null,
       everSent: true,
