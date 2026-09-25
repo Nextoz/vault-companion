@@ -36,7 +36,7 @@ FIXES — new findings reconciled in `docs/reviews/phase-1-reconciliation.md` ("
 | F3 queue/view rerun fixes (Astra N2, N3; Opus N5) | Opus 5.5 worker `f3`, pane `w3:pC`, branch `agent/queue-rerun-fixes`, brief `docs/briefs/F3-queue-rerun-fixes.md` | in flight |
 
 Next: merge F3 → full check + WebKit e2e → **gate run 3** (fresh Opus + Astra; brief + rerun addendum; report names
-`phase-1-rereview2-*.md`). CI blocked (GPT-6 Sol unavailable on owner's Codex account; owner decision pending).
+`phase-1-rereview2-*.md`). CI: owner decided 2026-09-25 — GPT-6 Astra at effort ≤ medium (`docs/orchestration.md`); launch after F3 merges (memory).
 
 ### Unresolved issues / risks
 

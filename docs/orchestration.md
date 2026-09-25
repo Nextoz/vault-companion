@@ -20,6 +20,11 @@ Full background: bootstrap §5–7 in `docs/bootstrap/`.
 | Independent **cross-model** architecture review; adversarial review of risky diffs; Markdown/data-integrity review; sync/concurrency review; security/privacy review; hard bounded bugs needing a second model family; critical QA before live-vault writes | `codex` | **GPT-6 Astra** `gpt-6-astra` |
 | Routine bounded implementation; CI/CD and DevOps; test implementation; tooling; mechanical refactors; focused debugging not justifying Astra | `codex` | **GPT-6 Sol** `gpt-6-sol` |
 
+**Owner decision 2026-09-25:** GPT-6 Sol is not available on the owner's Codex (ChatGPT) account (`model is not supported`).
+Sol-class work (the row above) therefore uses **GPT-6 Astra with reasoning effort `low` or `medium` — never higher**:
+`codex exec -m gpt-6-astra -c model_reasoning_effort="medium" …` (verify `reasoning effort:` in the log header).
+Astra reviews (the row before) keep their default effort.
+
 Rules:
 - Always pass the model explicitly; never rely on a CLI default:
   - `herdr agent start <name> --kind claude --pane <pane-id> -- --model claude-opus-5-5`

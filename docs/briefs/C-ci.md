@@ -1,7 +1,7 @@
 # Brief C — CI pipeline (GitHub Actions) + identical local check
 
 Type: **implementation** (bounded, routine). Branch `agent/ci`, worktree `C:\Dev\vault-companion-worktrees\ci`.
-Model routing: Codex **GPT-6 Sol**.
+Model routing: Codex **GPT-6 Astra at reasoning effort `medium`** (owner decision 2026-09-25; Sol unavailable).
 
 ## Objective
 
