@@ -1,7 +1,7 @@
 import type { CommandType } from '@vault-companion/contracts';
 import { useState } from 'react';
 import { exportText } from '../commands.ts';
-import type { PendingQueue, QueueItem } from '../queue/queue.ts';
+import type { PendingQueue, QueueItem, ReadEvidence } from '../queue/queue.ts';
 import { StateChip } from './StateChip.tsx';
 
 const VERB: Record<CommandType, string> = {
@@ -12,18 +12,30 @@ const VERB: Record<CommandType, string> = {
 };
 
 /** Every action on this device with its honest state. Saved entries can be cleared. */
-export function ActionsPanel({ queue, items }: { queue: PendingQueue; items: readonly QueueItem[] }) {
+export function ActionsPanel({
+  queue,
+  items,
+  read,
+}: {
+  queue: PendingQueue;
+  items: readonly QueueItem[];
+  /** The read on screen: clearing uses it as the watermark (G3-1). */
+  read: ReadEvidence | null;
+}) {
   const [exporting, setExporting] = useState<QueueItem | null>(null);
   if (items.length === 0) return null;
-  // Only receipts a read has acknowledged may be cleared; the rest still keep the screen honest (A9).
-  const saved = items.filter((i) => i.state === 'saved' && i.acknowledged);
+  // Only receipts a read has acknowledged, and the read on screen includes, may be cleared; the rest still keep
+  // the screen honest (A9, G3-1).
+  const saved = read
+    ? items.filter((i) => i.state === 'saved' && i.acknowledged && read.known[i.receipt?.commitSha ?? ''] === 'included')
+    : [];
 
   return (
     <section className="group actions" aria-label="Actions on this device">
       <h2>
         Actions
         {saved.length > 0 && (
-          <button type="button" className="link" onClick={() => void queue.forgetSaved(saved.map((i) => i.operationId))}>
+          <button type="button" className="link" onClick={() => read && void queue.forgetSaved(saved.map((i) => i.operationId), read)}>
             Clear saved
           </button>
         )}
