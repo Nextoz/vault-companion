@@ -113,6 +113,30 @@ the only record.
   --sandbox workspace-write - < <prompt> > <log> 2>&1"` in a full clone. Only with **≥ 5 GB free RAM** (the 4B model
   needs ~3.4 GB; at 1.2 GB free on 2026-09-25 background work was reaped). No Qwen CLI is installed.
 
+## Routing and effort (owner, 2026-09-25 — supersedes earlier routing notes where they conflict)
+
+Use agents proactively wherever independent work shortens delivery; the Lead keeps architecture, task boundaries,
+integration and final acceptance. Parallelize independent work; **sequence** overlapping UI/storage changes and review
+the combined result. Private vault investigation stays local (Lead, read-only); approval gates are unchanged.
+
+| Worker | Use for |
+|---|---|
+| Claude Code Cloud | substantial bounded repo work (features, test suites, reviews) |
+| Codex GPT-6 Astra | bounded implementation/review; effort chosen per task (below) |
+| Local Claude subagent | small local tasks when Codex is unavailable — sparingly: it spends the Lead's own quota |
+| Local Qwen | tiny deterministic edits, only with ≥ 5 GB free RAM |
+
+Astra effort (`-c model_reasoning_effort=<level>`), starting defaults:
+**low** mechanical edits, docs, straightforward tests, small fixes with a clear cause · **medium** bounded features,
+ordinary debugging, integration with clear contracts · **high** concurrency, identity, persistence, security-sensitive
+changes, difficult diagnosis, independent whole-system review · **xhigh/max** exceptional unresolved problems where
+evidence justifies it (record why). Escalate on real uncertainty or failed verification; never retry harder when the
+blocker is access, tooling or missing evidence. **Verify model and effort at launch** (`model:` / `reasoning effort:`
+lines at the top of the Codex log). Codex quota can run out (2026-09-25: until 18:55) — reroute, do not wait.
+
+Every brief is small: owned files, dependencies, acceptance checks, evidence-based handoff. Codex sandbox cannot
+reach the pnpm store: the Lead runs `pnpm install` in the clone **before** launching Astra.
+
 ## Worker → Lead handoff (owner, 2026-09-25)
 
 Every implementation worker (Cloud, Astra, Qwen) commits a short branch-local `.agent/handoffs/<brief-name>.md` with:
