@@ -9,7 +9,9 @@ Full background: bootstrap §5–7 in `docs/bootstrap/`.
   integration, conflict reconciliation and final technical decisions. Never delegated.
 - Workers and reviewers run in Herdr panes with bounded briefs (`docs/briefs/`), separate worktrees under
   `C:\Dev\vault-companion-worktrees\` for implementation, and report via files in `docs/reviews/`.
-- ~2–3 concurrent workers at most. No recursive spawning unless the Lead explicitly delegates it.
+- Concurrency: no fixed cap (owner, 2026-09-25) — spin up as many workers as genuinely independent work allows; the
+  practical limit on this machine is memory (~2 GB free observed; two background waiters were reaped). No recursive
+  spawning unless the Lead explicitly delegates it.
 - An implementation agent never certifies its own high-risk milestone.
 
 ## Model routing
@@ -88,7 +90,7 @@ the only record.
 ## Claude Code Cloud workers (owner rules, 2026-09-25)
 
 - Only for bounded, repo-contained tasks: no live vault, Windows-only tooling, Herdr state or local sync. Never send the
-  personal vault repository to the cloud. Cloud workers count toward the 2–3 concurrent-worker limit.
+  personal vault repository to the cloud. Cloud workers count as workers for concurrency planning.
 - Precondition: `git remote -v` shows a GitHub remote for this repo. If not, stop and tell the owner; never create one.
 - Launch: commit + push the brief, then
   `claude --cloud "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, commit and push the branch when done. Do not open a PR or spawn agents."`

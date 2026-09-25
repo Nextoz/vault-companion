@@ -3,7 +3,7 @@
 import { Command, type Receipt, type TaskView } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
 import { createCommandService } from './commands.ts';
-import { FileTooLarge, type WriteRequest } from './store.ts';
+import { FileTooLarge, TRAILER_UNDOES, type WriteRequest } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 const TODO = 'Tasks/To-Do List.md';
@@ -86,6 +86,18 @@ describe('Phase 1 gate regressions', () => {
     const afterC2 = store.text(TODO);
     expect(await run(env('UndoCompleteTask', { target: c1 }))).toMatchObject({ code: 'conflict:task-changed' });
     expect(store.text(TODO)).toBe(afterC2);
+  });
+
+  it('gate-3 F2 (mutant M20): if the "already undone?" search is inconclusive, the Undo is refused, not applied', async () => {
+    const { store, env, run, openTask } = await setup('## Open\n\n- [ ] A #todo\n\n## Done\n');
+    const c1 = env('CompleteTask', { task: (await openTask('A')).locator });
+    ok(await run(c1));
+    const afterC1 = store.text(TODO);
+    const real = store.findOperation.bind(store);
+    store.findOperation = async (base, until, value, key) =>
+      key === TRAILER_UNDOES ? { kind: 'unknown', reason: 'window truncated' } : real(base, until, value, key);
+    expect(await run(env('UndoCompleteTask', { target: c1 }))).toMatchObject({ code: 'dedupe-unknown' });
+    expect(store.text(TODO)).toBe(afterC1);
   });
 
   it('rerun Astra N5 / Opus N3: a truncated Inbox listing is a non-retryable refusal, not an endless retry', async () => {

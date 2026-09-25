@@ -133,6 +133,8 @@ export class InMemoryStore implements VaultStore {
     guard(dir);
     const commit = this.commits.get(atCommit);
     if (!commit) throw new StoreUnavailable(`unknown commit ${atCommit}`);
+    // Fail closed like real Git: a file is not an absent directory.
+    if (commit.tree.has(dir)) throw new StoreUnavailable('not a directory');
     const prefix = `${dir}/`;
     // All entry types: a nested path contributes its first segment as a directory name.
     const names = new Set<string>();

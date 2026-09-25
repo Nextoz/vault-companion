@@ -1,9 +1,9 @@
 // One behavioural contract, two implementations: the in-memory test double must behave like real Git.
-import { TRAILER_OP, TRAILER_PAYLOAD, type VaultPath, type VaultStore } from '@vault-companion/domain';
+import { TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type VaultPath, type VaultStore } from '@vault-companion/domain';
 import { gitBlobSha, InMemoryStore } from '@vault-companion/domain/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LocalGitStore } from './local-git-store.ts';
-import { createTempRepos, type TempRepos } from './git-fixture.ts';
+import { createTempRepos, git, type TempRepos } from './git-fixture.ts';
 
 const TODO = 'Tasks/To-Do List.md' as VaultPath;
 const SEED = {
@@ -134,6 +134,28 @@ describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_0
     expect(await store.isAncestor(head, base)).toBe(false);
   });
 
+  it('findOperation honours a non-default trailer key (gate-3 F1: the Undoes guard must not go inert)', async () => {
+    const { store } = await make();
+    const base = (await store.head()).commitSha;
+    await store.writeFile({
+      path: 'Inbox/new.md' as VaultPath,
+      baseCommit: base,
+      expect: 'absent',
+      bytes: enc('x'),
+      message: 'Vault Companion: test',
+      trailers: { [TRAILER_OP]: 'undo-op', [TRAILER_PAYLOAD]: 'sha256:u', [TRAILER_UNDOES]: 'target-op' },
+    });
+    const head = (await store.head()).commitSha;
+    expect((await store.findOperation(base, head, 'target-op', TRAILER_UNDOES)).kind).toBe('found');
+    expect((await store.findOperation(base, head, 'target-op')).kind).toBe('not-found'); // default key is Op
+    expect((await store.findOperation(base, head, 'undo-op', TRAILER_UNDOES)).kind).toBe('not-found');
+  });
+
+  it('listing a path that is a file is a failure, never "absent" (gate-3 F2)', async () => {
+    const { store } = await make();
+    await expect(store.listDir('Tasks/To-Do List.md', (await store.head()).commitSha)).rejects.toThrow();
+  });
+
   it('findOperation: unknown for an unknown base and for a truncated window', async () => {
     const { store, external } = await make(2);
     const base = (await store.head()).commitSha;
@@ -141,5 +163,21 @@ describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_0
     expect((await store.findOperation('f'.repeat(40), head1, 'op')).kind).toBe('unknown');
     for (let i = 0; i < 3; i++) await external({ 'Inbox/x.md': `v${i}\n` });
     expect((await store.findOperation(base, (await store.head()).commitSha, 'op')).kind).toBe('unknown');
+  });
+});
+
+describe('LocalGitStore mode precondition (gate-3 F2, mutant M13)', { timeout: 30_000 }, () => {
+  it('refuses to update a file stored as 100755 (the write would silently change its mode)', async () => {
+    const repos = createTempRepos(SEED);
+    current = { store: new LocalGitStore({ repo: repos.bare }), external: async () => '', cleanup: () => repos.cleanup() };
+    const writer = `${repos.root}/writer`;
+    git(writer, 'pull', '-q', '--ff-only');
+    git(writer, 'update-index', '--chmod=+x', 'Tasks/To-Do List.md');
+    git(writer, 'commit', '-q', '-m', 'make executable');
+    git(writer, 'push', '-q', 'origin', 'main');
+    const store = current.store;
+    const x = (await store.head()).commitSha;
+    expect(await write(store, TODO, x, 'v2', 'op', 'h', 'regular-file')).toEqual({ ok: false, reason: 'precondition-failed' });
+    expect((await store.head()).commitSha).toBe(x);
   });
 });

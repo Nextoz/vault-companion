@@ -90,6 +90,25 @@ describe('GitHubContentsStore', () => {
     expect(calls.filter((c) => c.init.method === 'POST' || c.init.method === 'PATCH')).toHaveLength(0);
   });
 
+  it('findOperation searches the requested trailer key (gate-3 F1, mutant M9)', async () => {
+    const msg = 'm\n\nVault-Companion-Op: undo-op\nVault-Companion-Payload: sha256:u\nVault-Companion-Undoes: target-op';
+    const make = () =>
+      store((url) =>
+        url.includes('/compare/')
+          ? json(200, { status: 'ahead', total_commits: 1, commits: [{ sha: SHA('4'), commit: { message: msg } }] })
+          : json(200, { files: [{ filename: 'Tasks/To-Do List.md' }] }),
+      ).s;
+    expect((await make().findOperation(SHA('0'), SHA('4'), 'target-op', 'Vault-Companion-Undoes')).kind).toBe('found');
+    expect((await make().findOperation(SHA('0'), SHA('4'), 'target-op')).kind).toBe('not-found');
+  });
+
+  it('a 404 for the commit root tree is a failure, never "absent" (gate-3 F2, mutant M11b)', async () => {
+    const s = store(() => json(404, { message: 'Not Found' })).s;
+    await expect(s.listDir('Inbox', SHA('a'))).rejects.toBeInstanceOf(StoreUnavailable);
+    const write = s.writeFile({ ...req, path: 'Inbox/n.md' as VaultPath, expect: 'absent' });
+    await expect(write).rejects.toBeInstanceOf(StoreUnavailable);
+  });
+
   it('listing fails closed: a 404 counts as empty only when the parent tree proves the directory absent (Opus N1)', async () => {
     const root = (withInbox: boolean) => ({ truncated: false, tree: withInbox ? [{ path: 'Inbox', mode: '040000', type: 'tree' }] : [] });
     const make = (withInbox: boolean) =>
