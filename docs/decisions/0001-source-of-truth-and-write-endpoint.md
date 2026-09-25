@@ -3,7 +3,7 @@
 Status: Accepted (bootstrap §3.1, 2026-09-24)
 
 **Context.** The vault lives as Markdown in Git; desktop Obsidian is the working copy; an hourly local
-worker syncs with `Nextoz/knowledge-vault-private` on GitHub; Google Drive is a backup mirror.
+worker syncs with `<owner>/<vault-repo>` on GitHub; Google Drive is a backup mirror.
 
 **Decision.** Markdown + Git history are authoritative. GitHub `main` is the app's durable remote write
 endpoint; a commit there is a valid save while the desktop is off, and does not imply desktop receipt.

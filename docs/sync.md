@@ -3,7 +3,7 @@
 ## Topology
 
 ```text
- phone (PWA) ──HTTPS──> Worker API ──GitHub App (Contents API)──> GitHub: Nextoz/knowledge-vault-private@main
+ phone (PWA) ──HTTPS──> Worker API ──GitHub App (Contents API)──> GitHub: <owner>/<vault-repo>@main
                                                                         ▲   │
                                                   scheduled local worker│   │ (hourly)
                                                                         │   ▼

@@ -12,7 +12,7 @@ at commit `77b45d6` (2026-09-24 14:04 +02:00), inspected read-only.
 | Claude Code / model | 2.1.281, `claude-opus-5-5` |
 | Toolchain | Node 24.18, pnpm (installed), git 2.55 (Windows), gh (authenticated) |
 | App repo | two docs-only commits, no remote; `Nextoz/vault-companion` does not exist on GitHub |
-| Vault remote | `Nextoz/knowledge-vault-private` exists, private, default branch `main` (metadata read only) |
+| Vault remote | `<owner>/<vault-repo>` exists, private, default branch `main` (metadata read only) |
 
 ## Snapshot freshness (recorded discrepancies)
 
