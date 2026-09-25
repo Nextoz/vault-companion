@@ -2,7 +2,7 @@ import type { Receipt, TasksResponse } from '@vault-companion/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import type { Fetched } from './api.ts';
 import type { QueueItem } from './queue/queue.ts';
-import { knownCommits, MAX_KNOWN, ReadSequencer, TaskReads } from './reads.ts';
+import { activeWorkState, knownCommits, MAX_KNOWN, ReadSequencer, TaskReads } from './reads.ts';
 
 describe('ReadSequencer (N3)', () => {
   it('applies responses that arrive in order, and drops one older than the newest applied', () => {
@@ -83,5 +83,19 @@ describe('TaskReads — the read ordering App.refreshTasks uses (F3)', () => {
     expect(await reads.read()).toEqual({ kind: 'offline' });
     expect(asked[0]).toHaveLength(MAX_KNOWN);
     expect(asked[0]?.[0]).toBe('f'.repeat(40));
+  });
+});
+
+describe('activeWorkState (quiet states)', () => {
+  const rev = 'c'.repeat(40);
+  it('maps every read outcome', () => {
+    expect(activeWorkState(null)).toEqual({ kind: 'message', text: 'Loading…' });
+    expect(activeWorkState({ kind: 'ok', data: { status: 'absent', revision: rev } })).toEqual({ kind: 'hidden' });
+    expect(activeWorkState({ kind: 'ok', data: { status: 'ok', revision: rev, blobSha: rev, markdown: '# a' } })).toEqual({ kind: 'content', markdown: '# a' });
+    expect(activeWorkState({ kind: 'ok', data: { status: 'refused', revision: rev, code: 'too-large', message: 'm' } })).toEqual({ kind: 'message', text: 'Too large to show here.' });
+    expect(activeWorkState({ kind: 'ok', data: { status: 'refused', revision: rev, code: 'encoding', message: 'm' } })).toEqual({ kind: 'message', text: 'Cannot be displayed.' });
+    expect(activeWorkState({ kind: 'offline' })).toEqual({ kind: 'message', text: 'Offline.' });
+    expect(activeWorkState({ kind: 'error', message: 'x' })).toEqual({ kind: 'message', text: 'Not available right now.' });
+    expect(activeWorkState({ kind: 'signed-out' })).toEqual({ kind: 'message', text: 'Not available right now.' });
   });
 });

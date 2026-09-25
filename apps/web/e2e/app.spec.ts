@@ -235,3 +235,77 @@ test('open a linked note from a task: read-only, sanitised, and nothing about it
   await page.getByRole('button', { name: 'Open note: Missing' }).click();
   await expect(page.getByRole('dialog')).toContainText('No note with this name was found.');
 });
+
+test('Active work card: above Today, sanitised, collapse remembered, nothing stored', async ({ page }) => {
+  api.activeWork = [
+    '# This week',
+    '',
+    '- Finish the **garden** plan with [[Projects/Garden|the garden]]',
+    '',
+    '<img src=x onerror="window.pwned=1"> [bad](javascript:window.pwned=2)',
+  ].join('\n');
+  await page.goto('/');
+
+  const card = region(page, 'Active work');
+  const body = card.getByTestId('active-work-body');
+  await expect(body.locator('strong')).toHaveText('garden');
+  await expect(body.locator('.wikilink')).toHaveText('the garden');
+  await expect(body.locator('a, img')).toHaveCount(0);
+  await expect(body).toContainText('<img src=x onerror="window.pwned=1">');
+  expect(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned)).toBeUndefined();
+
+  // Above Today in document order.
+  const above = await page.evaluate(() => {
+    const cardEl = document.querySelector('section[aria-label="Active work"]')!;
+    const today = document.querySelector('section[aria-label="Today"]')!;
+    return Boolean(cardEl.compareDocumentPosition(today) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  expect(above).toBe(true);
+
+  await card.getByRole('button', { name: 'Active work' }).click();
+  await expect(body).toHaveCount(0);
+  await page.reload();
+  await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Active work' })).toHaveAttribute('aria-expanded', 'false');
+  await expect(card.getByTestId('active-work-body')).toHaveCount(0);
+  await card.getByRole('button', { name: 'Active work' }).click();
+  await expect(card.getByTestId('active-work-body')).toContainText('This week');
+
+  const stored = await page.evaluate(async () => {
+    const dump: string[] = [];
+    for (const info of await indexedDB.databases()) {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const r = indexedDB.open(info.name!);
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      });
+      for (const name of db.objectStoreNames) {
+        const all = await new Promise<unknown[]>((resolve, reject) => {
+          const r = db.transaction(name).objectStore(name).getAll();
+          r.onsuccess = () => resolve(r.result);
+          r.onerror = () => reject(r.error);
+        });
+        dump.push(JSON.stringify(all));
+      }
+      db.close();
+    }
+    for (const key of await caches.keys()) for (const req of await (await caches.open(key)).keys()) dump.push(req.url);
+    dump.push(JSON.stringify({ ...localStorage }));
+    return dump.join('\n');
+  });
+  expect(stored).not.toContain('garden');
+  expect(stored).not.toContain('active-work');
+});
+
+test('Active work failures are quiet: the task lists still render; an absent file shows no card', async ({ page }) => {
+  api.activeWork = 'error';
+  await page.goto('/');
+  await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+  await expect(region(page, 'Active work')).toContainText('Not available right now.');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+
+  api.activeWork = null;
+  await page.reload();
+  await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+  await expect(region(page, 'Active work')).toHaveCount(0);
+});

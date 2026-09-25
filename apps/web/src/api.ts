@@ -1,6 +1,7 @@
 // Same-origin HTTP API (packages/contracts). `redirect: 'manual'` makes an expired Access session visible as an
 // opaque redirect instead of silently following it to a login page (F11).
 import {
+  ActiveWorkResponse,
   encodeLinkedNoteHeader,
   LINKED_NOTE_HEADER,
   LinkedNoteResponse,
@@ -45,6 +46,9 @@ export const getTasks = (known: readonly string[]) =>
  */
 export const getLinkedNote = (req: LinkedNoteRequest) =>
   getJson('/api/linked-note', LinkedNoteResponse, { [LINKED_NOTE_HEADER]: encodeLinkedNoteHeader(req) });
+
+/** Active Work Now card: fixed server-side path, `no-store`, never cached by the SW. */
+export const getActiveWork = () => getJson('/api/active-work', ActiveWorkResponse);
 
 /** `accountKey` is the queued item's binding, checked by the Worker against the session (A7), outside the body. */
 export const postCommand = (body: string, accountKey: string) =>

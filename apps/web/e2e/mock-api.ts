@@ -1,6 +1,7 @@
 // In-page API mock for Playwright. Every response is parsed through the contract schema before it is served,
 // so a mock that drifts from packages/contracts fails loudly instead of testing a fiction.
 import {
+  ActiveWorkResponse,
   ApiError,
   Command,
   decodeLinkedNoteHeader,
@@ -59,6 +60,8 @@ export class MockApi {
   /** Linked-note answers by target; the mock resolves `links[linkIndex]` of the requested task like the server. */
   notes = new Map<string, { path: string; markdown: string }>();
   /** Every decoded linked-note request, and the raw URL it came on (must never carry task text). */
+  /** Active Work Now: Markdown, `null` for an absent file, or `'error'` for a 503. */
+  activeWork: string | null | 'error' = null;
   readonly noteRequests: { req: LinkedNoteRequest; url: string }[] = [];
   readonly #receipts = new Map<string, Receipt>();
   #held: (() => void)[] = [];
@@ -69,6 +72,7 @@ export class MockApi {
     await page.route('**/api/tasks**', (route) => this.#tasks(route));
     await page.route('**/api/commands', (route) => this.#command(route));
     await page.route('**/api/linked-note**', (route) => this.#linkedNote(route));
+    await page.route('**/api/active-work', (route) => this.#activeWork(route));
   }
 
   #json(route: Route, status: number, body: unknown) {
@@ -78,6 +82,17 @@ export class MockApi {
   #session(route: Route) {
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     return this.#json(route, 200, SessionResponse.parse({ accountKey: ACCOUNT }));
+  }
+
+  #activeWork(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    if (this.activeWork === 'error') {
+      return this.#json(route, 503, ApiError.parse({ code: 'upstream-unavailable', message: 'GitHub is unavailable.', retryable: true }));
+    }
+    const body = this.activeWork === null
+      ? { status: 'absent', revision: this.#revision }
+      : { status: 'ok', revision: this.#revision, blobSha: '5'.repeat(40), markdown: this.activeWork };
+    return this.#json(route, 200, ActiveWorkResponse.parse(body));
   }
 
   #linkedNote(route: Route) {

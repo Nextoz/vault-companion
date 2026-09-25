@@ -8,6 +8,7 @@ import { knownCommits, renderable, TaskReads, type RenderedRead } from '../reads
 import { plainWikilinks } from '../text.ts';
 import { buildView } from '../view.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
+import { ActiveWorkCard } from './ActiveWorkCard.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
 import { TaskList } from './TaskList.tsx';
@@ -243,6 +244,8 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
         )}
 
         {needsAttention && <ActionsPanel queue={queue} items={snapshot.items} read={tasks} />}
+
+        {tab === 'today' && <ActiveWorkCard revision={tasks?.revision ?? null} />}
 
         {connection === 'loading' && !tasks && <p className="muted">Loading…</p>}
         {connection !== 'loading' && !tasks && (connection === 'refreshing' || rendered) && (
