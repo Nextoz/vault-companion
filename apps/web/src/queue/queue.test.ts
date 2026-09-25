@@ -41,14 +41,25 @@ const unavailable503 = () =>
 let factory: IDBFactory;
 let store: PendingStore;
 let clock: number;
-let send: ReturnType<typeof vi.fn<(body: string) => Promise<Response>>>;
+let send: ReturnType<typeof vi.fn<(body: string, accountKey: string) => Promise<Response>>>;
 let receipts: Receipt[];
+
+/** Single-tab stand-in for navigator.locks (the multi-tab cases live in queue.gate.test.ts). */
+const locks = {
+  tail: Promise.resolve() as Promise<unknown>,
+  request<T>(_name: string, fn: () => Promise<T>): Promise<T> {
+    const run = this.tail.then(fn);
+    this.tail = run.catch(() => undefined);
+    return run;
+  },
+};
 
 async function openQueue(): Promise<PendingQueue> {
   store = await openPendingStore(factory);
   return PendingQueue.open({
     store,
     send,
+    locks,
     now: () => clock,
     setTimer: () => () => undefined, // tests drive time and flushes explicitly
     onReceipt: (r) => receipts.push(r),
@@ -61,7 +72,7 @@ const note = (text = 'A synthetic thought') => captureNote(mint(), { text });
 beforeEach(() => {
   factory = new IDBFactory();
   clock = Date.UTC(2026, 8, 24, 10, 0, 0);
-  send = vi.fn<(body: string) => Promise<Response>>();
+  send = vi.fn<(body: string, accountKey: string) => Promise<Response>>();
   receipts = [];
 });
 

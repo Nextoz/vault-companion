@@ -18,7 +18,8 @@ async function json(res: Response): Promise<unknown> {
   }
 }
 
-export async function classify(res: Response): Promise<Outcome> {
+/** `operationId` is the one that was sent: a receipt naming any other operation is not its receipt (R12). */
+export async function classify(res: Response, operationId: string): Promise<Outcome> {
   // redirect: 'manual' turns an Access login redirect into an opaque redirect.
   if (res.type === 'opaqueredirect' || res.status === 401) return { kind: 'signed-out' };
 
@@ -26,10 +27,11 @@ export async function classify(res: Response): Promise<Outcome> {
 
   if (res.ok) {
     const receipt = Receipt.safeParse(body);
-    // A malformed 200 is retried: resending the identical envelope is deduplicated server-side.
-    return receipt.success
-      ? { kind: 'receipt', receipt: receipt.data }
-      : { kind: 'retry', error: { code: 'invalid-response', message: 'The server sent an unexpected reply.' } };
+    // A malformed or misrouted 200 is retried: resending the identical envelope is deduplicated server-side.
+    if (!receipt.success || receipt.data.operationId !== operationId) {
+      return { kind: 'retry', error: { code: 'invalid-response', message: 'The server sent an unexpected reply.' } };
+    }
+    return { kind: 'receipt', receipt: receipt.data };
   }
 
   const error = ApiError.safeParse(body);
@@ -44,7 +46,25 @@ export async function classify(res: Response): Promise<Outcome> {
 
   const { code, message, retryable } = error.data;
   if (code === 'unauthorized') return { kind: 'signed-out' };
+  // Sent under an identity other than the item's (A7): final for automatic sending, whatever the flag says.
+  if (code === 'account-mismatch') return { kind: 'attention', error: { code, message } };
   return retryable ? { kind: 'retry', error: { code, message } } : { kind: 'attention', error: { code, message } };
+}
+
+/**
+ * Refusals known not to have applied (R4). Only these release an item's dependents and same-task successors;
+ * `dedupe-unknown`, unparseable 4xx, `forbidden` and the like may hide an applied effect and keep them waiting.
+ */
+export function knownNotApplied(error: PendingError | null): boolean {
+  if (error === null) return false;
+  const { code } = error;
+  return (
+    code.startsWith('refused:') ||
+    code.startsWith('conflict:') ||
+    code === 'operation-id-reused' ||
+    code === 'invalid' ||
+    code === 'account-mismatch'
+  );
 }
 
 /** 1 s → 60 s exponential backoff after `attempts` consecutive failures. */

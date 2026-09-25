@@ -41,7 +41,8 @@ export function taskView(lineIndex: number, description: string, extra: Partial<
   };
 }
 
-export type CommandMode = 'ok' | 'offline' | 'unavailable' | { refuse: ApiError };
+/** `hold`: the request stays in flight until `release()`, then is answered as `ok`. */
+export type CommandMode = 'ok' | 'offline' | 'unavailable' | 'hold' | { refuse: ApiError };
 
 export class MockApi {
   session: 'ok' | 'signed-out' = 'ok';
@@ -52,6 +53,7 @@ export class MockApi {
   readonly bodies: string[] = [];
   readonly applied: Command[] = [];
   readonly #receipts = new Map<string, Receipt>();
+  #held: (() => void)[] = [];
   #revision = sha();
 
   async install(page: Page): Promise<void> {
@@ -94,8 +96,13 @@ export class MockApi {
     this.bodies.push(raw);
     if (request.headers()['x-vc-request'] !== '1') return this.#json(route, 403, { code: 'forbidden', message: 'x', retryable: false });
     const command = Command.parse(JSON.parse(raw));
+    // Like the Worker: the item's account binding travels outside the body and must match the session (A7).
+    if (request.headers()['x-vc-account'] !== ACCOUNT) {
+      return this.#json(route, 409, ApiError.parse({ code: 'account-mismatch', message: 'Other account.', retryable: false }));
+    }
 
     const mode = this.commandMode;
+    if (mode === 'hold') await new Promise<void>((resolve) => this.#held.push(resolve));
     if (mode === 'offline') return route.abort('internetdisconnected');
     if (mode === 'unavailable') {
       return this.#json(route, 503, ApiError.parse({ code: 'upstream-unavailable', message: 'GitHub is unavailable.', retryable: true }));
@@ -108,6 +115,16 @@ export class MockApi {
     this.#receipts.set(command.operationId, receipt);
     this.applied.push(command);
     return this.#json(route, 200, receipt);
+  }
+
+  /** Answer every held request (as `ok`) and stop holding new ones. */
+  release(): void {
+    this.commandMode = 'ok';
+    for (const resolve of this.#held.splice(0)) resolve();
+  }
+
+  get heldCount(): number {
+    return this.#held.length;
   }
 
   #apply(command: Command): Receipt {
