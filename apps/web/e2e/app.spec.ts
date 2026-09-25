@@ -12,6 +12,7 @@ test.beforeEach(async ({ page }) => {
 
 const region = (page: Page, name: string) => page.getByRole('region', { name, exact: true });
 const parsed = (bodies: string[]) => bodies.map((b) => Command.parse(JSON.parse(b)));
+const toast = (page: Page) => page.locator('.toast');
 
 test('complete a task, then Undo it from the toast', async ({ page }) => {
   await page.goto('/');
@@ -26,7 +27,7 @@ test('complete a task, then Undo it from the toast', async ({ page }) => {
   await expect.poll(() => api.applied.length).toBe(1);
   await expect(region(page, 'Done today').getByText('Saved to GitHub')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Undo' }).click();
+  await toast(page).getByRole('button', { name: 'Undo' }).click();
   await expect.poll(() => api.applied.length).toBe(2);
   const [complete, undo] = api.applied;
   expect(complete?.type).toBe('CompleteTask');
@@ -66,7 +67,7 @@ test('capture offline, then send the identical envelope once back online', async
   await expect(page.getByRole('button', { name: 'Note' })).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('a refused completion moves back with the error and offers Retry / Export / Discard', async ({ page }) => {
+test('a changed-task refusal moves back with the error and offers Refresh / Copy / Discard, never Retry', async ({ page }) => {
   api.commandMode = { refuse: { code: 'conflict:task-changed', message: 'This task changed on another device.', retryable: false } };
   await page.goto('/');
 
@@ -78,8 +79,11 @@ test('a refused completion moves back with the error and offers Retry / Export /
   await expect(region(page, 'Done today').getByText('Water the plants')).toHaveCount(0);
 
   const actions = region(page, 'Actions on this device');
-  await expect(actions.getByRole('button', { name: 'Retry' })).toBeVisible();
-  await actions.getByRole('button', { name: 'Export text' }).click();
+  await expect(actions).toContainText('This task changed on another device.');
+  await expect(actions.getByRole('button', { name: 'Refresh tasks' })).toBeVisible();
+  // The same bytes would be refused again: no Retry for a non-retryable refusal (P4-B).
+  await expect(actions.getByRole('button', { name: 'Retry' })).toHaveCount(0);
+  await actions.getByRole('button', { name: 'Copy text' }).click();
   await expect(page.getByLabel('Exported text')).toHaveValue('- [ ] Water the plants 📅 2026-09-24');
   await page.getByRole('button', { name: 'Close' }).click();
 
@@ -163,3 +167,144 @@ test('a second tab never re-sends a completion in flight in the first, and Undo 
   await expect(region(second, 'Today').getByText('Water the plants')).toBeVisible();
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
 });
+
+// ---- P4-B: client correctness -----------------------------------------------------------------------------------
+
+test('two identical open tasks: completing one leaves the other, which can then be completed too', async ({ page }) => {
+  api.open = [taskView(10, 'Water the plants'), taskView(12, 'Water the plants'), taskView(14, 'Call the bike shop')];
+  await page.goto('/');
+  const today = region(page, 'Today');
+  const twins = today.getByTestId('task').filter({ hasText: 'Water the plants' });
+  await expect(twins).toHaveCount(2);
+
+  // Pending on the device, then reloaded: the other twin never disappears.
+  api.commandMode = 'offline';
+  await twins.first().getByRole('button', { name: 'Complete: Water the plants' }).click();
+  await expect(twins).toHaveCount(1);
+  await expect(region(page, 'Done today').getByText('Water the plants')).toHaveCount(1);
+  await expect.poll(() => api.bodies.length).toBeGreaterThan(0);
+  await page.reload();
+  await expect(region(page, 'Done today').getByText('Water the plants')).toHaveCount(1);
+  await expect(twins).toHaveCount(1);
+
+  api.commandMode = 'ok';
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect.poll(() => api.applied.length).toBe(1);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(region(page, 'Done today').getByText('Saved to GitHub')).toBeVisible();
+  await expect(twins).toHaveCount(1);
+
+  // The remaining twin is still completable, and its completion names its own line.
+  await twins.getByRole('button', { name: 'Complete: Water the plants' }).click();
+  await expect.poll(() => api.applied.length).toBe(2);
+  await expect(twins).toHaveCount(0);
+  const lines = api.applied.map((c) => (c.type === 'CompleteTask' ? c.payload.task.lineIndex : -1));
+  expect(lines).toEqual([10, 12]);
+  await expect(region(page, 'Done today').getByTestId('task')).toHaveCount(2);
+});
+
+test('a stale read with shifted identical lines shows the pending completion on its own row, hiding no task', async ({ page }) => {
+  api.open = [taskView(10, 'Water the plants'), taskView(12, 'Water the plants')];
+  await page.goto('/');
+  const twins = region(page, 'Today').getByTestId('task').filter({ hasText: 'Water the plants' });
+  await expect(twins).toHaveCount(2);
+
+  api.commandMode = 'offline';
+  await twins.first().getByRole('button', { name: 'Complete: Water the plants' }).click();
+  await expect(twins).toHaveCount(1);
+
+  // A desktop edit inserted a line above both: new blob, both twins one line down.
+  api.open = [taskView(11, 'Water the plants'), taskView(13, 'Water the plants')];
+  api.blobSha = '9'.repeat(40);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(twins).toHaveCount(2);
+  await expect(region(page, 'Done today').getByTestId('task')).toContainText('On this device');
+});
+
+test('Undo from Done today after the toast expired sends exactly one valid UndoCompleteTask', async ({ page }) => {
+  await page.clock.install();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
+  await expect.poll(() => api.applied.length).toBe(1);
+  await expect(toast(page)).toBeVisible();
+  await page.clock.fastForward(9_000);
+  await expect(toast(page)).toHaveCount(0);
+
+  const done = region(page, 'Done today').getByTestId('task').filter({ hasText: 'Water the plants' });
+  await expect(done).toContainText('Saved to GitHub');
+  const undo = done.getByRole('button', { name: 'Undo: Water the plants' });
+  await undo.click();
+  await expect.poll(() => api.applied.length).toBe(2);
+
+  const sent = parsed(api.bodies);
+  const undos = sent.filter((c) => c.type === 'UndoCompleteTask');
+  expect(undos).toHaveLength(1);
+  // It carries the stored completion envelope verbatim.
+  expect(undos[0]?.type === 'UndoCompleteTask' && undos[0].payload.target).toEqual(sent[0]);
+  await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+  await expect(region(page, 'Done today').getByText('Water the plants')).toHaveCount(0);
+});
+
+test('no Undo in Done today for a completion this device did not make', async ({ page }) => {
+  api.doneToday = [{ ...taskView(30, 'Sweep the porch'), status: 'done', section: 'done', done: '2026-09-24' }];
+  await page.goto('/');
+  const done = region(page, 'Done today').getByTestId('task');
+  await expect(done).toContainText('Sweep the porch');
+  await expect(done.getByRole('button')).toHaveCount(0);
+});
+
+test('a conflict: Refresh tasks, then complete the current row', async ({ page }) => {
+  api.commandMode = { refuse: { code: 'conflict:task-changed', message: 'Changed.', retryable: false } };
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
+  const actions = region(page, 'Actions on this device');
+  await expect(actions).toContainText('This task changed on another device.');
+
+  // The desktop had edited the line; the refreshed read shows the current one.
+  api.commandMode = 'ok';
+  api.open = [taskView(10, 'Water the plants today'), taskView(11, 'Call the bike shop')];
+  api.blobSha = '9'.repeat(40);
+  await actions.getByRole('button', { name: 'Refresh tasks' }).click();
+  await region(page, 'Today').getByRole('button', { name: 'Complete: Water the plants today' }).click();
+  await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['CompleteTask']);
+  await expect(region(page, 'Done today').getByText('Water the plants today')).toBeVisible();
+});
+
+for (const [what, set] of [
+  ['session read fails (5xx)', () => (api.sessionMode = 'error')],
+  ['session read offline', () => (api.sessionMode = 'offline')],
+  ['task read fails (5xx)', () => (api.tasksMode = 'error')],
+  ['task read offline', () => (api.tasksMode = 'offline')],
+] as const) {
+  test(`${what}: "Couldn't reach your vault" with Try again, which recovers`, async ({ page }) => {
+    set();
+    await page.goto('/');
+    const banner = page.getByRole('status').filter({ hasText: "Couldn't reach your vault" });
+    await expect(banner).toBeVisible();
+    await expect(page.getByText('Loading…')).toHaveCount(0);
+
+    api.sessionMode = 'ok';
+    api.tasksMode = 'ok';
+    await banner.getByRole('button', { name: 'Try again' }).click();
+    await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+    await expect(banner).toHaveCount(0);
+  });
+}
+
+for (const which of ['session', 'tasks'] as const) {
+  test(`a ${which} read that never answers is given up after 10 s`, async ({ page }) => {
+    await page.clock.install();
+    if (which === 'session') api.sessionMode = 'hang';
+    else api.tasksMode = 'hang';
+    await page.goto('/');
+    await expect(page.getByText('Loading…')).toBeVisible();
+    await page.clock.fastForward(10_000);
+    const banner = page.getByRole('status').filter({ hasText: "Couldn't reach your vault" });
+    await expect(banner).toBeVisible();
+
+    api.sessionMode = 'ok';
+    api.tasksMode = 'ok';
+    await banner.getByRole('button', { name: 'Try again' }).click();
+    await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+  });
+}
