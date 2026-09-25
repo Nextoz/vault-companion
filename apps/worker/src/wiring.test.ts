@@ -191,6 +191,11 @@ describe('production composition (review R10)', () => {
     // unwired service gives (P4-A handoff).
     const note = await app.fetch(new Request(`${ORIGIN}/api/linked-note`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
     expect(note.status).toBe(400);
+    // Active Work is composed too: it reaches the GitHub store (whose fake key cannot mint a token here), so the answer
+    // is the store-failure 503, never the 404 of an unwired service.
+    const work = await app.fetch(new Request(`${ORIGIN}/api/active-work`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
+    expect(work.status).toBe(503);
+    expect(work.headers.get('Cache-Control')).toBe('no-store');
     const other = await new SignJWT({ email: 'owner@example.com' })
       .setProtectedHeader({ alg: 'RS256', kid: 'k' })
       .setIssuer('https://team.cloudflareaccess.com')

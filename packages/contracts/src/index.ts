@@ -245,3 +245,22 @@ export const LinkedNoteResponse = z.discriminatedUnion('status', [
   }),
 ]);
 export type LinkedNoteResponse = z.infer<typeof LinkedNoteResponse>;
+
+/** Read-only context the owner keeps by hand (vault-contract §1, ADR-0012 "chosen work"). Never written by the app. */
+export const ACTIVE_WORK_PATH = 'Tasks/Active Work Now.md';
+
+export const ActiveWorkRefusalCode = z.enum([
+  /** Larger than the 1 MB guard, or the folder listing needed to prove it is a regular file was truncated. */
+  'too-large',
+  /** Not valid UTF-8. */
+  'encoding',
+]);
+export type ActiveWorkRefusalCode = z.infer<typeof ActiveWorkRefusalCode>;
+
+export const ActiveWorkResponse = z.discriminatedUnion('status', [
+  z.strictObject({ status: z.literal('ok'), revision: commitSha, blobSha, markdown: z.string().max(MAX_NOTE_BYTES) }),
+  /** No regular file at the path: an ordinary state, not an error. */
+  z.strictObject({ status: z.literal('absent'), revision: commitSha }),
+  z.strictObject({ status: z.literal('refused'), revision: commitSha, code: ActiveWorkRefusalCode, message: z.string() }),
+]);
+export type ActiveWorkResponse = z.infer<typeof ActiveWorkResponse>;
