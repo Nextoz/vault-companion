@@ -3,7 +3,7 @@
 // - A completion that is pending, saving, or saved-but-not-yet-in-the-read moves the task to Done today.
 // - A completion that needs attention leaves the task where the server has it, carrying the error.
 // - A live Undo shows the task open again, carrying its state.
-// - A saved action stops overlaying once the read says its commit is `included`.
+// - A saved action stops overlaying once a read has said its commit is `included` (then it is acknowledged).
 import type { TaskView, TasksResponse } from '@vault-companion/contracts';
 import type { QueueItem } from './queue/queue.ts';
 
@@ -28,7 +28,9 @@ const isTaskAction = (i: QueueItem) => i.type === 'CompleteTask' || i.type === '
 
 export function buildView(tasks: TasksResponse | null, items: readonly QueueItem[]): ScreenView {
   const reflected = (i: QueueItem) =>
-    i.state === 'saved' && i.receipt !== null && tasks?.known[i.receipt.commitSha] === 'included';
+    i.state === 'saved' &&
+    i.receipt !== null &&
+    (i.acknowledged || tasks?.known[i.receipt.commitSha] === 'included');
   /** Still ahead of the server read: pending, saving, or saved-but-not-included. */
   const live = (i: QueueItem) => i.state !== 'attention' && !reflected(i);
 

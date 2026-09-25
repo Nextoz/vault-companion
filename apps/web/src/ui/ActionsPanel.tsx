@@ -15,14 +15,15 @@ const VERB: Record<CommandType, string> = {
 export function ActionsPanel({ queue, items }: { queue: PendingQueue; items: readonly QueueItem[] }) {
   const [exporting, setExporting] = useState<QueueItem | null>(null);
   if (items.length === 0) return null;
-  const saved = items.filter((i) => i.state === 'saved');
+  // Only receipts a read has acknowledged may be cleared; the rest still keep the screen honest (A9).
+  const saved = items.filter((i) => i.state === 'saved' && i.acknowledged);
 
   return (
     <section className="group actions" aria-label="Actions on this device">
       <h2>
         Actions
         {saved.length > 0 && (
-          <button type="button" className="link" onClick={() => queue.forgetSaved(saved.map((i) => i.operationId))}>
+          <button type="button" className="link" onClick={() => void queue.forgetSaved(saved.map((i) => i.operationId))}>
             Clear saved
           </button>
         )}

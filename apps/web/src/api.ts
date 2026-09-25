@@ -29,10 +29,16 @@ export const getSession = () => getJson('/api/session', SessionResponse);
 export const getTasks = (known: readonly string[]) =>
   getJson(known.length ? `/api/tasks?known=${known.join(',')}` : '/api/tasks', TasksResponse);
 
-export const postCommand = (body: string) =>
+/** `accountKey` is the queued item's binding, checked by the Worker against the session (A7), outside the body. */
+export const postCommand = (body: string, accountKey: string) =>
   fetch('/api/commands', {
     ...base,
     method: 'POST',
     body,
-    headers: { 'Content-Type': 'application/json', 'X-VC-Request': '1', Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-VC-Request': '1',
+      'X-VC-Account': accountKey,
+      Accept: 'application/json',
+    },
   });

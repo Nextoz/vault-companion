@@ -133,3 +133,33 @@ test('signed out: banner, and nothing is sent', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('Signed out — reload to sign in');
   expect(api.bodies).toHaveLength(0);
 });
+
+test('a second tab never re-sends a completion in flight in the first, and Undo is a real command (A3)', async ({ page, context }) => {
+  await page.goto('/');
+  await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+
+  api.commandMode = 'hold';
+  await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
+  await expect.poll(() => api.heldCount).toBe(1);
+
+  // Second tab over the same IndexedDB database, while the first tab's request is still out.
+  const second = await context.newPage();
+  await api.install(second);
+  await second.goto('/');
+  await expect(region(second, 'Done today').getByText('Water the plants')).toBeVisible();
+  await second.evaluate(() => window.dispatchEvent(new Event('online')));
+
+  // The completion may already have applied: Undo cannot be a local cancellation.
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await second.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(region(second, 'Actions on this device').getByTestId('action')).toHaveCount(2);
+  expect(api.bodies).toHaveLength(1); // neither tab sent anything else while the completion was in flight
+
+  api.release();
+  await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['CompleteTask', 'UndoCompleteTask']);
+  expect(parsed(api.bodies).filter((c) => c.type === 'CompleteTask')).toHaveLength(1);
+
+  await second.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(region(second, 'Today').getByText('Water the plants')).toBeVisible();
+  await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+});

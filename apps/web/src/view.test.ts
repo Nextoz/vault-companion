@@ -58,6 +58,7 @@ function item(envelope: QueueItem['envelope'], state: ItemState, extra: Partial<
     everSent: state !== 'pending',
     accountMismatch: false,
     receipt: null,
+    acknowledged: false,
     ...extra,
   };
 }
@@ -95,6 +96,12 @@ describe('buildView', () => {
     const fresh = buildView(read([], [task(DONE, 3, true)], { [COMMIT]: 'included' }), [saved]);
     expect(fresh.doneToday).toMatchObject([{ task: { locator: { lineText: DONE } }, action: { state: 'saved' } }]);
     expect(fresh.today).toEqual([]);
+  });
+
+  it('stops overlaying an acknowledged receipt even when a later read no longer lists its commit (A9)', () => {
+    const acknowledged = item(complete, 'saved', { receipt: completedReceipt, acknowledged: true });
+    const later = buildView(read([], [task(DONE, 3, true)]), [acknowledged]);
+    expect(later.doneToday).toMatchObject([{ task: { locator: { lineText: DONE } } }]);
   });
 
   it('shows a task re-opened by a live Undo even when the read still has it done', () => {

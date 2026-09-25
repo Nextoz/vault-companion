@@ -37,7 +37,10 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
   const revision = tasks?.revision ?? prefs.lastRevision();
 
   const knownRef = useRef<string[]>([]);
-  knownRef.current = snapshot.items.flatMap((i) => (i.receipt ? [i.receipt.commitSha] : []));
+  // Receipts not yet acknowledged by a read: ask whether the read includes them (A9).
+  knownRef.current = [
+    ...new Set(snapshot.items.flatMap((i) => (i.receipt && !i.acknowledged ? [i.receipt.commitSha] : []))),
+  ];
 
   const refreshSession = useCallback(async () => {
     const res = await getSession();
@@ -58,6 +61,7 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
     if (res.kind === 'ok') {
       prefs.setLastRevision(res.data.revision);
       setTasks(res.data);
+      void queue.acknowledge(res.data.known);
       setConnection('online');
     } else if (res.kind === 'signed-out') {
       setSessionSignedOut(true);

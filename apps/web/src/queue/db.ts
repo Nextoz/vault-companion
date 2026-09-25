@@ -1,9 +1,11 @@
-// IndexedDB `vault-companion` / store `pending` (commands.md#client-pending-queue-pwa).
-// Holds only the user's pending commands — never vault file contents.
-import type { CommandType } from '@vault-companion/contracts';
+// IndexedDB `vault-companion` / stores `pending` and `receipts` (commands.md#client-pending-queue-pwa).
+// Holds only the user's pending commands and recent receipts — never vault file contents.
+import type { CommandType, Receipt } from '@vault-companion/contracts';
 
 export const DB_NAME = 'vault-companion';
 export const STORE = 'pending';
+export const RECEIPTS = 'receipts';
+const VERSION = 2;
 
 export interface PendingError {
   code: string;
@@ -29,12 +31,34 @@ export interface PendingRecord {
   /** Failed attempts since the last success or user retry; drives backoff. */
   attempts: number;
   nextAttemptAt: number;
-  /** `saving` is never persisted: an in-flight request does not survive a reload. */
+  /** `saving` is never persisted: an in-flight request is represented by its lease below. */
   state: 'pending' | 'attention';
   lastError: PendingError | null;
   /** Short display text captured at the moment of the action. */
   label: string;
   createdAt: number;
+  /**
+   * While `now < leaseUntil`, some tab has a request for this item in flight (A3): no other tab sends,
+   * cancels or discards it. A lease that outlives a closed tab simply expires. Absent on version-1 rows.
+   */
+  leaseUntil?: number;
+  /** Identifies the claim holding the lease; only that claim may settle a non-receipt outcome. */
+  claimId?: string | null;
+}
+
+/** A receipt kept after its pending record is gone, until a read reports its commit `included` (A9). */
+export interface ReceiptRecord {
+  operationId: string;
+  seq: number;
+  type: CommandType;
+  body: string;
+  accountKey: string;
+  taskKey: string | null;
+  label: string;
+  receipt: Receipt;
+  /** A read reported `receipt.commitSha` as included. Only acknowledged receipts may be evicted. */
+  acknowledged: boolean;
+  savedAt: number;
 }
 
 export interface PendingStore {
@@ -42,6 +66,11 @@ export interface PendingStore {
   get(operationId: string): Promise<PendingRecord | undefined>;
   put(record: PendingRecord): Promise<void>;
   delete(...operationIds: string[]): Promise<void>;
+  receipts(): Promise<ReceiptRecord[]>;
+  /** One transaction: remove the pending record (if still present) and store its receipt. */
+  settle(receipt: ReceiptRecord): Promise<void>;
+  putReceipts(...receipts: ReceiptRecord[]): Promise<void>;
+  deleteReceipts(...operationIds: string[]): Promise<void>;
   close(): void;
 }
 
@@ -57,35 +86,53 @@ const done = (tx: IDBTransaction) =>
     tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed'));
   });
 
+/** Runs `fill` inside one readwrite transaction; a synchronous throw aborts everything it queued. */
+async function write(db: IDBDatabase, stores: string[], fill: (tx: IDBTransaction) => void): Promise<void> {
+  const tx = db.transaction(stores, 'readwrite');
+  const completed = done(tx);
+  try {
+    fill(tx);
+  } catch (error) {
+    tx.abort();
+    await completed.catch(() => undefined);
+    throw error;
+  }
+  await completed;
+}
+
 export async function openPendingStore(factory: IDBFactory = indexedDB): Promise<PendingStore> {
-  const open = factory.open(DB_NAME, 1);
+  const open = factory.open(DB_NAME, VERSION);
   open.onupgradeneeded = () => {
-    if (!open.result.objectStoreNames.contains(STORE)) {
-      open.result.createObjectStore(STORE, { keyPath: 'operationId' });
-    }
+    const names = open.result.objectStoreNames;
+    if (!names.contains(STORE)) open.result.createObjectStore(STORE, { keyPath: 'operationId' });
+    if (!names.contains(RECEIPTS)) open.result.createObjectStore(RECEIPTS, { keyPath: 'operationId' });
   };
+  // Another tab still holding version 1 must let go, or this tab could never open (and never keep actions).
   const db = await request(open);
+  db.onversionchange = () => db.close();
+
+  const readAll = async <T extends { seq: number }>(name: string) => {
+    const tx = db.transaction(name, 'readonly');
+    const rows = (await request(tx.objectStore(name).getAll())) as T[];
+    return rows.sort((a, b) => a.seq - b.seq);
+  };
 
   return {
-    async all() {
-      const tx = db.transaction(STORE, 'readonly');
-      const rows = (await request(tx.objectStore(STORE).getAll())) as PendingRecord[];
-      return rows.sort((a, b) => a.seq - b.seq);
-    },
+    all: () => readAll<PendingRecord>(STORE),
     async get(operationId) {
       const tx = db.transaction(STORE, 'readonly');
       return (await request(tx.objectStore(STORE).get(operationId))) as PendingRecord | undefined;
     },
-    async put(record) {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(record);
-      await done(tx);
-    },
-    async delete(...operationIds) {
-      const tx = db.transaction(STORE, 'readwrite');
-      for (const id of operationIds) tx.objectStore(STORE).delete(id);
-      await done(tx);
-    },
+    put: (record) => write(db, [STORE], (tx) => tx.objectStore(STORE).put(record)),
+    delete: (...ids) => write(db, [STORE], (tx) => ids.forEach((id) => tx.objectStore(STORE).delete(id))),
+    receipts: () => readAll<ReceiptRecord>(RECEIPTS),
+    settle: (receipt) =>
+      write(db, [STORE, RECEIPTS], (tx) => {
+        tx.objectStore(STORE).delete(receipt.operationId);
+        tx.objectStore(RECEIPTS).put(receipt);
+      }),
+    putReceipts: (...rows) => write(db, [RECEIPTS], (tx) => rows.forEach((r) => tx.objectStore(RECEIPTS).put(r))),
+    deleteReceipts: (...ids) => write(db, [RECEIPTS], (tx) => ids.forEach((id) => tx.objectStore(RECEIPTS).delete(id))),
     close() {
       db.close();
     },
