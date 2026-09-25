@@ -121,6 +121,11 @@ effect and shows the view as `refreshing` — a saved completion never reappears
 ## Client pending queue (PWA)
 
 - IndexedDB store `pending`, key `operationId`: envelope + `accountKey` + `everSent` + attempts + lastError.
+- IndexedDB store `drafts`, key `accountKey`: `{ accountKey, id, version, kind, text, updatedAt }` — the user's unsent
+  capture text, never vault content. Autosave writes only if the stored draft still has the `id` **and** `version` it
+  started from and is not newer (a stale or deleted draft is never rewritten; `id` stops a stale basis matching a draft
+  recreated at version 1). Save runs one `readwrite` transaction over `drafts` + `pending` that checks `id` + `version`,
+  enqueues the envelope and deletes the draft, so exactly one window can submit a given draft (ADR-0014).
 - Envelope and op ID are created and persisted **before** the first send; the control is disabled
   synchronously on tap (F19).
 - `accountKey` = SHA-256 of the Access identity (`sub`) from `/api/session`. Items are sent only when the
@@ -151,7 +156,7 @@ effect and shows the view as `refreshing` — a saved completion never reappears
   under the accountKey check.
 - Retained until a receipt or an explicit user discard. `navigator.storage.persist()` requested; UI says
   "kept on this device while possible".
-- Device storage holds only the user's pending commands and recent receipts — never vault file contents.
+- Device storage holds only the user's pending commands, recent receipts and unsent capture drafts — never vault file contents.
 
 ## UI states (see sync.md)
 

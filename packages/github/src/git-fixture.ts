@@ -6,6 +6,8 @@ import { dirname, join } from 'node:path';
 
 const ENV = {
   ...process.env,
+  GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+  GIT_CONFIG_NOSYSTEM: '1',
   GIT_AUTHOR_NAME: 'fixture',
   GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
   GIT_COMMITTER_NAME: 'fixture',
