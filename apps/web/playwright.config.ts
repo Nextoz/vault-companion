@@ -36,7 +36,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm build && pnpm preview',
+    // Built by the `e2e` script first: one long-lived process that Playwright can stop (a shell chain left
+    // `vite preview` orphaned and hung CI after the tests passed).
+    command: 'vite preview --port 4173 --strictPort',
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env['CI'],
     timeout: 120_000,
