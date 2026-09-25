@@ -183,7 +183,7 @@ export const LinkedNoteRequest = z.strictObject({
 });
 export type LinkedNoteRequest = z.infer<typeof LinkedNoteRequest>;
 
-/** The request travels base64url(JSON) in this header, so task text never appears in a URL (see P4A report). */
+/** The request travels base64url(JSON) in this header, so task text never appears in a URL or an access log. */
 export const LINKED_NOTE_HEADER = 'X-VC-Locator';
 /** Header values above this are refused before decoding (a maximal task line is 16,000 code points). */
 export const MAX_LINKED_NOTE_HEADER = 96 * 1024;

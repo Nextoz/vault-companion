@@ -45,8 +45,8 @@ export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
 }
 
 /**
- * Allowlisted root, and no hidden or denied folder at any depth (P4-A stricter reading of the §1 "Never" row:
- * `Projects/.obsidian/x.md` or `Projects/tmp/x.md` are as off-limits as the roots of the same name).
+ * Allowlisted root, and no hidden or denied folder at any depth: `Projects/.obsidian/x.md` or `Projects/tmp/x.md` are
+ * as off-limits as the roots of the same name (vault-contract §1 "Never" row).
  */
 export function canReadLinkedNote(path: VaultPath): boolean {
   const segments = path.split('/');

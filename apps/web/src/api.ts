@@ -40,7 +40,7 @@ export const getTasks = (known: readonly string[]) =>
   getJson(known.length ? `/api/tasks?known=${known.join(',')}` : '/api/tasks', TasksResponse);
 
 /**
- * P4-A: the server resolves the note from the task locator; the request rides in a header so task text is never part
+ * Linked note: the server resolves the note from the task locator; the request rides in a header so task text is never part
  * of a URL. `no-store` (base) and the service worker's `/api/*` bypass keep note text out of every cache.
  */
 export const getLinkedNote = (req: LinkedNoteRequest) =>

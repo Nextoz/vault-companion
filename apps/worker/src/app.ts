@@ -99,8 +99,8 @@ export function createApp(deps: AppDeps) {
     return c.json(result);
   });
 
-  // P4-A: the request (task locator + link index) travels base64url in a header, never in the URL, so task text stays out
-  // of URLs and access logs; a client path is not part of the contract. Logs carry neither note text nor its path.
+  // Read-only linked note. The request (task locator + link index) travels base64url in a header, never in the URL, so
+  // task text stays out of URLs and access logs; there is no client path. Logs carry neither note text nor its path.
   app.get('/api/linked-note', async (c) => {
     const read = deps.services.readLinkedNote;
     if (!read) return c.json(err('invalid', 'not found'), 404);
