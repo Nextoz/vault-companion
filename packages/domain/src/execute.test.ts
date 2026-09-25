@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { executeWrite, type WritePlan } from './execute.ts';
+import { executeWrite, MAX_ATTEMPTS, type WritePlan } from './execute.ts';
 import { TRAILER_OP, TRAILER_PAYLOAD, type VaultPath, type VaultStore } from './store.ts';
-import { InMemoryStore } from './testing/in-memory-store.ts';
+import { InMemoryStore, type WriteFault } from './testing/in-memory-store.ts';
 
 // A deliberately simple plan: append one line to a file. Tests exercise the executor, not Markdown.
 const PATH = 'Tasks/To-Do List.md' as VaultPath;
@@ -68,7 +68,7 @@ describe('executeWrite', () => {
       const f = await store.readFile(PATH, store.headCommit);
       await store.writeFile({
         path: PATH,
-        expectedBlobSha: f!.blobSha,
+        baseCommit: store.headCommit,
         bytes: enc.encode(dec.decode(f!.bytes) + '- [ ] two\n'),
         message: 'Vault Companion: test append',
         trailers: { [TRAILER_OP]: OP, [TRAILER_PAYLOAD]: HASH },
@@ -123,7 +123,7 @@ describe('executeWrite', () => {
   });
 
   it('repeated unknown outcomes end retryable (client retries with the same op ID)', async () => {
-    store.writeFaults.push('drop-then-unknown', 'drop-then-unknown', 'drop-then-unknown');
+    store.writeFaults.push(...Array<WriteFault>(MAX_ATTEMPTS).fill('drop-then-unknown'));
     const r = await executeWrite(store, { operationId: OP, baseRevision: base, payloadHash: HASH }, appendPlan('- [ ] two'));
     expect(r).toMatchObject({ ok: false, code: 'upstream-unavailable', retryable: true });
   });

@@ -1,6 +1,6 @@
 // Adapter tests against a fake fetch replaying response bodies recorded from the real API
-// (docs/discovery/github-api-probe-2026-09-24.md).
-import { FileTooLarge, StoreUnknownOutcome, type VaultPath } from '@vault-companion/domain';
+// (docs/discovery/github-api-probe-2026-09-24.md, github-gitdata-probe-2026-09-25.md).
+import { FileTooLarge, StoreUnavailable, StoreUnknownOutcome, type VaultPath } from '@vault-companion/domain';
 import { describe, expect, it } from 'vitest';
 import { GitHubContentsStore, parseTrailers } from './contents-store.ts';
 
@@ -39,46 +39,90 @@ describe('GitHubContentsStore', () => {
     await expect(s.readFile('Tasks/To-Do List.md' as VaultPath, SHA('a'))).rejects.toBeInstanceOf(FileTooLarge);
   });
 
-  it('PUT sends base64 content, branch, sha and trailers; maps recorded 409/422 bodies', async () => {
-    const results = [
-      json(409, { message: 'Inbox/n.md does not match cccccccccccccccccccccccccccccccccccccccc', status: '409' }),
-      json(422, { message: 'Invalid request.\n\n"sha" wasn\'t supplied.', status: '422' }),
-      json(409, { message: 'is at c30497f6265d5437fd32a384079d1cafe5938a3b but expected 05b9ce4ee3ce265bf32057041889dd18bc0fcfdc' }),
-    ];
-    const { s, calls } = store(() => results.shift()!);
-    const req = { path: 'Inbox/n.md' as VaultPath, bytes: new TextEncoder().encode('æ\n'), message: 'Vault Companion: capture note', trailers: { 'Vault-Companion-Op': 'op', 'Vault-Companion-Payload': 'sha256:h' } };
-    expect(await s.writeFile({ ...req, expectedBlobSha: SHA('c') })).toEqual({ ok: false, reason: 'cas-mismatch' });
-    expect(await s.writeFile({ ...req, expectedBlobSha: null })).toEqual({ ok: false, reason: 'exists' });
-    // Ref race on a different file (G1 P12): not applied, must re-dedupe like a CAS loss.
-    expect(await s.writeFile({ ...req, expectedBlobSha: null })).toEqual({ ok: false, reason: 'cas-mismatch' });
-    const body = JSON.parse(calls[0]!.init.body as string);
-    expect(body).toEqual({ message: 'Vault Companion: capture note\n\nVault-Companion-Op: op\nVault-Companion-Payload: sha256:h\n', content: 'w6YK', branch: 'main', sha: SHA('c') });
-    expect(JSON.parse(calls[1]!.init.body as string).sha).toBeUndefined();
+  // Recorded shapes: docs/discovery/github-gitdata-probe-2026-09-25.md (Q1–Q6).
+  function gitData(refStatus: number | 'throw', refBody: unknown = {}) {
+    return store((url, init) => {
+      const m = init.method ?? 'GET';
+      if (m === 'GET' && url.includes('/git/commits/')) return json(200, { sha: SHA('a'), tree: { sha: SHA('7') } });
+      if (m === 'POST' && url.endsWith('/git/blobs')) return json(201, { sha: SHA('b') });
+      if (m === 'POST' && url.endsWith('/git/trees')) return json(201, { sha: SHA('e') });
+      if (m === 'POST' && url.endsWith('/git/commits')) return json(201, { sha: SHA('c') });
+      if (m === 'PATCH') {
+        if (refStatus === 'throw') throw new TypeError('network connection lost');
+        return json(refStatus, refBody);
+      }
+      return json(500, {});
+    });
+  }
+  const req = {
+    path: 'Tasks/To-Do List.md' as VaultPath,
+    baseCommit: SHA('a'),
+    bytes: new TextEncoder().encode('æ'),
+    message: 'Vault Companion: complete task',
+    trailers: { 'Vault-Companion-Op': 'op', 'Vault-Companion-Payload': 'sha256:h' },
+  };
+
+  it('head-CAS write: blob, tree on the base tree, commit parented on the base, non-force ref update', async () => {
+    const { s, calls } = gitData(200, { object: { sha: SHA('c') } });
+    expect(await s.writeFile(req)).toEqual({ ok: true, commitSha: SHA('c'), blobSha: SHA('b') });
+    const bodies = calls.filter((c) => c.init.body).map((c) => [c.init.method, c.url.replace('https://api.github.com/repos/o/r', ''), JSON.parse(c.init.body as string)]);
+    expect(bodies).toEqual([
+      ['POST', '/git/blobs', { content: 'w6Y=', encoding: 'base64' }],
+      ['POST', '/git/trees', { base_tree: SHA('7'), tree: [{ path: 'Tasks/To-Do List.md', mode: '100644', type: 'blob', sha: SHA('b') }] }],
+      ['POST', '/git/commits', { message: 'Vault Companion: complete task\n\nVault-Companion-Op: op\nVault-Companion-Payload: sha256:h\n', tree: SHA('e'), parents: [SHA('a')] }],
+      ['PATCH', '/git/refs/heads/main', { sha: SHA('c'), force: false }],
+    ]);
   });
 
-  it('a PUT whose response is lost or 5xx is an unknown outcome, never a failure', async () => {
-    const lost = store(() => {
-      throw new TypeError('network connection lost');
+  it('maps the recorded 422 "Update is not a fast forward" to head-moved (A2 ABA rejection)', async () => {
+    const { s } = gitData(422, { message: 'Update is not a fast forward', status: '422' });
+    expect(await s.writeFile(req)).toEqual({ ok: false, reason: 'head-moved' });
+  });
+
+  it('a lost or 5xx ref update is an unknown outcome; a failure before the ref update is only unavailable', async () => {
+    await expect(gitData('throw').s.writeFile(req)).rejects.toBeInstanceOf(StoreUnknownOutcome);
+    await expect(gitData(502).s.writeFile(req)).rejects.toBeInstanceOf(StoreUnknownOutcome);
+    const early = store((url, init) => {
+      if ((init.method ?? 'GET') === 'GET') return json(200, { tree: { sha: SHA('7') } });
+      throw new TypeError('network connection lost'); // blob creation never reached GitHub
     }).s;
-    await expect(lost.writeFile({ path: 'Inbox/n.md' as VaultPath, expectedBlobSha: null, bytes: new Uint8Array(), message: 'm', trailers: {} })).rejects.toBeInstanceOf(StoreUnknownOutcome);
-    const five = store(() => json(502, {})).s;
-    await expect(five.writeFile({ path: 'Inbox/n.md' as VaultPath, expectedBlobSha: null, bytes: new Uint8Array(), message: 'm', trailers: {} })).rejects.toBeInstanceOf(StoreUnknownOutcome);
+    await expect(early.writeFile(req)).rejects.toBeInstanceOf(StoreUnavailable);
   });
 
-  it('findOperation: found via trailers, unknown when truncated or not an ancestor', async () => {
-    const commit = (sha: string, op: string) => ({ sha, commit: { message: `Vault Companion: complete task\n\nVault-Companion-Op: ${op}\nVault-Companion-Payload: sha256:${op}` } });
-    const { s } = store((url) => {
-      if (url.includes('/compare/')) return json(200, { status: 'ahead', total_commits: 2, commits: [commit(SHA('1'), 'x'), commit(SHA('2'), 'op-9')] });
+  it('findOperation pages the compare API oldest-first until total_commits are seen (R9)', async () => {
+    const commit = (sha: string, op: string) => ({ sha, commit: { message: `m\n\nVault-Companion-Op: ${op}\nVault-Companion-Payload: sha256:${op}` } });
+    const page1 = Array.from({ length: 250 }, (_, i) => commit(SHA('1'), `x${i}`));
+    const { s, calls } = store((url) => {
+      if (url.includes('page=1')) return json(200, { status: 'ahead', total_commits: 251, commits: page1 });
+      if (url.includes('page=2')) return json(200, { status: 'ahead', total_commits: 251, commits: [commit(SHA('2'), 'late-op')] });
       return json(200, { files: [{ filename: 'Tasks/To-Do List.md' }] });
     });
-    expect(await s.findOperation(SHA('0'), SHA('2'), 'op-9')).toEqual({ kind: 'found', op: { commitSha: SHA('2'), payloadHash: 'sha256:op-9', paths: ['Tasks/To-Do List.md'] } });
-    expect(await s.findOperation(SHA('0'), SHA('2'), 'nope')).toEqual({ kind: 'not-found' });
-    const trunc = store(() => json(200, { status: 'ahead', total_commits: 300, commits: [] })).s;
-    expect((await trunc.findOperation(SHA('0'), SHA('2'), 'nope')).kind).toBe('unknown');
-    const div = store(() => json(200, { status: 'diverged', total_commits: 1, commits: [] })).s;
-    expect((await div.findOperation(SHA('0'), SHA('2'), 'nope')).kind).toBe('unknown');
+    expect(await s.findOperation(SHA('0'), SHA('2'), 'late-op')).toMatchObject({ kind: 'found', op: { commitSha: SHA('2') } });
+    expect(calls.map((c) => c.url).filter((u) => u.includes('/compare/'))).toEqual([
+      `https://api.github.com/repos/o/r/compare/${SHA('0')}...${SHA('2')}?per_page=250&page=1`,
+      `https://api.github.com/repos/o/r/compare/${SHA('0')}...${SHA('2')}?per_page=250&page=2`,
+    ]);
+    const notFound = store(() => json(200, { status: 'ahead', total_commits: 1, commits: [commit(SHA('3'), 'other')] })).s;
+    expect(await notFound.findOperation(SHA('0'), SHA('3'), 'nope')).toEqual({ kind: 'not-found' });
+    const behind = store(() => json(200, { status: 'behind', total_commits: 0, commits: [] })).s;
+    expect((await behind.findOperation(SHA('0'), SHA('2'), 'nope')).kind).toBe('unknown');
     const missing = store(() => json(404, {})).s;
     expect((await missing.findOperation(SHA('0'), SHA('2'), 'nope')).kind).toBe('unknown');
+  });
+
+  it('lists a directory through the trees API at a commit and refuses a truncated listing (R8)', async () => {
+    const { s, calls } = store(() => json(200, { truncated: false, tree: [{ path: 'Note 1 - 2026-09-25.md', type: 'blob' }, { path: 'sub', type: 'tree' }] }));
+    expect(await s.listDir('Inbox', SHA('a'))).toEqual(['Note 1 - 2026-09-25.md']);
+    expect(calls[0]!.url).toBe(`https://api.github.com/repos/o/r/git/trees/${SHA('a')}:Inbox`);
+    const cut = store(() => json(200, { truncated: true, tree: [] })).s;
+    await expect(cut.listDir('Inbox', SHA('a'))).rejects.toBeInstanceOf(FileTooLarge);
+  });
+
+  it('rejects an unsafe path before any request is made (A8/R5)', async () => {
+    const { s, calls } = gitData(200);
+    await expect(s.writeFile({ ...req, path: '../../issues' as VaultPath })).rejects.toThrow('unsafe vault path');
+    await expect(s.readFile('Tasks/../../x.md' as VaultPath, SHA('a'))).rejects.toThrow('unsafe vault path');
+    expect(calls).toHaveLength(0);
   });
 
   it('parseTrailers only reads a final Key: value paragraph', () => {

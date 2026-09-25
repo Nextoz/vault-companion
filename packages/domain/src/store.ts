@@ -14,8 +14,11 @@ export interface StoredFile {
 
 export interface WriteRequest {
   readonly path: VaultPath;
-  /** Blob SHA the change was computed against; `null` means create and fail if the path exists. */
-  readonly expectedBlobSha: string | null;
+  /**
+   * The pinned commit X the change was computed against (ADR-0011). The new commit is parented on X and the branch
+   * only advances if its head is still exactly X; any later commit — even one restoring identical bytes — fails.
+   */
+  readonly baseCommit: string;
   readonly bytes: Uint8Array;
   /** Commit subject/body. Must never contain task or note text. */
   readonly message: string;
@@ -24,7 +27,7 @@ export interface WriteRequest {
 
 export type WriteResult =
   | { readonly ok: true; readonly commitSha: string; readonly blobSha: string }
-  | { readonly ok: false; readonly reason: 'cas-mismatch' | 'exists' };
+  | { readonly ok: false; readonly reason: 'head-moved' };
 
 export interface FoundOperation {
   readonly commitSha: string;
@@ -46,7 +49,7 @@ export interface VaultStore {
   readFile(path: VaultPath, atCommit: string): Promise<StoredFile | null>;
   /** Names (not paths) of files directly inside `dir` at `atCommit`. */
   listDir(dir: string, atCommit: string): Promise<readonly string[]>;
-  /** Compare-and-swap single-file commit on the vault branch. */
+  /** Single-file commit parented on `baseCommit`; publishes only as a fast-forward from it (head-CAS, ADR-0011). */
   writeFile(req: WriteRequest): Promise<WriteResult>;
   /** Find a commit in `baseCommitSha..untilCommit` whose trailers carry `operationId`. */
   findOperation(baseCommitSha: string, untilCommit: string, operationId: string): Promise<FindOperationResult>;

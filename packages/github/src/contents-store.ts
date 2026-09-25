@@ -3,6 +3,7 @@
 // docs/discovery/phase-0-findings.md, docs/discovery/github-api-probe-2026-09-24.md.
 import {
   FileTooLarge,
+  isStructurallySafePath,
   StoreUnavailable,
   StoreUnknownOutcome,
   TRAILER_OP,
@@ -23,8 +24,8 @@ export interface GitHubStoreOptions {
   readonly token: () => Promise<string>;
   readonly fetch?: typeof fetch;
   readonly apiBase?: string;
-  /** GitHub compare returns at most 250 commits without pagination. */
-  readonly dedupeWindowLimit?: number;
+  /** Max compare pages of 250 commits searched before dedupe answers `unknown` (default 20). */
+  readonly maxComparePages?: number;
 }
 
 const MAX_CONTENT_BYTES = 1024 * 1024;
@@ -33,13 +34,13 @@ export class GitHubContentsStore implements VaultStore {
   private readonly branch: string;
   private readonly f: typeof fetch;
   private readonly base: string;
-  private readonly limit: number;
+  private readonly maxPages: number;
 
   constructor(private readonly opts: GitHubStoreOptions) {
     this.branch = opts.branch ?? 'main';
     this.f = opts.fetch ?? fetch;
     this.base = `${opts.apiBase ?? 'https://api.github.com'}/repos/${opts.owner}/${opts.repo}`;
-    this.limit = Math.min(opts.dedupeWindowLimit ?? 250, 250);
+    this.maxPages = opts.maxComparePages ?? 20;
   }
 
   private async call(method: string, path: string, body?: unknown): Promise<Response> {
@@ -79,6 +80,7 @@ export class GitHubContentsStore implements VaultStore {
   }
 
   async readFile(path: VaultPath, atCommit: string): Promise<StoredFile | null> {
+    guardPath(path);
     const item = await this.getJson<{ type: string; sha: string; size: number; content?: string; encoding?: string }>(
       `${this.contentsPath(path)}?ref=${atCommit}`,
     );
@@ -91,46 +93,74 @@ export class GitHubContentsStore implements VaultStore {
   }
 
   async listDir(dir: string, atCommit: string): Promise<readonly string[]> {
-    const items = await this.getJson<{ type: string; name: string }[]>(`${this.contentsPath(dir)}?ref=${atCommit}`);
-    return Array.isArray(items) ? items.filter((i) => i.type === 'file').map((i) => i.name) : [];
+    guardPath(dir);
+    // Trees API at <commit>:<dir> (probe 2026-09-25 Q5); unlike Contents listings it reports truncation (R8).
+    const t = await this.getJson<{ truncated: boolean; tree: { path: string; type: string }[] }>(
+      `/git/trees/${atCommit}:${dir.split('/').map(encodeURIComponent).join('/')}`,
+    );
+    if (!t) return [];
+    if (t.truncated) throw new FileTooLarge('directory listing truncated');
+    return t.tree.filter((e) => e.type === 'blob').map((e) => e.path);
+  }
+
+  /** POST to the Git object endpoints: failures here leave only unreachable objects, never a durable effect. */
+  private async createObject<T>(path: string, body: unknown): Promise<T> {
+    let res: Response;
+    try {
+      res = await this.call('POST', path, body);
+    } catch {
+      throw new StoreUnavailable('network error creating a Git object');
+    }
+    if (res.status !== 201) throw new StoreUnavailable(`GitHub POST ${path} status ${res.status}`);
+    return (await res.json()) as T;
   }
 
   async writeFile(req: WriteRequest): Promise<WriteResult> {
+    guardPath(req.path);
+    // Head-CAS (ADR-0011, probe 2026-09-25): blob → tree on X's tree → commit parented on X → fast-forward ref.
+    const base = await this.getJson<{ tree: { sha: string } }>(`/git/commits/${req.baseCommit}`);
+    if (!base) throw new StoreUnavailable('base commit not found');
+    const blob = await this.createObject<{ sha: string }>('/git/blobs', { content: bytesToBase64(req.bytes), encoding: 'base64' });
+    const tree = await this.createObject<{ sha: string }>('/git/trees', {
+      base_tree: base.tree.sha,
+      tree: [{ path: req.path, mode: '100644', type: 'blob', sha: blob.sha }],
+    });
     const trailers = Object.entries(req.trailers).map(([k, v]) => `${k}: ${v}`).join('\n');
-    const body: Record<string, unknown> = {
+    const commit = await this.createObject<{ sha: string }>('/git/commits', {
       message: `${req.message}\n\n${trailers}\n`,
-      content: bytesToBase64(req.bytes),
-      branch: this.branch,
-    };
-    if (req.expectedBlobSha !== null) body.sha = req.expectedBlobSha;
-    const res = await this.call('PUT', this.contentsPath(req.path), body);
-    if (res.status === 200 || res.status === 201) {
-      const json = (await res.json()) as { content: { sha: string }; commit: { sha: string } };
-      return { ok: true, commitSha: json.commit.sha, blobSha: json.content.sha };
-    }
-    // G1: 409 = blob sha mismatch OR branch ref race ("is at X but expected Y"); neither was applied.
-    if (res.status === 409) return { ok: false, reason: 'cas-mismatch' };
-    // G1: 422 without sha = file already exists. 422 with sha was not observed; treat as CAS loss (re-dedupe).
-    if (res.status === 422) return { ok: false, reason: req.expectedBlobSha === null ? 'exists' : 'cas-mismatch' };
-    if (res.status >= 500) throw new StoreUnknownOutcome(`GitHub PUT status ${res.status}`);
-    throw new StoreUnavailable(`GitHub PUT status ${res.status}`);
+      tree: tree.sha,
+      parents: [req.baseCommit],
+    });
+    // Only this request can make the effect durable; a lost response here is an unknown outcome (call() throws it).
+    const res = await this.call('PATCH', `/git/refs/heads/${encodeURIComponent(this.branch)}`, { sha: commit.sha, force: false });
+    if (res.status === 200) return { ok: true, commitSha: commit.sha, blobSha: blob.sha };
+    // Probed: 422 "Update is not a fast forward" when the head moved past X (including the A2 ABA case).
+    if (res.status === 422 || res.status === 409) return { ok: false, reason: 'head-moved' };
+    if (res.status >= 500) throw new StoreUnknownOutcome(`GitHub ref update status ${res.status}`);
+    throw new StoreUnavailable(`GitHub ref update status ${res.status}`);
   }
 
   async findOperation(baseCommitSha: string, untilCommit: string, operationId: string): Promise<FindOperationResult> {
-    const cmp = await this.getJson<{ status: string; total_commits: number; commits: { sha: string; commit: { message: string } }[] }>(
-      `/compare/${baseCommitSha}...${untilCommit}?per_page=${this.limit}`,
-    );
-    if (!cmp) return { kind: 'unknown', reason: 'base commit unknown' };
-    if (cmp.status !== 'ahead' && cmp.status !== 'identical') return { kind: 'unknown', reason: `base is not an ancestor (${cmp.status})` };
-    for (const c of cmp.commits) {
-      const t = parseTrailers(c.commit.message);
-      if (t[TRAILER_OP] === operationId) {
-        const detail = await this.getJson<{ files?: { filename: string }[] }>(`/commits/${c.sha}`);
-        return { kind: 'found', op: { commitSha: c.sha, payloadHash: t[TRAILER_PAYLOAD] ?? '', paths: (detail?.files ?? []).map((f) => f.filename) } };
+    // Probe 2026-09-25 Q6: unpaged compare returns the NEWEST 250 commits; `per_page=250&page=n` pages oldest-first.
+    let seen = 0;
+    for (let page = 1; page <= this.maxPages; page++) {
+      const cmp = await this.getJson<{ status: string; total_commits: number; commits: { sha: string; commit: { message: string } }[] }>(
+        `/compare/${baseCommitSha}...${untilCommit}?per_page=250&page=${page}`,
+      );
+      if (!cmp) return { kind: 'unknown', reason: 'base commit unknown' };
+      if (cmp.status !== 'ahead' && cmp.status !== 'identical') return { kind: 'unknown', reason: `base is not an ancestor (${cmp.status})` };
+      for (const c of cmp.commits) {
+        const t = parseTrailers(c.commit.message);
+        if (t[TRAILER_OP] === operationId) {
+          const detail = await this.getJson<{ files?: { filename: string }[] }>(`/commits/${c.sha}`);
+          return { kind: 'found', op: { commitSha: c.sha, payloadHash: t[TRAILER_PAYLOAD] ?? '', paths: (detail?.files ?? []).map((f) => f.filename) } };
+        }
       }
+      seen += cmp.commits.length;
+      if (seen >= cmp.total_commits) return { kind: 'not-found' };
+      if (cmp.commits.length === 0) return { kind: 'unknown', reason: 'compare page empty before all commits were seen' };
     }
-    if (cmp.total_commits > cmp.commits.length) return { kind: 'unknown', reason: 'window truncated' };
-    return { kind: 'not-found' };
+    return { kind: 'unknown', reason: 'window truncated' };
   }
 
   async isAncestor(commit: string, head: string): Promise<boolean> {
@@ -144,6 +174,11 @@ export class GitHubContentsStore implements VaultStore {
     if (!parent) throw new StoreUnavailable('no parent');
     return parent;
   }
+}
+
+/** Defence in depth (security.md#paths): adapters re-check every path even though callers validated it. */
+export function guardPath(path: string): void {
+  if (!isStructurallySafePath(path)) throw new StoreUnavailable('unsafe vault path rejected by adapter');
 }
 
 /** Git trailer block = last paragraph of `Key: value` lines. */

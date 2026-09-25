@@ -18,6 +18,7 @@ import {
   type WriteRequest,
   type WriteResult,
 } from '@vault-companion/domain';
+import { guardPath } from './contents-store.ts';
 
 export interface LocalGitStoreOptions {
   readonly repo: string;
@@ -92,6 +93,7 @@ export class LocalGitStore implements VaultStore {
   }
 
   async readFile(path: VaultPath, atCommit: string): Promise<StoredFile | null> {
+    guardPath(path);
     const blobSha = await this.blobAt(atCommit, path);
     if (blobSha === null) return null;
     const bytes = await this.ok(['cat-file', 'blob', blobSha]);
@@ -99,6 +101,7 @@ export class LocalGitStore implements VaultStore {
   }
 
   async listDir(dir: string, atCommit: string): Promise<readonly string[]> {
+    guardPath(dir);
     const r = await this.run(['ls-tree', '-z', `${atCommit}:${dir}`]);
     if (r.code !== 0) return [];
     return r.stdout
@@ -111,30 +114,24 @@ export class LocalGitStore implements VaultStore {
   }
 
   async writeFile(req: WriteRequest): Promise<WriteResult> {
+    guardPath(req.path);
     const blob = (await this.ok(['hash-object', '-w', '--stdin'], req.bytes)).toString('utf8').trim();
     const trailers = Object.entries(req.trailers).map(([k, v]) => `${k}: ${v}`).join('\n');
     const message = `${req.message}\n\n${trailers}\n`;
-    // Loop only on ref races where the file itself is unchanged (GitHub Contents semantics).
-    for (let i = 0; i < 10; i++) {
-      const head = (await this.head()).commitSha;
-      const current = await this.blobAt(head, req.path);
-      if (req.expectedBlobSha === null ? current !== null : current !== req.expectedBlobSha) {
-        return { ok: false, reason: req.expectedBlobSha === null ? 'exists' : 'cas-mismatch' };
-      }
-      const indexFile = join(tmpdir(), `vc-index-${randomUUID()}`);
-      const env = { GIT_INDEX_FILE: indexFile };
-      try {
-        await this.ok(['read-tree', head], undefined, env);
-        await this.ok(['update-index', '--add', '--cacheinfo', `100644,${blob},${req.path}`], undefined, env);
-        const tree = (await this.ok(['write-tree'], undefined, env)).toString('utf8').trim();
-        const commit = (await this.ok(['commit-tree', tree, '-p', head, '-F', '-'], new TextEncoder().encode(message))).toString('utf8').trim();
-        const upd = await this.run(['update-ref', this.ref, commit, head]);
-        if (upd.code === 0) return { ok: true, commitSha: commit, blobSha: blob };
-      } finally {
-        await rm(indexFile, { force: true });
-      }
+    // Head-CAS (ADR-0011): commit parented on the pinned base; `update-ref <new> <old>` refuses unless the branch is
+    // still exactly at the base, atomically (same as GitHub's non-force ref update).
+    const indexFile = join(tmpdir(), `vc-index-${randomUUID()}`);
+    const env = { GIT_INDEX_FILE: indexFile };
+    try {
+      await this.ok(['read-tree', req.baseCommit], undefined, env);
+      await this.ok(['update-index', '--add', '--cacheinfo', `100644,${blob},${req.path}`], undefined, env);
+      const tree = (await this.ok(['write-tree'], undefined, env)).toString('utf8').trim();
+      const commit = (await this.ok(['commit-tree', tree, '-p', req.baseCommit, '-F', '-'], new TextEncoder().encode(message))).toString('utf8').trim();
+      const upd = await this.run(['update-ref', this.ref, commit, req.baseCommit]);
+      return upd.code === 0 ? { ok: true, commitSha: commit, blobSha: blob } : { ok: false, reason: 'head-moved' };
+    } finally {
+      await rm(indexFile, { force: true });
     }
-    throw new StoreUnavailable('ref kept moving');
   }
 
   async findOperation(baseCommitSha: string, untilCommit: string, operationId: string): Promise<FindOperationResult> {

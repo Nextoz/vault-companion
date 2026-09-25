@@ -3,11 +3,12 @@
 import type { ErrorCode } from '@vault-companion/contracts';
 import { StoreUnavailable, StoreUnknownOutcome, TRAILER_OP, TRAILER_PAYLOAD, type VaultPath, type VaultStore } from './store.ts';
 
-export const MAX_ATTEMPTS = 3;
+/** Head-CAS (ADR-0011) fails on any concurrent commit, so allow a few more re-plans than blob CAS needed. */
+export const MAX_ATTEMPTS = 5;
 
 /** A computed change against the vault at one commit. */
 export type Planned<E> =
-  | { readonly ok: true; readonly path: VaultPath; readonly expectedBlobSha: string | null; readonly bytes: Uint8Array; readonly effect: E }
+  | { readonly ok: true; readonly path: VaultPath; readonly bytes: Uint8Array; readonly effect: E }
   | { readonly ok: false; readonly code: ErrorCode; readonly message: string };
 
 export interface WritePlan<E> {
@@ -76,7 +77,7 @@ export async function executeWrite<E>(store: VaultStore, input: ExecuteInput, pl
       try {
         written = await store.writeFile({
           path: planned.path,
-          expectedBlobSha: planned.expectedBlobSha,
+          baseCommit: x,
           bytes: planned.bytes,
           message: plan.message,
           trailers: { [TRAILER_OP]: input.operationId, [TRAILER_PAYLOAD]: input.payloadHash },
@@ -93,7 +94,8 @@ export async function executeWrite<E>(store: VaultStore, input: ExecuteInput, pl
         return { ok: true, status: 'applied', path: planned.path, commitSha: written.commitSha, blobSha: written.blobSha, effect: planned.effect };
       }
       lastWasUnknown = false;
-      // CAS lost (possibly to our own earlier attempt): loop re-dedupes against a newer X.
+      // Head moved after X (possibly our own earlier attempt, or an Undo restoring identical bytes — review A2):
+      // loop re-dedupes against a newer X.
     }
     if (lastWasUnknown) return fail('upstream-unavailable', 'GitHub did not confirm the write; it will be retried safely', true);
     return fail('conflict:stale', 'the vault kept changing; try again', true);

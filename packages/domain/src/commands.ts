@@ -44,9 +44,9 @@ async function readTodo(store: VaultStore, at: string): Promise<{ ok: true; text
   return { ok: true, text, blobSha: file.blobSha };
 }
 
-function fromKernel<E, R>(r: md.MutationOk<E> | md.Refusal, path: VaultPath, expectedBlobSha: string | null, map: (e: E) => R): Planned<R> {
+function fromKernel<E, R>(r: md.MutationOk<E> | md.Refusal, path: VaultPath, map: (e: E) => R): Planned<R> {
   if (!r.ok) return refuse(r.code, r.message);
-  return { ok: true, path, expectedBlobSha, bytes: encoder.encode(r.text), effect: map(r.effect) };
+  return { ok: true, path, bytes: encoder.encode(r.text), effect: map(r.effect) };
 }
 
 export function completePlan(cmd: CompleteTaskCommand, timeZone: string): WritePlan<md.CompleteEffect> {
@@ -58,7 +58,7 @@ export function completePlan(cmd: CompleteTaskCommand, timeZone: string): WriteP
       if (!f.ok) return f.planned;
       const t = cmd.payload.task;
       const r = md.completeTask(f.text, { lineIndex: t.lineIndex, lineText: t.lineText, occurrencesAtRead: t.occurrencesAtRead, sameRevision: f.blobSha === t.blobSha }, doneDate);
-      return fromKernel(r, TODO, f.blobSha, (e) => e);
+      return fromKernel(r, TODO, (e) => e);
     },
   };
 }
@@ -91,9 +91,15 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
           const f = await readTodo(store, at);
           if (!f.ok) return f.planned;
           const completedFile = await store.readFile(TODO, found.op.commitSha);
-          const unchanged = completedFile !== null && completedFile.blobSha === f.blobSha;
-          const r = md.undoCompleteTask(f.text, { completion: derived.effect, unchangedSinceCompletion: unchanged });
-          return fromKernel(r, TODO, f.blobSha, (e) => ({ kind: 'reopened' as const, openLineText: e.openLineText }));
+          if (completedFile !== null && completedFile.blobSha === f.blobSha) {
+            // Exact inverse (review A1/R1): nothing changed since the completion, so its parent's bytes are the
+            // original — replayOnParent just proved completing them yields exactly the current file.
+            const original = await store.readFile(TODO, await store.parentOf(found.op.commitSha));
+            if (!original) return refuse('dedupe-unknown', 'the original task list cannot be read');
+            return { ok: true, path: TODO, bytes: original.bytes, effect: { kind: 'reopened', openLineText: derived.effect.openLineText } };
+          }
+          const r = md.undoCompleteTask(f.text, { completion: derived.effect, unchangedSinceCompletion: false });
+          return fromKernel(r, TODO, (e) => ({ kind: 'reopened' as const, openLineText: e.openLineText }));
         },
       };
     }
@@ -112,7 +118,7 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
             ...(p.due ? { due: p.due } : {}),
             ...(p.context ? { context: p.context } : {}),
           };
-          return fromKernel(md.captureTask(f.text, input), TODO, f.blobSha, (e) => ({ kind: 'task-captured' as const, lineText: e.lineText }));
+          return fromKernel(md.captureTask(f.text, input), TODO, (e) => ({ kind: 'task-captured' as const, lineText: e.lineText }));
         },
       };
     }
@@ -129,7 +135,9 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
           const names = await store.listDir(INBOX_DIR, at);
           const path = parseVaultPath(md.noteFileName(cmd.payload.text, date, names));
           if (!path || !canWrite(path, 'create')) return refuse('refused:path', 'note path is not allowed');
-          return { ok: true, path, expectedBlobSha: null, bytes, effect: { kind: 'note-captured', path } };
+          // The Inbox listing and the create refer to the same X; head-CAS publishes only if nothing landed since
+          // (review A4). Exact-path existence is covered by the listing too.
+          return { ok: true, path, bytes, effect: { kind: 'note-captured', path } };
         },
         // The chosen name depends on Inbox/ contents at write time, so verify by content, not replay.
         async deriveApplied(store, commitSha, paths) {

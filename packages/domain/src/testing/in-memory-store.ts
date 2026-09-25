@@ -1,7 +1,7 @@
 // In-memory VaultStore with Git-like semantics for domain tests.
-// Semantics mirror what the GitHub Contents API is *assumed* to do until gate G1 probes it
-// (docs/testing.md): CAS against the file's blob at the current branch head, each write is a new
-// commit on top of the head, trailers are searchable, blob SHAs are real Git blob SHAs.
+// Semantics mirror the probed GitHub Git Data API path (ADR-0011): a write is a commit parented on the pinned
+// commit and succeeds only if the branch head is still exactly that commit; trailers are searchable; blob SHAs are
+// real Git blob SHAs. Checked against real Git by packages/github/src/store-contract.test.ts.
 import {
   StoreUnavailable,
   StoreUnknownOutcome,
@@ -14,6 +14,11 @@ import {
   type WriteRequest,
   type WriteResult,
 } from '../store.ts';
+import { isStructurallySafePath } from '../paths.ts';
+
+function guard(path: string): void {
+  if (!isStructurallySafePath(path)) throw new StoreUnavailable('unsafe vault path rejected by adapter');
+}
 
 interface Commit {
   readonly sha: string;
@@ -95,7 +100,7 @@ export class InMemoryStore implements VaultStore {
   }
   text(path: string, at = this.headSha): string | null {
     const blob = this.commits.get(at)?.tree.get(path);
-    return blob === undefined ? null : new TextDecoder().decode(this.blobs.get(blob)!);
+    return blob === undefined ? null : new TextDecoder('utf-8', { ignoreBOM: true }).decode(this.blobs.get(blob)!);
   }
   commitsWithOp(operationId: string): string[] {
     return [...this.commits.values()].filter((c) => c.trailers[TRAILER_OP] === operationId).map((c) => c.sha);
@@ -116,6 +121,7 @@ export class InMemoryStore implements VaultStore {
   }
 
   async readFile(path: VaultPath, atCommit: string): Promise<StoredFile | null> {
+    guard(path);
     const commit = this.commits.get(atCommit);
     if (!commit) throw new StoreUnavailable(`unknown commit ${atCommit}`);
     const blobSha = commit.tree.get(path);
@@ -124,6 +130,7 @@ export class InMemoryStore implements VaultStore {
   }
 
   async listDir(dir: string, atCommit: string): Promise<readonly string[]> {
+    guard(dir);
     const commit = this.commits.get(atCommit);
     if (!commit) throw new StoreUnavailable(`unknown commit ${atCommit}`);
     const prefix = `${dir}/`;
@@ -131,20 +138,17 @@ export class InMemoryStore implements VaultStore {
   }
 
   async writeFile(req: WriteRequest): Promise<WriteResult> {
+    guard(req.path);
     this.writeCalls++;
     const fault = this.writeFaults.shift() ?? 'normal';
     if (fault === 'unavailable') throw new StoreUnavailable('simulated outage');
     if (fault === 'drop-then-unknown') throw new StoreUnknownOutcome('simulated timeout (not applied)');
     // Hash BEFORE the check: from here to pushCommit there must be no `await`, so check-and-set is atomic
-    // like GitHub's (G1 P12). An await in between let two concurrent writers both pass the CAS.
+    // like GitHub's ref update. An await in between let two concurrent writers both pass the CAS.
     const blobSha = await gitBlobSha(req.bytes);
+    // Head-CAS (ADR-0011): publish only as a fast-forward from the pinned commit.
+    if (this.headSha !== req.baseCommit) return { ok: false, reason: 'head-moved' };
     const head = this.commits.get(this.headSha)!;
-    const current = head.tree.get(req.path);
-    if (req.expectedBlobSha === null) {
-      if (current !== undefined) return { ok: false, reason: 'exists' };
-    } else if (current !== req.expectedBlobSha) {
-      return { ok: false, reason: 'cas-mismatch' };
-    }
     this.blobs.set(blobSha, req.bytes);
     const tree = new Map(head.tree);
     tree.set(req.path, blobSha);

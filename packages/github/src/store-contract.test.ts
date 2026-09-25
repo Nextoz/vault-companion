@@ -36,8 +36,8 @@ const harnesses: Record<string, (limit?: number) => Promise<Harness>> = {
 let current: Harness | null = null;
 afterEach(() => current?.cleanup());
 
-const write = (store: VaultStore, path: VaultPath, expected: string | null, text: string, op = 'op-1', hash = 'sha256:x') =>
-  store.writeFile({ path, expectedBlobSha: expected, bytes: enc(text), message: 'Vault Companion: test', trailers: { [TRAILER_OP]: op, [TRAILER_PAYLOAD]: hash } });
+const write = (store: VaultStore, path: VaultPath, baseCommit: string, text: string, op = 'op-1', hash = 'sha256:x') =>
+  store.writeFile({ path, baseCommit, bytes: enc(text), message: 'Vault Companion: test', trailers: { [TRAILER_OP]: op, [TRAILER_PAYLOAD]: hash } });
 
 // Real git on Windows spawns many processes per case (3–5 s observed); allow headroom under parallel load.
 describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_000 }, (name) => {
@@ -59,30 +59,48 @@ describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_0
     expect([...names].sort()).toEqual(['Første note - 2026-09-20.md']);
   });
 
-  it('CAS: succeeds on the expected blob, fails after the file changed, succeeds when only another file changed', async () => {
+  it('head-CAS (ADR-0011): writes from the current head succeed; any later commit makes a write from the old head fail', async () => {
     const { store, external } = await make();
     const x = (await store.head()).commitSha;
     const blob = (await store.readFile(TODO, x))!.blobSha;
-    await external({ 'Inbox/other.md': 'o\n' }); // head moves, file unchanged
-    const ok = await write(store, TODO, blob, 'v2\n');
+    const ok = await write(store, TODO, x, 'v2');
     expect(ok.ok).toBe(true);
-    const stale = await write(store, TODO, blob, 'v3\n', 'op-2');
-    expect(stale).toEqual({ ok: false, reason: 'cas-mismatch' });
+    if (ok.ok) expect(await store.parentOf(ok.commitSha)).toBe(x); // parented on the pinned commit
+    const y = (await store.head()).commitSha;
+    await external({ 'Inbox/other.md': 'o' }); // an unrelated file: blob CAS would have let the next write pass
+    expect(await write(store, TODO, y, 'v3', 'op-2')).toEqual({ ok: false, reason: 'head-moved' });
     const head = (await store.head()).commitSha;
-    expect(dec((await store.readFile(TODO, head))!.bytes)).toBe('v2\n');
+    expect(dec((await store.readFile(TODO, head))!.bytes)).toBe('v2');
     expect(await store.readFile(TODO, x)).toMatchObject({ blobSha: blob }); // history is immutable
   });
 
-  it('create fails when the path exists', async () => {
-    const { store } = await make();
-    expect(await write(store, 'Inbox/Første note - 2026-09-20.md' as VaultPath, null, 'x')).toEqual({ ok: false, reason: 'exists' });
-    expect((await write(store, 'Inbox/new.md' as VaultPath, null, 'x')).ok).toBe(true);
+  it('A2 ABA: identical bytes restored after X do not let a delayed write from X land', async () => {
+    const { store, external } = await make();
+    const x = (await store.head()).commitSha;
+    const original = SEED[TODO]!;
+    expect((await write(store, TODO, x, 'completed', 'op-C')).ok).toBe(true); // first delivery of C
+    await external({ [TODO]: original }); // Undo restores the exact original bytes
+    const restored = (await store.head()).commitSha;
+    expect((await store.readFile(TODO, restored))!.blobSha).toBe((await store.readFile(TODO, x))!.blobSha);
+    expect(await write(store, TODO, x, 'completed', 'op-C')).toEqual({ ok: false, reason: 'head-moved' }); // delayed duplicate
+    expect(dec((await store.readFile(TODO, (await store.head()).commitSha))!.bytes)).toBe(original);
   });
+
+  it.each(['../outside.md', 'Tasks/../../x.md', '/abs.md', `Inbox${String.fromCharCode(92)}x.md`, 'Inbox/%2e%2e.md', `Inbox/x${String.fromCharCode(0x85)}.md`, ''])(
+    'adapter rejects unsafe path %j before touching Git (security.md#paths)',
+    async (bad) => {
+      const { store } = await make();
+      const x = (await store.head()).commitSha;
+      await expect(store.readFile(bad as VaultPath, x)).rejects.toThrow('unsafe vault path');
+      await expect(write(store, bad as VaultPath, x, 'x')).rejects.toThrow('unsafe vault path');
+      expect((await store.head()).commitSha).toBe(x);
+    },
+  );
 
   it('findOperation: found with payload hash and changed paths; not-found; parentOf', async () => {
     const { store } = await make();
     const base = (await store.head()).commitSha;
-    const w = await write(store, 'Inbox/new.md' as VaultPath, null, 'x', 'op-A', 'sha256:abc');
+    const w = await write(store, 'Inbox/new.md' as VaultPath, base, 'x', 'op-A', 'sha256:abc');
     const head = (await store.head()).commitSha;
     expect(await store.findOperation(base, head, 'op-A')).toEqual({
       kind: 'found',
