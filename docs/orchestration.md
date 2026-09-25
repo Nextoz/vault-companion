@@ -106,6 +106,6 @@ the only record.
 ## Pull requests and CodeRabbit (owner, 2026-09-25)
 
 The repo is public and CodeRabbit reviews pull requests (not direct pushes). Every finished worker branch is merged
-through a PR opened by the Lead: open PR → wait for CodeRabbit → reconcile its comments like any review (fix with a test,
-or reject with a reason in the PR) → verify locally (`pnpm check`, e2e where relevant) → merge. Workers never open PRs.
+through a PR opened by the Lead: open PR → wait for CodeRabbit → hand the CodeRabbit comments to a worker via
+`docs/briefs/PR-coderabbit-loop.md` (Cloud, or Astra low for small PRs), which fixes with a test or rejects with a reason → verify locally (`pnpm check`, e2e where relevant) → merge. Workers never open PRs.
 Config: `.coderabbit.yaml`.
