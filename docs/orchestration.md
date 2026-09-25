@@ -98,7 +98,7 @@ the only record.
 - Every cloud brief says **push early**: a report stub pushed in the first minutes, then the final push. The Lead only
   sees GitHub, never the container; no branch after ~15 min ⇒ ask the session (`claude -p … --cloud <id>`).
 - Launch: commit + push the brief, then
-  `claude --cloud "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, commit and push the branch when done. Do not open a PR or spawn agents."`
+  `claude --cloud "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, write .agent/handoffs/<brief>.md, commit and push the branch when done. Do not open a PR or spawn agents."`
   Record session ID + branch in `docs/plan.md`. Continue a session: `claude -p "<message>" --cloud <session-id>`.
 - Finish: `git fetch`, review the branch, run verification locally, merge if accepted.
 - First use is one small task to verify the workflow. Verified 2026-09-25 (brief C).
@@ -112,6 +112,17 @@ the only record.
 - **Local Qwen** (tiny deterministic tasks, one at a time): `cmd /c "codex exec --oss --local-provider ollama -m qwen3.5:4b
   --sandbox workspace-write - < <prompt> > <log> 2>&1"` in a full clone. Only with **≥ 5 GB free RAM** (the 4B model
   needs ~3.4 GB; at 1.2 GB free on 2026-09-25 background work was reaped). No Qwen CLI is installed.
+
+## Worker → Lead handoff (owner, 2026-09-25)
+
+Every implementation worker (Cloud, Astra, Qwen) commits a short branch-local `.agent/handoffs/<brief-name>.md` with:
+1. **Completed** — what actually changed. 2. **Important discoveries** — unexpected technical/product/security
+findings, including outside the brief. 3. **Recommend** — fix now / follow-up / leave alone. 4. **Verification** —
+checks actually run and result. 5. **Commit** — SHA if available. Concise; not a review report. Launch prompts say so.
+
+Before merging, the Lead reads it and dispositions **every** meaningful discovery: fix now, concrete follow-up in
+`docs/plan.md`, or rejected with a reason (recorded in the PR comment). Worker-process commentary never goes into code
+comments. The handoff file is deleted from the branch once integrated (or on `main` after merge).
 
 ## Pull requests and CodeRabbit (owner, 2026-09-25)
 
