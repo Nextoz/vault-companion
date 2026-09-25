@@ -43,3 +43,14 @@ Write your report to the file named in your launch prompt, with: findings table
 (Critical = reachable durable loss/duplication/wrong-task write or auth bypass), then "Evidence run" (commands/scripts
 you executed and results), then "What is sound", then verdict `PASS` / `PASS WITH FIXES` / `BLOCK`.
 Reply in the terminal with **one line only**: `VERDICT: <verdict> — <n> findings (<c> critical, <h> high) — <report path>`.
+
+## Rerun addendum (2026-09-25)
+
+This is the **rerun** after fixes. In addition to everything above:
+1. Read `docs/reviews/phase-1-reconciliation.md` and verify **each** finding (A1–A10, R1–R14) is actually fixed on
+   `main` — re-run the original reproduction where one is described in `phase-1-review-{astra,opus}.md`. Mark each
+   `fixed` / `not fixed` / `partially fixed` with evidence.
+2. Hunt for **new** defects introduced by the fixes, especially: head-CAS writes (ADR-0011; GitHub Git Data API path in
+   `packages/github/src/contents-store.ts`), exact Undo via parent bytes (`packages/domain/src/commands.ts`), the
+   queue's cross-tab lock/lease protocol (`apps/web/src/queue/**`), and the paged dedupe.
+Write the report to the path named in your launch prompt (`phase-1-rereview-*.md`).
