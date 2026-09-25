@@ -6,7 +6,8 @@ look for or read the other's report.
 
 ## Scope
 
-The **whole system** on `main` after the Phase 2 harness merged (`packages/e2e`), judged end to end rather than
+The **whole system** on `main` after **all milestone-1 streams** merged — Phase 2 harness (`packages/e2e`), offline
+service-worker tests, deploy scaffold and `_headers`, linked notes, client correctness, draft recovery, Today rule, judged end to end rather than
 per file: phone PWA → queue → HTTP → auth → command services → executor → store → Git → desktop clone → sync model.
 
 - Evidence under review: `packages/e2e/**` and `docs/briefs/P2A-report.md` — does the disposable end-to-end
@@ -26,6 +27,9 @@ Edit any file except your report. No git commands that change state. Never open
 `pnpm test`, `pnpm typecheck`, `pnpm lint`, and throwaway scripts **only under your OS temp dir**.
 
 ## Hunt for
+
+0. **Overlaps between streams**: IndexedDB schema/migrations (queue + drafts), service-worker caching vs. note view
+   and drafts, task identity vs. Undo-in-Done-today vs. conflict UI, `_headers` CSP vs. the note renderer.
 
 1. **Acceptance-story failures** (`docs/product-contract.md`): any path where, with the computer off, a dropped
    connection loses or duplicates the action, or a conflict is hidden or loses a version. Construct the interleaving

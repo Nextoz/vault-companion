@@ -18,7 +18,9 @@ priorities are the owner's choice, informed by observed use (milestone 3).
 
 ## Milestone 1 — Integrated first-release build (current)
 
-Exit: all streams below merged, `pnpm check` + e2e + CI green, Phase 2 gate passed, known limitations listed here.
+Exit: all streams below merged, `pnpm check` + e2e + CI green, known limitations listed here, **and** the whole-system
+review passed against the **combined merged build** (P2-A, P2-B, P3-A, P4-A/B/C/D and T1 together — their UI and
+storage changes overlap, so no stream is reviewed only in isolation).
 
 | Stream | Worker | Status |
 |---|---|---|
@@ -31,7 +33,7 @@ Exit: all streams below merged, `pnpm check` + e2e + CI green, Phase 2 gate pass
 | T1 Today rule (domain read model) | Codex Astra low, clone `…-clones/today-rule` | in flight |
 | T1 Today layout (Overdue below, collapsed) | P4-B addendum | in flight |
 | P4-D Active Work Now read-only card | Cloud, after P4-A merges (reuses its renderer) | queued |
-| Phase 2 gate (whole-system review) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after PR #4 merges |
+| Whole-system review (Phase 2 gate + milestone 1 exit) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after **all** milestone-1 streams merge |
 
 Every branch: PR → CodeRabbit loop → CI → handoff dispositions (`.agent/handoffs/`) → merge.
 
@@ -58,7 +60,7 @@ repo), then the owner chooses the next improvement from observed use.
 | Tap Capture → keyboard ready | ≤ 0.5 s |
 | Tap complete/save → local acknowledgement (state chip) | ≤ 100 ms |
 | Online → "saved to GitHub" | ≤ 5 s typical |
-| Refused/conflicted action → resolved (refresh + redo, or discard) | ≤ 3 taps, no lost text |
+| Refused/conflicted action → clear, safe next step | ≤ 3 taps, no lost text; dismissing is **not** resolving the conflict |
 
 Observations: none yet (recorded privately in milestone 2–3).
 

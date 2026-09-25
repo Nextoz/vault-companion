@@ -12,7 +12,7 @@ new branches, CodeRabbit reviews, finished CI and finished Codex logs.
 
 1. For each pushed branch: open PR → CodeRabbit loop → CI green → read `.agent/handoffs/<brief>.md` and disposition
    every discovery in the PR comment → merge. P4-A also gets an Astra adversarial review first.
-2. After PR #4 merges: run the Phase 2 gate (`docs/reviews/phase-2-review-brief.md`, Cloud Opus + Astra) and
+2. After **all** milestone-1 streams merge: run the whole-system review on the combined build (Phase 2 gate (`docs/reviews/phase-2-review-brief.md`, Cloud Opus + Astra) and
    reconcile. Note for the gate: the real desktop worker never writes conflict markers (harness models a stricter case).
 3. After P3-A merges: owner does G2 with `docs/deploy.md` (owner has a Cloudflare account); Lead deploys and verifies
    read-only against the live vault; then milestone 2 canary (G3).
