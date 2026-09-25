@@ -27,18 +27,22 @@ Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef4
 
 ### Work in progress (exact next actions)
 
-**Phase 1 gate: first run FAILED → all 24 findings fixed and integrated** (`fea97cc`; 408 tests, WebKit e2e 8/8).
-Reconciliation + results: `docs/reviews/phase-1-reconciliation.md`.
+**Phase 1 gate:** run 1 FAILED (24 findings, all fixed, `fea97cc`). Rerun: Astra BLOCK (1 Critical), Opus PASS WITH
+FIXES — new findings reconciled in `docs/reviews/phase-1-reconciliation.md` ("Rerun" table).
 
-**In flight — gate rerun** (brief + rerun addendum `docs/reviews/phase-1-review-brief.md`):
-Opus 5.5 `rereview-opus` (pane `w3:pA`) → `docs/reviews/phase-1-rereview-opus.md`; GPT-6 Astra via `codex exec`
-(pane `w3:pB`, log `astra-rerun.log` in the Lead scratchpad, UTF-16) → `docs/reviews/phase-1-rereview-astra.md`.
+| Stream | Owner | Status |
+|---|---|---|
+| Rerun Lead items (create/update precondition — the Critical; fail-closed listing; stale-Undo trailer; truncated listing refusal; console + onError tests; ADR-0011 precision) | Lead | **done** `a9800c2`, 424 tests, all guards mutation-checked |
+| F3 queue/view rerun fixes (Astra N2, N3; Opus N5) | Opus 5.5 worker `f3`, pane `w3:pC`, branch `agent/queue-rerun-fixes`, brief `docs/briefs/F3-queue-rerun-fixes.md` | in flight |
 
-Next: reconcile rerun findings; if both PASS (or only Low findings remain), close Phase 1 and start Phase 2
-(disposable end-to-end: Node harness over LocalGitStore + desktop clone + worker-equivalent sync; see roadmap).
-CI: blocked — GPT-6 Sol unavailable on the owner's Codex account; owner to choose substitute or defer.
+Next: merge F3 → full check + WebKit e2e → **gate run 3** (fresh Opus + Astra; brief + rerun addendum; report names
+`phase-1-rereview2-*.md`). CI blocked (GPT-6 Sol unavailable on owner's Codex account; owner decision pending).
 
 ### Unresolved issues / risks
+
+- Phase 3 sizing: an Undo can make two paged dedupes per attempt × 5 attempts; check the Workers subrequest limit
+  of the chosen plan before deploy (rerun Opus note).
+- Leftover empty directories `C:\c\Dev\vault-companion-worktrees` from a path-conversion mistake — owner may delete.
 
 - R7 residue (Low, deferred): semantic Undo leaves a blank line in Done when Done has other non-blank content
   (K2 report note 1; needs a vault-contract §4.2 change).
