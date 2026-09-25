@@ -87,3 +87,45 @@ test('closing keeps the draft; Discard draft removes it', async ({ page }) => {
   await expect(page.getByLabel('Task text')).toHaveValue('');
   expect(api.bodies).toHaveLength(0);
 });
+
+test('two windows with the same draft: exactly one Save sends it, and the other cannot bring it back', async ({ page, context }) => {
+  await page.goto('/');
+  await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+  await page.getByRole('button', { name: 'Capture' }).click();
+  await page.getByRole('button', { name: 'Note' }).click();
+  await page.getByLabel('Note text').fill('A synthetic shared thought');
+  await expect.poll(() => storedDrafts(page)).toHaveLength(1);
+
+  // A second window over the same IndexedDB database restores the same draft.
+  const second = await context.newPage();
+  await api.install(second);
+  await second.goto('/');
+  await expect(region(second, 'Today').getByText('Water the plants')).toBeVisible();
+  await second.getByRole('button', { name: 'Capture' }).click();
+  await expect(second.getByLabel('Note text')).toHaveValue('A synthetic shared thought');
+
+  await second.getByRole('button', { name: 'Save' }).click();
+  await expect(region(second, 'Actions on this device')).toContainText('Saved to GitHub');
+  expect(await storedDrafts(page)).toEqual([]);
+
+  // The first window still shows the same draft: its Save is refused by the store, and nothing is sent.
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('This draft was saved or changed in another window')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+  // Typing on, the debounce, hiding and closing the window do not recreate it.
+  await page.getByLabel('Note text').fill('A synthetic shared thought, continued');
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  await page.getByRole('button', { name: 'Close' }).click();
+  expect(await storedDrafts(page)).toEqual([]);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Capture' }).click();
+  await expect(page.getByLabel(/^(Task|Note) text$/)).toHaveValue('');
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await second.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(region(page, 'Actions on this device')).toContainText('Saved to GitHub');
+  expect(api.bodies).toHaveLength(1);
+  expect(api.applied.map((c) => c.type)).toEqual(['CaptureNote']);
+});

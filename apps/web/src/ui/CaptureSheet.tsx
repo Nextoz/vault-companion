@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { captureNote, captureTask } from '../commands.ts';
-import { DraftKeeper, type DraftStore } from '../draft.ts';
+import { DraftKeeper, type DraftStatus, type DraftStore } from '../draft.ts';
 import { prefs, type CaptureKind } from '../prefs.ts';
 import type { PendingQueue } from '../queue/queue.ts';
 
 const LIMIT: Record<CaptureKind, number> = { task: 2000, note: 50_000 };
+
+const DRAFT_NOTICE: Partial<Record<DraftStatus, string>> = {
+  unavailable: 'This draft cannot be kept on this device.',
+  elsewhere: 'Another window is keeping a draft, so this text is not kept as a draft.',
+  superseded: 'This draft was saved or changed in another window. Close and reopen Capture to continue.',
+};
 
 interface Props {
   queue: PendingQueue;
@@ -18,13 +24,14 @@ interface Props {
 /**
  * Works offline: the envelope is minted and persisted on the device; the queue sends it later. Unsaved text is kept
  * as this account's draft (P4-C) and restored on reopen; closing keeps it, only "Discard draft" or Save removes it.
+ * With several windows open, each draft is saved at most once: see draft.ts.
  */
 export function CaptureSheet({ queue, drafts, accountKey, baseRevision, onClose }: Props) {
   const [kind, setKind] = useState<CaptureKind>(prefs.captureKind);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [draftUnavailable, setDraftUnavailable] = useState(false);
+  const [draftStatus, setDraftStatus] = useState<DraftStatus>('kept');
   const savingRef = useRef(false);
   const keeperRef = useRef<DraftKeeper | null>(null);
   const typedRef = useRef(false);
@@ -33,7 +40,8 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, onClose 
   contentRef.current = { kind, text };
 
   useEffect(() => {
-    const keeper = new DraftKeeper({ store: drafts, accountKey, onUnavailable: () => setDraftUnavailable(true) });
+    const keeper = new DraftKeeper({ store: drafts, accountKey, onStatus: setDraftStatus });
+    setDraftStatus('kept');
     keeperRef.current = keeper;
     const previous = boundRef.current;
     boundRef.current = accountKey;
@@ -66,7 +74,7 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, onClose 
   }, [drafts, accountKey]);
 
   const ready = accountKey !== null && baseRevision !== null;
-  const canSave = ready && text.trim().length > 0 && !saving;
+  const canSave = ready && text.trim().length > 0 && !saving && draftStatus !== 'superseded';
 
   const choose = (next: CaptureKind) => {
     setKind(next);
@@ -95,13 +103,22 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, onClose 
     setSaving(true);
     const keeper = keeperRef.current;
     try {
-      // No draft write may land after the enqueue transaction that deletes the draft.
+      // Every draft write this sheet started has finished: `basis` is the version this Save claims.
       await keeper?.suspend();
+      if (keeper?.superseded) return;
       const ctx = { baseRevision };
       const envelope = kind === 'task' ? captureTask(ctx, { text }) : captureNote(ctx, { text });
       const label = text.length > 80 ? `${text.slice(0, 79)}…` : text;
-      // One transaction: the command is kept and the draft is gone, or neither (P4-C).
-      await queue.enqueue(envelope, { accountKey, label: label.replace(/\s+/g, ' '), clearDraft: true });
+      // One transaction: the draft is still that version, the command is kept and the draft is gone; or nothing.
+      const result = await queue.enqueue(envelope, {
+        accountKey,
+        label: label.replace(/\s+/g, ' '),
+        ...(keeper ? { draft: keeper.basis } : {}),
+      });
+      if (result === 'draft-conflict') {
+        keeper?.supersede();
+        return;
+      }
       setText('');
       onClose();
     } catch {
@@ -135,7 +152,11 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, onClose 
           onChange={(e) => edit(e.target.value)}
         />
         {!ready && <p className="muted small">Connect once to set up this device before capturing.</p>}
-        {draftUnavailable && <p className="muted small">This draft cannot be kept on this device.</p>}
+        {DRAFT_NOTICE[draftStatus] && (
+          <p className={draftStatus === 'superseded' ? 'error' : 'muted small'} role="status">
+            {DRAFT_NOTICE[draftStatus]}
+          </p>
+        )}
         {error && <p className="error">{error}</p>}
         <div className="sheet-buttons">
           {text.length > 0 && (

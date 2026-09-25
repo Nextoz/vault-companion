@@ -48,7 +48,8 @@ describe('IndexedDB schema upgrade', () => {
     expect(await store.receipts()).toMatchObject([{ operationId: 'r1' }]);
     expect(await store.watermark()).toEqual(watermark);
     expect(await store.draft('a'.repeat(64))).toBeUndefined();
-    await store.putDraft({ accountKey: 'a'.repeat(64), kind: 'task', text: 'synthetic', updatedAt: 1 });
+    const draft = { accountKey: 'a'.repeat(64), id: 'd1', version: 1, kind: 'task' as const, text: 'synthetic', updatedAt: 1 };
+    expect(await store.putDraft(draft, null)).toBe('ok');
     expect(await store.draft('a'.repeat(64))).toMatchObject({ text: 'synthetic' });
     store.close();
   });

@@ -22,9 +22,40 @@ const VERSION = 4;
  */
 export interface Draft {
   accountKey: string;
+  /** Identity of this draft. Once it is saved or discarded, no write based on it can bring it back. */
+  id: string;
+  /** Bumped by every write. A write is accepted only from the version it was based on (compare-and-swap). */
+  version: number;
   kind: CaptureKind;
   text: string;
   updatedAt: number;
+}
+
+/** The draft version an app instance last read or wrote; `null`: it has seen no draft (it may only create one). */
+export type DraftBasis = Pick<Draft, 'id' | 'version'> | null;
+
+/** `conflict`: another instance changed, saved or discarded the draft since `basis`. Nothing was written. */
+export type DraftWrite = 'ok' | 'conflict';
+
+/**
+ * Capture Save of a draft. `basis` non-null: the command is enqueued only if the stored draft is still exactly that
+ * version, and the draft is deleted in the same transaction. `basis` null: the text was never kept as a draft, so
+ * nothing is checked or deleted (another instance's draft, if any, stays).
+ */
+export interface DraftSubmit {
+  accountKey: string;
+  basis: DraftBasis;
+}
+
+/**
+ * True if a write based on `basis` may replace `current` (G-CAS), and `next` is not older than it (G-NEWER).
+ * A null basis may only create; a non-null basis may only follow that exact version, so a draft that is gone stays
+ * gone.
+ */
+export function mayReplace(current: Draft | undefined, basis: DraftBasis, updatedAt: number): boolean {
+  if (current && updatedAt < current.updatedAt) return false;
+  if (basis === null) return current === undefined;
+  return current !== undefined && current.id === basis.id && current.version === basis.version;
 }
 
 export interface PendingError {
@@ -124,7 +155,7 @@ export interface PendingStore {
    * One transaction: the new record is written and, if `draftOf` is an accountKey, that account's draft is deleted.
    * Either both happen or neither, so saved text can never survive as a draft and be captured twice.
    */
-  add(record: PendingRecord, draftOf: string | null): Promise<void>;
+  add(record: PendingRecord, draft: DraftSubmit | null): Promise<'ok' | 'draft-conflict'>;
   receipts(): Promise<ReceiptRecord[]>;
   /** One transaction: remove the pending record (if still present) and store its receipt. */
   settle(receipt: ReceiptRecord): Promise<void>;
@@ -132,8 +163,10 @@ export interface PendingStore {
   writeReceipts(change: ReceiptChange): Promise<void>;
   watermark(): Promise<Watermark | null>;
   draft(accountKey: string): Promise<Draft | undefined>;
-  putDraft(draft: Draft): Promise<void>;
-  deleteDraft(accountKey: string): Promise<void>;
+  /** One transaction: written only if `mayReplace(current, basis, draft.updatedAt)`. */
+  putDraft(draft: Draft, basis: DraftBasis): Promise<DraftWrite>;
+  /** One transaction: deleted only if the stored draft is still `basis`. */
+  deleteDraft(accountKey: string, basis: NonNullable<DraftBasis>): Promise<DraftWrite>;
   close(): void;
 }
 
@@ -161,6 +194,34 @@ async function write(db: IDBDatabase, stores: string[], fill: (tx: IDBTransactio
     throw error;
   }
   await completed;
+}
+
+/**
+ * One readwrite transaction that reads `key` from `store` and lets `decide` write based on it. Nothing but IndexedDB
+ * requests run inside, so the read and the writes are atomic against every other instance (IndexedDB serialises
+ * readwrite transactions over overlapping stores). A throw in `decide` aborts everything it queued.
+ */
+async function guarded<T, R>(
+  db: IDBDatabase,
+  stores: string[],
+  store: string,
+  key: IDBValidKey,
+  decide: (current: T | undefined, tx: IDBTransaction) => R,
+): Promise<R> {
+  const tx = db.transaction(stores, 'readwrite');
+  const completed = done(tx);
+  let result: { value: R } | null = null;
+  const read = tx.objectStore(store).get(key);
+  read.onsuccess = () => {
+    try {
+      result = { value: decide(read.result as T | undefined, tx) };
+    } catch {
+      tx.abort();
+    }
+  };
+  await completed;
+  if (!result) throw new Error('IndexedDB transaction failed');
+  return (result as { value: R }).value;
 }
 
 export async function openPendingStore(factory: IDBFactory = indexedDB): Promise<PendingStore> {
@@ -201,11 +262,21 @@ export async function openPendingStore(factory: IDBFactory = indexedDB): Promise
     },
     put: (...records) => write(db, [STORE], (tx) => records.forEach((r) => tx.objectStore(STORE).put(r))),
     delete: (...ids) => write(db, [STORE], (tx) => ids.forEach((id) => tx.objectStore(STORE).delete(id))),
-    add: (record, draftOf) =>
-      write(db, draftOf === null ? [STORE] : [STORE, DRAFTS], (tx) => {
+    async add(record, draft) {
+      if (draft === null || draft.basis === null) {
+        await write(db, [STORE], (tx) => tx.objectStore(STORE).put(record));
+        return 'ok';
+      }
+      const { basis } = draft;
+      // Check, enqueue and delete in one transaction: of all instances holding this draft version, exactly one
+      // enqueues it; every other one finds it gone and enqueues nothing.
+      return guarded<Draft, 'ok' | 'draft-conflict'>(db, [STORE, DRAFTS], DRAFTS, draft.accountKey, (current, tx) => {
+        if (!current || current.id !== basis.id || current.version !== basis.version) return 'draft-conflict';
         tx.objectStore(STORE).put(record);
-        if (draftOf !== null) tx.objectStore(DRAFTS).delete(draftOf);
-      }),
+        tx.objectStore(DRAFTS).delete(draft.accountKey);
+        return 'ok';
+      });
+    },
     receipts: () => readAll<ReceiptRecord>(RECEIPTS),
     settle: (receipt) =>
       write(db, [STORE, RECEIPTS], (tx) => {
@@ -223,8 +294,18 @@ export async function openPendingStore(factory: IDBFactory = indexedDB): Promise
       const tx = db.transaction(DRAFTS, 'readonly');
       return (await request(tx.objectStore(DRAFTS).get(accountKey))) as Draft | undefined;
     },
-    putDraft: (draft) => write(db, [DRAFTS], (tx) => tx.objectStore(DRAFTS).put(draft)),
-    deleteDraft: (accountKey) => write(db, [DRAFTS], (tx) => tx.objectStore(DRAFTS).delete(accountKey)),
+    putDraft: (draft, basis) =>
+      guarded<Draft, DraftWrite>(db, [DRAFTS], DRAFTS, draft.accountKey, (current, tx) => {
+        if (!mayReplace(current, basis, draft.updatedAt)) return 'conflict';
+        tx.objectStore(DRAFTS).put(draft);
+        return 'ok';
+      }),
+    deleteDraft: (accountKey, basis) =>
+      guarded<Draft, DraftWrite>(db, [DRAFTS], DRAFTS, accountKey, (current, tx) => {
+        if (!current || current.id !== basis.id || current.version !== basis.version) return 'conflict';
+        tx.objectStore(DRAFTS).delete(accountKey);
+        return 'ok';
+      }),
     close() {
       db.close();
     },
