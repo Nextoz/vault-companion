@@ -135,6 +135,9 @@ export class InMemoryStore implements VaultStore {
     const fault = this.writeFaults.shift() ?? 'normal';
     if (fault === 'unavailable') throw new StoreUnavailable('simulated outage');
     if (fault === 'drop-then-unknown') throw new StoreUnknownOutcome('simulated timeout (not applied)');
+    // Hash BEFORE the check: from here to pushCommit there must be no `await`, so check-and-set is atomic
+    // like GitHub's (G1 P12). An await in between let two concurrent writers both pass the CAS.
+    const blobSha = await gitBlobSha(req.bytes);
     const head = this.commits.get(this.headSha)!;
     const current = head.tree.get(req.path);
     if (req.expectedBlobSha === null) {
@@ -142,7 +145,6 @@ export class InMemoryStore implements VaultStore {
     } else if (current !== req.expectedBlobSha) {
       return { ok: false, reason: 'cas-mismatch' };
     }
-    const blobSha = await gitBlobSha(req.bytes);
     this.blobs.set(blobSha, req.bytes);
     const tree = new Map(head.tree);
     tree.set(req.path, blobSha);

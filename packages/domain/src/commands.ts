@@ -119,10 +119,13 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
     case 'CaptureNote': {
       const date = userDate(cmd.occurredAt, deps.timeZone);
       const noteInput: md.NoteInput = { text: cmd.payload.text, date, capturedAt: cmd.occurredAt, ...(cmd.payload.context ? { context: cmd.payload.context } : {}) };
-      const bytes = encoder.encode(md.renderNote(noteInput));
+      // renderNote throws on bad input by signature; checkNoteInput is its non-throwing guard (K follow-up).
+      const invalid = md.checkNoteInput(noteInput);
+      const bytes = invalid ? new Uint8Array() : encoder.encode(md.renderNote(noteInput));
       return {
         message: 'Vault Companion: capture note',
         async compute(store, at) {
+          if (invalid) return refuse(invalid.code, invalid.message);
           const names = await store.listDir(INBOX_DIR, at);
           const path = parseVaultPath(md.noteFileName(cmd.payload.text, date, names));
           if (!path || !canWrite(path, 'create')) return refuse('refused:path', 'note path is not allowed');
@@ -146,7 +149,14 @@ export function createCommandService(deps: CommandServiceDeps) {
     async execute(cmd: Command, raw: unknown): Promise<Receipt | ApiError> {
       const skew = checkOccurredAt(cmd.occurredAt, deps.now());
       if (!skew.ok) return apiError('clock-skew', 'the device clock is ahead; check the time settings');
-      const r = await executeWrite(deps.store, { operationId: cmd.operationId, baseRevision: cmd.baseRevision, payloadHash: await payloadHash(raw) }, planFor(cmd, raw, deps));
+      let r;
+      try {
+        r = await executeWrite(deps.store, { operationId: cmd.operationId, baseRevision: cmd.baseRevision, payloadHash: await payloadHash(raw) }, planFor(cmd, raw, deps));
+      } catch (e) {
+        // A kernel post-condition failed: a bug, never a write. Retrying the same input cannot help.
+        if (e instanceof md.KernelInvariantError) return apiError('refused:structure', 'a safety check refused this change; nothing was written');
+        throw e;
+      }
       if (!r.ok) return apiError(r.code, r.message, r.retryable);
       return {
         operationId: cmd.operationId,

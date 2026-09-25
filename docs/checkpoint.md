@@ -1,20 +1,19 @@
-# Checkpoint — 2026-09-24 22:35 (Phase 1, mid-integration)
+# Checkpoint — 2026-09-25 (Phase 1, services integrated)
 
-**HEAD:** `main` @ `9aafad4` (clean). **Tests:** lint + typecheck + 284 unit/integration tests green;
-Playwright WebKit 7/7 green at `86ef426`.
+**HEAD:** `main` (clean after this commit). **Tests:** lint + typecheck + 305 tests / 20 files green;
+Playwright WebKit 7/7 green at `86ef426` (web unchanged since).
 
-**Completed this session:** Phase 0 (discovery, spikes, contracts, ADR-0001…0010, review + reconciliation);
-Phase 1 interfaces; domain executor (F1-safe, mutation-checked); LocalGitStore + GitHubContentsStore + shared
-store contract; G1 sandbox probe; worker HTTP security layer; command services (untested against real kernel);
-kernel (K) and PWA (F) delegated, reviewed, merged.
+**Completed since last checkpoint:** command services hardened at the kernel seam (`checkNoteInput`,
+`KernelInvariantError` ⇒ non-retryable refusal); seam tests covering A1, A3–A5, A7, A10–A14, A17, A26–A28, A30,
+A38, capture golden (ADR-0010) and lost-response retries for every command; InMemoryStore CAS made atomic.
 
-**Remaining in Phase 1:** see `docs/plan.md` → "Work in progress (exact next actions)" items 1–4.
+**Remaining in Phase 1:** `docs/plan.md` → Work in progress items 3–4.
 
-**Branches/worktrees:** `agent/markdown-kernel` (`71d8654`, merged) and `agent/frontend-shell` (`182dfca`, merged),
-worktrees under `C:\Dev\vault-companion-worktrees\`. Herdr workers `kernel` (`w3:p4`) and `frontend` (`w3:p3`) idle,
-kept for possible review follow-ups.
+**Branches/worktrees:** `agent/markdown-kernel`, `agent/frontend-shell` merged; worktrees kept until the Phase 1
+review. Herdr workers `kernel` (`w3:p4`), `frontend` (`w3:p3`) idle.
 
-**Risks:** see `docs/plan.md` → "Unresolved issues / risks".
+**Risks:** `docs/plan.md` → Unresolved issues / risks.
 
-**Exact next action:** in `packages/domain/src/commands.ts`, call `md.checkNoteInput` before `renderNote` and map
-`KernelInvariantError`; then write `packages/domain/src/commands.test.ts` (plan item 2).
+**Exact next action:** create `apps/worker/src/index.ts` (Workers entry: env bindings → Access verifier +
+GitHubContentsStore + createCommandService → createApp) and `apps/worker/src/node.ts` (Node server over
+LocalGitStore with a dev verifier) for Phase 2.

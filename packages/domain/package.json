@@ -10,5 +10,8 @@
   "dependencies": {
     "@vault-companion/contracts": "workspace:*",
     "@vault-companion/vault-markdown": "workspace:*"
+  },
+  "devDependencies": {
+    "@vault-companion/test-vault": "workspace:*"
   }
 }

@@ -19,23 +19,19 @@ Inherited, unverified: the Codex-updated desktop sync worker (absent from snapsh
 | B domain: time/path policy, JCS hash, pinned-commit executor, InMemoryStore | Lead | done, F1 guard mutation-checked |
 | B stores: LocalGitStore (real git), GitHubContentsStore, App token source, shared store contract | Lead | done; GitHub semantics verified on sandbox (G1) |
 | B worker HTTP: Access JWT, origin/CSRF, headers, allowlisted logger | Lead | done (29 tests) |
-| B command services (`packages/domain/src/commands.ts`) + read model | Lead | code done; **integration with real kernel in progress** |
+| B command services (`packages/domain/src/commands.ts`) + read model | Lead | done; seam-tested against real kernel + goldens |
 | CI (GitHub Actions) | Codex GPT-6 Sol (routing policy) | not started |
 
-Test status at `9aafad4`: `pnpm lint`, `pnpm typecheck`, `pnpm test` green — 284 tests / 19 files.
+Test status: `pnpm lint`, `pnpm typecheck`, `pnpm test` green — 305 tests / 20 files.
 Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef426`.
 
 ### Work in progress (exact next actions)
 
-1. `packages/domain/src/commands.ts`: call `md.checkNoteInput` before `renderNote` (renderNote throws on bad
-   input); map `KernelInvariantError` to a non-retryable refusal instead of a 500.
-2. `packages/domain/src/commands.test.ts`: command services against InMemoryStore + real kernel + test-vault
-   fixtures — lost response on Complete (A10), double submit (A11), op-ID reuse (A12), safe replay after another
-   task changed (A13), same-task conflict (A14), F2 twin (A26), Undo exact + after unrelated edit + forged target
-   (A3/A4/A28), capture top of Open (ADR-0010), note collision casefold (A30), clock skew (A17), backdated flag,
-   A38 midnight upload.
-3. Wire `apps/worker` entry: production composition (GitHubContentsStore + Access verifier from env bindings)
-   and a Node dev/e2e composition (LocalGitStore) — needed for Phase 2.
+1. ~~checkNoteInput / KernelInvariantError in commands.ts~~ — done.
+2. ~~Seam tests `packages/domain/src/commands.test.ts`~~ — done (21 tests; A28 guard mutation-checked). Found and
+   fixed an InMemoryStore atomicity bug (await between CAS check and commit let two writers pass).
+3. **Next:** wire `apps/worker` entry — production composition (GitHubContentsStore + Access verifier from env
+   bindings) and a Node composition over LocalGitStore for Phase 2 (`apps/worker/src/node.ts`).
 4. Phase 1 gate: fresh-context **Opus** adversarial review + **GPT-6 Astra** cross-model review of kernel and
    retry/dedupe; reconcile; then CI via GPT-6 Sol.
 

@@ -251,6 +251,10 @@ importers:
       '@vault-companion/vault-markdown':
         specifier: workspace:*
         version: link:../vault-markdown
+    devDependencies:
+      '@vault-companion/test-vault':
+        specifier: workspace:*
+        version: link:../test-vault
 
   packages/github:
     dependencies:
