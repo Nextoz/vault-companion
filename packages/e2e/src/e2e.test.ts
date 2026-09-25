@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Desktop } from './desktop.ts';
 import { createRemote, git, logWithOps, tryGit, type RemoteFixture } from './git.ts';
 import { Phone, type CommandAnswer } from './phone.ts';
-import { armRefCollision } from './ref-gate.ts';
+import { armRefCollision, disarmRefCollision } from './ref-gate.ts';
 import { startServer, type HarnessServer } from './server.ts';
 
 vi.mock('node:child_process', async (importOriginal) => {
@@ -102,6 +102,7 @@ async function setup(seed: string = todo(OPEN), opts: { email?: string; cleanup?
 }
 
 afterEach(async () => {
+  disarmRefCollision();
   const inspected = servers;
   servers = [];
   try {

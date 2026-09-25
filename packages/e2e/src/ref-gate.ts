@@ -41,6 +41,15 @@ export function armRefCollision(timeoutMs = 10_000): Promise<GatedWrite[]> {
   });
 }
 
+/** Test teardown: release anything held and clear the gate, so one failed test cannot leak into the next. */
+export function disarmRefCollision(): void {
+  const a = armed;
+  armed = null;
+  if (!a) return;
+  clearTimeout(a.timer);
+  a.held.forEach((release) => release());
+}
+
 /** Git subcommand after the leading `-C <dir>` / `-c <k=v>` options. */
 function subcommand(args: readonly string[]): string | undefined {
   let i = 0;

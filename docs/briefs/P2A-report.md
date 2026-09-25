@@ -101,4 +101,5 @@ None, in the initial PR or the review fixes. No scenario required a production c
    git-fixture tests are not hermetic and print `push negotiation failed` warnings under this machine's config; they pass.
 5. **Same-anchor shape (scenario 17).** With an empty Open, ADR-0010's top insertion and QuickAdd's append coincide, so
    concurrent captures there are a textual conflict by design (the residual case ADR-0010 accepts). Once the markers are
-   committed, all app writes stop until the owner resolves them, including captures that would not touch the markers.
+   committed, all app writes **to the task list** stop until the owner resolves them, including task captures that
+   would not touch the markers. `CaptureNote` writes a new Inbox file and does not read the task list, so it still works.
