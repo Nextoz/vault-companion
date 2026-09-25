@@ -86,7 +86,7 @@ Observations: none yet (recorded privately in milestone 2–3).
 | # | Decision | Status |
 |---|---|---|
 | T1 | Today meaning | **decided** (provisional) — ADR-0012 |
-| P1 | Cloudflare Workers plan | **on hold** — owner: redesign Undo first (ADR-0013, P4-E); Workers Paid only if a token Undo cannot work |
+| P1 | Cloudflare Workers plan | **on hold** — owner: redesign Undo first (ADR-0013, P4-E: ≈10 calls/attempt, ≤3 attempts ⇒ Free plan’s 50 suffices); Workers Paid (10,000 subrequests) only if a token Undo cannot work |
 | D2 | Linked-note allowlist | default `Projects/`, `Tasks/`, `Inbox/` (P4-A implements it) |
 | D3 | Task IDs | no `🆔` writes in first release |
 | D4 | Capture anchor | decided: top of Open (ADR-0010) |
