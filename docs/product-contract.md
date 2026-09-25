@@ -36,9 +36,16 @@ From a real phone, without AI:
 Today is derived, not stored, and keeps four signals apart:
 - **Chosen work:** `Tasks/Active Work Now.md` shown read-only above the lists. No task mapping is inferred and
   outcomes are never completed from the app.
-- **Today:** open tasks with deadline `📅` = today, or scheduled `⏳` ≤ today, or priority `🔺`/`⏫`.
-- **Overdue:** open tasks with `📅` < today, in a separate group **below** Today, collapsed by default (count shown).
+- **Overdue** appears as a separate group **below** Today, collapsed by default; its count stays visible.
 - **Available:** a start date `🛫` alone never puts a task in Today; it stays in All tasks.
+
+Rule (T = today in `Europe/Copenhagen`), evaluated in order for each open task:
+1. `📅` < T ⇒ **Overdue** (always, whatever other dates say).
+2. `📅` = T ⇒ **Today** (a deadline today beats any future start/scheduled date).
+3. `🛫` > T or `⏳` > T ⇒ **not Today** (not yet available/planned, even at 🔺/⏫).
+4. `⏳` ≤ T ⇒ **Today**.
+5. priority `🔺`/`⏫` ⇒ **Today**.
+6. otherwise ⇒ All tasks only. A future `📅` alone does not hold a priority task back.
 
 Everything open appears in All tasks. Revisit after real-phone use (the rule is a read-model change only).
 
