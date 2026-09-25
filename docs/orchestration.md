@@ -80,3 +80,7 @@ the only record.
 4. Run `pnpm check` to confirm the recorded test state, then continue with the checkpoint's exact next action.
 - `MSYS_NO_PATHCONV=1` also disables Git Bash path translation for git: pass Windows paths (`C:/Dev/...`) to git while
   it is set, or `/c/Dev/...` becomes `C:/c/Dev/...` (happened once; empty leftover dirs under `C:\c\` for the owner to delete).
+- `codex exec` writes its transcript to **stderr**; under Windows PowerShell 5, `2>&1 | Tee-Object` renders every line
+  red as a NativeCommandError even when the run is healthy (owner saw an all-red pane, 2026-09-25). Check the log for
+  real `ERROR` lines instead of the colour. For new runs prefer
+  `cmd /c "codex exec … - < <prompt-file> > <log> 2>&1"` (plain text, UTF-8 log, no red wrapping).
