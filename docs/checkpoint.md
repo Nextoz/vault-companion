@@ -29,7 +29,13 @@ exists; `main` pushed. Claude tokens are running low: implementation is routed t
 
 **Repo is PUBLIC (owner, 2026-09-25)**; merges now go through PRs so CodeRabbit reviews them (`docs/orchestration.md`).
 
-**Exact next action:** when D1 finishes (`D1 DONE` in `d1-run.log`): push `agent/spec-drift`, open a PR, wait for
-CodeRabbit, reconcile, merge. Then launch D2 (`docs/briefs/D2-public-scrub.md`, Astra low) the same way. For cloud
-C / P2-A: `git fetch`; when `origin/agent/ci` / `origin/agent/e2e-harness` carry their reports, open PRs, wait for
-CodeRabbit, review, verify locally, merge. F4 already merged (454 tests).
+**Open work (2026-09-25):**
+- PR #1 `agent/spec-drift` (D1 docs) — waiting for CodeRabbit. When it has commented: run the reusable brief
+  `docs/briefs/PR-coderabbit-loop.md` with `<N>=1` on Astra low (in a clone), then verify and merge.
+- D2 public scrub — Astra low in `C:\Devault-companion-clones\public-scrub` (pane: last split; log `d2-run.log`),
+  pushes `agent/public-scrub`; then open PR, CodeRabbit loop, merge.
+- Cloud C (`session_01WxbFmRJdtnNWyYPcqLkmvt`, `agent/ci`) and P2-A (`session_01FyLWeGWnPruL9dXefaVGf3`,
+  `agent/e2e-harness`) — when pushed with reports: open PRs, CodeRabbit loop (Cloud for P2-A), verify locally, merge.
+
+**Exact next action:** `git fetch`; handle whichever of the above is ready first. Keep the Lead lean (Claude tokens low):
+offload implementation and PR follow-ups to Cloud / Astra low.
