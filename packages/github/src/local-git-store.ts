@@ -8,9 +8,12 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  COMPARE_PAGE,
   StoreUnavailable,
   TRAILER_OP,
   TRAILER_PAYLOAD,
+  type CommitInfo,
+  type CommitsSinceResult,
   type FindOperationResult,
   type StoredFile,
   type VaultPath,
@@ -18,12 +21,14 @@ import {
   type WriteRequest,
   type WriteResult,
 } from '@vault-companion/domain';
-import { guardPath } from './contents-store.ts';
+import { guardPath, parseTrailers } from './contents-store.ts';
 
 export interface LocalGitStoreOptions {
   readonly repo: string;
   readonly branch?: string;
   readonly dedupeWindowLimit?: number;
+  /** Max commits `commitsSince` lists before answering `too-many` (default one compare page, 250). */
+  readonly comparePageSize?: number;
   readonly author?: { name: string; email: string };
 }
 
@@ -37,12 +42,14 @@ export class LocalGitStore implements VaultStore {
   private readonly repo: string;
   private readonly ref: string;
   private readonly windowLimit: number;
+  private readonly pageSize: number;
   private readonly env: NodeJS.ProcessEnv;
 
   constructor(opts: LocalGitStoreOptions) {
     this.repo = opts.repo;
     this.ref = `refs/heads/${opts.branch ?? 'main'}`;
     this.windowLimit = opts.dedupeWindowLimit ?? 250;
+    this.pageSize = opts.comparePageSize ?? COMPARE_PAGE;
     const who = opts.author ?? { name: 'Vault Companion', email: 'vault-companion@localhost' };
     this.env = {
       ...process.env,
@@ -181,6 +188,39 @@ export class LocalGitStore implements VaultStore {
     }
     if (entries.length > this.windowLimit) return { kind: 'unknown', reason: 'window truncated' };
     return { kind: 'not-found' };
+  }
+
+  private async commitExists(sha: string): Promise<boolean> {
+    return /^[0-9a-f]{40}$/.test(sha) && (await this.run(['cat-file', '-e', `${sha}^{commit}`])).code === 0;
+  }
+
+  async readCommit(commitSha: string): Promise<CommitInfo | null> {
+    if (!(await this.commitExists(commitSha))) return null;
+    const [parents, message] = (await this.ok(['log', '-1', '--format=%P%x1f%B', commitSha])).toString('utf8').split('\x1f') as [string, string];
+    // Raw diff against the first parent: ":<old mode> <new mode> <old blob> <new blob> <status>\0<path>\0".
+    const raw = (await this.ok(['diff-tree', '-r', '--root', '--no-commit-id', '-z', '--raw', '--no-renames', commitSha])).toString('utf8').split('\0');
+    const files: { path: string; blobSha: string | null }[] = [];
+    for (let i = 0; i + 1 < raw.length; i += 2) {
+      const meta = raw[i]!.split(' ');
+      const blob = meta[3]!;
+      files.push({ path: raw[i + 1]!, blobSha: /^0+$/.test(blob) ? null : blob });
+    }
+    return { sha: commitSha, parent: parents.trim().split(' ').filter(Boolean)[0] ?? null, trailers: parseTrailers(message), files };
+  }
+
+  async commitsSince(base: string, until: string): Promise<CommitsSinceResult> {
+    if (!(await this.commitExists(base)) || !(await this.commitExists(until))) return { kind: 'not-ancestor' };
+    if ((await this.run(['merge-base', '--is-ancestor', base, until])).code !== 0) return { kind: 'not-ancestor' };
+    const out = await this.ok(['log', '-z', `--max-count=${this.pageSize + 1}`, '--format=%H%x1f%B', `${base}..${until}`]);
+    const entries = out.toString('utf8').split('\0').filter((e) => e.trim().length > 0);
+    if (entries.length > this.pageSize) return { kind: 'too-many' };
+    return {
+      kind: 'ok',
+      commits: entries.map((e) => {
+        const [sha, message] = e.split('\x1f') as [string, string];
+        return { sha: sha.trim(), trailers: parseTrailers(message) };
+      }),
+    };
   }
 
   async isAncestor(commit: string, head: string): Promise<boolean> {

@@ -2,10 +2,10 @@
 // Pure orchestration over the VaultStore port and the Markdown kernel; no HTTP, no GitHub.
 import { MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type TasksResponse, type TaskView } from '@vault-companion/contracts';
 import * as md from '@vault-companion/vault-markdown';
-import { executeWrite, replayOnParent, type Planned, type WritePlan } from './execute.ts';
+import { executeWrite, type Planned, type Refused, type WritePlan } from './execute.ts';
 import { canWrite, INBOX_DIR, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 import { payloadHash } from './payload-hash.ts';
-import { FileTooLarge, TRAILER_UNDOES, type VaultPath, type VaultStore } from './store.ts';
+import { FileTooLarge, gitBlobSha, TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type CommitInfo, type VaultPath, type VaultStore } from './store.ts';
 import { checkOccurredAt, userDate } from './time.ts';
 
 export interface CommandServiceDeps {
@@ -15,6 +15,9 @@ export interface CommandServiceDeps {
 }
 
 const TODO = TODO_LIST_PATH as VaultPath;
+
+/** Undo re-plans at most this often when the head moves (ADR-0013 budget: ≤ 3 × ≈ 10 GitHub calls). */
+export const UNDO_MAX_ATTEMPTS = 3;
 
 const refuse = (code: ErrorCode, message: string): Planned<never> => ({ ok: false, code, message });
 const apiError = (code: ErrorCode, message: string, retryable = false): ApiError => ({ code, message, retryable });
@@ -30,7 +33,9 @@ function decodeUtf8(bytes: Uint8Array): string | null {
 }
 
 /** Read the To-Do List at X as text, or a refusal. */
-async function readTodo(store: VaultStore, at: string): Promise<{ ok: true; text: string; blobSha: string } | { ok: false; planned: Planned<never> }> {
+type TodoFile = { ok: true; text: string; blobSha: string; bytes: Uint8Array };
+
+async function readTodo(store: VaultStore, at: string): Promise<TodoFile | { ok: false; planned: Planned<never> }> {
   let file;
   try {
     file = await store.readFile(TODO, at);
@@ -41,7 +46,7 @@ async function readTodo(store: VaultStore, at: string): Promise<{ ok: true; text
   if (!file) return { ok: false, planned: refuse('refused:structure', 'the task list was not found') };
   const text = decodeUtf8(file.bytes);
   if (text === null) return { ok: false, planned: refuse('refused:encoding', 'the task list is not valid UTF-8') };
-  return { ok: true, text, blobSha: file.blobSha };
+  return { ok: true, text, blobSha: file.blobSha, bytes: file.bytes };
 }
 
 function fromKernel<E, R>(r: md.MutationOk<E> | md.Refusal, path: VaultPath, map: (e: E) => R): Planned<R> {
@@ -56,16 +61,118 @@ function fromKernel<E, R>(r: md.MutationOk<E> | md.Refusal, path: VaultPath, map
   return { ok: true, path, expect: 'regular-file', bytes: encoder.encode(r.text), effect: map(r.effect) };
 }
 
+/** The completion `cmd` applied to the To-Do List file `f`. */
+function completeOn(cmd: CompleteTaskCommand, f: TodoFile, timeZone: string): Planned<md.CompleteEffect> {
+  const t = cmd.payload.task;
+  const r = md.completeTask(f.text, { lineIndex: t.lineIndex, lineText: t.lineText, occurrencesAtRead: t.occurrencesAtRead, sameRevision: f.blobSha === t.blobSha }, userDate(cmd.occurredAt, timeZone));
+  return fromKernel(r, TODO, (e) => e);
+}
+
 export function completePlan(cmd: CompleteTaskCommand, timeZone: string): WritePlan<md.CompleteEffect> {
-  const doneDate = userDate(cmd.occurredAt, timeZone);
   return {
     message: 'Vault Companion: complete task',
     async compute(store, at) {
       const f = await readTodo(store, at);
       if (!f.ok) return f.planned;
-      const t = cmd.payload.task;
-      const r = md.completeTask(f.text, { lineIndex: t.lineIndex, lineText: t.lineText, occurrencesAtRead: t.occurrencesAtRead, sameRevision: f.blobSha === t.blobSha }, doneDate);
-      return fromKernel(r, TODO, (e) => e);
+      return completeOn(cmd, f, timeZone);
+    },
+  };
+}
+
+const refused = (code: ErrorCode, message: string): Refused => ({ kind: 'refused', code, message });
+
+/**
+ * The verified completion behind an Undo token (ADR-0013): commit `C` carries the target's operation ID and payload
+ * hash, changed only the To-Do List, and replaying the target on `C^` yields exactly `C`'s blob (review F4/F5).
+ */
+async function verifiedCompletion(
+  store: VaultStore,
+  c: CommitInfo,
+  target: CompleteTaskCommand,
+  timeZone: string,
+): Promise<{ ok: true; before: TodoFile; afterBlob: string; effect: md.CompleteEffect } | { ok: false; planned: Planned<never> }> {
+  const changed = c.files.length === 1 ? c.files[0] : undefined;
+  if (c.parent === null || changed?.path !== TODO || changed.blobSha === null) {
+    return { ok: false, planned: refuse('invalid', 'undo target does not match the recorded completion') };
+  }
+  const before = await readTodo(store, c.parent);
+  if (!before.ok) return { ok: false, planned: refuse('dedupe-unknown', 'the completion cannot be verified') };
+  const replay = completeOn(target, before, timeZone);
+  if (!replay.ok || (await gitBlobSha(replay.bytes)) !== changed.blobSha) {
+    return { ok: false, planned: refuse('dedupe-unknown', 'the completion cannot be verified') };
+  }
+  return { ok: true, before, afterBlob: changed.blobSha, effect: replay.effect };
+}
+
+/**
+ * Undo by token (ADR-0013). Per attempt at X: read commit `C` (the token) and check it is the target's completion; one
+ * single-page listing of `C..X` answers whether `C` is on the branch, whether this Undo already applied (dedupe), and
+ * whether another Undo of `C` exists. More than one page ⇒ `refused:undo-expired`. No paged search anywhere.
+ */
+function undoPlan(cmd: Extract<Command, { type: 'UndoCompleteTask' }>, raw: unknown, timeZone: string): WritePlan<Receipt['effect']> {
+  const target = cmd.payload.target;
+  const token = cmd.payload.targetCommit;
+  const rawTarget = (raw as { payload: { target: unknown } }).payload.target;
+  // Filled by `findApplied` for the X that `compute` then runs at.
+  let checked: { x: string; completion: CommitInfo } | null = null;
+
+  const readToken = async (store: VaultStore): Promise<CommitInfo | Refused> => {
+    const c = await store.readCommit(token);
+    if (!c) return refused('conflict:task-changed', 'that completion is not in the vault');
+    // Never trust the token: it must name the target's own commit, by operation ID and payload hash.
+    if (c.trailers[TRAILER_OP] !== target.operationId || c.trailers[TRAILER_PAYLOAD] !== (await payloadHash(rawTarget))) {
+      return refused('invalid', 'undo target does not match the recorded completion');
+    }
+    return c;
+  };
+
+  return {
+    message: 'Vault Companion: undo completion',
+    trailers: { [TRAILER_UNDOES]: target.operationId },
+    maxAttempts: UNDO_MAX_ATTEMPTS,
+    async findApplied(store, x, operationId) {
+      checked = null;
+      const c = await readToken(store);
+      if ('kind' in c) return c;
+      const since = await store.commitsSince(c.sha, x);
+      if (since.kind === 'not-ancestor') return refused('conflict:task-changed', 'that completion is not on the vault branch');
+      if (since.kind === 'too-many') return refused('refused:undo-expired', 'too much changed since; undo it in Obsidian');
+      const own = since.commits.find((k) => k.trailers[TRAILER_OP] === operationId);
+      if (own) {
+        const info = await store.readCommit(own.sha);
+        return { kind: 'found', op: { commitSha: own.sha, payloadHash: own.trailers[TRAILER_PAYLOAD] ?? '', paths: (info?.files ?? []).map((f) => f.path) } };
+      }
+      // Rerun review Opus N6: a completion can be undone once; a stale second Undo would reopen a LATER completion.
+      if (since.commits.some((k) => k.trailers[TRAILER_UNDOES] === target.operationId)) {
+        return refused('conflict:task-changed', 'that completion was already undone');
+      }
+      checked = { x, completion: c };
+      return { kind: 'not-found' };
+    },
+    async compute(store, at) {
+      if (checked?.x !== at) return refuse('dedupe-unknown', 'the completion was not checked at this revision');
+      const v = await verifiedCompletion(store, checked.completion, target, timeZone);
+      if (!v.ok) return v.planned;
+      const f = await readTodo(store, at);
+      if (!f.ok) return f.planned;
+      if (f.blobSha === v.afterBlob) {
+        // Exact inverse (review A1/R1): nothing changed since the completion, so its parent's bytes are the original —
+        // the replay just proved completing them yields exactly the current file.
+        return { ok: true, path: TODO, expect: 'regular-file', bytes: v.before.bytes, effect: { kind: 'reopened', openLineText: v.effect.openLineText } };
+      }
+      const r = md.undoCompleteTask(f.text, { completion: v.effect, unchangedSinceCompletion: false });
+      return fromKernel(r, TODO, (e) => ({ kind: 'reopened' as const, openLineText: e.openLineText }));
+    },
+    // This Undo's own commit (found by operation ID, payload hash checked by the executor): its effect is re-derived
+    // from the verified completion it undid.
+    async deriveApplied(store, commitSha, paths) {
+      const undo = await store.readCommit(commitSha);
+      if (undo?.trailers[TRAILER_UNDOES] !== target.operationId || !paths.includes(TODO)) return { ok: false, reason: 'not an undo of this completion' };
+      const c = await readToken(store);
+      if ('kind' in c) return { ok: false, reason: c.message };
+      const v = await verifiedCompletion(store, c, target, timeZone);
+      if (!v.ok) return { ok: false, reason: 'the completion cannot be verified' };
+      return { ok: true, path: TODO, effect: { kind: 'reopened', openLineText: v.effect.openLineText } };
     },
   };
 }
@@ -82,39 +189,8 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
         },
       };
     }
-    case 'UndoCompleteTask': {
-      const target = cmd.payload.target;
-      const rawTarget = (raw as { payload: { target: unknown } }).payload.target;
-      return {
-        message: 'Vault Companion: undo completion',
-        trailers: { [TRAILER_UNDOES]: target.operationId },
-        async compute(store, at) {
-          // Authenticate the target by its commit trailer and re-derive its effect (review F4/F5).
-          const found = await store.findOperation(target.baseRevision, at, target.operationId);
-          if (found.kind === 'unknown') return refuse('dedupe-unknown', 'cannot locate the completion to undo');
-          if (found.kind === 'not-found') return refuse('conflict:task-changed', 'that completion is not in the vault');
-          if (found.op.payloadHash !== (await payloadHash(rawTarget))) return refuse('invalid', 'undo target does not match the recorded completion');
-          // Rerun review Opus N6: a completion can be undone once; a stale second Undo would reopen a LATER completion.
-          const undone = await store.findOperation(found.op.commitSha, at, target.operationId, TRAILER_UNDOES);
-          if (undone.kind === 'unknown') return refuse('dedupe-unknown', 'cannot establish whether this completion was already undone');
-          if (undone.kind === 'found') return refuse('conflict:task-changed', 'that completion was already undone');
-          const derived = await replayOnParent(completePlan(target, deps.timeZone), store, found.op.commitSha, found.op.paths);
-          if (!derived.ok) return refuse('dedupe-unknown', 'the completion cannot be verified');
-          const f = await readTodo(store, at);
-          if (!f.ok) return f.planned;
-          const completedFile = await store.readFile(TODO, found.op.commitSha);
-          if (completedFile !== null && completedFile.blobSha === f.blobSha) {
-            // Exact inverse (review A1/R1): nothing changed since the completion, so its parent's bytes are the
-            // original — replayOnParent just proved completing them yields exactly the current file.
-            const original = await store.readFile(TODO, await store.parentOf(found.op.commitSha));
-            if (!original) return refuse('dedupe-unknown', 'the original task list cannot be read');
-            return { ok: true, path: TODO, expect: 'regular-file', bytes: original.bytes, effect: { kind: 'reopened', openLineText: derived.effect.openLineText } };
-          }
-          const r = md.undoCompleteTask(f.text, { completion: derived.effect, unchangedSinceCompletion: false });
-          return fromKernel(r, TODO, (e) => ({ kind: 'reopened' as const, openLineText: e.openLineText }));
-        },
-      };
-    }
+    case 'UndoCompleteTask':
+      return undoPlan(cmd, raw, deps.timeZone);
     case 'CaptureTask': {
       const p = cmd.payload;
       const createdDate = userDate(cmd.occurredAt, deps.timeZone);

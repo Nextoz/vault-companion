@@ -20,15 +20,16 @@ interface Harness {
   cleanup(): void;
 }
 
-const harnesses: Record<string, (limit?: number) => Promise<Harness>> = {
-  memory: async (limit) => {
+const harnesses: Record<string, (limit?: number, page?: number) => Promise<Harness>> = {
+  memory: async (limit, page) => {
     const s = await InMemoryStore.create(SEED);
     if (limit) s.dedupeWindowLimit = limit;
+    if (page) s.comparePageSize = page;
     return { store: s, external: (f) => s.commitFiles(f), cleanup: () => {} };
   },
-  'local-git': async (limit) => {
+  'local-git': async (limit, page) => {
     const repos: TempRepos = createTempRepos(SEED);
-    const store = new LocalGitStore({ repo: repos.bare, ...(limit ? { dedupeWindowLimit: limit } : {}) });
+    const store = new LocalGitStore({ repo: repos.bare, ...(limit ? { dedupeWindowLimit: limit } : {}), ...(page ? { comparePageSize: page } : {}) });
     return { store, external: async (f) => repos.commitExternal(f), cleanup: () => repos.cleanup() };
   },
 };
@@ -41,7 +42,7 @@ const write = (store: VaultStore, path: VaultPath, baseCommit: string, text: str
 
 // Real git on Windows spawns many processes per case (3–5 s observed); allow headroom under parallel load.
 describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_000 }, (name) => {
-  const make = async (limit?: number) => (current = await harnesses[name]!(limit));
+  const make = async (limit?: number, page?: number) => (current = await harnesses[name]!(limit, page));
 
   it('reads exact bytes (CRLF, Unicode) and reports the real Git blob SHA', async () => {
     const { store } = await make();
@@ -154,6 +155,46 @@ describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_0
   it('listing a path that is a file is a failure, never "absent" (gate-3 F2)', async () => {
     const { store } = await make();
     await expect(store.listDir('Tasks/To-Do List.md', (await store.head()).commitSha)).rejects.toThrow();
+  });
+
+  it('readCommit (ADR-0013): trailers, first parent and changed files with their Git blob SHAs; null when unknown', async () => {
+    const { store } = await make();
+    const base = (await store.head()).commitSha;
+    const w = await store.writeFile({
+      path: TODO,
+      baseCommit: base,
+      expect: 'regular-file',
+      bytes: enc('v2\n'),
+      message: 'Vault Companion: test',
+      trailers: { [TRAILER_OP]: 'op-A', [TRAILER_PAYLOAD]: 'sha256:abc', [TRAILER_UNDOES]: 'target-op' },
+    });
+    if (!w.ok) throw new Error('write failed');
+    expect(await store.readCommit(w.commitSha)).toEqual({
+      sha: w.commitSha,
+      parent: base,
+      trailers: { [TRAILER_OP]: 'op-A', [TRAILER_PAYLOAD]: 'sha256:abc', [TRAILER_UNDOES]: 'target-op' },
+      files: [{ path: TODO, blobSha: await gitBlobSha(enc('v2\n')) }],
+    });
+    expect(await store.readCommit('f'.repeat(40))).toBeNull();
+  });
+
+  it('commitsSince (ADR-0013): one page of base..until with trailers; empty when equal; not-ancestor; too-many beyond one page', async () => {
+    const { store, external } = await make(undefined, 3);
+    const base = (await store.head()).commitSha;
+    expect(await store.commitsSince(base, base)).toEqual({ kind: 'ok', commits: [] });
+    const w = await write(store, 'Inbox/new.md' as VaultPath, base, 'x', 'op-A', 'sha256:abc');
+    const e1 = await external({ 'Inbox/x.md': 'v1\n' });
+    const head = (await store.head()).commitSha;
+    const since = await store.commitsSince(base, head);
+    if (since.kind !== 'ok') throw new Error(since.kind);
+    expect(new Set(since.commits.map((c) => c.sha))).toEqual(new Set([w.ok ? w.commitSha : '', e1 || head]));
+    expect(since.commits.find((c) => c.trailers[TRAILER_OP] === 'op-A')?.trailers[TRAILER_PAYLOAD]).toBe('sha256:abc');
+    expect(await store.commitsSince(head, base)).toEqual({ kind: 'not-ancestor' });
+    expect(await store.commitsSince('f'.repeat(40), head)).toEqual({ kind: 'not-ancestor' });
+    await external({ 'Inbox/x.md': 'v2\n' }); // three since base: still one page
+    expect((await store.commitsSince(base, (await store.head()).commitSha)).kind).toBe('ok');
+    await external({ 'Inbox/x.md': 'v3\n' }); // four: beyond the page, never paged
+    expect(await store.commitsSince(base, (await store.head()).commitSha)).toEqual({ kind: 'too-many' });
   });
 
   it('findOperation: unknown for an unknown base and for a truncated window', async () => {

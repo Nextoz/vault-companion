@@ -144,63 +144,136 @@ describe('CompleteTask', () => {
   });
 });
 
-describe('UndoCompleteTask', () => {
+describe('UndoCompleteTask (token, ADR-0013)', () => {
   async function complete(description: string) {
     const t = await task(description);
     const raw = envelope('CompleteTask', { task: t.locator });
     return { raw, receipt: ok(await run(raw)) };
   }
+  const undoOf = (c: { raw: Record<string, unknown>; receipt: Receipt }, over: Record<string, unknown> = {}) =>
+    envelope('UndoCompleteTask', { target: c.raw, targetCommit: c.receipt.commitSha, ...over });
 
   it('A3: exact inverse restores the original bytes', async () => {
     const original = text();
-    const { raw } = await complete('Water the plants');
-    const r = ok(await run(envelope('UndoCompleteTask', { target: raw })));
+    const c = await complete('Water the plants');
+    const r = ok(await run(undoOf(c)));
     expect(r.effect).toMatchObject({ kind: 'reopened' });
     expect(text()).toBe(original);
   });
 
-  it('A4: undo after an unrelated desktop edit keeps that edit', async () => {
-    const { raw } = await complete('Water the plants');
+  it('A4: semantic inverse after an unrelated desktop edit keeps that edit', async () => {
+    const c = await complete('Water the plants');
     await store.commitFiles({ [TODO]: editLine('- [ ] Call the bike shop about the gears', '- [ ] Call the bike shop about the brakes') });
-    ok(await run(envelope('UndoCompleteTask', { target: raw })));
+    ok(await run(undoOf(c)));
     expect(text()).toContain('- [ ] Water the plants #todo 📅 2026-09-30 ➕ 2026-09-01\n');
     expect(text()).not.toContain('Water the plants #todo 📅 2026-09-30 ➕ 2026-09-01 ✅');
     expect(text()).toContain('about the brakes');
   });
 
   it('A5: completed line edited afterwards ⇒ conflict, nothing written', async () => {
-    const { raw } = await complete('Water the plants');
+    const c = await complete('Water the plants');
     await store.commitFiles({ [TODO]: editLine('- [x] Water the plants', '- [x] Water all the plants') });
     const head = store.headCommit;
-    expect(await run(envelope('UndoCompleteTask', { target: raw }))).toMatchObject({ code: 'conflict:task-changed' });
+    expect(await run(undoOf(c))).toMatchObject({ code: 'conflict:task-changed' });
     expect(store.headCommit).toBe(head);
   });
 
-  it('A28: a forged target (altered after the fact) is rejected', async () => {
-    const { raw } = await complete('Water the plants');
-    const forged = { ...raw, occurredAt: '2026-09-23T10:00:00+02:00' };
+  it('A28: a forged target (altered after the fact) does not match the token commit’s payload hash', async () => {
+    const c = await complete('Water the plants');
+    const forged = { ...c.raw, occurredAt: '2026-09-23T10:00:00+02:00' };
     const before = text();
-    expect(await run(envelope('UndoCompleteTask', { target: forged }))).toMatchObject({ code: 'invalid' });
+    expect(await run(undoOf(c, { target: forged }))).toMatchObject({ code: 'invalid' });
     expect(text()).toBe(before);
   });
 
-  it('A27: undo of a completion that never reached Git ⇒ nothing to undo', async () => {
+  it('a forged token naming another operation’s commit is refused, never trusted', async () => {
+    const c = await complete('Water the plants');
+    const other = await complete('Call the bike shop');
+    const before = text();
+    expect(await run(undoOf(c, { targetCommit: other.receipt.commitSha }))).toMatchObject({ code: 'invalid' });
+    // A commit without app trailers (the seed) is no better.
+    expect(await run(undoOf(c, { targetCommit: base }))).toMatchObject({ code: 'invalid' });
+    expect(text()).toBe(before);
+  });
+
+  it('A27: a token naming no commit ⇒ nothing to undo', async () => {
     const t = await task('Water the plants');
     const neverSent = envelope('CompleteTask', { task: t.locator });
     const before = text();
-    expect(await run(envelope('UndoCompleteTask', { target: neverSent }))).toMatchObject({ code: 'conflict:task-changed' });
+    expect(await run(envelope('UndoCompleteTask', { target: neverSent, targetCommit: 'f'.repeat(40) }))).toMatchObject({ code: 'conflict:task-changed' });
     expect(text()).toBe(before);
   });
 
-  it('undo retried after a lost response ⇒ one reopen', async () => {
+  it('a token that is not an ancestor of head (rewritten away) is refused', async () => {
+    const c = await complete('Water the plants');
+    store.rewindHead(1);
+    const head = store.headCommit;
+    expect(await run(undoOf(c))).toMatchObject({ code: 'conflict:task-changed' });
+    expect(store.headCommit).toBe(head);
+  });
+
+  it('lost-response retry of the Undo ⇒ already-applied with the same commit, one reopen', async () => {
     const original = text();
-    const { raw } = await complete('Water the plants');
-    const undo = envelope('UndoCompleteTask', { target: raw });
+    const c = await complete('Water the plants');
+    const undo = undoOf(c);
     store.writeFaults.push('apply-then-unknown');
-    ok(await run(undo));
-    ok(await run(undo));
+    const first = ok(await run(undo));
+    const again = ok(await run(undo));
+    expect(again).toMatchObject({ status: 'already-applied', commitSha: first.commitSha, effect: first.effect });
     expect(store.commitsWithOp(undo.operationId as string)).toHaveLength(1);
     expect(text()).toBe(original);
+  });
+
+  it('a second Undo of the same completion is refused', async () => {
+    const c = await complete('Water the plants');
+    ok(await run(undoOf(c)));
+    const after = text();
+    expect(await run(undoOf(c))).toMatchObject({ code: 'conflict:task-changed' });
+    expect(text()).toBe(after);
+  });
+
+  it('beyond one compare page since the completion ⇒ refused:undo-expired, nothing written; exactly one page still works', async () => {
+    store.comparePageSize = 3;
+    const c = await complete('Water the plants');
+    for (let i = 0; i < 3; i++) await store.commitFiles({ [`Inbox/other ${i}.md`]: `${i}\n` });
+    // Three commits since C: the page holds them all.
+    const inPage = await (async () => {
+      const probe = await store.commitsSince(c.receipt.commitSha, store.headCommit);
+      return probe.kind;
+    })();
+    expect(inPage).toBe('ok');
+    await store.commitFiles({ 'Inbox/other 3.md': '3\n' });
+    const head = store.headCommit;
+    expect(await run(undoOf(c))).toMatchObject({ code: 'refused:undo-expired', retryable: false });
+    expect(store.headCommit).toBe(head);
+
+    store.comparePageSize = 5;
+    ok(await run(undoOf(c)));
+  });
+
+  it('call budget: one attempt makes ≤ 10 store calls and no paged search', async () => {
+    const c = await complete('Water the plants');
+    await store.commitFiles({ 'Inbox/other.md': 'o\n' });
+    store.calls.length = 0;
+    ok(await run(undoOf(c)));
+    expect(store.calls.length).toBeLessThanOrEqual(10);
+    expect(store.calls).not.toContain('findOperation');
+    expect(store.calls.filter((k) => k === 'commitsSince')).toHaveLength(1);
+  });
+
+  it('at most 3 attempts when the head keeps moving', async () => {
+    const c = await complete('Water the plants');
+    let i = 0;
+    store.afterHead = async () => {
+      store.afterHead = null; // land one desktop commit per attempt, after X is pinned
+      await store.commitFiles({ [`Inbox/race ${i++}.md`]: 'r\n' });
+      store.afterHead = hook;
+    };
+    const hook = store.afterHead;
+    const writes = store.writeCalls;
+    expect(await run(undoOf(c))).toMatchObject({ code: 'conflict:stale', retryable: true });
+    expect(store.writeCalls - writes).toBe(3);
+    expect(store.calls.filter((k) => k === 'head').length).toBeGreaterThanOrEqual(3);
   });
 });
 

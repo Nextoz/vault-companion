@@ -2,12 +2,15 @@
 // Response shapes and write/conflict semantics were probed against the real API (Phase 0 and gate G1):
 // docs/discovery/phase-0-findings.md, docs/discovery/github-api-probe-2026-09-24.md.
 import {
+  COMPARE_PAGE,
   FileTooLarge,
   isStructurallySafePath,
   StoreUnavailable,
   StoreUnknownOutcome,
   TRAILER_OP,
   TRAILER_PAYLOAD,
+  type CommitInfo,
+  type CommitsSinceResult,
   type FindOperationResult,
   type StoredFile,
   type VaultPath,
@@ -41,6 +44,8 @@ export class GitHubContentsStore implements VaultStore {
   private readonly f: typeof fetch;
   private readonly base: string;
   private readonly maxPages: number;
+  /** Commit → tree SHA seen in commit/compare responses, so a write on that commit skips re-reading it (ADR-0013). */
+  private readonly trees = new Map<string, string>();
 
   constructor(private readonly opts: GitHubStoreOptions) {
     this.branch = opts.branch ?? 'main';
@@ -144,11 +149,15 @@ export class GitHubContentsStore implements VaultStore {
     const satisfied = req.expect === 'absent' ? entry === undefined : entry?.type === 'blob' && entry.mode === '100644';
     if (!satisfied) return { ok: false, reason: 'precondition-failed' };
     // Head-CAS (ADR-0011, probe 2026-09-25): blob → tree on X's tree → commit parented on X → fast-forward ref.
-    const base = await this.getJson<{ tree: { sha: string } }>(`/git/commits/${req.baseCommit}`);
-    if (!base) throw new StoreUnavailable('base commit not found');
+    let baseTree = this.trees.get(req.baseCommit);
+    if (baseTree === undefined) {
+      const base = await this.getJson<{ tree: { sha: string } }>(`/git/commits/${req.baseCommit}`);
+      if (!base) throw new StoreUnavailable('base commit not found');
+      baseTree = base.tree.sha;
+    }
     const blob = await this.createObject<{ sha: string }>('/git/blobs', { content: bytesToBase64(req.bytes), encoding: 'base64' });
     const tree = await this.createObject<{ sha: string }>('/git/trees', {
-      base_tree: base.tree.sha,
+      base_tree: baseTree,
       tree: [{ path: req.path, mode: '100644', type: 'blob', sha: blob.sha }],
     });
     const trailers = Object.entries(req.trailers).map(([k, v]) => `${k}: ${v}`).join('\n');
@@ -187,6 +196,43 @@ export class GitHubContentsStore implements VaultStore {
       if (cmp.commits.length === 0) return { kind: 'unknown', reason: 'compare page empty before all commits were seen' };
     }
     return { kind: 'unknown', reason: 'window truncated' };
+  }
+
+  async readCommit(commitSha: string): Promise<CommitInfo | null> {
+    // One request (REST commit): message, parents, tree and changed files with their blob SHAs.
+    const res = await this.call('GET', `/commits/${encodeURIComponent(commitSha)}`);
+    // 404 unknown, 422 "No commit found for SHA": a token that names no commit.
+    if (res.status === 404 || res.status === 422) return null;
+    if (!res.ok) throw new StoreUnavailable(`GitHub GET status ${res.status}`);
+    const c = (await res.json()) as {
+      sha: string;
+      parents: { sha: string }[];
+      commit: { message: string; tree: { sha: string } };
+      files?: { filename: string; sha: string | null; status: string }[];
+    };
+    this.trees.set(c.sha, c.commit.tree.sha);
+    return {
+      sha: c.sha,
+      parent: c.parents[0]?.sha ?? null,
+      trailers: parseTrailers(c.commit.message),
+      files: (c.files ?? []).map((f) => ({ path: f.filename, blobSha: f.status === 'removed' ? null : f.sha })),
+    };
+  }
+
+  async commitsSince(base: string, until: string): Promise<CommitsSinceResult> {
+    // One compare page, oldest-first (probe 2026-09-25 Q6); `total_commits` says whether it holds them all. Never paged.
+    const res = await this.call('GET', `/compare/${base}...${until}?per_page=${COMPARE_PAGE}&page=1`);
+    if (res.status === 404 || res.status === 422) return { kind: 'not-ancestor' };
+    if (!res.ok) throw new StoreUnavailable(`GitHub GET status ${res.status}`);
+    const cmp = (await res.json()) as {
+      status: string;
+      total_commits: number;
+      commits: { sha: string; commit: { message: string; tree: { sha: string } } }[];
+    };
+    if (cmp.status !== 'ahead' && cmp.status !== 'identical') return { kind: 'not-ancestor' };
+    if (cmp.total_commits > COMPARE_PAGE || cmp.commits.length < cmp.total_commits) return { kind: 'too-many' };
+    for (const c of cmp.commits) this.trees.set(c.sha, c.commit.tree.sha);
+    return { kind: 'ok', commits: cmp.commits.map((c) => ({ sha: c.sha, trailers: parseTrailers(c.commit.message) })) };
   }
 
   async isAncestor(commit: string, head: string): Promise<boolean> {
