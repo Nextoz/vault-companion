@@ -109,3 +109,5 @@ The repo is public and CodeRabbit reviews pull requests (not direct pushes). Eve
 through a PR opened by the Lead: open PR → wait for CodeRabbit → hand the CodeRabbit comments to a worker via
 `docs/briefs/PR-coderabbit-loop.md` (Cloud, or Astra low for small PRs), which fixes with a test or rejects with a reason → verify locally (`pnpm check`, e2e where relevant) → merge. Workers never open PRs.
 Config: `.coderabbit.yaml`.
+- Codex `--sandbox workspace-write` cannot write a git **worktree's** git dir (it lives in the main repo's `.git`), so
+  Codex tasks run in a **full clone** under `C:\Devault-companion-clones\<task>` and push their own branch.
