@@ -33,7 +33,7 @@ Reviewed HEAD `be1881fd926a64e6fdd84a5e872b2a444905a655`, with Phase 1 scope rel
 
 ### Adversarial scripts
 
-Scripts are retained only under `C:\Users\evkar\AppData\Local\Temp`. Re-run from the repository with:
+Scripts are retained only under `%USERPROFILE%\AppData\Local\Temp`. Re-run from the repository with:
 
 ```powershell
 node --experimental-transform-types "$env:TEMP\vc-astra-review.mts"
@@ -69,12 +69,12 @@ A2's deterministic write wrapper intercepts the first outer `writeFile`, tempora
 ### Runtime log-guard mutation
 
 Temp directory:
-`C:\Users\evkar\AppData\Local\Temp\vc-astra-mutation-bf0cc32c95bc476f8f15ee3a2aba74a8`.
+`%USERPROFILE%\AppData\Local\Temp\vc-astra-mutation-bf0cc32c95bc476f8f15ee3a2aba74a8`.
 
 Copied only `app.ts`, `log.ts`, and `app.test.ts` into that directory. Repointed external imports to their existing repository dependencies; removed `ALLOWED.has(k) &&` from the temp logger's filter. The test assertions were unchanged. Temp Vitest configuration selected only that copied suite, with its root/cache in the temp directory.
 
 ```powershell
-pnpm test --config C:/Users/evkar/AppData/Local/Temp/vc-astra-mutation-bf0cc32c95bc476f8f15ee3a2aba74a8/vitest.config.mjs --configLoader native
+pnpm test --config "$env:USERPROFILE/AppData/Local/Temp/vc-astra-mutation-bf0cc32c95bc476f8f15ee3a2aba74a8/vitest.config.mjs" --configLoader native
 ```
 
 Result: **20 tests passed, 1 file**, 919 ms; the forbidden-key guard mutant survived. Initial setup attempts did not run tests: Vite's default bundled config loader attempted a forbidden cache directory and received EPERM; switching to the native config loader then required setting the test root to the temp directory. Those setup failures were resolved without changing repository files or requesting broader permissions.
