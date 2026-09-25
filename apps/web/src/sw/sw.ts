@@ -43,7 +43,8 @@ async function shell(request: Request): Promise<Response> {
 
 async function asset(request: Request): Promise<Response> {
   const cache = await caches.open(CACHE);
-  const cached = await cache.match(request);
+  // ignoreVary: a `Vary: Origin` asset response must still match the precached copy offline (P2-B finding).
+  const cached = await cache.match(request, { ignoreVary: true });
   if (cached) return cached;
   const res = await fetch(request);
   if (res.ok && res.type === 'basic') await cache.put(request, res.clone());
