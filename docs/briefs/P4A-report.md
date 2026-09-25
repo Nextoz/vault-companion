@@ -83,9 +83,8 @@ Markdown renderer (raw HTML off) → DOMPurify allowlist → note view.
 - Wikilinks in note bodies are not openable.
 - The log records no path hash for this route. The brief says "log no … path", which is stricter than security.md's
   "hash only".
-- `apps/worker/src/index.ts` is **not** in the brief's may-change list, so the production composition is not wired
-  yet. `Services.readLinkedNote` is optional, and the route answers 404 until it is. Wiring it takes one line (see Open
-  questions).
+- Production composition: wired by the Lead in `apps/worker/src/index.ts` (`ea9733b`); `wiring.test.ts` asserts the
+  route answers 400 (not the unwired 404) for a malformed request.
 
 ## Mutation evidence
 
@@ -132,9 +131,7 @@ Each guard was broken in place, its covering tests were run, and the file was re
 
 ## Open questions
 
-1. **Production wiring** (outside the may-change list). In `apps/worker/src/index.ts`:
-   `const services = { ...createCommandService({...}), ...createLinkedNoteService({ store }) };`. Until then
-   `/api/linked-note` returns 404 in production.
+1. ~~Production wiring~~ — resolved by the Lead (`ea9733b`).
 2. **`encoding` refusal code**: I added it for non-UTF-8 notes rather than render with replacement characters. Keep it,
    or fold it into another code?
 3. **Recursive listing cost**: a bare-name link lists three roots recursively (3 GitHub API calls) on every open. That
