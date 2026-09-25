@@ -5,6 +5,7 @@ import { notRedoneBy, stillUnresolved, UNRESOLVED_TEXT, unresolvedFrom, type Unr
 import { completeTask, undoCompleteTask } from '../commands.ts';
 import { unreachableText, wake as wakeUp, type Connection } from '../connection.ts';
 import { prefs } from '../prefs.ts';
+import type { DraftStore } from '../draft.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { knownCommits, renderable, TaskReads, type RenderedRead } from '../reads.ts';
 import { plainWikilinks } from '../text.ts';
@@ -24,7 +25,7 @@ const UNDO_WINDOW_MS = 8000;
 /** Re-reads after a stale response that predates the watermark; each asks about the newest one. */
 const STALE_REREADS = 3;
 
-export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventTarget }) {
+export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: DraftStore; receipts: EventTarget }) {
   const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
   const [rendered, setRendered] = useState<RenderedRead | null>(null);
   const [connection, setConnection] = useState<Connection>('loading');
@@ -333,6 +334,7 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
       {captureOpen && (
         <CaptureSheet
           queue={queue}
+          drafts={drafts}
           accountKey={accountKey}
           baseRevision={revision}
           taskBlocked={lock ? lock.banner : null}
