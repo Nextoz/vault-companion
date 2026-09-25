@@ -66,3 +66,22 @@ All accepted.
 | Opus N6: stale Undo of an already-undone completion reopens a later completion | Low | `Vault-Companion-Undoes: <opId>` trailer; Undo refused if its target already has an applied Undo in `T..X`. | L |
 | Opus N8: no A4 regression test | Low | Gate test. | L |
 | Opus note: Workers free-plan 50-subrequest cap vs paged dedupe | risk | Record for Phase 3 deploy sizing. | L |
+
+## Gate run 3 (2026-09-25) — `phase-1-rereview2-astra.md` and `phase-1-rereview2-opus.md`: both **PASS WITH FIXES**
+
+No Critical/High. Opus: all 13 rerun findings fixed. Astra: all fixed except G3-1/G3-2 refinements of N3/N2.
+**Lead decision: Phase 1 gate PASSED WITH FIXES.** No live write occurs before Phase 3; the items below are fixed with
+mutation-checked tests now or tracked to their phase, and are re-verified by the mandatory Phase 2 whole-system review.
+
+| Finding | Sev | Decision | Owner / when |
+|---|---|---|---|
+| G3-1 cross-tab eviction lets a stale read in another tab render a saved completion open | Medium | Shared durable watermark: before evicting a receipt, persist the acknowledged revision; every tab only accepts reads whose `known` includes the watermark (or that were requested after it) | F4 worker, now |
+| G3-2 Retry's predecessor reset and dependent generation bump are two transactions | Medium | One IndexedDB readwrite transaction for the predecessor and all affected dependents | F4 worker, now |
+| F3 `App.tsx` read-ordering wiring untested | Low | Extract into a testable function/hook; test held R0 → R1 → late R0 | F4 worker, now |
+| G3-3 schema-valid commands can produce > 4,000-char lines the receipt/read schemas reject | Medium | Typed pre-write refusal when the resulting line exceeds the persisted-line limit; read path tolerates long existing lines (read-only reason) instead of failing the whole response | Lead, now |
+| F1 keyed `findOperation` untested on real adapters (N6 guard could silently go inert) | Low | Store-contract case with a non-default key; N6 gate through LocalGitStore | Lead, now |
+| F2 surviving mutants: root 404 as absent, LocalGit mode, LocalGit ls-tree failure, `unknown` Undoes search | Low | Tests for each | Lead, now |
+| F6 spec drift (Undoes, timeout, dependency generation) | Low | Amend commands.md, vault-contract §4.2, sync.md, ADR-0005 | Lead, now |
+| F4 no server deadline < 30 s client timeout; Undo = 3 paged searches | Low | Worker deadline (≈20 s ⇒ retryable 503); measure compare latency on sandbox | Phase 3 sizing |
+| F5 `known=` checks up to 20+ receipts serially | Low | Bounded concurrency; acknowledged receipts rechecked only when ancestry breaks | Phase 3 sizing |
+| Residual: delayed app Undo vs desktop uncheck + re-complete with identical text | accepted | Documented as §4.2 text-equality semantics | Lead (docs) |
