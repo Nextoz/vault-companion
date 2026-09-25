@@ -54,3 +54,12 @@ This is the **rerun** after fixes. In addition to everything above:
    `packages/github/src/contents-store.ts`), exact Undo via parent bytes (`packages/domain/src/commands.ts`), the
    queue's cross-tab lock/lease protocol (`apps/web/src/queue/**`), and the paged dedupe.
 Write the report to the path named in your launch prompt (`phase-1-rereview-*.md`).
+
+## Rerun 2 addendum (2026-09-25, gate run 3)
+
+In addition to everything above: you may read `phase-1-rereview-astra.md` and `phase-1-rereview-opus.md` (but not any
+`phase-1-rereview2-*.md`). Verify **each** finding in the "Rerun" table of `docs/reviews/phase-1-reconciliation.md`
+(Astra N1–N5, Opus N1–N8) is fixed on `main`, re-running the reviewers' reproductions. Hunt for new defects in:
+the write precondition (`WriteRequest.expect`) in all three adapters, fail-closed directory listing (`treeEntries`,
+LocalGit `listDir`), the `Vault-Companion-Undoes` guard, the queue dependency generation, `ReadSequencer`/`knownCommits`
+/`buildView`, and the command timeout. Report names: `phase-1-rereview2-*.md`.
