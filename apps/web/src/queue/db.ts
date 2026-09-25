@@ -44,6 +44,12 @@ export interface PendingRecord {
   leaseUntil?: number;
   /** Identifies the claim holding the lease; only that claim may settle a non-receipt outcome. */
   claimId?: string | null;
+  /**
+   * Bumped whenever the user retries `dependsOn`, even while this item is in flight (N2). A refusal to a request
+   * sent under an older value answered a predecessor state that no longer holds: it is requeued, never final.
+   * Absent on older rows (read as 0).
+   */
+  dependencyGeneration?: number;
 }
 
 /** A receipt kept after its pending record is gone, until a read reports its commit `included` (A9). */

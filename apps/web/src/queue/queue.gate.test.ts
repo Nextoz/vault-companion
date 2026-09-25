@@ -1,4 +1,5 @@
-// Phase 1 gate reproductions (docs/reviews/phase-1-reconciliation.md, owner F2): A3/R3, A7, A9, R4, R12.
+// Phase 1 gate reproductions (docs/reviews/phase-1-reconciliation.md): A3/R3, A7, A9, R4, R12 (owner F2);
+// N2, N3, N5 from the gate rerun (owner F3).
 // Multi-tab cases use two independently opened queues, each with its own IndexedDB connection to one database.
 import { IDBFactory } from 'fake-indexeddb';
 import {
@@ -9,12 +10,13 @@ import {
   type TasksResponse,
 } from '@vault-companion/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { postCommand } from '../api.ts';
+import { COMMAND_TIMEOUT_MS, postCommand } from '../api.ts';
 import { captureNote, completeTask, undoCompleteTask } from '../commands.ts';
+import { knownCommits, ReadSequencer } from '../reads.ts';
 import { buildView } from '../view.ts';
 import { backoffMs } from './classify.ts';
 import { openPendingStore, type PendingStore } from './db.ts';
-import { PendingQueue, type LockManagerLike } from './queue.ts';
+import { LEASE_MS, PendingQueue, type LockManagerLike } from './queue.ts';
 
 const ACCOUNT_A = 'a'.repeat(64);
 const ACCOUNT_B = 'b'.repeat(64);
@@ -542,5 +544,238 @@ describe('R12 — a receipt must name the operation that was sent', () => {
     clock += backoffMs(1);
     await tab.queue.flush();
     expect(tab.receipts.map((r) => r.operationId)).toEqual([envelope.operationId]);
+  });
+});
+
+// ---- Phase 1 gate rerun (docs/reviews/phase-1-reconciliation.md, F3): N2, N3, N5 -------------------------------
+
+describe('N2 — Retry on a predecessor while its dependent Undo is in flight', () => {
+  const ids = (send: Tab['send']) => send.mock.calls.map(([body]) => (JSON.parse(body) as Command).operationId);
+
+  /** C refused (known not applied) in tab A, so its Undo U is released and queued behind it. */
+  async function refusedCompletionWithUndo(a: Tab) {
+    const target = complete();
+    const undo = undoOf(target);
+    await a.queue.enqueue(target, taskOpts);
+    a.queue.setSession(ACCOUNT_A);
+    await a.queue.flush();
+    expect(await a.queue.undoCompletion(target, undo, taskOpts)).toBe('queued');
+    return { target, undo };
+  }
+
+  it("the Undo's late refusal is not final: it goes back behind the retried completion", async () => {
+    const a = await openTab();
+    const b = await openTab();
+    const undoReply = deferred<Response>();
+    a.send
+      .mockImplementationOnce(async () => refusal('refused:structure'))
+      .mockImplementationOnce(async () => undoReply.promise)
+      .mockImplementation(async (body) => ok(body));
+    b.send.mockImplementation(async (body) => ok(body));
+
+    const { target, undo } = await refusedCompletionWithUndo(a);
+    const aFlush = a.queue.flush();
+    await vi.waitFor(() => expect(a.send).toHaveBeenCalledTimes(2)); // U is out, C needs attention
+
+    await b.queue.retry(target.operationId);
+    b.queue.setSession(ACCOUNT_A);
+    await b.queue.flush();
+    expect(ids(b.send)).toEqual([target.operationId]); // C commits; U is still A's
+
+    // The service answered U before C existed.
+    undoReply.resolve(refusal('conflict:task-changed'));
+    await aFlush;
+
+    expect(ids(a.send)).toEqual([target.operationId, undo.operationId, undo.operationId]);
+    const undoBodies = a.send.mock.calls.slice(1).map(([body]) => body);
+    expect(undoBodies[0]).toBe(undoBodies[1]); // envelope bytes never change
+    expect(await a.store.all()).toEqual([]);
+    expect((await a.store.receipts()).map((r) => r.operationId).sort()).toEqual(
+      [target.operationId, undo.operationId].sort(),
+    );
+  });
+
+  it('after lease expiry and reclaim, only the live claim requeues; the expired claim stays ignored', async () => {
+    const a = await openTab();
+    const b = await openTab();
+    const aUndo = deferred<Response>();
+    const bUndo = deferred<Response>();
+    a.send
+      .mockImplementationOnce(async () => refusal('refused:structure'))
+      .mockImplementationOnce(async () => aUndo.promise)
+      .mockImplementation(async (body) => ok(body));
+    b.send.mockImplementationOnce(async () => bUndo.promise).mockImplementation(async (body) => ok(body));
+
+    const { target, undo } = await refusedCompletionWithUndo(a);
+    const aFlush = a.queue.flush();
+    await vi.waitFor(() => expect(a.send).toHaveBeenCalledTimes(2));
+
+    clock += 10 * 60_000; // A's lease on U expires; B reclaims and resends U
+    b.queue.setSession(ACCOUNT_A);
+    const bFlush = b.queue.flush();
+    await vi.waitFor(() => expect(b.send).toHaveBeenCalledTimes(1));
+
+    aUndo.resolve(refusal('conflict:task-changed')); // expired claim: ignored
+    await aFlush;
+    await a.queue.retry(target.operationId); // U is leased by B: it cannot be reset, only marked
+    await a.queue.flush();
+    expect(ids(a.send)).toEqual([target.operationId, undo.operationId, target.operationId]);
+
+    bUndo.resolve(refusal('conflict:task-changed')); // B's claim predates the retry
+    await bFlush;
+    expect(ids(b.send)).toEqual([undo.operationId, undo.operationId]);
+    const undoBodies = [...a.send.mock.calls, ...b.send.mock.calls]
+      .map(([body]) => body)
+      .filter((body) => typeOf(body) === 'UndoCompleteTask');
+    expect(new Set(undoBodies).size).toBe(1); // envelope bytes never change
+    expect(await a.store.all()).toEqual([]);
+    expect(await a.store.receipts()).toHaveLength(2);
+  });
+
+  it('a refusal from the same generation is still final', async () => {
+    const a = await openTab();
+    a.send
+      .mockImplementationOnce(async () => refusal('refused:structure'))
+      .mockImplementationOnce(async () => refusal('conflict:task-changed'));
+    const { undo } = await refusedCompletionWithUndo(a);
+    await a.queue.flush();
+    expect(await a.store.get(undo.operationId)).toMatchObject({
+      state: 'attention',
+      lastError: { code: 'conflict:task-changed' },
+    });
+  });
+});
+
+describe('N3 — a late stale read never regresses the screen', () => {
+  const COMMIT_C = '5'.repeat(40);
+  const DONE_LINE = '- [x] Water the plants 📅 2026-09-24 ✅ 2026-09-24';
+  const task = (lineText: string, done = false): TaskView => ({
+    locator: { ...LOCATOR, lineText },
+    description: 'Water the plants',
+    status: done ? 'done' : 'open',
+    section: done ? 'done' : 'open',
+    priority: null,
+    due: '2026-09-24',
+    scheduled: null,
+    start: null,
+    created: null,
+    done: done ? '2026-09-24' : null,
+    recurring: false,
+    readOnlyReason: null,
+    links: [],
+  });
+  const readAt = (revision: string, done: boolean, known: TasksResponse['known']): TasksResponse => ({
+    revision,
+    blobSha: BLOB,
+    today: '2026-09-24',
+    timeZone: 'Europe/Copenhagen',
+    writeBlock: null,
+    known,
+    todayTasks: done ? [] : [task(LINE)],
+    overdue: [],
+    allOpen: done ? [] : [task(LINE)],
+    doneToday: done ? [task(DONE_LINE, true)] : [],
+  });
+  const completed = (body: string) =>
+    json(
+      200,
+      receiptFor(body, {
+        commitSha: COMMIT_C,
+        effect: { kind: 'completed', completedLineText: DONE_LINE, openLineText: LINE, completedInPlace: false, doneDate: '2026-09-24' },
+      }),
+    );
+  /** What the screen shows: open rows, and each Done row as the overlay's state or `server`. */
+  const shown = (view: ReturnType<typeof buildView>) => ({
+    open: view.all.length,
+    done: view.doneToday.map((r) => (r.task ? 'server' : (r.action?.state ?? '?'))),
+  });
+
+  async function savedCompletion() {
+    const tab = await openTab();
+    tab.send.mockImplementation(async (body) => completed(body));
+    await tab.queue.enqueue(complete(), taskOpts);
+    tab.queue.setSession(ACCOUNT_A);
+    await tab.queue.flush();
+    return tab;
+  }
+
+  it('R0 → C → R1 (acknowledges) → late R0: R0 is not applied, and could not regress the view if it were', async () => {
+    const reads = new ReadSequencer();
+    let rendered: TasksResponse | null = null;
+    const r0 = reads.begin(); // started before C
+
+    const tab = await savedCompletion();
+    const r1 = reads.begin();
+    const R1 = readAt('7'.repeat(40), true, { [COMMIT_C]: 'included' });
+    expect(reads.accept(r1)).toBe(true);
+    rendered = R1;
+    await tab.queue.acknowledge(R1.known);
+    expect(tab.queue.getSnapshot().items).toMatchObject([{ state: 'saved', acknowledged: true }]);
+    expect(shown(buildView(rendered, tab.queue.getSnapshot().items))).toEqual({ open: 0, done: ['server'] });
+
+    const R0 = readAt(REV, false, { [COMMIT_C]: 'not-included' });
+    expect(reads.accept(r0)).toBe(false);
+    expect(shown(buildView(rendered, tab.queue.getSnapshot().items))).toEqual({ open: 0, done: ['server'] });
+
+    // Reflection follows the response being rendered, never a sticky acknowledgement.
+    expect(shown(buildView(R0, tab.queue.getSnapshot().items))).toEqual({ open: 0, done: ['saved'] });
+  });
+
+  it('reload variant: an acknowledged receipt still overlays a later read that says not-included', async () => {
+    let tab = await savedCompletion();
+    await tab.queue.acknowledge({ [COMMIT_C]: 'included' });
+    tab.queue.dispose();
+
+    tab = await openTab(); // reload: nothing in memory survives
+    const items = tab.queue.getSnapshot().items;
+    expect(items).toMatchObject([{ state: 'saved', acknowledged: true }]);
+    // The next read is asked about the acknowledged receipt too, or its answer could not be checked.
+    expect(knownCommits(items)).toEqual([COMMIT_C]);
+
+    expect(shown(buildView(readAt(REV, false, { [COMMIT_C]: 'not-included' }), items))).toEqual({ open: 0, done: ['saved'] });
+    expect(shown(buildView(readAt('7'.repeat(40), true, { [COMMIT_C]: 'included' }), items))).toEqual({ open: 0, done: ['server'] });
+  });
+});
+
+describe('N5 — a command request that never settles', () => {
+  it('is aborted before the lease expires, retried later, and the tab keeps flushing other items', async () => {
+    expect(COMMAND_TIMEOUT_MS).toBeLessThan(LEASE_MS);
+    const timeout = new AbortController();
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeout.signal);
+    const bodies: string[] = [];
+    // Like real fetch against a server that never answers the first request: it settles only by abort.
+    const fetchMock = vi.fn((_url: string, init: RequestInit) => {
+      bodies.push(init.body as string);
+      if (bodies.length > 1) return Promise.resolve(ok(init.body as string));
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const store = await openPendingStore(factory);
+    stores.push(store);
+    const queue = await PendingQueue.open({ store, send: postCommand, locks, now: () => clock, setTimer: () => () => undefined });
+    const first = captureNote(mint(), { text: 'first' });
+    const second = captureNote(mint(), { text: 'second' });
+    await queue.enqueue(first, { accountKey: ACCOUNT_A, label: 'n1' });
+    await queue.enqueue(second, { accountKey: ACCOUNT_A, label: 'n2' });
+    queue.setSession(ACCOUNT_A);
+    const flushed = queue.flush();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(timeoutSpy).toHaveBeenCalledWith(COMMAND_TIMEOUT_MS);
+
+    timeout.abort(new DOMException('The operation timed out.', 'TimeoutError'));
+    await flushed;
+
+    expect(bodies.map((b) => (JSON.parse(b) as Command).operationId)).toEqual([first.operationId, second.operationId]);
+    expect(await store.get(first.operationId)).toMatchObject({
+      state: 'pending',
+      attempts: 1,
+      leaseUntil: 0,
+      lastError: { code: 'timeout' },
+    });
+    expect(await store.get(second.operationId)).toBeUndefined();
+    timeoutSpy.mockRestore();
   });
 });

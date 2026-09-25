@@ -9,6 +9,9 @@ export type Fetched<T> =
   | { kind: 'offline' }
   | { kind: 'error'; message: string };
 
+/** A command request the server has not answered by then is aborted and retried (N5). Below the queue's lease. */
+export const COMMAND_TIMEOUT_MS = 30_000;
+
 const base: RequestInit = { redirect: 'manual', credentials: 'same-origin', cache: 'no-store' };
 
 async function getJson<S extends z.ZodType>(url: string, schema: S): Promise<Fetched<z.infer<S>>> {
@@ -35,6 +38,7 @@ export const postCommand = (body: string, accountKey: string) =>
     ...base,
     method: 'POST',
     body,
+    signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
     headers: {
       'Content-Type': 'application/json',
       'X-VC-Request': '1',

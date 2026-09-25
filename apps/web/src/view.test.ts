@@ -98,10 +98,14 @@ describe('buildView', () => {
     expect(fresh.today).toEqual([]);
   });
 
-  it('stops overlaying an acknowledged receipt even when a later read no longer lists its commit (A9)', () => {
+  it('decides reflection by the rendered read alone, never by a sticky acknowledgement (N3)', () => {
     const acknowledged = item(complete, 'saved', { receipt: completedReceipt, acknowledged: true });
-    const later = buildView(read([], [task(DONE, 3, true)]), [acknowledged]);
-    expect(later.doneToday).toMatchObject([{ task: { locator: { lineText: DONE } } }]);
+    const included = buildView(read([], [task(DONE, 3, true)], { [COMMIT]: 'included' }), [acknowledged]);
+    expect(included.doneToday).toMatchObject([{ task: { locator: { lineText: DONE } } }]);
+
+    const stale = buildView(read([openTask], [], { [COMMIT]: 'not-included' }), [acknowledged]);
+    expect(stale.today).toEqual([]);
+    expect(stale.doneToday).toMatchObject([{ task: null, action: { state: 'saved' } }]);
   });
 
   it('shows a task re-opened by a live Undo even when the read still has it done', () => {
