@@ -103,7 +103,8 @@ the only record.
 - Every cloud brief says **push early**: a report stub pushed in the first minutes, then the final push. The Lead only
   sees GitHub, never the container; no branch after ~15 min ⇒ ask the session (`claude -p … --cloud <id>`).
 - Launch: commit + push the brief, then
-  `claude --cloud "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, write .agent/handoffs/<brief>.md, commit and push the branch when done. Do not open a PR or spawn agents."`
+  `claude --cloud --permission-mode auto "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, write .agent/handoffs/<brief>.md, commit and push the branch when done. Do not open a PR or spawn agents."`
+  (`--permission-mode auto`: owner request 2026-09-25, so sessions do not stall on approvals — verify in the session.)
   Record session ID + branch in `docs/plan.md`. Continue a session: `claude -p "<message>" --cloud <session-id>`.
 - Finish: `git fetch`, review the branch, run verification locally, merge if accepted.
 - First use is one small task to verify the workflow. Verified 2026-09-25 (brief C).
