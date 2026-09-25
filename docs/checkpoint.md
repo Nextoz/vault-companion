@@ -16,25 +16,11 @@ new branches, CodeRabbit reviews, finished CI and finished Codex logs.
    reconcile. Note for the gate: the real desktop worker never writes conflict markers (harness models a stricter case).
 3. After P3-A merges: owner does G2 with `docs/deploy.md` (owner has a Cloudflare account); Lead deploys and verifies
    read-only against the live vault; then milestone 2 canary (G3).
-4. Owner decision T1 (Today) — recommendation below; implement only after the owner chooses.
+4. T1 Today: domain rule (Astra), layout (P4-B), Active Work Now card (P4-D after P4-A).
 
 ## Owner-side issue seen 2026-09-25 (vault, not app)
 
 The desktop sync run at 14:06 stopped: "Git index already contains staged changes". Nothing reaches GitHub until the
 owner commits or unstages them in the vault repo. The Lead does not modify the vault.
 
-## T1 Today — recommended first-release behaviour (awaiting owner)
-
-Separate four signals instead of merging them:
-- **Chosen work:** `Tasks/Active Work Now.md` shown read-only at the top (already an allowed read-only context in
-  `docs/vault-contract.md` §1). No task mapping inferred; outcomes are not completed from the app.
-- **Today:** open tasks with `📅` = today or `⏳` ≤ today (scheduled work stays until done), or priority 🔺/⏫.
-- **Overdue:** `📅` < today, as a collapsed group **below** Today ("3 overdue").
-- **Available:** `🛫` ≤ today is *not* Today; such tasks stay in All tasks.
-
-Example (today = 25 Sep): "Send invoice 📅 25 Sep" → Today · "Draft outline ⏳ 23 Sep" → Today · "Fix bike 🔺" →
-Today · "Renew passport 📅 20 Sep" → Overdue (collapsed) · "Plan trip 🛫 1 Sep" → All only. Active Work Now's
-outcomes appear above all of them as plain read-only text.
-
-Differences from current code: start dates leave Today; Overdue moves below Today and collapses; `📅` uses `=` (the
-Build Contract wording). Needs owner choice before `docs/product-contract.md` changes.
+## T1 Today — decided 2026-09-25 (ADR-0012), provisional; implementation split per `docs/plan.md`.

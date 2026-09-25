@@ -31,14 +31,16 @@ From a real phone, without AI:
 > action. When the computer returns and synchronization runs, both changes reach
 > the vault. Any conflict is visible and preserves both versions.
 
-### Today (first release definition)
+### Today (first release definition — owner decision T1, 2026-09-25, ADR-0012)
 
-Today is derived, not stored. An open task appears in Today when any of:
-its deadline `📅` ≤ today, its scheduled date `⏳` ≤ today, its start date `🛫` ≤ today,
-or its priority is `🔺`/`⏫`. Everything open appears in All tasks. Overdue items are
-marked, not dumped: Today shows them in a separate "Overdue" group.
-(Mirrors the vault's own `## Due soon` query intent without the 3-day window;
-revisit after real-phone use.)
+Today is derived, not stored, and keeps four signals apart:
+- **Chosen work:** `Tasks/Active Work Now.md` shown read-only above the lists. No task mapping is inferred and
+  outcomes are never completed from the app.
+- **Today:** open tasks with deadline `📅` = today, or scheduled `⏳` ≤ today, or priority `🔺`/`⏫`.
+- **Overdue:** open tasks with `📅` < today, in a separate group **below** Today, collapsed by default (count shown).
+- **Available:** a start date `🛫` alone never puts a task in Today; it stays in All tasks.
+
+Everything open appears in All tasks. Revisit after real-phone use (the rule is a read-model change only).
 
 ### Done today
 

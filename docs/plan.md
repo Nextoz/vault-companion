@@ -28,7 +28,9 @@ Exit: all streams below merged, `pnpm check` + e2e + CI green, Phase 2 gate pass
 | P4-A linked note context (contract item 7) | Cloud `session_012WDdnkDZjTWRF4956Mjaoz`, `agent/linked-notes` | in flight; Astra adversarial review before merge |
 | P4-B client correctness: duplicate-task identity, read timeouts/error state, conflict next step, Undo in Done today | Cloud `session_01TLT6gLxkoKtDHSy8CcCpmb`, `agent/client-correctness` | in flight |
 | P4-C capture draft recovery (account-aware, separate from the queue) | Cloud `session_01H7tmZxTqo9BDE7UHb5esX1`, `agent/draft-recovery` | in flight |
-| Today definition | **owner decision** (below) | blocks only the Today change, nothing else |
+| T1 Today rule (domain read model) | Codex Astra low, clone `…-clones/today-rule` | in flight |
+| T1 Today layout (Overdue below, collapsed) | P4-B addendum | in flight |
+| P4-D Active Work Now read-only card | Cloud, after P4-A merges (reuses its renderer) | queued |
 | Phase 2 gate (whole-system review) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after PR #4 merges |
 
 Every branch: PR → CodeRabbit loop → CI → handoff dispositions (`.agent/handoffs/`) → merge.
@@ -64,7 +66,7 @@ Observations: none yet (recorded privately in milestone 2–3).
 
 | # | Decision | Status |
 |---|---|---|
-| T1 | **Today meaning** — recommendation in `docs/checkpoint.md`; repo contract says `≤ today`, vault Build Contract says `= today` | **open** |
+| T1 | Today meaning | **decided** (provisional) — ADR-0012 |
 | D2 | Linked-note allowlist | default `Projects/`, `Tasks/`, `Inbox/` (P4-A implements it) |
 | D3 | Task IDs | no `🆔` writes in first release |
 | D4 | Capture anchor | decided: top of Open (ADR-0010) |
