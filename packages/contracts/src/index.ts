@@ -5,7 +5,12 @@ const isoInstant = z.iso.datetime({ offset: true });
 const commitSha = z.string().regex(/^[0-9a-f]{40}$/, 'expected a 40-hex commit SHA');
 const blobSha = z.string().regex(/^[0-9a-f]{40}$/, 'expected a 40-hex blob SHA');
 // No newline characters: a locator always names exactly one line.
-const singleLine = z.string().min(1).max(4000).refine((s) => !/[\r\n]/.test(s), 'must be a single line');
+/**
+ * Longest task line the app reads or writes (gate-3 G3-3). Submitted text is capped far lower (2,000 + 2,000 context), so
+ * accepted mutations fit; the domain refuses a write whose resulting line would exceed it (never truncates).
+ */
+export const MAX_TASK_LINE = 16_000;
+const singleLine = z.string().min(1).max(MAX_TASK_LINE).refine((s) => !/[\r\n]/.test(s), 'must be a single line');
 
 export const TaskLocator = z.strictObject({
   path: z.literal('Tasks/To-Do List.md'),
@@ -158,6 +163,8 @@ export const TasksResponse = z.strictObject({
   overdue: z.array(TaskView),
   allOpen: z.array(TaskView),
   doneToday: z.array(TaskView),
+  /** Task lines longer than MAX_TASK_LINE are left out of the views (never truncated); edit them in Obsidian. */
+  omittedLongLines: z.number().int().nonnegative().optional(),
 });
 export type TasksResponse = z.infer<typeof TasksResponse>;
 

@@ -1,6 +1,6 @@
 // Application services: one WritePlan per command type (docs/commands.md) and the task read model.
 // Pure orchestration over the VaultStore port and the Markdown kernel; no HTTP, no GitHub.
-import type { ApiError, Command, CompleteTaskCommand, ErrorCode, Receipt, TasksResponse, TaskView } from '@vault-companion/contracts';
+import { MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type TasksResponse, type TaskView } from '@vault-companion/contracts';
 import * as md from '@vault-companion/vault-markdown';
 import { executeWrite, replayOnParent, type Planned, type WritePlan } from './execute.ts';
 import { canWrite, INBOX_DIR, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
@@ -46,6 +46,13 @@ async function readTodo(store: VaultStore, at: string): Promise<{ ok: true; text
 
 function fromKernel<E, R>(r: md.MutationOk<E> | md.Refusal, path: VaultPath, map: (e: E) => R): Planned<R> {
   if (!r.ok) return refuse(r.code, r.message);
+  // Gate-3 G3-3: every task line this write produces must fit the receipt/read contract, or the durable receipt and all
+  // later reads would be rejected by the client. Refuse before writing; never truncate vault text.
+  for (const [k, v] of Object.entries(r.effect as object)) {
+    if (/lineText$/i.test(k) && typeof v === 'string' && v.length > MAX_TASK_LINE) {
+      return refuse('invalid', `the resulting task line would exceed ${MAX_TASK_LINE} characters`);
+    }
+  }
   return { ok: true, path, expect: 'regular-file', bytes: encoder.encode(r.text), effect: map(r.effect) };
 }
 
@@ -199,7 +206,9 @@ export function createCommandService(deps: CommandServiceDeps) {
       const parsed = md.parseTodoList(f.text);
       if (!parsed.ok) return apiError(parsed.code, parsed.message);
       const today = userDate(deps.now(), deps.timeZone);
-      const views = parsed.tasks.map((t) => toView(t, f.blobSha));
+      // Gate-3 G3-3: an over-long existing line must not invalidate the whole response; leave it out and count it.
+      const fitting = parsed.tasks.filter((t) => t.lineText.length <= MAX_TASK_LINE);
+      const views = fitting.map((t) => toView(t, f.blobSha));
       const open = views.filter((v) => v.status === 'open');
       const overdue = open.filter((v) => v.due !== null && v.due < today);
       const isToday = (v: TaskView) =>
@@ -217,6 +226,7 @@ export function createCommandService(deps: CommandServiceDeps) {
         overdue,
         allOpen: open,
         doneToday: views.filter((v) => v.status === 'done' && v.done === today),
+        omittedLongLines: parsed.tasks.length - fitting.length,
       };
     },
   };

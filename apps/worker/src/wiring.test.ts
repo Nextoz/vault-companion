@@ -1,7 +1,7 @@
 // Review A10/R10: prove the real wiring, not stubs. (1) A18 sentinel through createApp + createCommandService +
 // kernel + InMemoryStore for every command, refusals and an outage. (2) The production composition accepts a
 // correctly signed Access token and rejects others. (3) configProblems covers R11.
-import { Command } from '@vault-companion/contracts';
+import { Command, MAX_TASK_LINE, Receipt, TasksResponse } from '@vault-companion/contracts';
 import { createCommandService } from '@vault-companion/domain';
 import { InMemoryStore } from '@vault-companion/domain/testing';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
@@ -74,6 +74,64 @@ describe('A18 through the real command stack (review A10/R10)', () => {
     expect(JSON.stringify(logs)).not.toContain('Inbox/');
     expect(JSON.stringify(printed)).not.toContain(SENTINEL);
     expect(logs.find((l) => l.commandType === 'CaptureNote')?.pathHash).toMatch(/^[0-9a-f]{16}$/);
+  });
+});
+
+describe('accepted results are closed under the public contracts (gate-3 G3-3)', () => {
+  async function stack(todo: string) {
+    const store = await InMemoryStore.create({ [TODO]: todo });
+    const services = createCommandService({ store, now: () => new Date('2026-09-24T12:00:00Z'), timeZone: 'Europe/Copenhagen' });
+    const app = createApp({ verify: async () => ({ ok: true, email: 'o@example.com', accountKey: ACCOUNT }), appOrigin: ORIGIN, services, log: () => {} });
+    let n = 0;
+    const env = (type: string, payload: unknown) => ({
+      schemaVersion: 1,
+      operationId: `00000000-0000-4000-b000-${(++n).toString(16).padStart(12, '0')}`,
+      type,
+      occurredAt: '2026-09-24T14:00:00+02:00',
+      baseRevision: store.headCommit,
+      payload,
+    });
+    const post = async (body: unknown) => {
+      const res = await app.request('/api/commands', {
+        method: 'POST',
+        headers: { Origin: ORIGIN, 'X-VC-Request': '1', 'X-VC-Account': ACCOUNT, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return { status: res.status, body: await res.json() };
+    };
+    const read = async () => TasksResponse.parse(await (await app.request('/api/tasks')).json());
+    return { store, env, post, read };
+  }
+
+  it('Astra repro 1: maximal capture (2,000 text + 2,000-char URL context) yields a valid receipt and valid reads, retry included', async () => {
+    const { env, post, read } = await stack('## Open\n\n## Done\n');
+    const context = `https://example.com/${'a'.repeat(2000 - 20)}`;
+    const cmd = env('CaptureTask', { text: 'x'.repeat(2000), context });
+    const first = await post(cmd);
+    expect(first.status).toBe(200);
+    expect(Receipt.safeParse(first.body).success).toBe(true);
+    const again = await post(cmd); // deduplicated retry
+    expect(Receipt.safeParse(again.body).success).toBe(true);
+    expect((await read()).allOpen).toHaveLength(1);
+  });
+
+  it('Astra repro 2 (scaled to the new limit): completing a line near the limit is refused before writing, and reads stay valid', async () => {
+    const long = `- [ ] ${'y'.repeat(MAX_TASK_LINE - 12)} #todo`; // exactly MAX_TASK_LINE characters
+    expect(long.length).toBe(MAX_TASK_LINE);
+    const { store, env, post, read } = await stack(`## Open\n\n${long}\n\n## Done\n`);
+    const view = await read();
+    const head = store.headCommit;
+    const res = await post(env('CompleteTask', { task: view.allOpen[0]!.locator }));
+    expect(res).toMatchObject({ status: 400, body: { code: 'invalid' } });
+    expect(store.headCommit).toBe(head);
+  });
+
+  it('an existing line over the limit does not invalidate the task list: it is omitted and counted', async () => {
+    const huge = `- [ ] ${'z'.repeat(MAX_TASK_LINE + 10)} #todo`;
+    const { read } = await stack(`## Open\n\n- [ ] Normal #todo\n${huge}\n\n## Done\n`);
+    const view = await read();
+    expect(view.allOpen.map((t) => t.description)).toEqual(['Normal']);
+    expect(view.omittedLongLines).toBe(1);
   });
 });
 
