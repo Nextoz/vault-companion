@@ -2,7 +2,7 @@
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
 import { createCommandService, DEFAULT_USER_TIME_ZONE } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
-import { createRemoteJWKSet } from 'jose';
+import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createApp } from './app.ts';
 import { createAccessVerifier } from './auth.ts';
 import type { LogRecord } from './log.ts';
@@ -32,6 +32,8 @@ export function configProblems(env: Partial<Env>): string[] {
   const problems = REQUIRED.filter((k) => !env[k]).map((k) => `missing ${k}`);
   if (env.AUTH_MODE !== 'access') problems.push('AUTH_MODE must be "access" in production');
   if (env.APP_ORIGIN && !/^https:\/\/[^/]+$/.test(env.APP_ORIGIN)) problems.push('APP_ORIGIN must be an https origin');
+  if (env.ACCESS_TEAM_DOMAIN && !/^https:\/\/[^/]+\/?$/.test(env.ACCESS_TEAM_DOMAIN)) problems.push('ACCESS_TEAM_DOMAIN must be an https origin');
+  if (env.USER_TIME_ZONE && !isValidTimeZone(env.USER_TIME_ZONE)) problems.push('USER_TIME_ZONE is not a valid IANA zone');
   return problems;
 }
 
@@ -42,10 +44,20 @@ const log = (r: LogRecord) => {
 
 let cached: { env: Env; app: ReturnType<typeof createApp> } | null = null;
 
-function build(env: Env) {
+function isValidTimeZone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Production composition. `keys` is injectable so tests can prove the real wiring with a local JWKS (review R10). */
+export function createProductionApp(env: Env, keys?: JWTVerifyGetKey) {
   const teamDomain = env.ACCESS_TEAM_DOMAIN.replace(/\/$/, '');
   const verify = createAccessVerifier({
-    keys: createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`)),
+    keys: keys ?? createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`)),
     issuer: teamDomain,
     audience: env.ACCESS_AUD,
     allowedEmails: env.ALLOWED_EMAILS.split(',').map((e) => e.trim()).filter(Boolean),
@@ -67,7 +79,7 @@ export default {
       // Never reveal configuration details to the client.
       return new Response('Service not configured', { status: 503, headers: { 'Cache-Control': 'no-store' } });
     }
-    if (!cached || cached.env !== env) cached = { env, app: build(env) };
+    if (!cached || cached.env !== env) cached = { env, app: createProductionApp(env) };
     return cached.app.fetch(request);
   },
 };

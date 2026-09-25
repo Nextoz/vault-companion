@@ -1,7 +1,7 @@
 import type { ApiError, Command, Receipt } from '@vault-companion/contracts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp, statusFor, type Services } from './app.ts';
-import type { LogRecord } from './log.ts';
+import { sanitize, type LogRecord } from './log.ts';
 
 const ORIGIN = 'https://vc.example.com';
 const SENTINEL = 'SENTINEL-7f3a-private-text';
@@ -51,7 +51,7 @@ const receipt: Receipt = {
 function post(body: unknown, headers: Record<string, string> = {}) {
   return makeApp().request('/api/commands', {
     method: 'POST',
-    headers: { 'Cf-Access-Jwt-Assertion': 'good', Origin: ORIGIN, 'X-VC-Request': '1', 'Content-Type': 'application/json', ...headers },
+    headers: { 'Cf-Access-Jwt-Assertion': 'good', Origin: ORIGIN, 'X-VC-Request': '1', 'X-VC-Account': ACCOUNT, 'Content-Type': 'application/json', ...headers },
     body: typeof body === 'string' ? body : JSON.stringify(body),
   });
 }
@@ -89,6 +89,15 @@ describe('CSRF / origin guard (T4)', () => {
   ])('%s ⇒ 403 and nothing executes', async (_n, h) => {
     const res = await post(captureNote, h);
     expect(res.status).toBe(403);
+    expect(executed).toHaveLength(0);
+  });
+  it.each([
+    ['missing X-VC-Account', { 'X-VC-Account': '' }],
+    ['another account', { 'X-VC-Account': 'b'.repeat(64) }],
+  ])('%s ⇒ 409 account-mismatch and nothing executes (review A7)', async (_n, h) => {
+    const res = await post(captureNote, h);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'account-mismatch', retryable: false });
     expect(executed).toHaveLength(0);
   });
   it('GET cannot mutate', async () => {
@@ -129,6 +138,15 @@ describe('responses', () => {
     ['upstream-unavailable', 503],
   ] as const)('maps %s to %i', (code, status) => {
     expect(statusFor(code)).toBe(status);
+  });
+});
+
+describe('runtime log allowlist (review A10: guards log.ts sanitize filter)', () => {
+  it('drops every key that is not allowlisted, even when a caller casts around the type', () => {
+    const smuggled = { requestId: 'r', method: 'POST', route: '/api/commands', status: 200, durationMs: 1, text: SENTINEL, body: { t: SENTINEL }, path: SENTINEL } as unknown as LogRecord;
+    const out = sanitize(smuggled);
+    expect(Object.keys(out).sort()).toEqual(['durationMs', 'method', 'requestId', 'route', 'status']);
+    expect(JSON.stringify(out)).not.toContain(SENTINEL);
   });
 });
 

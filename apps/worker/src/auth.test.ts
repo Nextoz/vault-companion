@@ -49,7 +49,14 @@ describe('createAccessVerifier', () => {
     ['signed by another key', async () => token({ key: other })],
     ['wrong audience', async () => token({ aud: 'other-app' })],
     ['wrong issuer', async () => token({ iss: 'https://evil.cloudflareaccess.com' })],
-    ['expired', async () => token({ exp: Math.floor(Date.now() / 1000) - 60 })],
+    ['expired', async () => token({ exp: Math.floor(Date.now() / 1000) - 600 })],
+    // Review A6: claims must be present, lifetime bounded, nbf honoured.
+    ['no exp claim', async () => new SignJWT({ email: EMAIL }).setProtectedHeader({ alg: 'RS256', kid: 'k1' }).setIssuer(ISS).setAudience(AUD).setSubject('s').setIssuedAt().sign(good)],
+    ['no iat claim', async () => new SignJWT({ email: EMAIL }).setProtectedHeader({ alg: 'RS256', kid: 'k1' }).setIssuer(ISS).setAudience(AUD).setSubject('s').setExpirationTime('10m').sign(good)],
+    ['lifetime over 24 h', async () => token({ exp: '30h' })],
+    ['issued in the future (iat)', async () => new SignJWT({ email: EMAIL }).setProtectedHeader({ alg: 'RS256', kid: 'k1' }).setIssuer(ISS).setAudience(AUD).setSubject('s').setIssuedAt(Math.floor(Date.now() / 1000) + 3600).setExpirationTime(Math.floor(Date.now() / 1000) + 7200).sign(good)],
+    ['not yet valid (nbf)', async () => new SignJWT({ email: EMAIL }).setProtectedHeader({ alg: 'RS256', kid: 'k1' }).setIssuer(ISS).setAudience(AUD).setSubject('s').setIssuedAt().setNotBefore(Math.floor(Date.now() / 1000) + 3600).setExpirationTime('2h').sign(good)],
+    ['no sub claim', async () => new SignJWT({ email: EMAIL }).setProtectedHeader({ alg: 'RS256', kid: 'k1' }).setIssuer(ISS).setAudience(AUD).setIssuedAt().setExpirationTime('10m').sign(good)],
     ['email not allowlisted', async () => token({ email: 'someone@example.com' })],
   ])('rejects %s', async (_name, make) => {
     expect(await verify(await make())).toEqual({ ok: false });

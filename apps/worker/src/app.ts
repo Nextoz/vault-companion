@@ -95,6 +95,10 @@ export function createApp(deps: AppDeps) {
     if (!(c.req.header('Content-Type') ?? '').toLowerCase().startsWith('application/json')) {
       return c.json(err('forbidden', 'JSON required'), 403);
     }
+    // Review A7: the device says which account queued this command; it must be the one signed in now.
+    if (c.req.header('X-VC-Account') !== c.get('identity').accountKey) {
+      return c.json(err('account-mismatch', 'this action was saved under a different sign-in'), 409);
+    }
     const text = await c.req.text();
     if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return c.json(err('invalid', 'body too large'), 400);
     let raw: unknown;
@@ -123,6 +127,6 @@ export function createApp(deps: AppDeps) {
   });
 
   app.notFound((c) => c.json(err('invalid', 'not found'), 404));
-  app.onError((_e, c) => c.json(err('upstream-unavailable', 'internal error', true), 500));
+  app.onError((_e, c) => c.json(err('upstream-unavailable', 'internal error', true), 503)); // commands.md: 503 (R11)
   return app;
 }

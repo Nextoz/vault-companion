@@ -47,9 +47,15 @@ describe('write allowlist', () => {
 });
 
 describe('linked-note read policy', () => {
-  it('denies Journal and Health by default, allows other notes', () => {
+  it('allows only Projects/, Tasks/ and Inbox/ (D2 default)', () => {
     expect(canReadLinkedNote(parseVaultPath('Journal/Daily/2026-09-24.md')!)).toBe(false);
     expect(canReadLinkedNote(parseVaultPath('Health/Anything.md')!)).toBe(false);
     expect(canReadLinkedNote(parseVaultPath('Projects/Some Project.md')!)).toBe(true);
+    // Review A8: an allowlist, not a denylist — any other root is denied.
+    for (const root of ['Finance', 'Personal', 'Job Search 2026', 'Daily']) expect(canReadLinkedNote(parseVaultPath(`${root}/x.md`)!)).toBe(false);
+    expect(canReadLinkedNote(parseVaultPath('Inbox/x.md')!)).toBe(true);
+    expect(canReadLinkedNote(parseVaultPath('Tasks/Active Work Now.md')!)).toBe(true);
+    expect(parseVaultPath(`Inbox/x${String.fromCharCode(0x85)}.md`)).toBeNull();
+    expect(parseVaultPath(`Inbox/x${String.fromCharCode(0x2028)}.md`)).toBeNull();
   });
 });

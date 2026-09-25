@@ -10,6 +10,10 @@ export interface AccessConfig {
   readonly allowedEmails: readonly string[];
 }
 
+/** Access sessions are configured at ≤ 24 h (docs/security.md); anything longer is rejected. */
+const MAX_TOKEN_LIFETIME_S = 24 * 60 * 60;
+const CLOCK_TOLERANCE_S = 5 * 60;
+
 export type Identity = { readonly ok: true; readonly email: string; readonly accountKey: string } | { readonly ok: false };
 
 export function createAccessVerifier(config: AccessConfig) {
@@ -21,7 +25,14 @@ export function createAccessVerifier(config: AccessConfig) {
         issuer: config.issuer,
         audience: config.audience,
         algorithms: ['RS256'],
+        // Review A6: expiry must exist (a token without `exp` would otherwise be valid forever), lifetime bounded.
+        requiredClaims: ['exp', 'iat', 'sub'],
+        maxTokenAge: MAX_TOKEN_LIFETIME_S,
+        clockTolerance: CLOCK_TOLERANCE_S,
       });
+      const { exp, iat } = payload as { exp: number; iat: number };
+      if (exp - iat > MAX_TOKEN_LIFETIME_S) return { ok: false };
+      if (iat > Date.now() / 1000 + CLOCK_TOLERANCE_S) return { ok: false };
       const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : '';
       if (!payload.sub || !allowed.has(email)) return { ok: false };
       return { ok: true, email, accountKey: await sha256Hex(payload.sub) };
