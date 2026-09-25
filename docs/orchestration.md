@@ -84,3 +84,14 @@ the only record.
   red as a NativeCommandError even when the run is healthy (owner saw an all-red pane, 2026-09-25). Check the log for
   real `ERROR` lines instead of the colour. For new runs prefer
   `cmd /c "codex exec … - < <prompt-file> > <log> 2>&1"` (plain text, UTF-8 log, no red wrapping).
+
+## Claude Code Cloud workers (owner rules, 2026-09-25)
+
+- Only for bounded, repo-contained tasks: no live vault, Windows-only tooling, Herdr state or local sync. Never send the
+  personal vault repository to the cloud. Cloud workers count toward the 2–3 concurrent-worker limit.
+- Precondition: `git remote -v` shows a GitHub remote for this repo. If not, stop and tell the owner; never create one.
+- Launch: commit + push the brief, then
+  `claude --cloud "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, commit and push the branch when done. Do not open a PR or spawn agents."`
+  Record session ID + branch in `docs/plan.md`. Continue a session: `claude -p "<message>" --cloud <session-id>`.
+- Finish: `git fetch`, review the branch, run verification locally, merge if accepted.
+- First use is one small task to verify the workflow.
