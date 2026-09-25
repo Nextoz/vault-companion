@@ -171,6 +171,17 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
   }
 }
 
+/** Ordered Today rule from docs/product-contract.md; dates are parsed YYYY-MM-DD values. */
+export function classifyOpenTask(view: TaskView, today: string): 'overdue' | 'today' | 'other' {
+  if (view.status !== 'open') return 'other';
+  if (view.due !== null && view.due < today) return 'overdue';
+  if (view.due === today) return 'today';
+  if ((view.start !== null && view.start > today) || (view.scheduled !== null && view.scheduled > today)) return 'other';
+  if (view.scheduled !== null && view.scheduled <= today) return 'today';
+  if (view.priority === 'highest' || view.priority === 'high') return 'today';
+  return 'other';
+}
+
 export function createCommandService(deps: CommandServiceDeps) {
   return {
     async execute(cmd: Command, raw: unknown): Promise<Receipt | ApiError> {
@@ -210,9 +221,8 @@ export function createCommandService(deps: CommandServiceDeps) {
       const fitting = parsed.tasks.filter((t) => t.lineText.length <= MAX_TASK_LINE);
       const views = fitting.map((t) => toView(t, f.blobSha));
       const open = views.filter((v) => v.status === 'open');
-      const overdue = open.filter((v) => v.due !== null && v.due < today);
-      const isToday = (v: TaskView) =>
-        !overdue.includes(v) && ([v.due, v.scheduled, v.start].some((d) => d !== null && d <= today) || v.priority === 'highest' || v.priority === 'high');
+      const overdue = open.filter((v) => classifyOpenTask(v, today) === 'overdue');
+      const isToday = (v: TaskView) => classifyOpenTask(v, today) === 'today';
       const knownMap: Record<string, 'included' | 'not-included'> = {};
       for (const sha of known) knownMap[sha] = (await deps.store.isAncestor(sha, x)) ? 'included' : 'not-included';
       return {
