@@ -1,6 +1,7 @@
 import type { CommandType } from '@vault-companion/contracts';
 import { useState } from 'react';
 import { exportText } from '../commands.ts';
+import { knownNotApplied } from '../queue/classify.ts';
 import type { PendingQueue, QueueItem, ReadEvidence } from '../queue/queue.ts';
 import { StateChip } from './StateChip.tsx';
 
@@ -11,16 +12,33 @@ const VERB: Record<CommandType, string> = {
   CaptureNote: 'Note',
 };
 
+/** The line shown for an action that needs attention: the conflict in plain words, else the server's message. */
+export function attentionText(item: QueueItem): string | null {
+  if (item.error?.code === 'conflict:task-changed') return 'This task changed on another device.';
+  return item.error?.message ?? null;
+}
+
+/**
+ * Whether sending the same bytes again can succeed. A refusal known not to have applied (`refused:*`, `conflict:*`,
+ * …) is final for these bytes: the server will refuse them again, so Retry is not offered (P4-B).
+ */
+export function canRetry(item: QueueItem): boolean {
+  return !item.accountMismatch && !knownNotApplied(item.error);
+}
+
 /** Every action on this device with its honest state. Saved entries can be cleared. */
 export function ActionsPanel({
   queue,
   items,
   read,
+  onRefresh,
 }: {
   queue: PendingQueue;
   items: readonly QueueItem[];
   /** The read on screen: clearing uses it as the watermark (G3-1). */
   read: ReadEvidence | null;
+  /** Re-read the tasks, so the user can act on the current row after a conflict. */
+  onRefresh: () => void;
 }) {
   const [exporting, setExporting] = useState<QueueItem | null>(null);
   if (items.length === 0) return null;
@@ -50,15 +68,20 @@ export function ActionsPanel({
             </div>
             {item.state === 'attention' && (
               <>
-                {item.error && <p className="error">{item.error.message}</p>}
+                {item.error && <p className="error">{attentionText(item)}</p>}
                 <div className="action-buttons">
-                  {!item.accountMismatch && (
+                  {canRetry(item) && (
                     <button type="button" onClick={() => void queue.retry(item.operationId)}>
                       Retry
                     </button>
                   )}
+                  {item.error?.code.startsWith('conflict:') && (
+                    <button type="button" onClick={onRefresh}>
+                      Refresh tasks
+                    </button>
+                  )}
                   <button type="button" onClick={() => setExporting(item)}>
-                    Export text
+                    Copy text
                   </button>
                   <button type="button" className="danger" onClick={() => void queue.discard(item.operationId)}>
                     Discard
@@ -79,8 +102,8 @@ function ExportDialog({ text, onClose }: { text: string; onClose: () => void }) 
   const [copied, setCopied] = useState(false);
   return (
     <div className="sheet-backdrop" role="presentation" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label="Export text" onClick={(e) => e.stopPropagation()}>
-        <h2>Export text</h2>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Copy text" onClick={(e) => e.stopPropagation()}>
+        <h2>Copy text</h2>
         <textarea readOnly value={text} rows={6} aria-label="Exported text" onFocus={(e) => e.currentTarget.select()} />
         <div className="sheet-buttons">
           <button

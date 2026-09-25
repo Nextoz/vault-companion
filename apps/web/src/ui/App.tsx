@@ -2,18 +2,17 @@ import type { CompleteTaskCommand, TaskView } from '@vault-companion/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { getSession, getTasks } from '../api.ts';
 import { completeTask, undoCompleteTask } from '../commands.ts';
+import { unreachableText, wake as wakeUp, type Connection } from '../connection.ts';
 import { prefs } from '../prefs.ts';
 import type { PendingQueue } from '../queue/queue.ts';
 import { knownCommits, renderable, TaskReads, type RenderedRead } from '../reads.ts';
 import { plainWikilinks } from '../text.ts';
-import { buildView } from '../view.ts';
+import { buildView, occurrenceKey } from '../view.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { TaskList } from './TaskList.tsx';
 
 type Tab = 'today' | 'all';
-/** `refreshing`: the last read was stale against the watermark (G3-1); the last good read stays, if any. */
-type Connection = 'loading' | 'online' | 'offline' | 'error' | 'refreshing';
 interface Toast {
   target: CompleteTaskCommand;
   label: string;
@@ -33,7 +32,8 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
   const [captureOpen, setCaptureOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  // Tasks whose checkbox was tapped: disabled synchronously, before the envelope is even persisted (F19).
+  // Task occurrences whose checkbox was tapped: disabled synchronously, before the envelope is even persisted (F19).
+  // Keyed by occurrence, so an identical line elsewhere stays tappable (P4-B).
   const [tapped, setTapped] = useState<ReadonlySet<string>>(new Set());
   const tappedRef = useRef(new Set<string>());
 
@@ -97,15 +97,16 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
     }
   }, [queue]);
 
-  const wake = useCallback(async () => {
-    const session = await refreshSession();
-    if (session === 'ok') {
-      void queue.kick();
-      await refreshTasks();
-    } else if (session === 'offline') {
-      setConnection('offline');
-    }
-  }, [queue, refreshSession, refreshTasks]);
+  const wake = useCallback(
+    () =>
+      wakeUp({
+        session: refreshSession,
+        kick: () => void queue.kick(),
+        tasks: refreshTasks,
+        setConnection,
+      }),
+    [queue, refreshSession, refreshTasks],
+  );
 
   // Start, `online`, focus: re-confirm the session, then retry the queue immediately.
   useEffect(() => {
@@ -144,11 +145,11 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
     return () => clearTimeout(id);
   }, [toast]);
 
-  const view = useMemo(() => buildView(tasks, snapshot.items), [tasks, snapshot.items]);
+  const view = useMemo(() => buildView(tasks, snapshot.items, accountKey), [tasks, snapshot.items, accountKey]);
 
   const complete = useCallback(
     async (task: TaskView) => {
-      const key = task.locator.lineText;
+      const key = occurrenceKey(task.locator);
       if (tappedRef.current.has(key)) return;
       if (!accountKey || !tasks) {
         setNotice('Connect once to set up this device.');
@@ -171,12 +172,25 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
     [accountKey, queue, tasks],
   );
 
+  // Completions with an Undo being minted: the toast and the Done today row cannot mint a second one (P4-B).
+  const undoingRef = useRef(new Set<string>());
   const undo = useCallback(
     async (target: CompleteTaskCommand, label: string) => {
       setToast(null);
       if (!accountKey || !revision) return;
-      const envelope = undoCompleteTask({ baseRevision: revision }, target);
-      await queue.undoCompletion(target, envelope, { accountKey, label, taskKey: target.payload.task.lineText });
+      const undone = queue
+        .getSnapshot()
+        .items.some((i) => i.envelope.type === 'UndoCompleteTask' && i.envelope.payload.target.operationId === target.operationId);
+      if (undone || undoingRef.current.has(target.operationId)) return;
+      undoingRef.current.add(target.operationId);
+      try {
+        const envelope = undoCompleteTask({ baseRevision: revision }, target);
+        await queue.undoCompletion(target, envelope, { accountKey, label, taskKey: occurrenceKey(target.payload.task) });
+      } catch {
+        setNotice('Could not keep this action on the device.');
+      } finally {
+        undoingRef.current.delete(target.operationId);
+      }
     },
     [accountKey, queue, revision],
   );
@@ -207,16 +221,11 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
             </button>
           </div>
         )}
-        {!signedOut && connection === 'offline' && (
-          <div className="banner" role="status">
-            Offline. Captures are kept on this device and sent when you are back online.
-          </div>
-        )}
-        {!signedOut && connection === 'error' && (
-          <div className="banner banner-warn" role="status">
-            <span>Could not load tasks.</span>
+        {!signedOut && (connection === 'offline' || connection === 'error') && (
+          <div className={connection === 'error' ? 'banner banner-warn' : 'banner'} role="status">
+            <span>{unreachableText(connection)}</span>
             <button type="button" onClick={() => void wake()}>
-              Retry
+              Try again
             </button>
           </div>
         )}
@@ -239,7 +248,7 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
           </div>
         )}
 
-        {needsAttention && <ActionsPanel queue={queue} items={snapshot.items} read={tasks} />}
+        {needsAttention && <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={refreshTasks} />}
 
         {connection === 'loading' && !tasks && <p className="muted">Loading…</p>}
         {connection !== 'loading' && !tasks && (connection === 'refreshing' || rendered) && (
@@ -251,13 +260,13 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
             <>
               <TaskList title="Overdue" rows={view.overdue} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} overdue />
               <TaskList title="Today" rows={view.today} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} empty="Nothing due today." />
-              <TaskList title="Done today" rows={view.doneToday} tapped={tapped} blocked onComplete={complete} />
+              <TaskList title="Done today" rows={view.doneToday} tapped={tapped} blocked onComplete={complete} onUndo={undo} />
             </>
           ) : (
             <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={!!writeBlocked} onComplete={complete} empty="No open tasks." />
           ))}
 
-        {!needsAttention && <ActionsPanel queue={queue} items={snapshot.items} read={tasks} />}
+        {!needsAttention && <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={refreshTasks} />}
       </main>
 
       <button type="button" className="fab" onClick={() => setCaptureOpen(true)} aria-label="Capture">

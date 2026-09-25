@@ -27,6 +27,8 @@ export interface QueueItem {
   envelope: Command;
   label: string;
   taskKey: string | null;
+  /** The account the item was created under (A7). */
+  accountKey: string;
   state: ItemState;
   error: PendingError | null;
   everSent: boolean;
@@ -571,6 +573,7 @@ export class PendingQueue {
       envelope: this.#envelopeOf(record),
       label: record.label,
       taskKey: record.taskKey,
+      accountKey: record.accountKey,
       state,
       error: mismatch ? ACCOUNT_MISMATCH : record.lastError,
       everSent: record.everSent,
@@ -588,6 +591,7 @@ export class PendingQueue {
       envelope: this.#envelopeOf(saved),
       label: saved.label,
       taskKey: saved.taskKey,
+      accountKey: saved.accountKey,
       state: 'saved',
       error: null,
       everSent: true,

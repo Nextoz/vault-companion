@@ -295,6 +295,11 @@ textarea:focus-visible {
   font-size: 0.85rem;
 }
 
+.task .link {
+  align-self: center;
+  min-height: var(--tap);
+}
+
 .primary {
   background: var(--accent);
   border-color: var(--accent);

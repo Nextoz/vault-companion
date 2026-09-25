@@ -1,20 +1,24 @@
-import type { TaskView } from '@vault-companion/contracts';
+import type { CompleteTaskCommand, TaskView } from '@vault-companion/contracts';
 import { plainWikilinks, readOnlyText } from '../text.ts';
-import type { Row } from '../view.ts';
+import { occurrenceKey, type Row } from '../view.ts';
+import { attentionText } from './ActionsPanel.tsx';
 import { StateChip } from './StateChip.tsx';
 
 interface Props {
   title: string;
   rows: Row[];
+  /** Occurrence keys of tapped checkboxes (`occurrenceKey`). */
   tapped: ReadonlySet<string>;
   /** No completion from this list (Done today, or the file is write-blocked). */
   blocked: boolean;
   onComplete: (task: TaskView) => void;
+  /** Undo a saved app completion from its Done today row (P4-B); rows without `undo` offer none. */
+  onUndo?: (target: CompleteTaskCommand, label: string) => void;
   overdue?: boolean;
   empty?: string;
 }
 
-export function TaskList({ title, rows, tapped, blocked, onComplete, overdue = false, empty }: Props) {
+export function TaskList({ title, rows, tapped, blocked, onComplete, onUndo, overdue = false, empty }: Props) {
   if (rows.length === 0 && !empty) return null;
   return (
     <section className="group" aria-label={title}>
@@ -24,7 +28,15 @@ export function TaskList({ title, rows, tapped, blocked, onComplete, overdue = f
       ) : (
         <ul className="tasks">
           {rows.map((row) => (
-            <TaskRow key={row.key} row={row} tapped={tapped} blocked={blocked} overdue={overdue} onComplete={onComplete} />
+            <TaskRow
+              key={row.key}
+              row={row}
+              tapped={tapped}
+              blocked={blocked}
+              overdue={overdue}
+              onComplete={onComplete}
+              onUndo={onUndo}
+            />
           ))}
         </ul>
       )}
@@ -38,11 +50,20 @@ function TaskRow({
   blocked,
   overdue,
   onComplete,
-}: { row: Row; tapped: ReadonlySet<string>; blocked: boolean; overdue: boolean; onComplete: (t: TaskView) => void }) {
-  const { task, action } = row;
+  onUndo,
+}: {
+  row: Row;
+  tapped: ReadonlySet<string>;
+  blocked: boolean;
+  overdue: boolean;
+  onComplete: (t: TaskView) => void;
+  onUndo: Props['onUndo'];
+}) {
+  const { task, action, undo } = row;
   const busy = action !== null && action.state !== 'attention' && action.state !== 'saved';
   const readOnly = task?.readOnlyReason ?? null;
-  const canComplete = !row.done && task !== null && readOnly === null && !blocked && !busy && !tapped.has(task.locator.lineText);
+  const canComplete =
+    !row.done && task !== null && readOnly === null && !blocked && !busy && !tapped.has(occurrenceKey(task.locator));
   const text = plainWikilinks(row.description);
 
   return (
@@ -67,8 +88,21 @@ function TaskRow({
           {readOnly && <span className="readonly">{readOnlyText(readOnly)}</span>}
           {action && <StateChip state={action.state} />}
         </span>
-        {action?.state === 'attention' && action.error && <span className="error">{action.error.message}</span>}
+        {action?.state === 'attention' && action.error && <span className="error">{attentionText(action)}</span>}
       </div>
+      {undo && onUndo && (
+        <button
+          type="button"
+          className="link"
+          aria-label={`Undo: ${text}`}
+          onClick={(e) => {
+            e.currentTarget.disabled = true; // synchronous, like the checkbox
+            onUndo(undo, action?.label ?? text);
+          }}
+        >
+          Undo
+        </button>
+      )}
     </li>
   );
 }
