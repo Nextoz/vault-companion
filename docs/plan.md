@@ -33,9 +33,10 @@ FIXES — new findings reconciled in `docs/reviews/phase-1-reconciliation.md` ("
 | Stream | Owner | Status |
 |---|---|---|
 | Rerun Lead items (create/update precondition — the Critical; fail-closed listing; stale-Undo trailer; truncated listing refusal; console + onError tests; ADR-0011 precision) | Lead | **done** `a9800c2`, 424 tests, all guards mutation-checked |
-| F3 queue/view rerun fixes (Astra N2, N3; Opus N5) | Opus 5.5 worker `f3`, pane `w3:pC`, branch `agent/queue-rerun-fixes`, brief `docs/briefs/F3-queue-rerun-fixes.md` | in flight |
+| F3 queue/view rerun fixes (Astra N2, N3; Opus N5) | Opus 5.5 worker `f3` (retired) | **merged** `7c7a3a4`; report `docs/briefs/F3-report.md` |
 
-Next: merge F3 → full check + WebKit e2e → **gate run 3** (fresh Opus + Astra; brief + rerun addendum; report names
+**Gate run 3 in flight** (`2a0c17e`, 432 tests, e2e 8/8): Opus `rereview2-opus` (pane `w3:pD`) and Astra `codex exec`
+(pane `w3:pE`, log `astra-rerun2.log`) → `docs/reviews/phase-1-rereview2-{opus,astra}.md`. Previously planned: gate run 3 (fresh Opus + Astra; brief + rerun addendum; report names
 `phase-1-rereview2-*.md`). CI: owner decided 2026-09-25 — GPT-6 Astra at effort ≤ medium (`docs/orchestration.md`); launch after F3 merges (memory).
 
 ### Unresolved issues / risks

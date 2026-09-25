@@ -20,13 +20,8 @@ decided with real probe evidence. K2 (`w3:p8`) and F2 (`w3:p9`) fix workers runn
 **Gate rerun:** Astra BLOCK (1 Critical: create could replace a file/directory), Opus PASS WITH FIXES. Lead fixes done
 (`a9800c2`, 424 tests). F3 (queue/view) in flight in pane `w3:pC`, branch `agent/queue-rerun-fixes`.
 
-**State at last check (2026-09-25, memory-pressure event #2):** F3 has UNCOMMITTED changes in
-`C:\Devault-companion-worktrees\queue-rerun-fixes` (api.ts, queue/db.ts, queue/queue.ts, queue/queue.gate.test.ts,
-ui/App.tsx, view.test.ts, new reads.ts + reads.test.ts) and is waiting on its own background mutation script — a
-mutant may be applied to the source at any moment. No F3 report yet. The Lead's waiter was reaped by Claude Code for
-low memory (2.4 GB free); not restarted.
+**F3 merged** (`7c7a3a4`); gate run 3 launched on `2a0c17e` (432 tests, e2e 8/8).
 
-**Exact next action:** do NOT edit that worktree while F3's mutation script may be running. Check `herdr agent read f3`:
-when it has committed on `agent/queue-rerun-fixes` and written `docs/briefs/F3-report.md`, review + merge, run
-`pnpm check` + WebKit e2e, then launch gate run 3 (`phase-1-rereview2-*.md`). If F3's session died with changes
-uncommitted, first restore any mutant (F3 used backups under its temp dir; diff against expectations) before committing.
+**Exact next action:** read `docs/reviews/phase-1-rereview2-{opus,astra}.md` (Astra log `astra-rerun2.log` in the Lead
+scratchpad, UTF-16); reconcile. If the gate passes: close Phase 1, then launch CI (brief C) on GPT-6 Astra at effort
+medium via `codex exec -c model_reasoning_effort="medium"`, then plan Phase 2.
