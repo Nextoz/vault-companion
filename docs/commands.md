@@ -120,6 +120,9 @@ effect and shows the view as `refreshing` — a saved completion never reappears
 - **Multiple tabs / installed PWA (A3):** claim, local cancellation, settlement and discard run inside
   `navigator.locks.request('vc-pending', …)` and re-read the IndexedDB record inside the lock; in-memory state is a
   cache, never the basis of a decision. Without Web Locks, local cancellation is disabled (Undo is always sent).
+- **Claim lease (F2 decision, accepted by the Lead):** a claim writes `leaseUntil` (60 s) and `claimId` to the record, so
+  other tabs neither send, cancel nor discard an item in flight; a crashed tab's lease expires; settlement only writes if
+  its `claimId` still owns the record. A request slower than 60 s may be re-sent by another tab — safe by server dedupe.
 - **Session changes (A7):** the session/account is re-checked after every awaited step of a claim and immediately
   before the request; the request carries `X-VC-Account`.
 - **Receipts (A9, R12):** a receipt is stored in IndexedDB (`receipts`) in the same transaction that removes the

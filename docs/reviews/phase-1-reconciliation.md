@@ -34,3 +34,15 @@ Owners: **L** = Lead (domain, stores, worker, contracts) · **K2** = kernel fix 
 
 `docs/commands.md` (head-CAS algorithm, paging, account header, receipt persistence, dependent release, cross-tab),
 `docs/vault-contract.md` §4.2 and §4.4, `docs/security.md` (JWT claims), ADR-0010 note, ADR-0011.
+
+## Fix results (2026-09-25)
+
+- Lead: `0e6173a`, `1a9a55f` — all L items; regressions mutation-checked.
+- K2: `6d01305` (`docs/briefs/K2-report.md`) — 32 tests incl. 4,000-document property test; 13/14 mutants killed,
+  1 proven equivalent. **Residual (Low, deferred):** R7 blank residue remains when Done has other non-blank content
+  (needs a §4.2 change); recorded in `docs/plan.md`.
+- F2: `48e6b49` (`docs/briefs/F2-report.md`) — 20/20 mutants killed; new two-page WebKit e2e for A3. Decision recorded:
+  60 s claim lease (`docs/commands.md`).
+- Integrated `main`: 408 tests / 26 files green; WebKit e2e 8/8. The property test needed a 60 s timeout under the
+  full parallel suite (no assertion changed).
+- Next: gate rerun with fresh Opus + Astra (`phase-1-rereview-*.md`).

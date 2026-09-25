@@ -85,7 +85,8 @@ function tasksOf(text: string): readonly ParsedTask[] {
 }
 
 describe('kernel properties over generated documents', () => {
-  it(`P1–P3 over ${DOCUMENTS} seeded documents`, () => {
+  // ~2.6 s alone, >5 s under the full parallel suite: give the generator headroom (no assertion changed).
+  it(`P1–P3 over ${DOCUMENTS} seeded documents`, { timeout: 60_000 }, () => {
     const rnd = mulberry32(SEED);
     const stats = { completions: 0, doneAbove: 0, exactAccepted: 0, exactDeclined: 0, semanticOk: 0, semanticRefused: 0, refusals: 0 };
     for (let i = 0; i < DOCUMENTS; i++) {
