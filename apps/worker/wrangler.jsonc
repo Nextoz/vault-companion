@@ -28,17 +28,10 @@
     "USER_TIME_ZONE": "Europe/Copenhagen",
   },
 
-  // Everything else in REQUIRED is set per account with `wrangler secret put <NAME>` (docs/deploy.md step 7), never
-  // committed. Identifiers are secrets too so that the public repo carries no real account, domain or email:
-  //   wrangler secret put ACCESS_TEAM_DOMAIN       # https://<team>.cloudflareaccess.com
-  //   wrangler secret put ACCESS_AUD               # Access application audience (AUD) tag
-  //   wrangler secret put ALLOWED_EMAILS           # comma-separated; must match the Access policy
-  //   wrangler secret put APP_ORIGIN               # https://<worker-host>, no trailing slash
-  //   wrangler secret put GITHUB_APP_ID
-  //   wrangler secret put GITHUB_APP_PRIVATE_KEY   # PKCS#8 PEM (see docs/deploy.md step 1)
-  //   wrangler secret put GITHUB_INSTALLATION_ID
-  //   wrangler secret put VAULT_OWNER
-  //   wrangler secret put VAULT_REPO
+  // Fixed values: the vault branch is main; durable dates are Copenhagen dates (docs/vault-contract.md). No overrides.
+  // Everything else in REQUIRED is a secret (identifiers too: the repo is public). First deploy uploads them all with
+  // `wrangler deploy --secrets-file <absolute path outside any repo>`; rotation: `wrangler secret put <NAME>`
+  // (docs/deploy.md steps 6-7).
   // `secrets.required` is the machine-readable form of this list (wrangler types/dev validation; config.test.ts).
   "secrets": {
     "required": [

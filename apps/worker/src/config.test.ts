@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import runbook from '../../../docs/deploy.md?raw';
 import raw from '../wrangler.jsonc?raw';
 import { configProblems } from './index.ts';
 
@@ -58,9 +59,19 @@ describe('wrangler.jsonc', () => {
     expect(config.preview_urls).toBe(false);
   });
 
-  it('commits only non-identifying vars (public repo); everything else is a secret', () => {
-    expect(Object.keys(vars).sort()).toEqual(['AUTH_MODE', 'USER_TIME_ZONE', 'VAULT_BRANCH']);
+  it('commits only the fixed non-identifying vars (public repo); everything else is a secret', () => {
+    // Vault branch is main; durable dates are Copenhagen dates (docs/vault-contract.md). No placeholders.
+    expect(vars).toEqual({ AUTH_MODE: 'access', VAULT_BRANCH: 'main', USER_TIME_ZONE: 'Europe/Copenhagen' });
     expect(required.filter((k) => !secrets.includes(k))).toEqual([]);
+  });
+
+  it('first-deploy secrets file in docs/deploy.md lists exactly the required secrets', () => {
+    // `wrangler deploy --secrets-file` uploads every secret with the first version (docs/deploy.md step 6).
+    const block = /```json\n([\s\S]*?)```/.exec(runbook)?.[1];
+    expect(block).toBeDefined();
+    const keys = Object.keys(JSON.parse(block!) as Record<string, string>).sort();
+    expect(keys).toEqual([...secrets].sort());
+    expect(keys).toEqual(required.filter((k) => !(k in vars)).sort());
   });
 
   it('never gives a secret a committed value', () => {

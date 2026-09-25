@@ -80,5 +80,10 @@ once merged**; other commands keep ADR-0005 paging, so a very deep completion de
 4. Hostname (CodeRabbit PR #10): `workers_dev: false` and `preview_urls: false`, asserted by `config.test.ts`; the
    only hostname is the custom domain behind Access, attached with `wrangler deploy --domain <host>` so it never
    enters the repo. `APP_ORIGIN` must match it exactly. Dashboard check: `docs/deploy.md` step 8.
-5. Runbook order (CodeRabbit PR #10): dry run → `wrangler login --use-keyring` → first deploy → secrets. Each
-   `secret put` deploys a live version; `/api/*` answers `503` (`configProblems`) until all nine are set.
+5. Runbook order (CodeRabbit PR #10, Lead decision at `bf9b2ec`): dry run → `wrangler login --use-keyring` →
+   secrets JSON at an absolute path outside any repo → first deploy with
+   `wrangler deploy --domain <host> --secrets-file <file>` (one version with all nine secrets; the file is then
+   deleted or kept outside repos) → later rotations with `wrangler secret put`. `config.test.ts` checks that the
+   runbook's JSON template lists exactly the required secrets and that the vars are fixed (`VAULT_BRANCH="main"`,
+   `USER_TIME_ZONE="Europe/Copenhagen"`, no overrides). The runbook's Node command and `--secrets-file` were
+   exercised against a dry run with a throwaway key and dummy values; a real upload needs an account.

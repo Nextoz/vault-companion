@@ -86,45 +86,63 @@ pnpm exec wrangler login --use-keyring
 `--use-keyring` keeps the OAuth token in the OS keychain; without it wrangler stores it in a **plaintext TOML file**
 in your home directory. Set `CLOUDFLARE_ACCOUNT_ID` in your shell (not in the repo).
 
-## 6. First deploy
+## 6. Secrets file (outside every repository)
 
-```sh
-pnpm exec wrangler deploy --domain <host>
+The first deploy uploads the Worker **and all nine secrets in one version**, so no live version ever runs without
+them. Write this JSON to `<path-outside-repos>/secrets.json` — an absolute path **outside any Git repository** —
+replacing each placeholder (the keys are checked against `wrangler.jsonc` by `apps/worker/src/config.test.ts`):
+
+```json
+{
+  "ACCESS_TEAM_DOMAIN": "https://<team>.cloudflareaccess.com",
+  "ACCESS_AUD": "<AUD tag from step 3>",
+  "ALLOWED_EMAILS": "<same address(es) as the Access policy, comma-separated>",
+  "APP_ORIGIN": "https://<host>",
+  "GITHUB_APP_ID": "<App ID from step 1>",
+  "GITHUB_APP_PRIVATE_KEY": "<set by the command below>",
+  "GITHUB_INSTALLATION_ID": "<installation ID from step 2>",
+  "VAULT_OWNER": "<owner>",
+  "VAULT_REPO": "<vault-repo>"
+}
 ```
 
-This uploads the Worker with the committed config (`workers_dev`/`preview_urls` off) and attaches `<host>` as its
-custom domain; pass `--domain <host>` on **every** later deploy too, so the domain stays out of the repo. Deploy
-**before** any `wrangler secret put`: on a Worker that does not exist yet, `secret put` creates one without this
-config. (`pnpm deploy:dry` already built `apps/web/dist`; rebuild it with `pnpm --filter @vault-companion/web build`
-if the web app changed since.)
-
-Until step 7 is complete, **every `/api/*` request answers `503 Service not configured`** (`configProblems` in
-`apps/worker/src/index.ts`); the static shell is served, behind Access.
-
-## 7. Secrets
-
-Still in `apps/worker`. Each command prompts for the value (or reads it from the redirected file) and sends it to
-Cloudflare; wrangler writes no secret value to disk or the repo. **Each `secret put` immediately deploys a new live
-version** of the Worker, and it keeps answering `503` until all nine are set.
+Then put the multi-line PEM into it with correct JSON escaping (Node is already required by the repo):
 
 ```sh
-pnpm exec wrangler secret put ACCESS_TEAM_DOMAIN       # https://<team>.cloudflareaccess.com
-pnpm exec wrangler secret put ACCESS_AUD               # AUD tag from step 3
-pnpm exec wrangler secret put ALLOWED_EMAILS           # same address(es) as the Access policy, comma-separated
-pnpm exec wrangler secret put APP_ORIGIN               # https://<host>, no trailing slash
-pnpm exec wrangler secret put GITHUB_APP_ID            # step 1
-pnpm exec wrangler secret put GITHUB_APP_PRIVATE_KEY < "<path-outside-repos>/app-pkcs8.pem"
-pnpm exec wrangler secret put GITHUB_INSTALLATION_ID   # step 2
-pnpm exec wrangler secret put VAULT_OWNER              # <owner>
-pnpm exec wrangler secret put VAULT_REPO               # <vault-repo>
+node -e "const fs=require('fs');const [f,k]=process.argv.slice(1);const s=JSON.parse(fs.readFileSync(f,'utf8'));s.GITHUB_APP_PRIVATE_KEY=fs.readFileSync(k,'utf8');fs.writeFileSync(f,JSON.stringify(s,null,2)+'\n')" "<path-outside-repos>/secrets.json" "<path-outside-repos>/app-pkcs8.pem"
 ```
 
 The repository is public, so **every identifying setting is a secret** — the nine above, not only the private key.
-Only three non-identifying vars are committed in `wrangler.jsonc`: `AUTH_MODE="access"`, `VAULT_BRANCH`, and a
-placeholder `USER_TIME_ZONE` (the domain default). Never move a secret into `vars`; `config.test.ts` fails if `vars`
-holds anything else. To use your own branch or zone without committing it, override at deploy time
-(`wrangler deploy --domain <host> --var USER_TIME_ZONE:<zone>`). After the last secret, store the `.pem` files in
-your password manager or delete them.
+Only three non-identifying vars are committed in `wrangler.jsonc`, with fixed values: `AUTH_MODE="access"`,
+`VAULT_BRANCH="main"` (the vault branch), and `USER_TIME_ZONE="Europe/Copenhagen"` (durable dates are Copenhagen
+dates, `docs/vault-contract.md`). Do not override them at deploy time, and never move a secret into `vars`;
+`config.test.ts` fails if `vars` differs.
+
+## 7. First deploy
+
+Still in `apps/worker`:
+
+```sh
+pnpm exec wrangler deploy --domain <host> --secrets-file "<path-outside-repos>/secrets.json"
+```
+
+This uploads one version with the committed config (`workers_dev`/`preview_urls` off), all nine secrets, and
+`<host>` as its custom domain. Pass `--domain <host>` on **every** later deploy too, so the domain stays out of the
+repo; later deploys need no `--secrets-file` (secrets carry over between versions). (`pnpm deploy:dry` already built
+`apps/web/dist`; rebuild it with `pnpm --filter @vault-companion/web build` if the web app changed since.)
+
+If a secret is missing or invalid, **every `/api/*` request answers `503 Service not configured`** (`configProblems`
+in `apps/worker/src/index.ts`); the static shell is still served, behind Access.
+
+Afterwards **delete `secrets.json`**, or keep it only outside every repository (e.g. in your password manager). Store
+or delete the `.pem` files the same way.
+
+### Rotating a secret later
+
+Once the Worker exists, change one value with `pnpm exec wrangler secret put <NAME>` (it prompts for the value; for
+the key: `pnpm exec wrangler secret put GITHUB_APP_PRIVATE_KEY < "<path-outside-repos>/app-pkcs8.pem"`). Each
+`secret put` immediately deploys a new live version. Never run `secret put` before step 7: on a Worker that does not
+exist yet it creates one without this config.
 
 ## 8. Verify the hostnames
 
