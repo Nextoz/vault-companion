@@ -271,3 +271,13 @@ describe('overdueSummary (ADR-0012)', () => {
     expect(overdueSummary(3)).toBe('3 overdue');
   });
 });
+
+describe('occurrenceKey (P4-B)', () => {
+  it('tells identical lines of one read apart and keeps one line of one read stable', () => {
+    const a = task(OPEN, 10).locator;
+    const b = task(OPEN, 12).locator;
+    expect(occurrenceKey(a)).not.toBe(occurrenceKey(b));
+    expect(occurrenceKey(a)).toBe(occurrenceKey({ ...a }));
+    expect(occurrenceKey(a)).not.toBe(occurrenceKey({ ...a, blobSha: '9'.repeat(40) }));
+  });
+});
