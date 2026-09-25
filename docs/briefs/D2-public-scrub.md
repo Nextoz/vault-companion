@@ -11,7 +11,7 @@ Change current files only (history is out of scope). Replace, don't delete meani
    and is excluded by policy).
 3. Replace local user-profile path prefixes with `%USERPROFILE%` and standalone local usernames with
    `<user>` in `docs/reviews/**` and `docs/discovery/**`.
-4. `git grep -n -i -E '[k]nowledge-vault-private|[e]vkar|[j]ob search|[t]herapy' HEAD -- . ':!docs/bootstrap/**'`
+4. `git grep -n -i -E '[k]nowledge-vault-private|[e]vkar|[j]ob search|[t]herapy' -- . ':!docs/bootstrap/**'`
    must return nothing afterwards; run it and paste the result in the commit message. Character classes
    keep this equivalent scan pattern from matching the brief itself.
 
