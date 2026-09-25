@@ -10,6 +10,7 @@
     "@vault-companion/contracts": "workspace:*",
     "@vault-companion/domain": "workspace:*",
     "hono": "^4.13.8",
-    "jose": "^6.2.12"
+    "jose": "^6.2.12",
+    "@vault-companion/github": "workspace:*"
   }
 }
