@@ -27,20 +27,21 @@ Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef4
 
 ### Work in progress (exact next actions)
 
-**Phase 1 gate FAILED** (Astra BLOCK, Opus PASS WITH FIXES). Reconciliation with owners:
-`docs/reviews/phase-1-reconciliation.md`. Fixes in flight:
+**Phase 1 gate: first run FAILED → all 24 findings fixed and integrated** (`fea97cc`; 408 tests, WebKit e2e 8/8).
+Reconciliation + results: `docs/reviews/phase-1-reconciliation.md`.
 
-| Stream | Owner | Brief | Status |
-|---|---|---|---|
-| K2 kernel fixes (A1/R1, A5/R2, R6, R7, R13, R14) | Opus 5.5 worker `k2`, pane `w3:p8`, branch `agent/kernel-fixes` | `docs/briefs/K2-kernel-fixes.md` | in flight |
-| F2 queue fixes (A3, A7, A9, R4, R12) | Opus 5.5 worker `f2`, pane `w3:p9`, branch `agent/queue-fixes` | `docs/briefs/F2-queue-fixes.md` | in flight (interrupted externally once before writing code; resumed) |
-| L head-CAS (ADR-0011: A2, A4, R8, R9), domain exact-undo via parent bytes (A1), JWT claims (A6), `X-VC-Account` check (A7), adapter path guards + allowlist (A8/R5), log/wiring tests (A10/R10), R11 | Lead on `main` | reconciliation table | **done** (`0e6173a`, `1a9a55f`), mutation-checked, 349 tests |
+**In flight — gate rerun** (brief + rerun addendum `docs/reviews/phase-1-review-brief.md`):
+Opus 5.5 `rereview-opus` (pane `w3:pA`) → `docs/reviews/phase-1-rereview-opus.md`; GPT-6 Astra via `codex exec`
+(pane `w3:pB`, log `astra-rerun.log` in the Lead scratchpad, UTF-16) → `docs/reviews/phase-1-rereview-astra.md`.
 
-Then: merge K2/F2, full check, **rerun the gate** (same brief, fresh Opus + Astra via `codex exec`).
-CI: GPT-6 Sol is **not available** on the owner's ChatGPT-account Codex (`model is not supported`); owner decision
-pending on a substitute — not started.
+Next: reconcile rerun findings; if both PASS (or only Low findings remain), close Phase 1 and start Phase 2
+(disposable end-to-end: Node harness over LocalGitStore + desktop clone + worker-equivalent sync; see roadmap).
+CI: blocked — GPT-6 Sol unavailable on the owner's Codex account; owner to choose substitute or defer.
 
 ### Unresolved issues / risks
+
+- R7 residue (Low, deferred): semantic Undo leaves a blank line in Done when Done has other non-blank content
+  (K2 report note 1; needs a vault-contract §4.2 change).
 
 - Service-worker offline shell not e2e-tested (F-report open point 1) → real-phone checklist.
 - Recent receipts are memory-only in the PWA (F-report 4): F10 overlay lost on reload.
