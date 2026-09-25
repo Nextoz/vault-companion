@@ -12,6 +12,11 @@ export interface StoredFile {
   readonly commitSha: string;
 }
 
+export interface ListedFile {
+  readonly path: string;
+  readonly blobSha: string;
+}
+
 export interface WriteRequest {
   readonly path: VaultPath;
   /**
@@ -59,6 +64,12 @@ export interface VaultStore {
    * absent. Any other failure throws (fail closed — rerun review Opus N1).
    */
   listDir(dir: string, atCommit: string): Promise<readonly string[]>;
+  /**
+   * Every **regular file** (Git mode 100644/100755; never symlinks, submodules or directories) anywhere below `dir` at
+   * `atCommit`, as full vault-relative paths with their blob SHAs. `[]` only when `dir` is confirmed absent; a truncated
+   * listing throws `FileTooLarge`; any other failure throws (fail closed). Used to resolve linked notes (P4-A).
+   */
+  listFiles(dir: string, atCommit: string): Promise<readonly ListedFile[]>;
   /** Single-file commit parented on `baseCommit`; publishes only as a fast-forward from it (head-CAS, ADR-0011). */
   writeFile(req: WriteRequest): Promise<WriteResult>;
   /** Find a commit in `baseCommitSha..untilCommit` whose trailer `key` (default `Vault-Companion-Op`) equals `value`. */

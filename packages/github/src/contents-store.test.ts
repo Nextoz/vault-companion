@@ -161,6 +161,31 @@ describe('GitHubContentsStore', () => {
     await expect(cut.listDir('Inbox', SHA('a'))).rejects.toBeInstanceOf(FileTooLarge);
   });
 
+  it('listFiles (P4-A): recursive tree at the pinned commit, regular files only, truncation fails closed', async () => {
+    const tree = {
+      truncated: false,
+      tree: [
+        { path: 'Garden', mode: '040000', type: 'tree', sha: SHA('1') },
+        { path: 'Garden/Plan.md', mode: '100644', type: 'blob', sha: SHA('2') },
+        { path: 'run.md', mode: '100755', type: 'blob', sha: SHA('3') },
+        { path: 'link.md', mode: '120000', type: 'blob', sha: SHA('4') }, // symlink: the Contents API would follow it
+        { path: 'vendored', mode: '160000', type: 'commit', sha: SHA('5') },
+      ],
+    };
+    const { s, calls } = store(() => json(200, tree));
+    expect(await s.listFiles('Projects', SHA('a'))).toEqual([
+      { path: 'Projects/Garden/Plan.md', blobSha: SHA('2') },
+      { path: 'Projects/run.md', blobSha: SHA('3') },
+    ]);
+    expect(calls[0]!.url).toBe(`https://api.github.com/repos/o/r/git/trees/${SHA('a')}:Projects?recursive=1`);
+    const truncated = store(() => json(200, { ...tree, truncated: true })).s;
+    await expect(truncated.listFiles('Projects', SHA('a'))).rejects.toBeInstanceOf(FileTooLarge);
+    const absent = store((url) => (url.includes(':Projects') ? json(404, {}) : json(200, { truncated: false, tree: [] }))).s;
+    expect(await absent.listFiles('Projects', SHA('a'))).toEqual([]);
+    const failing = store((url) => (url.includes(':Projects') ? json(404, {}) : json(200, { truncated: false, tree: [{ path: 'Projects', mode: '040000', type: 'tree', sha: SHA('6') }] }))).s;
+    await expect(failing.listFiles('Projects', SHA('a'))).rejects.toBeInstanceOf(StoreUnavailable);
+  });
+
   it('rejects an unsafe path before any request is made (A8/R5)', async () => {
     const { s, calls } = gitData(200);
     await expect(s.writeFile({ ...req, path: '../../issues' as VaultPath })).rejects.toThrow('unsafe vault path');

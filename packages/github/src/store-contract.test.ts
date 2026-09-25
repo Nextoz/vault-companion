@@ -1,6 +1,7 @@
 // One behavioural contract, two implementations: the in-memory test double must behave like real Git.
 import { TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type VaultPath, type VaultStore } from '@vault-companion/domain';
 import { gitBlobSha, InMemoryStore } from '@vault-companion/domain/testing';
+import { symlinkSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LocalGitStore } from './local-git-store.ts';
 import { createTempRepos, git, type TempRepos } from './git-fixture.ts';
@@ -57,6 +58,18 @@ describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_0
     const { store } = await make();
     const names = await store.listDir('Inbox', (await store.head()).commitSha);
     expect([...names].sort()).toEqual(['Første note - 2026-09-20.md', 'sub']);
+  });
+
+  it('listFiles (P4-A): every regular file below a directory, recursively, with blob SHAs; fails closed', async () => {
+    const { store } = await make();
+    const x = (await store.head()).commitSha;
+    const files = [...(await store.listFiles('Inbox', x))].sort((a, b) => a.path.localeCompare(b.path));
+    expect(files.map((f) => f.path)).toEqual(['Inbox/Første note - 2026-09-20.md', 'Inbox/sub/nested.md']);
+    for (const f of files) expect(f.blobSha).toBe((await store.readFile(f.path as VaultPath, x))!.blobSha);
+    expect(await store.listFiles('Nowhere', x)).toEqual([]);
+    await expect(store.listFiles('Inbox', 'f'.repeat(40))).rejects.toThrow();
+    await expect(store.listFiles(TODO, x)).rejects.toThrow(); // a file is not an absent directory
+    await expect(store.listFiles('Inbox/../Tasks', x)).rejects.toThrow('unsafe vault path');
   });
 
   it('head-CAS (ADR-0011): writes from the current head succeed; any later commit makes a write from the old head fail', async () => {
@@ -179,5 +192,23 @@ describe('LocalGitStore mode precondition (gate-3 F2, mutant M13)', { timeout: 3
     const x = (await store.head()).commitSha;
     expect(await write(store, TODO, x, 'v2', 'op', 'h', 'regular-file')).toEqual({ ok: false, reason: 'precondition-failed' });
     expect((await store.head()).commitSha).toBe(x);
+  });
+});
+
+describe('LocalGitStore listFiles returns regular files only (P4-A: a symlink could point outside the allowlist)', { timeout: 30_000 }, () => {
+  it('omits symlinks, keeps 100644 and 100755 files', async () => {
+    const repos = createTempRepos({ ...SEED, 'Projects/plain.md': 'p\n', 'Projects/exec.md': 'e\n', 'Finance/secret.md': 's\n' });
+    current = { store: new LocalGitStore({ repo: repos.bare }), external: async () => '', cleanup: () => repos.cleanup() };
+    const writer = `${repos.root}/writer`;
+    git(writer, 'pull', '-q', '--ff-only');
+    symlinkSync('../Finance/secret.md', `${writer}/Projects/link.md`);
+    git(writer, 'add', '-A');
+    git(writer, 'update-index', '--chmod=+x', 'Projects/exec.md');
+    git(writer, 'commit', '-q', '-m', 'link');
+    git(writer, 'push', '-q', 'origin', 'main');
+    expect(git(writer, 'ls-tree', 'HEAD', 'Projects/link.md')).toMatch(/^120000 /);
+    const store = current.store;
+    const files = await store.listFiles('Projects', (await store.head()).commitSha);
+    expect(files.map((f) => f.path).sort()).toEqual(['Projects/exec.md', 'Projects/plain.md']);
   });
 });
