@@ -20,8 +20,12 @@ decided with real probe evidence. K2 (`w3:p8`) and F2 (`w3:p9`) fix workers runn
 **Gate rerun:** Astra BLOCK (1 Critical: create could replace a file/directory), Opus PASS WITH FIXES. Lead fixes done
 (`a9800c2`, 424 tests). F3 (queue/view) in flight in pane `w3:pC`, branch `agent/queue-rerun-fixes`.
 
-**F3 merged** (`7c7a3a4`); gate run 3 launched on `2a0c17e` (432 tests, e2e 8/8).
+**Phase 1 gate passed with fixes** (run 3). Lead fixes committed (`593d2f6`, 443 tests). Remote `Nextoz/vault-companion` (private)
+exists; `main` pushed. Claude tokens are running low: implementation is routed to Cloud and Astra-low.
 
-**Exact next action:** read `docs/reviews/phase-1-rereview2-{opus,astra}.md` (Astra log `astra-rerun2.log` in the Lead
-scratchpad, UTF-16); reconcile. If the gate passes: close Phase 1, then launch CI (brief C) on GPT-6 Astra at effort
-medium via `codex exec -c model_reasoning_effort="medium"`, then plan Phase 2.
+**In flight:** F4 (Opus, pane `w3:pF`, local branch `agent/queue-gate3`); D1 (Astra low, pane `w3:pG`, local branch
+`agent/spec-drift`); C (Cloud `session_01WxbFmRJdtnNWyYPcqLkmvt`, branch `agent/ci` on origin).
+
+**Exact next action:** for each finished stream: read its report (F4: `docs/briefs/F4-report.md`; D1: `D1 DONE` line in
+`d1-run.log`; C: `git fetch` then `docs/briefs/C-report.md` on `origin/agent/ci`), review the diff, run `pnpm check`
+(+ web e2e for F4), merge, push `main`. Then decompose Phase 2 into Cloud briefs.

@@ -27,17 +27,20 @@ Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef4
 
 ### Work in progress (exact next actions)
 
-**Phase 1 gate:** run 1 FAILED (24 findings, all fixed, `fea97cc`). Rerun: Astra BLOCK (1 Critical), Opus PASS WITH
-FIXES — new findings reconciled in `docs/reviews/phase-1-reconciliation.md` ("Rerun" table).
+**Phase 1 gate: PASSED WITH FIXES** (run 3: Opus + Astra both PASS WITH FIXES, no Critical/High). Reconciliation:
+`docs/reviews/phase-1-reconciliation.md` ("Gate run 3"). App repo now has a private remote: `Nextoz/vault-companion`
+(created 2026-09-25 with owner approval; contains no vault content).
 
 | Stream | Owner | Status |
 |---|---|---|
-| Rerun Lead items (create/update precondition — the Critical; fail-closed listing; stale-Undo trailer; truncated listing refusal; console + onError tests; ADR-0011 precision) | Lead | **done** `a9800c2`, 424 tests, all guards mutation-checked |
-| F3 queue/view rerun fixes (Astra N2, N3; Opus N5) | Opus 5.5 worker `f3` (retired) | **merged** `7c7a3a4`; report `docs/briefs/F3-report.md` |
+| Lead gate-3 items G3-3, F1, F2 | Lead | **done** `a3e442e`, `593d2f6` (443 tests, mutants killed) |
+| F4 queue gate-3 (G3-1 watermark, G3-2 atomic retry, F3 App wiring) | Opus 5.5 worker `f4`, pane `w3:pF`, branch `agent/queue-gate3` (local), brief `docs/briefs/F4-queue-gate3.md` | in flight |
+| D1 spec drift (F6) | Codex **Astra low**, pane `w3:pG`, branch `agent/spec-drift` (local worktree), log `d1-run.log` in Lead scratchpad | in flight |
+| C CI + `pnpm ci:local` | **Claude Code Cloud** session `session_01WxbFmRJdtnNWyYPcqLkmvt`, branch `agent/ci` (pushed by the cloud) | in flight (first cloud trial) |
+| F4-sizing (server deadline, concurrent `known=`) | — | Phase 3 sizing |
 
-**Gate run 3 in flight** (`2a0c17e`, 432 tests, e2e 8/8): Opus `rereview2-opus` (pane `w3:pD`) and Astra `codex exec`
-(pane `w3:pE`, log `astra-rerun2.log`) → `docs/reviews/phase-1-rereview2-{opus,astra}.md`. Previously planned: gate run 3 (fresh Opus + Astra; brief + rerun addendum; report names
-`phase-1-rereview2-*.md`). CI: owner decided 2026-09-25 — GPT-6 Astra at effort ≤ medium (`docs/orchestration.md`); launch after F3 merges (memory).
+Next: review + merge F4, D1, C (cloud: `git fetch`, review `origin/agent/ci`, verify locally, merge); then Phase 2
+(disposable end-to-end) — to be decomposed into Cloud briefs (repo-contained) + Astra-low tasks.
 
 ### Unresolved issues / risks
 

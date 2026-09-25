@@ -96,4 +96,9 @@ the only record.
   `claude --cloud "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, commit and push the branch when done. Do not open a PR or spawn agents."`
   Record session ID + branch in `docs/plan.md`. Continue a session: `claude -p "<message>" --cloud <session-id>`.
 - Finish: `git fetch`, review the branch, run verification locally, merge if accepted.
-- First use is one small task to verify the workflow.
+- First use is one small task to verify the workflow. Verified 2026-09-25 (brief C).
+- `claude --cloud` needs an interactive TTY: launch it with `herdr pane run <pane> "claude --cloud '…'"` and read the
+  `Created cloud session: … session_<id>` line from the pane.
+- **Routing under Claude-token pressure (owner, 2026-09-25):** most implementation goes to Claude Code Cloud; small or
+  low-risk tasks to Codex GPT-6 Astra at effort `low` (`cmd /c "codex exec -m gpt-6-astra -c model_reasoning_effort=low …"`).
+  The local Lead stays lean: decompose, review, integrate.
