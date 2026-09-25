@@ -33,8 +33,8 @@ Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef4
 | Stream | Owner | Brief | Status |
 |---|---|---|---|
 | K2 kernel fixes (A1/R1, A5/R2, R6, R7, R13, R14) | Opus 5.5 worker `k2`, pane `w3:p8`, branch `agent/kernel-fixes` | `docs/briefs/K2-kernel-fixes.md` | in flight |
-| F2 queue fixes (A3, A7, A9, R4, R12) | Opus 5.5 worker `f2`, pane `w3:p9`, branch `agent/queue-fixes` | `docs/briefs/F2-queue-fixes.md` | in flight |
-| L head-CAS (ADR-0011: A2, A4, R8, R9), domain exact-undo via parent bytes (A1), JWT claims (A6), `X-VC-Account` check (A7), adapter path guards + allowlist (A8/R5), log/wiring tests (A10/R10), R11 | Lead on `main` | reconciliation table | next |
+| F2 queue fixes (A3, A7, A9, R4, R12) | Opus 5.5 worker `f2`, pane `w3:p9`, branch `agent/queue-fixes` | `docs/briefs/F2-queue-fixes.md` | in flight (interrupted externally once before writing code; resumed) |
+| L head-CAS (ADR-0011: A2, A4, R8, R9), domain exact-undo via parent bytes (A1), JWT claims (A6), `X-VC-Account` check (A7), adapter path guards + allowlist (A8/R5), log/wiring tests (A10/R10), R11 | Lead on `main` | reconciliation table | **done** (`0e6173a`, `1a9a55f`), mutation-checked, 349 tests |
 
 Then: merge K2/F2, full check, **rerun the gate** (same brief, fresh Opus + Astra via `codex exec`).
 CI: GPT-6 Sol is **not available** on the owner's ChatGPT-account Codex (`model is not supported`); owner decision

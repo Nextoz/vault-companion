@@ -17,6 +17,10 @@ review. Herdr workers `kernel` (`w3:p4`), `frontend` (`w3:p3`) idle.
 **Phase 1 gate (2026-09-25):** failed; reconciled (`docs/reviews/phase-1-reconciliation.md`), ADR-0011 head-CAS
 decided with real probe evidence. K2 (`w3:p8`) and F2 (`w3:p9`) fix workers running; panes w3:p4–p7 closed.
 
-**Exact next action:** Lead implements head-CAS (ADR-0011) in `packages/domain/src/store.ts` port
-(`writeFile` gains `baseCommit`, result `head-moved`), InMemoryStore, LocalGitStore (`update-ref` old=X),
-GitHubContentsStore (Git Data API), executor (budget 5, paged dedupe), plus the other L items in the reconciliation.
+**Lead fixes done:** `0e6173a` (head-CAS ADR-0011, exact Undo via parent bytes, path guards) and `1a9a55f`
+(JWT claims, account binding, real-stack log/wiring tests). 349 tests green, all mutation-checked.
+
+**Exact next action:** wait for K2 (`w3:p8`) and F2 (`w3:p9`) reports (`docs/briefs/K2-report.md`, `F2-report.md` on their
+branches); review diffs; merge into `main` (expect conflicts only in lockfile/tsconfig); full check + e2e; then rerun
+the Phase 1 gate with `docs/reviews/phase-1-review-brief.md` (fresh Opus + Astra via `codex exec`, new report names
+`phase-1-rereview-{opus,astra}.md`).
