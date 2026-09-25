@@ -216,6 +216,7 @@ describe('account isolation', () => {
     a.change({ kind: 'note', text: 'Only for A' });
     await a.dispose();
 
+    expect(await store.draft(ACCOUNT_B)).toBeUndefined();
     const b = keeper(ACCOUNT_B);
     expect(await b.restore()).toBeNull();
     b.change({ kind: 'task', text: 'B writes its own' });
@@ -232,6 +233,12 @@ describe('account isolation', () => {
     expect((await store.all()).map((r) => r.operationId)).toEqual([envelope.operationId]);
     expect(send).not.toHaveBeenCalled();
     queue.dispose();
+  });
+
+  it('a store answering with another account\'s draft is still not shown', async () => {
+    const foreign = { accountKey: ACCOUNT_A, kind: 'task' as const, text: 'Only for A', updatedAt: 1 };
+    const confused: DraftStore = { ...store, draft: async () => foreign };
+    expect(await keeper(ACCOUNT_B, { store: confused }).restore()).toBeNull();
   });
 });
 
