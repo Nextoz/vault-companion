@@ -33,7 +33,8 @@ exists; `main` pushed. Claude tokens are running low: implementation is routed t
 - PRs #1 (D1) and #2 (D2 scrub) merged (`4915e36`, `7316ea2`). Lead merges PRs itself when checks pass.
 - Watcher `tools/wait-for-work.sh` runs in the background and wakes the Lead on CodeRabbit reviews / new `agent/*` branches.
 - Cloud C (`session_01WxbFmRJdtnNWyYPcqLkmvt`, `agent/ci`) and P2-A (`session_01FyLWeGWnPruL9dXefaVGf3`,
-  `agent/e2e-harness`) — when pushed with reports: open PRs, CodeRabbit loop (Cloud for P2-A), verify locally, merge.
+  `agent/e2e-harness`) — **done but unpushed** (sessions were bundle uploads, no `origin`). Owner installs the Claude
+  GitHub App on the repo, then Lead sends each session `claude -p "<push instruction>" --cloud <id>`; then PRs as usual.
 
 **Exact next action:** `git fetch`; handle whichever of the above is ready first. Keep the Lead lean (Claude tokens low):
 offload implementation and PR follow-ups to Cloud / Astra low.
