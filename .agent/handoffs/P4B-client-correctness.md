@@ -64,10 +64,9 @@ worker, docs or service-worker change. Base: `origin/main` `e37dc83` (main was *
 
 ## Important discoveries
 
-- **The branch was not pushed.** The container had no git remote (cloned from an empty seed bundle). I added
-  `origin = https://github.com/Nextoz/vault-companion.git`, where read works. Push is refused by the git proxy:
-  *"Nextoz/vault-companion is not in this session's authorized repository set"*. The commits exist only in this
-  container. Add the repo to the session's sources and push, or fetch the commits another way.
+- The container had no git remote (cloned from an empty seed bundle). I added
+  `origin = https://github.com/Nextoz/vault-companion.git`. The first push was refused by the git proxy (repo not
+  in the session's authorized set). After the owner attached the repo with push access, the branch was pushed.
 - **WebKit could not be installed** (proxy 403 to `cdn.playwright.dev` / `playwright.download.prss.microsoft.com`).
   The e2e suite ran on the pre-installed **Chromium** with the iPhone 15 profile, using a git-excluded scratch config
   that overrides only the browser. CI's WebKit run is the first WebKit verification.
@@ -131,4 +130,4 @@ worker, docs or service-worker change. Base: `origin/main` `e37dc83` (main was *
 ## Commit
 
 Branch `agent/client-correctness` on `origin/main` `e37dc83`: `01617d1`, `b6b0514`, `f6e200e`, `fe42398`, `37f3412`,
-`0701638`, plus this handoff commit. **Not pushed** (git proxy authorization, above).
+`0701638`, plus the handoff commits. Pushed to `origin/agent/client-correctness`.
