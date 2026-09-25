@@ -63,7 +63,7 @@ For N1, GitHub's [Create a tree documentation](https://docs.github.com/en/rest/g
 
 ### Independent adversarial probes
 
-Scripts are under `%TEMP%`, this run `C:\Users\evkar\AppData\Local\Temp`, importing actual repository modules via absolute paths.
+Scripts are under `%TEMP%`, this run `%USERPROFILE%\AppData\Local\Temp`, importing actual repository modules via absolute paths.
 
 ```powershell
 node --experimental-transform-types "$env:TEMP\vc-astra-rerun.mts"

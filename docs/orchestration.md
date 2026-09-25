@@ -92,13 +92,52 @@ the only record.
 - Only for bounded, repo-contained tasks: no live vault, Windows-only tooling, Herdr state or local sync. Never send the
   personal vault repository to the cloud. Cloud workers count as workers for concurrency planning.
 - Precondition: `git remote -v` shows a GitHub remote for this repo. If not, stop and tell the owner; never create one.
+- Precondition 2: the **Claude GitHub App is installed on `Nextoz/vault-companion`** (github.com/apps/claude). Without it
+  `claude --cloud` uploads a local *bundle* instead of cloning: the session has no `origin` and cannot push (C and P2-A,
+  2026-09-25, finished but never pushed). The launch output should say it is cloning, not bundling.
+- Every cloud brief says **push early**: a report stub pushed in the first minutes, then the final push. The Lead only
+  sees GitHub, never the container; no branch after ~15 min ⇒ ask the session (`claude -p … --cloud <id>`).
 - Launch: commit + push the brief, then
-  `claude --cloud "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, commit and push the branch when done. Do not open a PR or spawn agents."`
+  `claude --cloud "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, write .agent/handoffs/<brief>.md, commit and push the branch when done. Do not open a PR or spawn agents."`
   Record session ID + branch in `docs/plan.md`. Continue a session: `claude -p "<message>" --cloud <session-id>`.
 - Finish: `git fetch`, review the branch, run verification locally, merge if accepted.
 - First use is one small task to verify the workflow. Verified 2026-09-25 (brief C).
 - `claude --cloud` needs an interactive TTY: launch it with `herdr pane run <pane> "claude --cloud '…'"` and read the
   `Created cloud session: … session_<id>` line from the pane.
+  Launch **one at a time** and wait for the shell prompt to return before the next: text typed while `claude --cloud`
+  provisions is queued as messages to that session (`herdr pane wait-output` also matches old screen text).
 - **Routing under Claude-token pressure (owner, 2026-09-25):** most implementation goes to Claude Code Cloud; small or
   low-risk tasks to Codex GPT-6 Astra at effort `low` (`cmd /c "codex exec -m gpt-6-astra -c model_reasoning_effort=low …"`).
   The local Lead stays lean: decompose, review, integrate.
+- **Local Qwen** (tiny deterministic tasks, one at a time): `cmd /c "codex exec --oss --local-provider ollama -m qwen3.5:4b
+  --sandbox workspace-write - < <prompt> > <log> 2>&1"` in a full clone. Only with **≥ 5 GB free RAM** (the 4B model
+  needs ~3.4 GB; at 1.2 GB free on 2026-09-25 background work was reaped). No Qwen CLI is installed.
+
+## Worker → Lead handoff (owner, 2026-09-25)
+
+Every implementation worker (Cloud, Astra, Qwen) commits a short branch-local `.agent/handoffs/<brief-name>.md` with:
+1. **Completed** — what actually changed. 2. **Important discoveries** — unexpected technical/product/security
+findings, including outside the brief. 3. **Recommend** — fix now / follow-up / leave alone. 4. **Verification** —
+checks actually run and result. 5. **Commit** — SHA if available. Concise; not a review report. Launch prompts say so.
+
+Before merging, the Lead reads it and dispositions **every** meaningful discovery: fix now, concrete follow-up in
+`docs/plan.md`, or rejected with a reason (recorded in the PR comment). Worker-process commentary never goes into code
+comments. The handoff file is deleted from the branch once integrated (or on `main` after merge).
+
+## Pull requests and CodeRabbit (owner, 2026-09-25)
+
+The repo is public and CodeRabbit reviews pull requests (not direct pushes). Every finished worker branch is merged
+through a PR opened by the Lead: open PR → wait for CodeRabbit → hand the CodeRabbit comments to a worker via
+`docs/briefs/PR-coderabbit-loop.md` (Cloud, or Astra low for small PRs), which fixes with a test or rejects with a reason → verify locally (`pnpm check`, e2e where relevant) → merge. Workers never open PRs.
+- **The Lead pushes and merges PRs itself** once CodeRabbit's comments are resolved and all checks/local verification pass (owner, 2026-09-25). If CodeRabbit has not reviewed a PR, comment `@coderabbitai review`.
+- **Waking the Lead:** before stopping with delegated work outstanding, run `bash tools/wait-for-work.sh` as a
+  background command. It exits on a finished CodeRabbit review or a new `agent/*` branch on origin, which re-invokes the Lead.
+- Run `gh pr merge` from the main checkout: from a temporary worktree it merges remotely, then fails the local
+  `main` checkout (`'main' is already used by worktree`).
+Config: `.coderabbit.yaml`.
+- Codex `--sandbox workspace-write` cannot write a git **worktree's** git dir (it lives in the main repo's `.git`), so
+  Codex tasks run in a **full clone** under `C:\Devault-companion-clones\<task>` and push their own branch.
+- Codex `workspace-write` keeps `.git` **read-only** and has no GitHub credentials (verified 2026-09-25): Astra edits
+  files only; the Lead reviews the diff, commits, pushes and comments. Workers must not edit `docs/plan.md`.
+- Visibility: `pwsh -NoProfile -File tools/status.ps1` in its own pane shows agents, Codex logs, cloud session links,
+  worker branches and open PRs (refresh 30 s).

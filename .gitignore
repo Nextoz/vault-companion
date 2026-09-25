@@ -8,3 +8,5 @@ coverage/
 .wrangler/
 playwright-report/
 test-results/
+tools/wait-for-work.sh.started
+.private/

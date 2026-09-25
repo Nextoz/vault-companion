@@ -12,10 +12,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { COMMAND_TIMEOUT_MS, postCommand } from '../api.ts';
 import { captureNote, completeTask, undoCompleteTask } from '../commands.ts';
-import { knownCommits, ReadSequencer } from '../reads.ts';
+import type { Fetched } from '../api.ts';
+import { knownCommits, ReadSequencer, renderable, TaskReads } from '../reads.ts';
 import { buildView } from '../view.ts';
 import { backoffMs } from './classify.ts';
-import { openPendingStore, type PendingStore } from './db.ts';
+import { openPendingStore, type PendingRecord, type PendingStore } from './db.ts';
 import { LEASE_MS, PendingQueue, type LockManagerLike } from './queue.ts';
 
 const ACCOUNT_A = 'a'.repeat(64);
@@ -415,16 +416,16 @@ describe('A9 — receipts persist until a read includes them', () => {
     expect(await tab.store.receipts()).toHaveLength(25); // no silent cap on unacknowledged evidence
 
     const ids = tab.queue.getSnapshot().items.map((i) => i.operationId);
-    await tab.queue.forgetSaved(ids);
+    await tab.queue.forgetSaved(ids, { revision: REV, known: { [COMMIT]: 'included' } });
     expect(await tab.store.receipts()).toHaveLength(25); // "Clear saved" cannot drop unacknowledged receipts
 
-    await tab.queue.acknowledge({ [COMMIT]: 'not-included' });
+    await tab.queue.acknowledge({ revision: REV, known: { [COMMIT]: 'not-included' } });
     expect(tab.queue.getSnapshot().items.every((i) => !i.acknowledged)).toBe(true);
     expect(await tab.store.receipts()).toHaveLength(25);
 
-    await tab.queue.acknowledge({ [COMMIT]: 'included' });
+    await tab.queue.acknowledge({ revision: REV, known: { [COMMIT]: 'included' } });
     expect((await tab.store.receipts()).length).toBeLessThanOrEqual(20); // acknowledged history is bounded
-    await tab.queue.forgetSaved(ids);
+    await tab.queue.forgetSaved(ids, { revision: REV, known: { [COMMIT]: 'included' } });
     expect(await tab.store.receipts()).toEqual([]);
   });
 });
@@ -549,20 +550,20 @@ describe('R12 — a receipt must name the operation that was sent', () => {
 
 // ---- Phase 1 gate rerun (docs/reviews/phase-1-reconciliation.md, F3): N2, N3, N5 -------------------------------
 
+const ids = (send: Tab['send']) => send.mock.calls.map(([body]) => (JSON.parse(body) as Command).operationId);
+
+/** C refused (known not applied) in tab A, so its Undo U is released and queued behind it. */
+async function refusedCompletionWithUndo(a: Tab) {
+  const target = complete();
+  const undo = undoOf(target);
+  await a.queue.enqueue(target, taskOpts);
+  a.queue.setSession(ACCOUNT_A);
+  await a.queue.flush();
+  expect(await a.queue.undoCompletion(target, undo, taskOpts)).toBe('queued');
+  return { target, undo };
+}
+
 describe('N2 — Retry on a predecessor while its dependent Undo is in flight', () => {
-  const ids = (send: Tab['send']) => send.mock.calls.map(([body]) => (JSON.parse(body) as Command).operationId);
-
-  /** C refused (known not applied) in tab A, so its Undo U is released and queued behind it. */
-  async function refusedCompletionWithUndo(a: Tab) {
-    const target = complete();
-    const undo = undoOf(target);
-    await a.queue.enqueue(target, taskOpts);
-    a.queue.setSession(ACCOUNT_A);
-    await a.queue.flush();
-    expect(await a.queue.undoCompletion(target, undo, taskOpts)).toBe('queued');
-    return { target, undo };
-  }
-
   it("the Undo's late refusal is not final: it goes back behind the retried completion", async () => {
     const a = await openTab();
     const b = await openTab();
@@ -646,6 +647,302 @@ describe('N2 — Retry on a predecessor while its dependent Undo is in flight', 
   });
 });
 
+describe('G3-2 — Retry persists the predecessor and every affected dependent in one transaction', () => {
+  const READS = new Set(['all', 'get', 'receipts', 'load', 'watermark', 'close']);
+  /** Every write passes while `gate.budget` lasts; the next throws before reaching IndexedDB (the tab dies there). */
+  const interruptWrites = (gate: { budget: number }) => (s: PendingStore): PendingStore =>
+    Object.fromEntries(
+      Object.entries(s).map(([name, fn]: [string, (...args: unknown[]) => Promise<unknown>]) => [
+        name,
+        READS.has(name)
+          ? fn
+          : async (...args: unknown[]) => {
+              if (gate.budget-- <= 0) throw new Error('synthetic interruption');
+              return fn(...args);
+            },
+      ]),
+    ) as unknown as PendingStore;
+  /** Writes of `target.id` carry an uncloneable field: IndexedDB aborts the transaction that holds them. */
+  const poisonWrites = (target: { id: string }) => (s: PendingStore): PendingStore => ({
+    ...s,
+    put: (...records: PendingRecord[]) =>
+      (s.put as (...r: PendingRecord[]) => Promise<void>)(
+        ...records.map((r) => (r.operationId === target.id ? ({ ...r, poison: () => 0 } as PendingRecord) : r)),
+      ),
+  });
+
+  /** Tab A: C refused, its Undo U sent and its (refusal) response held. */
+  async function heldUndo(a: Tab) {
+    const undoReply = deferred<Response>();
+    a.send
+      .mockImplementationOnce(async () => refusal('refused:structure'))
+      .mockImplementationOnce(async () => undoReply.promise)
+      .mockImplementation(async (body) => ok(body));
+    const { target, undo } = await refusedCompletionWithUndo(a);
+    const aFlush = a.queue.flush();
+    await vi.waitFor(() => expect(a.send).toHaveBeenCalledTimes(2));
+    return { target, undo, undoReply, aFlush };
+  }
+
+  async function restart(b: Tab) {
+    b.queue.dispose();
+    const next = await openTab();
+    next.send.mockImplementation(async (body) => ok(body));
+    next.queue.setSession(ACCOUNT_A);
+    await next.queue.flush();
+    return next;
+  }
+
+  it('an interruption at the transaction boundary cannot split them: after a restart the Undo still follows', async () => {
+    const a = await openTab();
+    const gate = { budget: Infinity };
+    const b = await openTab({ wrap: interruptWrites(gate) });
+    const { target, undo, undoReply, aFlush } = await heldUndo(a);
+
+    gate.budget = 1; // one write transaction may commit; tab B dies at the next boundary
+    await b.queue.retry(target.operationId).catch(() => undefined);
+    const b2 = await restart(b);
+    expect(ids(b2.send)).toEqual([target.operationId]);
+
+    undoReply.resolve(refusal('conflict:task-changed')); // the service answered U before C existed
+    await aFlush;
+
+    expect(ids(a.send)).toEqual([target.operationId, undo.operationId, undo.operationId]);
+    expect(await a.store.all()).toEqual([]);
+    expect((await a.store.receipts()).map((r) => r.operationId).sort()).toEqual(
+      [target.operationId, undo.operationId].sort(),
+    );
+  });
+
+  it('a failure inside the transaction rolls back both, publishes nothing, and a later Retry still works', async () => {
+    const a = await openTab();
+    const poisoned = { id: '' };
+    const b = await openTab({ wrap: poisonWrites(poisoned) });
+    const { target, undo, undoReply, aFlush } = await heldUndo(a);
+
+    poisoned.id = undo.operationId;
+    await b.queue.kick(); // B has no session: this only loads and publishes the current state
+    const before = await a.store.all();
+    await expect(b.queue.retry(target.operationId)).rejects.toBeDefined();
+    expect(await a.store.all()).toEqual(before); // neither C's reset nor U's generation
+    expect(b.queue.getSnapshot().items.find((i) => i.operationId === target.operationId)).toMatchObject({
+      state: 'attention',
+    });
+
+    const b2 = await restart(b);
+    expect(b2.send).not.toHaveBeenCalled(); // C was never retried
+    undoReply.resolve(refusal('conflict:task-changed')); // answers the unchanged state: final
+    await aFlush;
+    expect(await a.store.get(undo.operationId)).toMatchObject({ state: 'attention' });
+
+    await b2.queue.retry(target.operationId);
+    await b2.queue.flush();
+    expect(ids(b2.send)).toEqual([target.operationId, undo.operationId]);
+    expect(await a.store.all()).toEqual([]);
+  });
+});
+
+describe('G3-1 — a shared durable read watermark protects receipts evicted by any tab', () => {
+  const N = 21;
+  const REV_B = '7'.repeat(40);
+  const open = (i: number) => `- [ ] Synthetic ${i} 📅 2026-09-24`;
+  const closed = (i: number) => `- [x] Synthetic ${i} 📅 2026-09-24 ✅ 2026-09-24`;
+  const commitOf = (i: number) => (0xc000 + i).toString(16).padStart(40, '0');
+  const indexOf = (lineText: string) => Number(/Synthetic (\d+)/.exec(lineText)?.[1]);
+  const task = (i: number, done: boolean): TaskView => ({
+    locator: { ...LOCATOR, lineIndex: i, lineText: done ? closed(i) : open(i) },
+    description: `Synthetic ${i}`,
+    status: done ? 'done' : 'open',
+    section: done ? 'done' : 'open',
+    priority: null,
+    due: '2026-09-24',
+    scheduled: null,
+    start: null,
+    created: null,
+    done: done ? '2026-09-24' : null,
+    recurring: false,
+    readOnlyReason: null,
+    links: [],
+  });
+  const upTo = (n: number) => Array.from({ length: n }, (_, k) => k + 1);
+  /** Tasks 1..N at `revision`, those in `done` completed; `known` as the Worker would answer it. */
+  const readAt = (revision: string, done: number[], known: TasksResponse['known']): TasksResponse => {
+    const openTasks = upTo(N)
+      .filter((i) => !done.includes(i))
+      .map((i) => task(i, false));
+    return {
+      revision,
+      blobSha: BLOB,
+      today: '2026-09-24',
+      timeZone: 'Europe/Copenhagen',
+      writeBlock: null,
+      known,
+      todayTasks: openTasks,
+      overdue: [],
+      allOpen: openTasks,
+      doneToday: done.map((i) => task(i, true)),
+    };
+  };
+  const included = (commits: string[]) => Object.fromEntries(commits.map((c) => [c, 'included' as const]));
+  const allDone = () => readAt(REV_B, upTo(N), included(upTo(N).map(commitOf)));
+
+  /** Tab B completes tasks 1..n, each landing in its own commit. */
+  async function completeAll(b: Tab, n: number) {
+    b.send.mockImplementation(async (body) => {
+      const envelope = JSON.parse(body) as CompleteTaskCommand;
+      const i = indexOf(envelope.payload.task.lineText);
+      return json(
+        200,
+        receiptFor(body, {
+          commitSha: commitOf(i),
+          effect: { kind: 'completed', completedLineText: closed(i), openLineText: open(i), completedInPlace: false, doneDate: '2026-09-24' },
+        }),
+      );
+    });
+    const ops: string[] = [];
+    for (const i of upTo(n)) {
+      const envelope = completeTask(mint(), { ...LOCATOR, lineIndex: i, lineText: open(i) });
+      ops.push(envelope.operationId);
+      await b.queue.enqueue(envelope, { accountKey: ACCOUNT_A, label: `Synthetic ${i}`, taskKey: open(i) });
+    }
+    b.queue.setSession(ACCOUNT_A);
+    await b.queue.flush();
+    return ops;
+  }
+
+  /** The tab's real read path over its own queue; the test answers each `getTasks`. */
+  function readerOf(tab: Tab) {
+    const calls: { known: readonly string[]; reply: ReturnType<typeof deferred<Fetched<TasksResponse>>> }[] = [];
+    const reads = new TaskReads({
+      getTasks: (known) => {
+        const reply = deferred<Fetched<TasksResponse>>();
+        calls.push({ known, reply });
+        return reply.promise;
+      },
+      watermark: () => tab.queue.readWatermark(),
+      receipts: () => knownCommits(tab.queue.getSnapshot().items),
+    });
+    const call = (i: number) => {
+      const c = calls[i];
+      if (!c) throw new Error(`read ${i} was not issued`);
+      return c;
+    };
+    return { reads, calls, call };
+  }
+  const openShown = (read: TasksResponse, tab: Tab) =>
+    buildView(read, tab.queue.getSnapshot().items).all.map((r) => r.description);
+
+  it("Astra's scenario: B completes 21, reads, acknowledges and evicts; A reloads, then its held R0 is stale", async () => {
+    const a = await openTab();
+    const b = await openTab();
+    const { reads, calls, call } = readerOf(a);
+    const r0 = reads.read(); // before any completion
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    const R0 = readAt(REV, [], {});
+
+    const ops = await completeAll(b, N);
+    await b.queue.acknowledge(allDone());
+    expect(await b.store.receipts()).toHaveLength(20); // the production eviction rule dropped receipt 1
+    expect(await b.queue.readWatermark()).toMatchObject({ commitSha: REV_B, receiptOpIds: [ops[0]] });
+
+    await a.queue.kick(); // A reloads durable state: receipt 1 is gone from its cache too
+    expect(openShown(R0, a)).toEqual(['Synthetic 1']); // what rendering R0 would show: the hazard
+    call(0).reply.resolve({ kind: 'ok', data: R0 });
+    expect(await r0).toEqual({ kind: 'stale', retry: true }); // R0 never asked about the watermark
+
+    const r1 = reads.read();
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(call(1).known[0]).toBe(REV_B); // every read asks about the watermark first
+    call(1).reply.resolve({ kind: 'ok', data: readAt(REV_B, upTo(N), included([REV_B, ...upTo(N).map(commitOf)])) });
+    const applied = await r1;
+    if (applied.kind !== 'apply') throw new Error(`not applied: ${applied.kind}`);
+    expect(openShown(applied.read.data, a)).toEqual([]);
+    expect(renderable(applied.read, a.queue.getSnapshot().watermark)).toBe(true);
+  });
+
+  it('a read that asked about the watermark and reports it not included is stale, with no automatic re-read', async () => {
+    const a = await openTab();
+    const b = await openTab();
+    await completeAll(b, N);
+    await b.queue.acknowledge(allDone());
+    await a.queue.kick();
+
+    const { reads, calls, call } = readerOf(a);
+    const r = reads.read();
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    expect(call(0).known[0]).toBe(REV_B);
+    call(0).reply.resolve({ kind: 'ok', data: readAt(REV, [], { [REV_B]: 'not-included' }) }); // a lagging replica
+    expect(await r).toEqual({ kind: 'stale', retry: false });
+  });
+
+  it('reload variant: a screen rendered before the eviction stops being renderable once the tab sees the watermark', async () => {
+    const a = await openTab();
+    const b = await openTab();
+    const { reads, calls, call } = readerOf(a);
+    const r0 = reads.read();
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    call(0).reply.resolve({ kind: 'ok', data: readAt(REV, [], {}) });
+    const rendered = await r0;
+    if (rendered.kind !== 'apply') throw new Error(`not applied: ${rendered.kind}`);
+    expect(renderable(rendered.read, a.queue.getSnapshot().watermark)).toBe(true);
+
+    await completeAll(b, N);
+    await b.queue.acknowledge(allDone());
+
+    const reloaded = await openTab(); // a page reload of tab A
+    expect(renderable(rendered.read, reloaded.queue.getSnapshot().watermark)).toBe(false);
+    await a.queue.kick(); // or the same page, once any queue operation reloads durable state
+    expect(renderable(rendered.read, a.queue.getSnapshot().watermark)).toBe(false);
+  });
+
+  it('explicit saved-entry removal ("Clear saved") sets the watermark in the same transaction', async () => {
+    const a = await openTab();
+    const b = await openTab();
+    const { reads, calls, call } = readerOf(a);
+    const r0 = reads.read();
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+
+    const ops = await completeAll(b, 2);
+    const RB = readAt(REV_B, [1, 2], included([commitOf(1), commitOf(2)]));
+    await b.queue.acknowledge(RB);
+    expect(await b.queue.readWatermark()).toBeNull(); // nothing evicted yet
+    await b.queue.forgetSaved(ops, RB);
+    expect(await b.store.receipts()).toEqual([]);
+    expect(await b.queue.readWatermark()).toMatchObject({ commitSha: REV_B, receiptOpIds: ops });
+
+    await a.queue.kick();
+    call(0).reply.resolve({ kind: 'ok', data: readAt(REV, [], {}) });
+    expect(await r0).toEqual({ kind: 'stale', retry: true });
+  });
+
+  it('a receipt is evicted only by a read that itself reports it included, so the watermark contains it', async () => {
+    const b = await openTab();
+    const ops = await completeAll(b, N);
+    await b.queue.acknowledge(readAt(REV_B, upTo(20), included(upTo(20).map(commitOf))));
+    // 21 acknowledged now, but this read says nothing about the oldest one (receipt 1).
+    await b.queue.acknowledge(readAt(REV_B, [N], included([commitOf(N)])));
+    expect(await b.store.receipts()).toHaveLength(N);
+    expect(await b.queue.readWatermark()).toBeNull();
+
+    await b.queue.forgetSaved(ops, readAt(REV_B, [], {})); // "Clear saved" on a read that answers nothing
+    expect(await b.store.receipts()).toHaveLength(N);
+    expect(await b.queue.readWatermark()).toBeNull();
+  });
+
+  it('a read that does not satisfy the current watermark can neither evict nor move it', async () => {
+    const b = await openTab();
+    const ops = await completeAll(b, N);
+    await b.queue.acknowledge(allDone());
+    const watermark = await b.queue.readWatermark();
+
+    // An older read that reports receipts 2 and 3 included, but not the watermark.
+    const older = readAt(REV, [2, 3], included([commitOf(2), commitOf(3)]));
+    await b.queue.forgetSaved(ops.slice(1, 3), older);
+    expect(await b.store.receipts()).toHaveLength(20);
+    expect(await b.queue.readWatermark()).toEqual(watermark);
+  });
+});
+
 describe('N3 — a late stale read never regresses the screen', () => {
   const COMMIT_C = '5'.repeat(40);
   const DONE_LINE = '- [x] Water the plants 📅 2026-09-24 ✅ 2026-09-24';
@@ -709,7 +1006,7 @@ describe('N3 — a late stale read never regresses the screen', () => {
     const R1 = readAt('7'.repeat(40), true, { [COMMIT_C]: 'included' });
     expect(reads.accept(r1)).toBe(true);
     rendered = R1;
-    await tab.queue.acknowledge(R1.known);
+    await tab.queue.acknowledge(R1);
     expect(tab.queue.getSnapshot().items).toMatchObject([{ state: 'saved', acknowledged: true }]);
     expect(shown(buildView(rendered, tab.queue.getSnapshot().items))).toEqual({ open: 0, done: ['server'] });
 
@@ -723,7 +1020,7 @@ describe('N3 — a late stale read never regresses the screen', () => {
 
   it('reload variant: an acknowledged receipt still overlays a later read that says not-included', async () => {
     let tab = await savedCompletion();
-    await tab.queue.acknowledge({ [COMMIT_C]: 'included' });
+    await tab.queue.acknowledge({ revision: '7'.repeat(40), known: { [COMMIT_C]: 'included' } });
     tab.queue.dispose();
 
     tab = await openTab(); // reload: nothing in memory survives

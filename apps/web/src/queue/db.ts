@@ -1,11 +1,14 @@
-// IndexedDB `vault-companion` / stores `pending` and `receipts` (commands.md#client-pending-queue-pwa).
-// Holds only the user's pending commands and recent receipts — never vault file contents.
+// IndexedDB `vault-companion` / stores `pending`, `receipts` and `meta` (commands.md#client-pending-queue-pwa).
+// Holds only the user's pending commands, recent receipts and the read watermark — never vault file contents.
 import type { CommandType, Receipt } from '@vault-companion/contracts';
 
 export const DB_NAME = 'vault-companion';
 export const STORE = 'pending';
 export const RECEIPTS = 'receipts';
-const VERSION = 2;
+export const META = 'meta';
+const WATERMARK = 'watermark';
+/** v3 adds `meta` (the read watermark, G3-1); the upgrade only creates missing stores, so rows survive. */
+const VERSION = 3;
 
 export interface PendingError {
   code: string;
@@ -67,16 +70,45 @@ export interface ReceiptRecord {
   savedAt: number;
 }
 
+/**
+ * Written in the same transaction that evicts acknowledged receipts (G3-1): `commitSha` is the revision of the read
+ * that reported every evicted receipt `included`. A read that does not show it included may predate those commits,
+ * and must not be rendered: the receipts that would have overlaid it are gone, in every tab.
+ */
+export interface Watermark {
+  commitSha: string;
+  /** The receipts whose eviction set this watermark (diagnostics only). */
+  receiptOpIds: string[];
+  /** Increases with every new watermark; lets a tab tell whether its rendered read predates the current one. */
+  version: number;
+}
+
+export interface ReceiptChange {
+  put?: ReceiptRecord[];
+  remove?: string[];
+  watermark?: Watermark | undefined;
+}
+
+export interface Loaded {
+  records: PendingRecord[];
+  receipts: ReceiptRecord[];
+  watermark: Watermark | null;
+}
+
 export interface PendingStore {
+  /** One readonly transaction: a consistent view of all three stores. */
+  load(): Promise<Loaded>;
   all(): Promise<PendingRecord[]>;
   get(operationId: string): Promise<PendingRecord | undefined>;
-  put(record: PendingRecord): Promise<void>;
+  /** One transaction: every record is written, or (on any failure) none is. */
+  put(...records: PendingRecord[]): Promise<void>;
   delete(...operationIds: string[]): Promise<void>;
   receipts(): Promise<ReceiptRecord[]>;
   /** One transaction: remove the pending record (if still present) and store its receipt. */
   settle(receipt: ReceiptRecord): Promise<void>;
-  putReceipts(...receipts: ReceiptRecord[]): Promise<void>;
-  deleteReceipts(...operationIds: string[]): Promise<void>;
+  /** One transaction: receipts written and removed together with the watermark that makes removal safe. */
+  writeReceipts(change: ReceiptChange): Promise<void>;
+  watermark(): Promise<Watermark | null>;
   close(): void;
 }
 
@@ -112,24 +144,36 @@ export async function openPendingStore(factory: IDBFactory = indexedDB): Promise
     const names = open.result.objectStoreNames;
     if (!names.contains(STORE)) open.result.createObjectStore(STORE, { keyPath: 'operationId' });
     if (!names.contains(RECEIPTS)) open.result.createObjectStore(RECEIPTS, { keyPath: 'operationId' });
+    if (!names.contains(META)) open.result.createObjectStore(META);
   };
-  // Another tab still holding version 1 must let go, or this tab could never open (and never keep actions).
+  // Another tab still holding an older version must let go, or this tab could never open (and never keep actions).
   const db = await request(open);
   db.onversionchange = () => db.close();
 
+  const bySeq = <T extends { seq: number }>(rows: T[]) => rows.sort((a, b) => a.seq - b.seq);
   const readAll = async <T extends { seq: number }>(name: string) => {
     const tx = db.transaction(name, 'readonly');
-    const rows = (await request(tx.objectStore(name).getAll())) as T[];
-    return rows.sort((a, b) => a.seq - b.seq);
+    return bySeq((await request(tx.objectStore(name).getAll())) as T[]);
   };
+  const readWatermark = async (tx: IDBTransaction) =>
+    ((await request(tx.objectStore(META).get(WATERMARK))) as Watermark | undefined) ?? null;
 
   return {
+    async load() {
+      const tx = db.transaction([STORE, RECEIPTS, META], 'readonly');
+      const [records, receipts, watermark] = await Promise.all([
+        request(tx.objectStore(STORE).getAll()) as Promise<PendingRecord[]>,
+        request(tx.objectStore(RECEIPTS).getAll()) as Promise<ReceiptRecord[]>,
+        readWatermark(tx),
+      ]);
+      return { records: bySeq(records), receipts: bySeq(receipts), watermark };
+    },
     all: () => readAll<PendingRecord>(STORE),
     async get(operationId) {
       const tx = db.transaction(STORE, 'readonly');
       return (await request(tx.objectStore(STORE).get(operationId))) as PendingRecord | undefined;
     },
-    put: (record) => write(db, [STORE], (tx) => tx.objectStore(STORE).put(record)),
+    put: (...records) => write(db, [STORE], (tx) => records.forEach((r) => tx.objectStore(STORE).put(r))),
     delete: (...ids) => write(db, [STORE], (tx) => ids.forEach((id) => tx.objectStore(STORE).delete(id))),
     receipts: () => readAll<ReceiptRecord>(RECEIPTS),
     settle: (receipt) =>
@@ -137,8 +181,13 @@ export async function openPendingStore(factory: IDBFactory = indexedDB): Promise
         tx.objectStore(STORE).delete(receipt.operationId);
         tx.objectStore(RECEIPTS).put(receipt);
       }),
-    putReceipts: (...rows) => write(db, [RECEIPTS], (tx) => rows.forEach((r) => tx.objectStore(RECEIPTS).put(r))),
-    deleteReceipts: (...ids) => write(db, [RECEIPTS], (tx) => ids.forEach((id) => tx.objectStore(RECEIPTS).delete(id))),
+    writeReceipts: ({ put = [], remove = [], watermark }) =>
+      write(db, [RECEIPTS, META], (tx) => {
+        if (watermark) tx.objectStore(META).put(watermark, WATERMARK);
+        put.forEach((r) => tx.objectStore(RECEIPTS).put(r));
+        remove.forEach((id) => tx.objectStore(RECEIPTS).delete(id));
+      }),
+    watermark: () => readWatermark(db.transaction(META, 'readonly')),
     close() {
       db.close();
     },

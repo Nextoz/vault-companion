@@ -1,31 +1,40 @@
-# Checkpoint — 2026-09-25 (Phase 1, services integrated)
+# Checkpoint — 2026-09-25 (Milestone 1: integrated first-release build)
 
-**HEAD:** `main` (clean after this commit). **Tests:** lint + typecheck + 305 tests / 20 files green;
-Playwright WebKit 7/7 green at `86ef426` (web unchanged since).
+**HEAD:** `main`, clean. CI (GitHub Actions) gates every PR. Plan, milestones, workers, targets: `docs/plan.md`.
 
-**Completed since last checkpoint:** command services hardened at the kernel seam (`checkNoteInput`,
-`KernelInvariantError` ⇒ non-retryable refusal); seam tests covering A1, A3–A5, A7, A10–A14, A17, A26–A28, A30,
-A38, capture golden (ADR-0010) and lost-response retries for every command; InMemoryStore CAS made atomic.
+## In flight (all Claude Code Cloud; branches appear on origin when pushed)
 
-**Remaining in Phase 1:** `docs/plan.md` → Work in progress items 3–4.
+P2-A fixes (PR #4) · P2-B offline e2e · P3-A deploy scaffold · P4-A linked notes · P4-B client correctness ·
+P4-C draft recovery. Session IDs in `docs/plan.md`. Watcher: `tools/wait-for-work.sh` (background) wakes the Lead on
+new branches, CodeRabbit reviews, finished CI and finished Codex logs.
 
-**Branches/worktrees:** `agent/markdown-kernel`, `agent/frontend-shell` merged; worktrees kept until the Phase 1
-review. Herdr workers `kernel` (`w3:p4`), `frontend` (`w3:p3`) idle.
+## Exact next actions
 
-**Risks:** `docs/plan.md` → Unresolved issues / risks.
+1. For each pushed branch: open PR → CodeRabbit loop → CI green → read `.agent/handoffs/<brief>.md` and disposition
+   every discovery in the PR comment → merge. P4-A also gets an Astra adversarial review first.
+2. After PR #4 merges: run the Phase 2 gate (`docs/reviews/phase-2-review-brief.md`, Cloud Opus + Astra) and
+   reconcile. Note for the gate: the real desktop worker never writes conflict markers (harness models a stricter case).
+3. After P3-A merges: owner does G2 with `docs/deploy.md` (owner has a Cloudflare account); Lead deploys and verifies
+   read-only against the live vault; then milestone 2 canary (G3).
+4. Owner decision T1 (Today) — recommendation below; implement only after the owner chooses.
 
-**Phase 1 gate (2026-09-25):** failed; reconciled (`docs/reviews/phase-1-reconciliation.md`), ADR-0011 head-CAS
-decided with real probe evidence. K2 (`w3:p8`) and F2 (`w3:p9`) fix workers running; panes w3:p4–p7 closed.
+## Owner-side issue seen 2026-09-25 (vault, not app)
 
-**Gate rerun:** Astra BLOCK (1 Critical: create could replace a file/directory), Opus PASS WITH FIXES. Lead fixes done
-(`a9800c2`, 424 tests). F3 (queue/view) in flight in pane `w3:pC`, branch `agent/queue-rerun-fixes`.
+The desktop sync run at 14:06 stopped: "Git index already contains staged changes". Nothing reaches GitHub until the
+owner commits or unstages them in the vault repo. The Lead does not modify the vault.
 
-**Phase 1 gate passed with fixes** (run 3). Lead fixes committed (`593d2f6`, 443 tests). Remote `Nextoz/vault-companion` (private)
-exists; `main` pushed. Claude tokens are running low: implementation is routed to Cloud and Astra-low.
+## T1 Today — recommended first-release behaviour (awaiting owner)
 
-**In flight:** F4 (Opus, pane `w3:pF`, local branch `agent/queue-gate3`); D1 (Astra low, pane `w3:pG`, local branch
-`agent/spec-drift`); C (Cloud `session_01WxbFmRJdtnNWyYPcqLkmvt`, branch `agent/ci` on origin).
+Separate four signals instead of merging them:
+- **Chosen work:** `Tasks/Active Work Now.md` shown read-only at the top (already an allowed read-only context in
+  `docs/vault-contract.md` §1). No task mapping inferred; outcomes are not completed from the app.
+- **Today:** open tasks with `📅` = today or `⏳` ≤ today (scheduled work stays until done), or priority 🔺/⏫.
+- **Overdue:** `📅` < today, as a collapsed group **below** Today ("3 overdue").
+- **Available:** `🛫` ≤ today is *not* Today; such tasks stay in All tasks.
 
-**Exact next action:** for each finished stream: read its report (F4: `docs/briefs/F4-report.md`; D1: `D1 DONE` line in
-`d1-run.log`; C: `git fetch` then `docs/briefs/C-report.md` on `origin/agent/ci`), review the diff, run `pnpm check`
-(+ web e2e for F4), merge, push `main`. Then decompose Phase 2 into Cloud briefs.
+Example (today = 25 Sep): "Send invoice 📅 25 Sep" → Today · "Draft outline ⏳ 23 Sep" → Today · "Fix bike 🔺" →
+Today · "Renew passport 📅 20 Sep" → Overdue (collapsed) · "Plan trip 🛫 1 Sep" → All only. Active Work Now's
+outcomes appear above all of them as plain read-only text.
+
+Differences from current code: start dates leave Today; Overdue moves below Today and collapses; `📅` uses `=` (the
+Build Contract wording). Needs owner choice before `docs/product-contract.md` changes.

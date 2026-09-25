@@ -10,10 +10,13 @@
 //   `vc-pending` Web Lock after re-reading IndexedDB. In-memory state is a cache, never the basis of a decision (A3).
 //   Without Web Locks, local cancellation is disabled;
 // - nothing is dropped except on receipt or explicit user discard. No retry limit. A receipt is kept in IndexedDB
-//   until a read reports its commit `included`; only such acknowledged receipts are ever evicted (A9).
-import type { Command, CommandType, CompleteTaskCommand, Receipt } from '@vault-companion/contracts';
+//   until a read reports its commit `included`; only such acknowledged receipts are ever evicted (A9);
+// - evicting a receipt first records, in the same transaction, the revision of a read that reported it `included`
+//   (the watermark, G3-1). Every tab renders only reads that show the watermark included, so a receipt gone from
+//   IndexedDB can no longer be needed to overlay a stale read in any tab.
+import type { Command, CommandType, CompleteTaskCommand, Receipt, TasksResponse } from '@vault-companion/contracts';
 import { backoffMs, classify, knownNotApplied, type Outcome } from './classify.ts';
-import type { PendingError, PendingRecord, PendingStore, ReceiptRecord } from './db.ts';
+import type { PendingError, PendingRecord, PendingStore, ReceiptRecord, Watermark } from './db.ts';
 
 export type ItemState = 'pending' | 'saving' | 'saved' | 'attention';
 
@@ -37,6 +40,16 @@ export interface QueueItem {
 export interface QueueSnapshot {
   items: readonly QueueItem[];
   signedOut: boolean;
+  /** Loaded in the same transaction as `items`: whenever a receipt is missing from them, this covers it. */
+  watermark: Watermark | null;
+}
+
+/** The parts of a task read that prove which commits it contains. */
+export type ReadEvidence = Pick<TasksResponse, 'revision' | 'known'>;
+
+/** True if the read contains the watermark commit, so every receipt evicted under it is reflected in the read. */
+export function satisfiesWatermark(read: ReadEvidence, watermark: Watermark | null): boolean {
+  return watermark === null || read.revision === watermark.commitSha || read.known[watermark.commitSha] === 'included';
 }
 
 export interface EnqueueOptions {
@@ -101,6 +114,7 @@ export class PendingQueue {
   // Caches of IndexedDB, refreshed inside every lock. Never trusted for a decision outside one.
   #records = new Map<string, PendingRecord>();
   #receipts = new Map<string, ReceiptRecord>();
+  #watermark: Watermark | null = null;
   readonly #envelopes = new Map<string, Command>();
   readonly #listeners = new Set<() => void>();
 
@@ -111,7 +125,7 @@ export class PendingQueue {
   #flushing: Promise<void> | null = null;
   #flushAgain = false;
   #cancelTimer: (() => void) | null = null;
-  #snapshot: QueueSnapshot = { items: [], signedOut: false };
+  #snapshot: QueueSnapshot = { items: [], signedOut: false, watermark: null };
 
   private constructor(options: QueueOptions) {
     this.#store = options.store;
@@ -142,6 +156,11 @@ export class PendingQueue {
   };
 
   getSnapshot = (): QueueSnapshot => this.#snapshot;
+
+  /** The watermark as IndexedDB has it now, whichever tab set it. */
+  readWatermark(): Promise<Watermark | null> {
+    return this.#store.watermark();
+  }
 
   // ---- session -----------------------------------------------------------------------------------------------
 
@@ -197,19 +216,23 @@ export class PendingQueue {
   /**
    * User "Retry": same envelope, immediately. Its dependents that needed attention go back behind it (R4). One
    * whose request is in flight keeps its claim but moves to a new dependency generation, so a refusal answering
-   * the old predecessor state is requeued when it arrives rather than becoming final (N2).
+   * the old predecessor state is requeued when it arrives rather than becoming final (N2). The predecessor and
+   * every affected dependent are written in one IndexedDB transaction (G3-2).
    */
   async retry(operationId: string): Promise<void> {
     await this.#locked(async () => {
       const record = this.#records.get(operationId);
       if (!record || this.#leased(record)) return;
       const again = (r: PendingRecord): PendingRecord => ({ ...r, state: 'pending', attempts: 0, nextAttemptAt: 0, lastError: null });
-      await this.#persist(again(record));
-      for (const dependent of [...this.#records.values()]) {
+      const writes = [again(record)];
+      for (const dependent of this.#records.values()) {
         if (dependent.dependsOn !== operationId) continue;
         const next = { ...dependent, dependencyGeneration: (dependent.dependencyGeneration ?? 0) + 1 };
-        await this.#persist(next.state === 'attention' && !this.#leased(next) ? again(next) : next);
+        writes.push(next.state === 'attention' && !this.#leased(next) ? again(next) : next);
       }
+      // One transaction (G3-2): a tab that dies here leaves either all of it or none, never C requeued behind a
+      // dependent whose old refusal would still count as final.
+      await this.#persist(...writes);
     });
     void this.flush();
   }
@@ -226,31 +249,32 @@ export class PendingQueue {
     });
   }
 
-  /** Drop "Saved to GitHub" entries the UI no longer needs. Unacknowledged receipts are kept regardless (A9). */
-  async forgetSaved(operationIds: Iterable<string>): Promise<void> {
+  /**
+   * Drop "Saved to GitHub" entries the UI no longer needs, with the read on screen as the watermark. Unacknowledged
+   * receipts are kept regardless (A9), and so is any receipt that read does not report `included` (G3-1).
+   */
+  async forgetSaved(operationIds: Iterable<string>, read: ReadEvidence): Promise<void> {
     const ids = new Set(operationIds);
     await this.#locked(async () => {
-      const drop = [...this.#receipts.values()].filter((r) => r.acknowledged && ids.has(r.operationId));
-      if (drop.length === 0) return;
-      await this.#store.deleteReceipts(...drop.map((r) => r.operationId));
-      for (const r of drop) this.#receipts.delete(r.operationId);
-      this.#emit();
+      const chosen = [...this.#receipts.values()].filter((r) => r.acknowledged && ids.has(r.operationId));
+      await this.#writeReceipts(read, [], this.#evictable(chosen, read));
     });
   }
 
-  /** The `known` map of a read: receipts it reports `included` become acknowledged, and evictable. */
-  async acknowledge(known: Readonly<Record<string, 'included' | 'not-included'>>): Promise<void> {
+  /**
+   * A rendered read: receipts it reports `included` become acknowledged. Acknowledged receipts beyond the retention
+   * limit are evicted, with this read's revision as the new watermark, if this read reports them `included` too.
+   */
+  async acknowledge(read: ReadEvidence): Promise<void> {
     await this.#locked(async () => {
       const now = [...this.#receipts.values()]
-        .filter((r) => !r.acknowledged && known[r.receipt.commitSha] === 'included')
+        .filter((r) => !r.acknowledged && read.known[r.receipt.commitSha] === 'included')
         .map((r) => ({ ...r, acknowledged: true }));
-      if (now.length > 0) await this.#store.putReceipts(...now);
-      for (const r of now) this.#receipts.set(r.operationId, r);
-      const acknowledged = [...this.#receipts.values()].filter((r) => r.acknowledged).sort((a, b) => a.seq - b.seq);
-      const evict = acknowledged.slice(0, Math.max(0, acknowledged.length - MAX_ACKNOWLEDGED));
-      if (evict.length > 0) await this.#store.deleteReceipts(...evict.map((r) => r.operationId));
-      for (const r of evict) this.#receipts.delete(r.operationId);
-      this.#emit();
+      const receipts = new Map(this.#receipts);
+      for (const r of now) receipts.set(r.operationId, r);
+      const acknowledged = [...receipts.values()].filter((r) => r.acknowledged).sort((a, b) => a.seq - b.seq);
+      const excess = acknowledged.slice(0, Math.max(0, acknowledged.length - MAX_ACKNOWLEDGED));
+      await this.#writeReceipts(read, now, this.#evictable(excess, read));
     });
   }
 
@@ -455,9 +479,34 @@ export class PendingQueue {
   }
 
   async #reload(): Promise<void> {
-    const [records, receipts] = await Promise.all([this.#store.all(), this.#store.receipts()]);
+    const { records, receipts, watermark } = await this.#store.load();
     this.#records = new Map(records.map((r) => [r.operationId, r]));
     this.#receipts = new Map(receipts.map((r) => [r.operationId, r]));
+    this.#watermark = watermark;
+  }
+
+  /**
+   * Under the lock. Those of `candidates` that `read` proves are in its revision, provided the read contains the
+   * current watermark (so the watermark only moves forward). Otherwise none.
+   */
+  #evictable(candidates: ReceiptRecord[], read: ReadEvidence): ReceiptRecord[] {
+    if (!satisfiesWatermark(read, this.#watermark)) return [];
+    return candidates.filter((r) => read.known[r.receipt.commitSha] === 'included');
+  }
+
+  /** Under the lock. One transaction: acknowledgements, evictions, and the watermark that permits the evictions. */
+  async #writeReceipts(read: ReadEvidence, put: ReceiptRecord[], evict: ReceiptRecord[]): Promise<void> {
+    if (put.length === 0 && evict.length === 0) return;
+    const remove = evict.map((r) => r.operationId);
+    const watermark: Watermark | undefined =
+      remove.length > 0
+        ? { commitSha: read.revision, receiptOpIds: remove, version: (this.#watermark?.version ?? 0) + 1 }
+        : undefined;
+    await this.#store.writeReceipts({ put: put.filter((r) => !remove.includes(r.operationId)), remove, watermark });
+    for (const r of put) this.#receipts.set(r.operationId, r);
+    for (const id of remove) this.#receipts.delete(id);
+    if (watermark) this.#watermark = watermark;
+    this.#emit();
   }
 
   async #enqueueLocked(envelope: Command, options: EnqueueOptions): Promise<void> {
@@ -484,9 +533,10 @@ export class PendingQueue {
     });
   }
 
-  async #persist(record: PendingRecord): Promise<void> {
-    await this.#store.put(record);
-    this.#records.set(record.operationId, record);
+  /** Durable first, in one transaction; the cache and listeners see the records only once it has committed. */
+  async #persist(...records: PendingRecord[]): Promise<void> {
+    await this.#store.put(...records);
+    for (const record of records) this.#records.set(record.operationId, record);
     this.#emit();
   }
 
@@ -552,7 +602,7 @@ export class PendingQueue {
       ...[...this.#records.values()].map((r) => this.#itemOf(r)),
       ...[...this.#receipts.values()].map((r) => this.#savedItemOf(r)),
     ].sort((a, b) => a.seq - b.seq);
-    this.#snapshot = { items, signedOut: this.#signedOut };
+    this.#snapshot = { items, signedOut: this.#signedOut, watermark: this.#watermark };
     for (const listener of this.#listeners) listener();
   }
 }

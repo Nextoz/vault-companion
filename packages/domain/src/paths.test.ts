@@ -52,7 +52,7 @@ describe('linked-note read policy', () => {
     expect(canReadLinkedNote(parseVaultPath('Health/Anything.md')!)).toBe(false);
     expect(canReadLinkedNote(parseVaultPath('Projects/Some Project.md')!)).toBe(true);
     // Review A8: an allowlist, not a denylist — any other root is denied.
-    for (const root of ['Finance', 'Personal', 'Job Search 2026', 'Daily']) expect(canReadLinkedNote(parseVaultPath(`${root}/x.md`)!)).toBe(false);
+    for (const root of ['Finance', 'Personal', 'Area Example', 'Daily']) expect(canReadLinkedNote(parseVaultPath(`${root}/x.md`)!)).toBe(false);
     expect(canReadLinkedNote(parseVaultPath('Inbox/x.md')!)).toBe(true);
     expect(canReadLinkedNote(parseVaultPath('Tasks/Active Work Now.md')!)).toBe(true);
     expect(parseVaultPath(`Inbox/x${String.fromCharCode(0x85)}.md`)).toBeNull();
