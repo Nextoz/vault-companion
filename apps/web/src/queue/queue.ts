@@ -57,6 +57,8 @@ export interface EnqueueOptions {
   label: string;
   taskKey?: string | null;
   dependsOn?: string | null;
+  /** Capture Save: delete this account's draft in the same transaction that persists the item (P4-C). */
+  clearDraft?: boolean;
 }
 
 /** The part of `navigator.locks` the queue uses: an exclusive lock held for the callback's duration. */
@@ -513,7 +515,7 @@ export class PendingQueue {
     if (this.#records.has(envelope.operationId) || this.#receipts.has(envelope.operationId)) return;
     const last = this.#ordered().at(-1);
     const now = this.#now();
-    await this.#persist({
+    const record: PendingRecord = {
       operationId: envelope.operationId,
       seq: Math.max(now, (last?.seq ?? 0) + 1),
       type: envelope.type,
@@ -530,7 +532,10 @@ export class PendingQueue {
       createdAt: now,
       leaseUntil: 0,
       claimId: null,
-    });
+    };
+    await this.#store.add(record, options.clearDraft ? options.accountKey : null);
+    this.#records.set(record.operationId, record);
+    this.#emit();
   }
 
   /** Durable first, in one transaction; the cache and listeners see the records only once it has committed. */

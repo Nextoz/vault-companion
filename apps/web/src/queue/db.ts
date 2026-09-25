@@ -1,14 +1,31 @@
-// IndexedDB `vault-companion` / stores `pending`, `receipts` and `meta` (commands.md#client-pending-queue-pwa).
-// Holds only the user's pending commands, recent receipts and the read watermark — never vault file contents.
+// IndexedDB `vault-companion` / stores `pending`, `receipts`, `meta` (commands.md#client-pending-queue-pwa) and
+// `drafts`. Holds only the user's pending commands, recent receipts, the read watermark and unsent capture drafts —
+// never vault file contents.
 import type { CommandType, Receipt } from '@vault-companion/contracts';
+import type { CaptureKind } from '../prefs.ts';
 
 export const DB_NAME = 'vault-companion';
 export const STORE = 'pending';
 export const RECEIPTS = 'receipts';
 export const META = 'meta';
+export const DRAFTS = 'drafts';
 const WATERMARK = 'watermark';
-/** v3 adds `meta` (the read watermark, G3-1); the upgrade only creates missing stores, so rows survive. */
-const VERSION = 3;
+/**
+ * v3 adds `meta` (the read watermark, G3-1), v4 adds `drafts` (P4-C). The upgrade only creates missing stores, so
+ * rows survive.
+ */
+const VERSION = 4;
+
+/**
+ * The unfinished Capture text of one account: the user's own unsent words, never a command. Keyed by `accountKey`,
+ * so a draft is only ever offered back to the account that wrote it.
+ */
+export interface Draft {
+  accountKey: string;
+  kind: CaptureKind;
+  text: string;
+  updatedAt: number;
+}
 
 export interface PendingError {
   code: string;
@@ -103,12 +120,20 @@ export interface PendingStore {
   /** One transaction: every record is written, or (on any failure) none is. */
   put(...records: PendingRecord[]): Promise<void>;
   delete(...operationIds: string[]): Promise<void>;
+  /**
+   * One transaction: the new record is written and, if `draftOf` is an accountKey, that account's draft is deleted.
+   * Either both happen or neither, so saved text can never survive as a draft and be captured twice.
+   */
+  add(record: PendingRecord, draftOf: string | null): Promise<void>;
   receipts(): Promise<ReceiptRecord[]>;
   /** One transaction: remove the pending record (if still present) and store its receipt. */
   settle(receipt: ReceiptRecord): Promise<void>;
   /** One transaction: receipts written and removed together with the watermark that makes removal safe. */
   writeReceipts(change: ReceiptChange): Promise<void>;
   watermark(): Promise<Watermark | null>;
+  draft(accountKey: string): Promise<Draft | undefined>;
+  putDraft(draft: Draft): Promise<void>;
+  deleteDraft(accountKey: string): Promise<void>;
   close(): void;
 }
 
@@ -145,6 +170,7 @@ export async function openPendingStore(factory: IDBFactory = indexedDB): Promise
     if (!names.contains(STORE)) open.result.createObjectStore(STORE, { keyPath: 'operationId' });
     if (!names.contains(RECEIPTS)) open.result.createObjectStore(RECEIPTS, { keyPath: 'operationId' });
     if (!names.contains(META)) open.result.createObjectStore(META);
+    if (!names.contains(DRAFTS)) open.result.createObjectStore(DRAFTS, { keyPath: 'accountKey' });
   };
   // Another tab still holding an older version must let go, or this tab could never open (and never keep actions).
   const db = await request(open);
@@ -175,6 +201,11 @@ export async function openPendingStore(factory: IDBFactory = indexedDB): Promise
     },
     put: (...records) => write(db, [STORE], (tx) => records.forEach((r) => tx.objectStore(STORE).put(r))),
     delete: (...ids) => write(db, [STORE], (tx) => ids.forEach((id) => tx.objectStore(STORE).delete(id))),
+    add: (record, draftOf) =>
+      write(db, draftOf === null ? [STORE] : [STORE, DRAFTS], (tx) => {
+        tx.objectStore(STORE).put(record);
+        if (draftOf !== null) tx.objectStore(DRAFTS).delete(draftOf);
+      }),
     receipts: () => readAll<ReceiptRecord>(RECEIPTS),
     settle: (receipt) =>
       write(db, [STORE, RECEIPTS], (tx) => {
@@ -188,6 +219,12 @@ export async function openPendingStore(factory: IDBFactory = indexedDB): Promise
         remove.forEach((id) => tx.objectStore(RECEIPTS).delete(id));
       }),
     watermark: () => readWatermark(db.transaction(META, 'readonly')),
+    async draft(accountKey) {
+      const tx = db.transaction(DRAFTS, 'readonly');
+      return (await request(tx.objectStore(DRAFTS).get(accountKey))) as Draft | undefined;
+    },
+    putDraft: (draft) => write(db, [DRAFTS], (tx) => tx.objectStore(DRAFTS).put(draft)),
+    deleteDraft: (accountKey) => write(db, [DRAFTS], (tx) => tx.objectStore(DRAFTS).delete(accountKey)),
     close() {
       db.close();
     },
