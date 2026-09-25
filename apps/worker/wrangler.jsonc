@@ -1,0 +1,49 @@
+// Cloudflare Worker config (Phase 3 scaffold, brief P3-A). The owner's G2 steps: docs/deploy.md.
+// Public repo: placeholders only — no account IDs, domains, emails or secret values here, ever.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "vault-companion",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-20",
+  "send_metrics": false,
+  // Only hostname: the owner's custom domain behind Cloudflare Access (docs/deploy.md). No *.workers.dev and no
+  // per-version preview URLs — either would be an unprotected second origin unless Access also covers it.
+  "workers_dev": false,
+  "preview_urls": false,
+  // No `nodejs_compat`: the dry-run bundle builds without it (P3A report).
+  // `account_id` is deliberately absent: wrangler reads CLOUDFLARE_ACCOUNT_ID from the owner's shell.
+
+  // PWA and API share one origin (app.ts origin/CSRF checks assume it). /api/* always reaches the Hono app;
+  // everything else is served from the web build without invoking the Worker.
+  "assets": {
+    "directory": "../web/dist",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "single-page-application",
+  },
+
+  // Non-secret settings (Env in src/index.ts). AUTH_MODE must stay "access": configProblems() refuses anything else.
+  "vars": {
+    "AUTH_MODE": "access",
+    "VAULT_BRANCH": "main",
+    "USER_TIME_ZONE": "Europe/Copenhagen",
+  },
+
+  // Fixed values: the vault branch is main; durable dates are Copenhagen dates (docs/vault-contract.md). No overrides.
+  // Everything else in REQUIRED is a secret (identifiers too: the repo is public). First deploy uploads them all with
+  // `wrangler deploy --secrets-file <absolute path outside any repo>`; rotation: `wrangler secret put <NAME>`
+  // (docs/deploy.md steps 6-7).
+  // `secrets.required` is the machine-readable form of this list (wrangler types/dev validation; config.test.ts).
+  "secrets": {
+    "required": [
+      "ACCESS_TEAM_DOMAIN",
+      "ACCESS_AUD",
+      "ALLOWED_EMAILS",
+      "APP_ORIGIN",
+      "GITHUB_APP_ID",
+      "GITHUB_APP_PRIVATE_KEY",
+      "GITHUB_INSTALLATION_ID",
+      "VAULT_OWNER",
+      "VAULT_REPO",
+    ],
+  },
+}
