@@ -46,6 +46,18 @@ Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef4
 Next: review + merge F4, D1, C (cloud: `git fetch`, review `origin/agent/ci`, verify locally, merge); then Phase 2
 (disposable end-to-end) — to be decomposed into Cloud briefs (repo-contained) + Astra-low tasks.
 
+### Path to the phone (Lead, 2026-09-25)
+
+1. Merge P3-A (deploy scaffold) ⇒ `docs/deploy.md` runbook.
+2. **Owner G2** (credentials, no vault risk): Cloudflare account (free plan is expected to suffice — P3-A sizing),
+   Access app + policy, a GitHub App installed **only on `Nextoz/vault-companion-sandbox`**, `wrangler secret put`.
+3. Deploy against the **sandbox** vault ⇒ real iPhone: install PWA, complete/undo/capture, offline queue.
+4. Phase 2 gate + Phase 3 canary prep ⇒ owner G3 approval ⇒ switch secrets to the live vault (canary write).
+
+P3-A dispositions (Lead): `allowBuilds` accepted as an explicit minimal list; identifying settings are Wrangler
+**secrets**, never committed vars (public repo); static pages get security headers via `apps/web/public/_headers`
+with a drift test against the Worker's header constant.
+
 ### Unresolved issues / risks
 
 - Phase 3 sizing: an Undo can make two paged dedupes per attempt × 5 attempts; check the Workers subrequest limit

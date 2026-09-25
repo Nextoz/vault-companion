@@ -43,5 +43,8 @@ exists; `main` pushed. Claude tokens are running low: implementation is routed t
   (Cloud `session_01LWfCSsJj1eCeWtXgpcYspN`, `agent/offline-shell-e2e`). P4-A is security-relevant: add an Astra
   adversarial review of its PR besides CodeRabbit.
 
+- Handoffs: every worker branch carries `.agent/handoffs/<brief>.md`; Lead dispositions each discovery before merge.
+- Phone path and P3-A dispositions: `docs/plan.md` → "Path to the phone". PR #3 CI hang fixed (`492ce0f`).
+
 **Exact next action:** `git fetch`; handle whichever of the above is ready first. Keep the Lead lean (Claude tokens low):
 offload implementation and PR follow-ups to Cloud / Astra low.
