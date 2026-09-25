@@ -61,6 +61,9 @@ worker, docs or service-worker change. Base: `origin/main` `e37dc83` (main was *
      locator, or when **the user redoes the action** on that row (`src/attention.ts`).
    - Discarding a **capture** first opens a dialog that shows its text with Copy / Discard / Keep, so nothing typed is
      lost unseen.
+8. **Addendum 4: clock-skew**: no Retry (the stored envelope keeps its `occurredAt`, so identical bytes are refused
+   again). The next step reads "Check your phone's date and time, then redo the action." Copy text and Discard stay.
+   Unit test (`canRetry`, `attentionText`) and e2e (no Retry, no automatic re-send).
 
 ## Important discoveries
 
@@ -74,8 +77,8 @@ worker, docs or service-worker change. Base: `origin/main` `e37dc83` (main was *
   instead of the marker lines only.
 - Reloading while a request is in flight leaves that item "Saving…" until the 60 s lease expires (existing A3 design,
   not changed). The twin e2e test reloads while offline for that reason.
-- The discarded-refusal note is kept in memory only. After a reload the task just shows open, which is the honest
-  state. Persisting it would need an IndexedDB schema change in the queue.
+- The discarded-refusal note is kept in memory only (**accepted by the Lead**, addendum 4). After a reload the task
+  just shows open, which is the honest state. Persisting it would need an IndexedDB schema change in the queue.
 - The per-occurrence FIFO key includes the blob, so actions minted from different reads of the same line are no
   longer serialised by the queue. Ordering there relies on the server's locator check (a second completion of an
   already-completed line is refused) and on the Undo dependency (`dependsOn`), which is unchanged.
@@ -84,18 +87,15 @@ worker, docs or service-worker change. Base: `origin/main` `e37dc83` (main was *
 
 - **Worker/contract (outside P4-B):** flag lines inside conflict markers, e.g. `readOnlyReason: 'refused:vault-conflict'`
   per task, or marker line ranges in `writeBlock`. The client could then freeze only those rows.
-- Consider a sent-once guard or IndexedDB record for discarded-refusal notes if the owner wants them to survive
-  reloads.
-- `clock-skew` still shows Retry (it is not in `knownNotApplied`), though identical bytes will be refused again. Worth
-  a Lead decision.
+- If observed use shows the discarded-refusal note should survive reloads, persist it in IndexedDB.
 - Possible merge overlap: P4-C (draft recovery) also touches `CaptureSheet.tsx` (this branch adds a `taskBlocked`
   prop), and P2-B may touch the offline banner copy.
 
 ## Verification
 
 - `pnpm check` (lint + typecheck + test): **green**, 33 files, 486 tests.
-- Web e2e: `vite build` + Playwright, **24/24 green on Chromium** (iPhone 15 profile); stable under
-  `--repeat-each 5` (before addendum 3) and `--repeat-each 3` (final). WebKit not run locally (see above).
+- Web e2e: `vite build` + Playwright, **25/25 green on Chromium** (iPhone 15 profile) after addendum 4; stable under
+  `--repeat-each 5` (before addendum 3) and `--repeat-each 3` (after addendum 3). WebKit not run locally (see above).
 - **Guards broken once, each confirmed to fail its test (then restored):**
 
   | # | Mutation | Caught by |
@@ -114,6 +114,7 @@ worker, docs or service-worker change. Base: `origin/main` `e37dc83` (main was *
   | M12 | conflict banner shows server message | writeBlock test |
   | M13 | same-revision read settles a discarded refusal | attention test |
   | M14 | redo on another task settles it | attention test |
+  | M15 | Retry offered for `clock-skew` | ActionsPanel test + e2e clock-skew |
   | E1 | write-blocked rows stay completable | e2e sync-conflict |
   | E2 | task capture not blocked | e2e sync-conflict |
   | E3 | Overdue expanded by default | e2e ADR-0012 |

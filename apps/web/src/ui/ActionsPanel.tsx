@@ -12,9 +12,13 @@ const VERB: Record<CommandType, string> = {
   CaptureNote: 'Note',
 };
 
+/** The action's time is too far from the server's; the stored bytes carry that time, so only a redo can pass. */
+export const CLOCK_SKEW_TEXT = "Check your phone's date and time, then redo the action.";
+
 /** The line shown for an action that needs attention: the conflict in plain words, else the server's message. */
 export function attentionText(item: QueueItem): string | null {
   if (item.error?.code === 'conflict:task-changed') return 'This task changed on another device.';
+  if (item.error?.code === 'clock-skew') return CLOCK_SKEW_TEXT;
   return item.error?.message ?? null;
 }
 
@@ -22,9 +26,10 @@ export function attentionText(item: QueueItem): string | null {
  * Whether sending the same bytes again can succeed. A refusal known not to have applied (`refused:*`, `conflict:*`,
  * …) is final for these bytes: the server will refuse them again, so Retry is not offered (P4-B). Except a refusal
  * for Git conflict markers in the file: once the owner resolves the conflict on the desktop, the same bytes may apply.
+ * `clock-skew` is final too: the stored envelope keeps its `occurredAt`, so identical bytes are refused again.
  */
 export function canRetry(item: QueueItem): boolean {
-  if (item.accountMismatch) return false;
+  if (item.accountMismatch || item.error?.code === 'clock-skew') return false;
   return item.error?.code === 'refused:vault-conflict' || !knownNotApplied(item.error);
 }
 

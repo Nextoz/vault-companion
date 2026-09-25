@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { completeTask } from '../commands.ts';
 import type { QueueItem } from '../queue/queue.ts';
-import { attentionText, canRetry } from './ActionsPanel.tsx';
+import { attentionText, canRetry, CLOCK_SKEW_TEXT } from './ActionsPanel.tsx';
 
 const envelope = completeTask({ baseRevision: '1'.repeat(40) }, {
   path: 'Tasks/To-Do List.md',
@@ -34,6 +34,8 @@ describe('attention next steps (P4-B)', () => {
       expect(canRetry(attention(code)), code).toBe(false);
     }
     expect(canRetry(attention('account-mismatch', { accountMismatch: true }))).toBe(false);
+    // The stored envelope keeps its occurredAt: identical bytes are refused again (Lead addendum 4).
+    expect(canRetry(attention('clock-skew'))).toBe(false);
   });
 
   it('keeps Retry where resending may still succeed, including after a sync conflict is resolved', () => {
@@ -43,5 +45,7 @@ describe('attention next steps (P4-B)', () => {
   it('explains a changed task in plain words; other errors keep the server message', () => {
     expect(attentionText(attention('conflict:task-changed'))).toBe('This task changed on another device.');
     expect(attentionText(attention('refused:recurring'))).toBe('Server words.');
+    expect(attentionText(attention('clock-skew'))).toBe("Check your phone's date and time, then redo the action.");
+    expect(CLOCK_SKEW_TEXT).toBe("Check your phone's date and time, then redo the action.");
   });
 });

@@ -420,3 +420,22 @@ test('discarding a refused capture shows its text first; nothing typed is lost u
   await page.getByRole('dialog', { name: 'Discard this capture?' }).getByRole('button', { name: 'Discard' }).click();
   await expect(actions).toHaveCount(0);
 });
+
+test('a clock-skew refusal: check the date and time, then redo; no Retry, Copy text and Discard stay', async ({ page }) => {
+  api.commandMode = { refuse: { code: 'clock-skew', message: 'Clock skew.', retryable: false } };
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Capture' }).click();
+  await page.getByRole('button', { name: 'Note', exact: true }).click();
+  await page.getByLabel('Note text').fill('A synthetic thought');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+  const actions = region(page, 'Actions on this device');
+  await expect(actions).toContainText("Check your phone's date and time, then redo the action.");
+  await expect(actions.getByRole('button', { name: 'Retry' })).toHaveCount(0);
+  await expect(actions.getByRole('button', { name: 'Copy text' })).toBeVisible();
+  await expect(actions.getByRole('button', { name: 'Discard' })).toBeVisible();
+  const attempts = api.bodies.length;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(actions).toContainText('Needs attention');
+  expect(api.bodies.length).toBe(attempts); // never re-sent automatically
+});
