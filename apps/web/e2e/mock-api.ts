@@ -159,7 +159,7 @@ export class MockApi {
     if (request.headers()['x-vc-request'] !== '1') return this.#json(route, 403, { code: 'forbidden', message: 'x', retryable: false });
     const command = Command.parse(JSON.parse(raw));
     // Like the Worker: the item's account binding travels outside the body and must match the session (A7).
-    if (request.headers()['x-vc-account'] !== ACCOUNT) {
+    if (request.headers()['x-vc-account'] !== this.account) {
       return this.#json(route, 409, ApiError.parse({ code: 'account-mismatch', message: 'Other account.', retryable: false }));
     }
 
