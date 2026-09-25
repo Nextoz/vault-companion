@@ -111,7 +111,7 @@ describe('buildView', () => {
   });
 
   it('shows a task re-opened by a live Undo even when the read still has it done', () => {
-    const undo = undoCompleteTask({ baseRevision: REV }, complete);
+    const undo = undoCompleteTask({ baseRevision: REV }, complete, COMMIT);
     const items = [item(complete, 'saved', { receipt: completedReceipt }), item(undo, 'pending', { seq: 2 })];
     const v = buildView(read([], [task(DONE, 3, true)], { [COMMIT]: 'included' }), items);
     expect(v.doneToday).toEqual([]);
@@ -191,7 +191,7 @@ describe('buildView with identical task lines (P4-B)', () => {
   });
 
   it('shows a live Undo as its own row and never hides the identical task that stayed open', () => {
-    const undo = undoCompleteTask({ baseRevision: REV }, c10);
+    const undo = undoCompleteTask({ baseRevision: REV }, c10, COMMIT);
     const twin = at(11, 1, BLOB2);
     const items = [saved10(), item(undo, 'pending', { seq: 2 })];
     const v = buildView(read([twin], [done(40)], { [COMMIT]: 'included' }), items);
@@ -245,7 +245,7 @@ describe('Undo from Done today (P4-B)', () => {
   it('offers none for a completion of another account, without a session, or already being undone', () => {
     expect(buildView(included, [saved], 'b'.repeat(64)).doneToday[0]?.undo).toBeNull();
     expect(buildView(included, [saved], null).doneToday[0]?.undo).toBeNull();
-    const undo = undoCompleteTask({ baseRevision: REV }, complete);
+    const undo = undoCompleteTask({ baseRevision: REV }, complete, COMMIT);
     const undoing = buildView(included, [saved, item(undo, 'attention', { seq: 2, error: { code: 'x', message: 'x' } })], ACCOUNT);
     expect(undoing.doneToday).toMatchObject([{ undo: null }]);
   });

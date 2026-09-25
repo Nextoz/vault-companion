@@ -33,9 +33,34 @@ export function completeTask(ctx: MintContext, task: TaskLocator): CompleteTaskC
   return checked({ ...base(ctx), type: 'CompleteTask', payload: { task } }) as CompleteTaskCommand;
 }
 
-/** Undo names its target by carrying the original CompleteTask envelope verbatim. */
-export function undoCompleteTask(ctx: MintContext, target: CompleteTaskCommand): Command {
-  return checked({ ...base(ctx), type: 'UndoCompleteTask', payload: { target } });
+/**
+ * Undo names its target by carrying the original CompleteTask envelope verbatim, and the completion's commit from its
+ * receipt as a token (ADR-0013).
+ */
+export function undoCompleteTask(ctx: MintContext, target: CompleteTaskCommand, targetCommit: string): Command {
+  return checked({ ...base(ctx), type: 'UndoCompleteTask', payload: { target, targetCommit } });
+}
+
+/**
+ * An Undo of a completion that has no receipt yet (ADR-0013): everything but `targetCommit`. It is queued behind the
+ * completion; the queue fills the token from the receipt once, before the first send (`withTargetCommit`), and
+ * persists it, so every attempt sends the same bytes. Not a sendable Command until then.
+ */
+export function undoDraft(ctx: MintContext, target: CompleteTaskCommand): Command {
+  const draft = { ...base(ctx), type: 'UndoCompleteTask' as const, payload: { target } };
+  checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } }); // valid once the token is filled in
+  return draft as unknown as Command;
+}
+
+/** An Undo draft (no token yet), as the queue stores it. */
+export function isUndoDraft(envelope: Command): boolean {
+  return envelope.type === 'UndoCompleteTask' && !('targetCommit' in envelope.payload);
+}
+
+/** The draft with its token: a checked, sendable Undo whose other fields are unchanged. */
+export function withTargetCommit(draft: Command, targetCommit: string): Command {
+  if (draft.type !== 'UndoCompleteTask') throw new TypeError('not an Undo');
+  return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
 }
 
 export function captureTask(

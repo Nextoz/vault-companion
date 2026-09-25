@@ -514,3 +514,48 @@ describe('review P2A-Astra fixes', () => {
     await expect(fetch(`${baseUrl}/api/session`)).rejects.toThrow();
   });
 });
+
+describe('Undo by token (ADR-0013)', () => {
+  it('after a desktop edit: the Undo reopens the task, keeps the edit, dedupes a resend, and refuses a second Undo', async () => {
+    const h = await setup();
+    const tasks = await h.phone.read();
+    const complete = h.phone.envelope('CompleteTask', { task: locatorOf(tasks, WATER) }, tasks.revision);
+    const completion = receiptOf(await h.phone.send(complete));
+
+    h.desktop.sync();
+    const permitDue = PERMIT.replace('#todo', '#todo 📅 2026-10-01');
+    h.desktop.edit(TODO, (t) => t.replace(PERMIT, permitDue));
+    expect(h.desktop.sync()).toMatchObject({ committedLocal: true, pushed: true });
+
+    const now = await h.phone.read();
+    const undo = h.phone.envelope('UndoCompleteTask', { target: complete, targetCommit: completion.commitSha }, now.revision);
+    const undone = receiptOf(await h.phone.send(undo));
+    expect(undone).toMatchObject({ status: 'applied', effect: { kind: 'reopened', openLineText: WATER } });
+
+    // The phone never heard back: the identical envelope again is the same commit, not a second reopen.
+    expect(receiptOf(await h.phone.send(undo))).toMatchObject({ status: 'already-applied', commitSha: undone.commitSha });
+    expect(h.commitsFor(undo.operationId)).toEqual([undone.commitSha]);
+
+    const second = h.phone.envelope('UndoCompleteTask', { target: complete, targetCommit: completion.commitSha }, now.revision);
+    expect(await h.phone.send(second)).toMatchObject({ status: 409, error: { code: 'conflict:task-changed' } });
+
+    h.desktop.sync();
+    expect(h.desktop.git('log', '-1', '--format=%B', undone.commitSha)).toContain(`Vault-Companion-Undoes: ${complete.operationId}`);
+    expect(h.desktop.read(TODO)).toBe(todo([WATER, BIKE, RECEIPTS, GARDEN, permitDue, DENTIST]));
+    expect(h.bareHead()).toBe(undone.commitSha);
+  });
+
+  it('a token that is not the completion’s commit is refused and nothing is written', async () => {
+    const h = await setup();
+    const tasks = await h.phone.read();
+    const complete = h.phone.envelope('CompleteTask', { task: locatorOf(tasks, WATER) }, tasks.revision);
+    receiptOf(await h.phone.send(complete));
+    const head = h.bareHead();
+
+    const forged = h.phone.envelope('UndoCompleteTask', { target: complete, targetCommit: tasks.revision }, head);
+    expect(await h.phone.send(forged)).toMatchObject({ status: 400, error: { code: 'invalid' } });
+    const unknown = h.phone.envelope('UndoCompleteTask', { target: complete, targetCommit: 'f'.repeat(40) }, head);
+    expect(await h.phone.send(unknown)).toMatchObject({ status: 409, error: { code: 'conflict:task-changed' } });
+    expect(h.bareHead()).toBe(head);
+  });
+});

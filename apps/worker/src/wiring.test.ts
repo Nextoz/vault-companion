@@ -58,9 +58,11 @@ describe('A18 through the real command stack (review A10/R10)', () => {
 
     const complete = env('CompleteTask', { task: water.locator });
     Command.parse(complete);
+    const completed = await post(complete);
+    const { commitSha } = (await completed.clone().json()) as { commitSha: string };
     const statuses = [
-      (await post(complete)).status,
-      (await post(env('UndoCompleteTask', { target: complete }))).status,
+      completed.status,
+      (await post(env('UndoCompleteTask', { target: complete, targetCommit: commitSha }))).status,
       (await post(env('CaptureTask', { text: `Call ${SENTINEL} about the bike` }))).status,
       (await post(env('CaptureNote', { text: `${SENTINEL} first line\nand ${SENTINEL} body` }))).status,
       (await post(env('CompleteTask', { task: recycling.locator }))).status, // refused:recurring

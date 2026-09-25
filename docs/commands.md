@@ -22,8 +22,10 @@ version it has shipped.
 
 Payloads:
 - `CompleteTask { task: { path, blobSha, lineIndex, lineText, occurrencesAtRead } }`
-- `UndoCompleteTask { target: <the original CompleteTask envelope, verbatim> }` — the server authenticates it
-  by its payload hash against the target commit's trailer and re-derives the effect itself (F4/F5).
+- `UndoCompleteTask { target: <the original CompleteTask envelope, verbatim>, targetCommit: <C from its receipt> }` —
+  `targetCommit` is a token (ADR-0013): the server verifies it against Git (never trusts it) and re-derives the effect
+  itself (F4/F5). The client fills it from the completion's receipt; an Undo queued before that receipt exists is a
+  draft that gets the token once, persisted before its first send, so retries resend identical bytes.
 - `CaptureTask { text, priority?, due?, context? }`
 - `CaptureNote { text, context? }`
 
@@ -91,15 +93,20 @@ The effect is never taken from the client. For a found or just-created commit C 
   byte-for-byte; the mutation's own effect object is then the receipt effect. Mismatch ⇒ `dedupe-unknown`.
 - CaptureNote: the created path is taken from C's changed-file list.
 
-`UndoCompleteTask`: find the target's commit T by trailer in `target.baseRevision..X`, check the supplied
-target envelope's hash equals T's payload trailer, then search `T..X` for
-`Vault-Companion-Undoes: <target operationId>`: found ⇒ `conflict:task-changed`; inconclusive ⇒ `dedupe-unknown`.
-A completion can be undone only once; Undo commits carry that trailer. If no prior Undo is found,
-re-derive the completion effect from T as above, then:
-- **exact inverse** — the file at X is byte-identical to `T:path`: write `T^:path` (the verified original bytes;
-  review A1/R1);
-- otherwise the semantic inverse (vault-contract §4.2) on the file at X.
-Target not found ⇒ `conflict:task-changed` (nothing to undo in Git).
+`UndoCompleteTask` (ADR-0013 — no paged scans; at most 3 attempts, ≈ 10 GitHub calls each). Per attempt at X:
+1. Read commit C = `targetCommit`. Unknown ⇒ `conflict:task-changed` (nothing to undo). Its `Vault-Companion-Op` must
+   equal the target's operation ID and its payload trailer the target envelope's hash, else `invalid`.
+2. One single-page listing of `C..X` (≤ 250 commits; GitHub: one `compare` page). C not an ancestor of X ⇒
+   `conflict:task-changed`. More than one page ⇒ `refused:undo-expired` ("too much changed since; undo it in
+   Obsidian"), never paged. The same page answers: this Undo's own operation ID present ⇒ dedupe (`already-applied`);
+   another commit with `Vault-Companion-Undoes: <target operationId>` ⇒ `conflict:task-changed` (a completion is undone
+   at most once; Undo commits carry that trailer).
+3. Re-derive the completion effect: C must change only the task list, and replaying the target on `C^` must give
+   exactly C's blob. Then:
+   - **exact inverse** — the file at X is byte-identical to `C:path`: write `C^:path` (the verified original bytes;
+     review A1/R1);
+   - otherwise the semantic inverse (vault-contract §4.2) on the file at X.
+Other commands keep the paged dedupe of `baseRevision..X` (ADR-0005).
 
 Per effect type:
 
@@ -108,7 +115,7 @@ Per effect type:
 | CaptureTask append | dedupe at X; head-CAS from X |
 | CaptureNote create | dedupe at X; case-insensitive collision check on the Inbox tree at X; head-CAS from X |
 | CompleteTask | dedupe at X; already-done target ⇒ conflict, never a second `✅` |
-| UndoCompleteTask | dedupe at X; Undoes trailer prevents a second Undo of the same completion; inverse requires exact completed text |
+| UndoCompleteTask | dedupe in the single `C..X` page; Undoes trailer prevents a second Undo of the same completion; inverse requires exact completed text |
 | task-ID assignment | not performed in first release |
 | recurrence successor | not performed (`refused:recurring`) |
 
@@ -133,6 +140,10 @@ effect and shows the view as `refreshing` — a saved completion never reappears
   an in-flight dependent keeps its claim, but an attention response from the old generation requeues it.
   If the predecessor was provably *never sent by any tab*, Undo removes both locally; otherwise Undo is always a
   real queued command. Items for the same task are sent FIFO.
+- **Undo drafts (ADR-0013):** an Undo queued before its completion has a receipt carries no `targetCommit`. The claim
+  fills it from the receipt and persists it with the claim, before the request leaves. A draft whose completion is
+  refused (known not applied) is dropped locally — nothing was completed; one with neither its completion nor a
+  receipt on the device needs attention and is never sent. A receipt a draft still needs is never evicted.
 - **Multiple tabs / installed PWA (A3):** claim, local cancellation, settlement and discard run inside
   `navigator.locks.request('vc-pending', …)` and re-read the IndexedDB record inside the lock; in-memory state is a
   cache, never the basis of a decision. Without Web Locks, local cancellation is disabled (Undo is always sent).

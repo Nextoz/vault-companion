@@ -98,7 +98,9 @@ async function openTab(options: { locks?: LockManagerLike | null; wrap?: (s: Pen
 
 const mint = () => ({ baseRevision: REV, now: new Date(clock) });
 const complete = () => completeTask(mint(), LOCATOR);
-const undoOf = (target: CompleteTaskCommand) => undoCompleteTask(mint(), target);
+// A tokened Undo (not a draft): these suites test the queue's dependency rules for any dependent (R4, N2, G3-2).
+// Drafts (ADR-0013) are covered in queue.test.ts.
+const undoOf = (target: CompleteTaskCommand) => undoCompleteTask(mint(), target, '5'.repeat(40));
 const taskOpts = { accountKey: ACCOUNT_A, label: 'Water the plants', taskKey: LINE };
 
 beforeEach(() => {
