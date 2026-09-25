@@ -44,6 +44,14 @@ export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
   return kind === 'create' && segments.length === 2 && segments[0] === INBOX_DIR;
 }
 
+/**
+ * Allowlisted root, and no hidden or denied folder at any depth (P4-A stricter reading of the §1 "Never" row:
+ * `Projects/.obsidian/x.md` or `Projects/tmp/x.md` are as off-limits as the roots of the same name).
+ */
 export function canReadLinkedNote(path: VaultPath): boolean {
-  return LINKED_NOTE_ALLOWED_ROOTS.has(path.split('/')[0]!);
+  const segments = path.split('/');
+  if (!LINKED_NOTE_ALLOWED_ROOTS.has(segments[0]!)) return false;
+  return segments.slice(1, -1).every((s) => !s.startsWith('.') && !DENIED_ROOTS.has(s)) && !segments.at(-1)!.startsWith('.');
 }
+
+export const LINKED_NOTE_ROOTS: readonly string[] = [...LINKED_NOTE_ALLOWED_ROOTS];

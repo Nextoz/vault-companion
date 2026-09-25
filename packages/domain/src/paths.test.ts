@@ -55,6 +55,11 @@ describe('linked-note read policy', () => {
     for (const root of ['Finance', 'Personal', 'Area Example', 'Daily']) expect(canReadLinkedNote(parseVaultPath(`${root}/x.md`)!)).toBe(false);
     expect(canReadLinkedNote(parseVaultPath('Inbox/x.md')!)).toBe(true);
     expect(canReadLinkedNote(parseVaultPath('Tasks/Active Work Now.md')!)).toBe(true);
+    // P4-A: hidden or denied folders are off-limits at any depth, not only as roots.
+    for (const p of ['Projects/.obsidian/x.md', 'Projects/a/.trash/x.md', 'Inbox/tmp/x.md', 'Tasks/output/x.md', 'Projects/.x.md']) {
+      expect(canReadLinkedNote(parseVaultPath(p)!)).toBe(false);
+    }
+    expect(canReadLinkedNote(parseVaultPath('Projects/a/b/Deep Note.md')!)).toBe(true);
     expect(parseVaultPath(`Inbox/x${String.fromCharCode(0x85)}.md`)).toBeNull();
     expect(parseVaultPath(`Inbox/x${String.fromCharCode(0x2028)}.md`)).toBeNull();
   });
