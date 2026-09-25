@@ -95,16 +95,64 @@ the only record.
 - Precondition 2: the **Claude GitHub App is installed on `Nextoz/vault-companion`** (github.com/apps/claude). Without it
   `claude --cloud` uploads a local *bundle* instead of cloning: the session has no `origin` and cannot push (C and P2-A,
   2026-09-25, finished but never pushed). The launch output should say it is cloning, not bundling.
+- **Probe 2026-09-25 14:45:** even with the App installed, a CLI-launched session had no `origin` (bundle upload) and
+  could not push. Needed as well: the owner's claude.ai account connected to GitHub with push access — run `/web-setup`
+  in a terminal Claude Code session (sends the local `gh` token), or connect GitHub at claude.ai/code. Existing
+  sessions recover when the owner approves "attach repository with push access" in the session UI; then the Lead
+  sends `claude -p "push now" --cloud <id>`. **Never launch a new cloud task before a probe push succeeds.**
+- Every cloud brief says **push early**: a report stub pushed in the first minutes, then the final push. The Lead only
+  sees GitHub, never the container; no branch after ~15 min ⇒ ask the session (`claude -p … --cloud <id>`).
 - Launch: commit + push the brief, then
-  `claude --cloud "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, commit and push the branch when done. Do not open a PR or spawn agents."`
+  `claude --cloud --permission-mode auto "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, write .agent/handoffs/<brief>.md, commit and push the branch when done. Do not open a PR or spawn agents."`
+  (`--permission-mode auto`: owner request 2026-09-25, so sessions do not stall on approvals — verify in the session.)
   Record session ID + branch in `docs/plan.md`. Continue a session: `claude -p "<message>" --cloud <session-id>`.
 - Finish: `git fetch`, review the branch, run verification locally, merge if accepted.
 - First use is one small task to verify the workflow. Verified 2026-09-25 (brief C).
 - `claude --cloud` needs an interactive TTY: launch it with `herdr pane run <pane> "claude --cloud '…'"` and read the
   `Created cloud session: … session_<id>` line from the pane.
+  Launch **one at a time** and wait for the shell prompt to return before the next: text typed while `claude --cloud`
+  provisions is queued as messages to that session (`herdr pane wait-output` also matches old screen text).
 - **Routing under Claude-token pressure (owner, 2026-09-25):** most implementation goes to Claude Code Cloud; small or
   low-risk tasks to Codex GPT-6 Astra at effort `low` (`cmd /c "codex exec -m gpt-6-astra -c model_reasoning_effort=low …"`).
   The local Lead stays lean: decompose, review, integrate.
+- **Local Qwen** (tiny deterministic tasks, one at a time): `cmd /c "codex exec --oss --local-provider ollama -m qwen3.5:4b
+  --sandbox workspace-write - < <prompt> > <log> 2>&1"` in a full clone. Only with **≥ 5 GB free RAM** (the 4B model
+  needs ~3.4 GB; at 1.2 GB free on 2026-09-25 background work was reaped). No Qwen CLI is installed.
+
+## Routing and effort (owner, 2026-09-25 — supersedes earlier routing notes where they conflict)
+
+Use agents proactively wherever independent work shortens delivery; the Lead keeps architecture, task boundaries,
+integration and final acceptance. Parallelize independent work; **sequence** overlapping UI/storage changes and review
+the combined result. Private vault investigation stays local (Lead, read-only); approval gates are unchanged.
+
+| Worker | Use for |
+|---|---|
+| Claude Code Cloud | substantial bounded repo work (features, test suites, reviews) |
+| Codex GPT-6 Astra | bounded implementation/review; effort chosen per task (below) |
+| Local Claude subagent | small local tasks when Codex is unavailable — sparingly: it spends the Lead's own quota |
+| Local Qwen | tiny deterministic edits, only with ≥ 5 GB free RAM |
+
+Astra effort (`-c model_reasoning_effort=<level>`), starting defaults:
+**low** mechanical edits, docs, straightforward tests, small fixes with a clear cause · **medium** bounded features,
+ordinary debugging, integration with clear contracts · **high** concurrency, identity, persistence, security-sensitive
+changes, difficult diagnosis, independent whole-system review · **xhigh/max** exceptional unresolved problems where
+evidence justifies it (record why). Escalate on real uncertainty or failed verification; never retry harder when the
+blocker is access, tooling or missing evidence. **Verify model and effort at launch** (`model:` / `reasoning effort:`
+lines at the top of the Codex log). Codex quota can run out (2026-09-25: until 18:55) — reroute, do not wait.
+
+Every brief is small: owned files, dependencies, acceptance checks, evidence-based handoff. Codex sandbox cannot
+reach the pnpm store: the Lead runs `pnpm install` in the clone **before** launching Astra.
+
+## Worker → Lead handoff (owner, 2026-09-25)
+
+Every implementation worker (Cloud, Astra, Qwen) commits a short branch-local `.agent/handoffs/<brief-name>.md` with:
+1. **Completed** — what actually changed. 2. **Important discoveries** — unexpected technical/product/security
+findings, including outside the brief. 3. **Recommend** — fix now / follow-up / leave alone. 4. **Verification** —
+checks actually run and result. 5. **Commit** — SHA if available. Concise; not a review report. Launch prompts say so.
+
+Before merging, the Lead reads it and dispositions **every** meaningful discovery: fix now, concrete follow-up in
+`docs/plan.md`, or rejected with a reason (recorded in the PR comment). Worker-process commentary never goes into code
+comments. The handoff file is deleted from the branch once integrated (or on `main` after merge).
 
 ## Pull requests and CodeRabbit (owner, 2026-09-25)
 

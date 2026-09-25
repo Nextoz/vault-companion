@@ -12,19 +12,35 @@ export type Fetched<T> =
 /** A command request the server has not answered by then is aborted and retried (N5). Below the queue's lease. */
 export const COMMAND_TIMEOUT_MS = 30_000;
 
+/** A session or task read the server has not fully answered by then is abandoned as an error (P4-B). */
+export const READ_TIMEOUT_MS = 10_000;
+
 const base: RequestInit = { redirect: 'manual', credentials: 'same-origin', cache: 'no-store' };
 
-async function getJson<S extends z.ZodType>(url: string, schema: S): Promise<Fetched<z.infer<S>>> {
-  let res: Response;
+const TIMED_OUT = 'The server did not answer in time.';
+
+export async function getJson<S extends z.ZodType>(url: string, schema: S): Promise<Fetched<z.infer<S>>> {
+  // A timer rather than AbortSignal.timeout: it bounds the body as well as the headers, and tests can drive it.
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), READ_TIMEOUT_MS);
   try {
-    res = await fetch(url, { ...base, headers: { Accept: 'application/json' } });
-  } catch {
-    return { kind: 'offline' };
+    let res: Response;
+    try {
+      res = await fetch(url, { ...base, signal: abort.signal, headers: { Accept: 'application/json' } });
+    } catch {
+      return abort.signal.aborted ? { kind: 'error', message: TIMED_OUT } : { kind: 'offline' };
+    }
+    if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403) return { kind: 'signed-out' };
+    if (!res.ok) return { kind: 'error', message: `The server answered ${res.status}.` };
+    // Fetch aborts the body with the signal; the race also bounds a body that ignores it.
+    const aborted = new Promise<undefined>((resolve) => abort.signal.addEventListener('abort', () => resolve(undefined)));
+    const body: unknown = await Promise.race([res.json().catch(() => undefined), aborted]);
+    if (abort.signal.aborted) return { kind: 'error', message: TIMED_OUT };
+    const parsed = schema.safeParse(body);
+    return parsed.success ? { kind: 'ok', data: parsed.data } : { kind: 'error', message: 'Unexpected reply from the server.' };
+  } finally {
+    clearTimeout(timer);
   }
-  if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403) return { kind: 'signed-out' };
-  if (!res.ok) return { kind: 'error', message: `The server answered ${res.status}.` };
-  const parsed = schema.safeParse(await res.json().catch(() => undefined));
-  return parsed.success ? { kind: 'ok', data: parsed.data } : { kind: 'error', message: 'Unexpected reply from the server.' };
 }
 
 export const getSession = () => getJson('/api/session', SessionResponse);

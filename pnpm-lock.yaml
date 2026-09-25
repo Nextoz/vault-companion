@@ -263,6 +263,30 @@ importers:
         specifier: workspace:*
         version: link:../test-vault
 
+  packages/e2e:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^2.1.1
+        version: 2.1.1(hono@4.13.8)
+      '@vault-companion/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@vault-companion/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@vault-companion/github':
+        specifier: workspace:*
+        version: link:../github
+      '@vault-companion/worker':
+        specifier: workspace:*
+        version: link:../../apps/worker
+      hono:
+        specifier: ^4.13.8
+        version: 4.13.8
+      jose:
+        specifier: ^6.2.12
+        version: 6.2.12
+
   packages/github:
     dependencies:
       '@vault-companion/domain':
@@ -523,6 +547,12 @@ packages:
   '@eslint/plugin-kit@0.7.3':
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+
+  '@hono/node-server@2.1.1':
+    resolution: {integrity: sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      hono: ^4
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -1753,6 +1783,10 @@ snapshots:
     dependencies:
       '@eslint/core': 1.2.1
       levn: 0.4.1
+
+  '@hono/node-server@2.1.1(hono@4.13.8)':
+    dependencies:
+      hono: 4.13.8
 
   '@humanfs/core@0.19.2':
     dependencies:

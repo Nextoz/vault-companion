@@ -1,40 +1,23 @@
-# Checkpoint — 2026-09-25 (Phase 1, services integrated)
+# Checkpoint — 2026-09-25 (Milestone 1: integrated first-release build)
 
-**HEAD:** `main` (clean after this commit). **Tests:** lint + typecheck + 305 tests / 20 files green;
-Playwright WebKit 7/7 green at `86ef426` (web unchanged since).
+**HEAD:** `main`, clean. CI (GitHub Actions) gates every PR. Plan, milestones, workers, targets: `docs/plan.md`.
 
-**Completed since last checkpoint:** command services hardened at the kernel seam (`checkNoteInput`,
-`KernelInvariantError` ⇒ non-retryable refusal); seam tests covering A1, A3–A5, A7, A10–A14, A17, A26–A28, A30,
-A38, capture golden (ADR-0010) and lost-response retries for every command; InMemoryStore CAS made atomic.
+## In flight (all Claude Code Cloud; branches appear on origin when pushed)
 
-**Remaining in Phase 1:** `docs/plan.md` → Work in progress items 3–4.
+P2-A fixes (PR #4) · P2-B offline e2e · P3-A deploy scaffold · P4-A linked notes · P4-B client correctness ·
+P4-C draft recovery. Session IDs in `docs/plan.md`. Watcher: `tools/wait-for-work.sh` (background) wakes the Lead on
+new branches, CodeRabbit reviews, finished CI and finished Codex logs.
 
-**Branches/worktrees:** `agent/markdown-kernel`, `agent/frontend-shell` merged; worktrees kept until the Phase 1
-review. Herdr workers `kernel` (`w3:p4`), `frontend` (`w3:p3`) idle.
+## Exact next actions
 
-**Risks:** `docs/plan.md` → Unresolved issues / risks.
+1. For each pushed branch: open PR → CodeRabbit loop → CI green → read `.agent/handoffs/<brief>.md` and disposition
+   every discovery in the PR comment → merge. P4-A also gets an Astra adversarial review first.
+2. After **all** milestone-1 streams merge: run the whole-system review on the combined build (Phase 2 gate (`docs/reviews/phase-2-review-brief.md`, Cloud Opus + Astra) and
+   reconcile. Note for the gate: the real desktop worker never writes conflict markers (harness models a stricter case).
+3. After P3-A merges: owner does G2 with `docs/deploy.md` (owner has a Cloudflare account); Lead deploys and verifies
+   read-only against the live vault; then milestone 2 canary (G3).
+4. T1 Today: domain rule (Astra), layout (P4-B), Active Work Now card (P4-D after P4-A).
 
-**Phase 1 gate (2026-09-25):** failed; reconciled (`docs/reviews/phase-1-reconciliation.md`), ADR-0011 head-CAS
-decided with real probe evidence. K2 (`w3:p8`) and F2 (`w3:p9`) fix workers running; panes w3:p4–p7 closed.
+## Desktop sync worker broken — see `docs/plan.md` "Done" (root cause, fix proposal); awaiting owner approval to change the vault.
 
-**Gate rerun:** Astra BLOCK (1 Critical: create could replace a file/directory), Opus PASS WITH FIXES. Lead fixes done
-(`a9800c2`, 424 tests). F3 (queue/view) in flight in pane `w3:pC`, branch `agent/queue-rerun-fixes`.
-
-**Phase 1 gate passed with fixes** (run 3). Lead fixes committed (`593d2f6`, 443 tests). Remote `Nextoz/vault-companion` (private)
-exists; `main` pushed. Claude tokens are running low: implementation is routed to Cloud and Astra-low.
-
-**In flight:** F4 (Opus, pane `w3:pF`, local branch `agent/queue-gate3`); D1 (Astra low, pane `w3:pG`, local branch
-`agent/spec-drift`); C (Cloud `session_01WxbFmRJdtnNWyYPcqLkmvt`, branch `agent/ci` on origin); P2-A (Cloud
-`session_01FyLWeGWnPruL9dXefaVGf3`, branch `agent/e2e-harness`, report `docs/briefs/P2A-report.md`).
-
-**Repo is PUBLIC (owner, 2026-09-25)**; merges now go through PRs so CodeRabbit reviews them (`docs/orchestration.md`).
-
-**Open work (2026-09-25):**
-- PRs #1 (D1) and #2 (D2 scrub) merged (`4915e36`, `7316ea2`). Lead merges PRs itself when checks pass.
-- Watcher `tools/wait-for-work.sh` runs in the background and wakes the Lead on CodeRabbit reviews / new `agent/*` branches.
-- Cloud C (`session_01WxbFmRJdtnNWyYPcqLkmvt`, `agent/ci`) and P2-A (`session_01FyLWeGWnPruL9dXefaVGf3`,
-  `agent/e2e-harness`) — **done but unpushed** (sessions were bundle uploads, no `origin`). Owner installs the Claude
-  GitHub App on the repo, then Lead sends each session `claude -p "<push instruction>" --cloud <id>`; then PRs as usual.
-
-**Exact next action:** `git fetch`; handle whichever of the above is ready first. Keep the Lead lean (Claude tokens low):
-offload implementation and PR follow-ups to Cloud / Astra low.
+## T1 Today — decided 2026-09-25 (ADR-0012), provisional; implementation split per `docs/plan.md`.
