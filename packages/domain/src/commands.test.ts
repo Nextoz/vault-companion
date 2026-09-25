@@ -4,6 +4,8 @@ import { Command, type Receipt, type TaskView } from '@vault-companion/contracts
 import { loadFixture } from '@vault-companion/test-vault';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createCommandService } from './commands.ts';
+import { payloadHash } from './payload-hash.ts';
+import { TRAILER_OP, TRAILER_PAYLOAD, type VaultPath } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 const TODO = 'Tasks/To-Do List.md';
@@ -204,11 +206,50 @@ describe('UndoCompleteTask (token, ADR-0013)', () => {
     expect(text()).toBe(before);
   });
 
-  it('a token that is not an ancestor of head (rewritten away) is refused', async () => {
+  it('a token that is not an ancestor of head is refused, even when head holds the same bytes', async () => {
     const c = await complete('Water the plants');
-    store.rewindHead(1);
+    const completedText = text();
+    store.rewindHead(1); // C rewritten away…
+    await store.commitFiles({ [TODO]: completedText }); // …and the same completed file committed by someone else
     const head = store.headCommit;
     expect(await run(undoOf(c))).toMatchObject({ code: 'conflict:task-changed' });
+    expect(store.headCommit).toBe(head);
+  });
+
+  it('a token commit with the right payload hash but another operation ID is refused', async () => {
+    const c = await complete('Water the plants');
+    const completedText = text();
+    store.rewindHead(1);
+    // The very same change, recorded under another operation ID: only the Op trailer tells them apart.
+    const crafted = await store.writeFile({
+      path: TODO as VaultPath,
+      baseCommit: store.headCommit,
+      expect: 'regular-file',
+      bytes: new TextEncoder().encode(completedText),
+      message: 'crafted',
+      trailers: { [TRAILER_OP]: uuid(), [TRAILER_PAYLOAD]: await payloadHash(c.raw) },
+    });
+    if (!crafted.ok) throw new Error('write failed');
+    expect(await run(undoOf(c, { targetCommit: crafted.commitSha }))).toMatchObject({ code: 'invalid' });
+    expect(store.headCommit).toBe(crafted.commitSha);
+  });
+
+  it('a token commit with the right trailers but other content (not the completion) cannot be verified', async () => {
+    const t = await task('Water the plants');
+    const target = envelope('CompleteTask', { task: t.locator });
+    const other = ok(await run(envelope('CompleteTask', { task: (await task('Call the bike shop')).locator })));
+    // A commit claiming to be `target` but holding a different change (here: the bike-shop completion's bytes).
+    const crafted = await store.writeFile({
+      path: TODO as VaultPath,
+      baseCommit: store.headCommit,
+      expect: 'regular-file',
+      bytes: new TextEncoder().encode(store.text(TODO, other.commitSha)! + '\n'),
+      message: 'crafted',
+      trailers: { [TRAILER_OP]: target.operationId as string, [TRAILER_PAYLOAD]: await payloadHash(target) },
+    });
+    if (!crafted.ok) throw new Error('write failed');
+    const head = store.headCommit;
+    expect(await run(envelope('UndoCompleteTask', { target, targetCommit: crafted.commitSha }))).toMatchObject({ code: 'dedupe-unknown' });
     expect(store.headCommit).toBe(head);
   });
 
