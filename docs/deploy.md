@@ -123,11 +123,14 @@ dates, `docs/vault-contract.md`). Do not override them at deploy time, and never
 Still in `apps/worker`:
 
 ```sh
-pnpm exec wrangler deploy --domain <host> --secrets-file "<path-outside-repos>/secrets.json"
+pnpm exec wrangler deploy --domain "<host>" --secrets-file "<path-outside-repos>/secrets.json"
 ```
 
+Replace both quoted placeholders with real values before running (e.g. `--domain "vc.example.com"`); unquoted `<host>`
+would be read by the shell as a redirection.
+
 This uploads one version with the committed config (`workers_dev`/`preview_urls` off), all nine secrets, and
-`<host>` as its custom domain. Pass `--domain <host>` on **every** later deploy too, so the domain stays out of the
+`<host>` as its custom domain. Pass `--domain "<host>"` on **every** later deploy too, so the domain stays out of the
 repo; later deploys need no `--secrets-file` (secrets carry over between versions). (`pnpm deploy:dry` already built
 `apps/web/dist`; rebuild it with `pnpm --filter @vault-companion/web build` if the web app changed since.)
 
