@@ -22,7 +22,9 @@ priorities are the owner's choice, informed by observed use (milestone 3).
   fixed. **Canary prerequisite** (W2). Proposed fix (owner-approved vault change): stage with only non-ignored
   excludes, then `restore --staged` the tracked-but-ignored paths; put the add inside the unstage-on-error block; add a
   `.gitignore` + tracked-ignored-file case to its test script. Clear the current state with `git restore --staged -- .`
-  (working files untouched). Verified on a copied index, never the live one.
+  (working files untouched). Verified on a copied index, never the live one. **Patch ready (2026-09-25 15:50, kept local — the worker
+  lives in the private vault):** module + new `.gitignore` regression case; its own suite passes 18/18 patched, the
+  new case fails on the original with the exact production error. Applying it = owner-approved vault write.
 
 ## Milestone 1 — Integrated first-release build (current)
 
