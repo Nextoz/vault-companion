@@ -13,7 +13,7 @@ import {
   TasksResponse,
   type TaskView,
 } from '@vault-companion/contracts';
-import type { Page, Route } from '@playwright/test';
+import type { BrowserContext, Page, Route } from '@playwright/test';
 
 export const ACCOUNT = 'a'.repeat(64);
 const TODAY = '2026-09-24';
@@ -54,6 +54,8 @@ export type ReadMode = 'ok' | 'error' | 'offline' | 'hang';
 
 export class MockApi {
   session: 'ok' | 'signed-out' = 'ok';
+  /** `down`: every request fails as a network error and is not recorded (it never reached the server). */
+  network: 'up' | 'down' = 'up';
   sessionMode: ReadMode = 'ok';
   tasksMode: ReadMode = 'ok';
   /** The read's writeBlock, e.g. a committed Git conflict in the task list. */
@@ -76,12 +78,15 @@ export class MockApi {
   #held: (() => void)[] = [];
   #revision = sha();
 
-  async install(page: Page): Promise<void> {
-    await page.route('**/api/session', (route) => this.#session(route));
-    await page.route('**/api/tasks**', (route) => this.#tasks(route));
-    await page.route('**/api/commands', (route) => this.#command(route));
-    await page.route('**/api/linked-note**', (route) => this.#linkedNote(route));
-    await page.route('**/api/active-work', (route) => this.#activeWork(route));
+  /** Route a page, or a whole context: only a context route also sees requests made by a service worker. */
+  async install(target: Page | BrowserContext): Promise<void> {
+    const on = (glob: string, handle: (route: Route) => Promise<void>) =>
+      target.route(glob, (route) => (this.network === 'down' ? route.abort('internetdisconnected') : handle(route)));
+    await on('**/api/session', (route) => this.#session(route));
+    await on('**/api/tasks**', (route) => this.#tasks(route));
+    await on('**/api/commands', (route) => this.#command(route));
+    await on('**/api/linked-note**', (route) => this.#linkedNote(route));
+    await on('**/api/active-work', (route) => this.#activeWork(route));
   }
 
   #json(route: Route, status: number, body: unknown) {
