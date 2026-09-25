@@ -15,6 +15,14 @@ priorities are the owner's choice, informed by observed use (milestone 3).
 - Desktop sync worker (live, read-only inspection 2026-09-25): commits local edits before fetch, merges compatible
   divergence via `merge-tree`, never force-pushes, on overlap preserves both commits **without** conflict markers and
   records `conflict` in `.git/vault-sync-status.json` ⇒ W1–W4 met by design. Surfacing to the owner is log/status only.
+- **Desktop sync worker is broken (found 2026-09-25, read-only):** the module version installed 2026-09-24 ~21:00 has
+  failed every hourly run. Its `git add -A -- . ':(exclude)<path>'` names paths that `.gitignore` also covers; Git exits
+  1 on those after staging the other changes, and the add sits outside the worker's unstage-on-error block, so the
+  staged leftovers make every later run refuse. Its tests use repos without `.gitignore`. Recurs on every run until
+  fixed. **Canary prerequisite** (W2). Proposed fix (owner-approved vault change): stage with only non-ignored
+  excludes, then `restore --staged` the tracked-but-ignored paths; put the add inside the unstage-on-error block; add a
+  `.gitignore` + tracked-ignored-file case to its test script. Clear the current state with `git restore --staged -- .`
+  (working files untouched). Verified on a copied index, never the live one.
 
 ## Milestone 1 — Integrated first-release build (current)
 
