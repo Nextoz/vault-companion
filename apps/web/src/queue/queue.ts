@@ -53,7 +53,10 @@ export interface LockManagerLike {
 
 export interface QueueOptions {
   store: PendingStore;
-  /** POST the body with `X-VC-Account: accountKey`; must use `redirect: 'manual'` so expiry is detectable. */
+  /**
+   * POST the body with `X-VC-Account: accountKey`; must use `redirect: 'manual'` so expiry is detectable, and must
+   * settle well within `LEASE_MS` (abort with a TimeoutError), or this tab's flush waits on it forever (N5).
+   */
   send: (body: string, accountKey: string) => Promise<Response>;
   /** Cross-tab lock. Defaults to `navigator.locks`; `null` means none (local cancellation disabled). */
   locks?: LockManagerLike | null;
@@ -63,8 +66,8 @@ export interface QueueOptions {
 }
 
 const LOCK_NAME = 'vc-pending';
-/** How long a claim keeps other tabs off an item. Longer than any request; a dead tab's lease just expires. */
-const LEASE_MS = 60_000;
+/** How long a claim keeps other tabs off an item. Longer than any request (`COMMAND_TIMEOUT_MS`); a dead tab's lease just expires. */
+export const LEASE_MS = 60_000;
 /** Acknowledged receipts kept for the "Saved to GitHub" list. Unacknowledged receipts are never evicted. */
 const MAX_ACKNOWLEDGED = 20;
 
@@ -191,17 +194,21 @@ export class PendingQueue {
     return result;
   }
 
-  /** User "Retry": same envelope, immediately. Its dependents that needed attention go back behind it (R4). */
+  /**
+   * User "Retry": same envelope, immediately. Its dependents that needed attention go back behind it (R4). One
+   * whose request is in flight keeps its claim but moves to a new dependency generation, so a refusal answering
+   * the old predecessor state is requeued when it arrives rather than becoming final (N2).
+   */
   async retry(operationId: string): Promise<void> {
     await this.#locked(async () => {
       const record = this.#records.get(operationId);
       if (!record || this.#leased(record)) return;
-      const again = (r: PendingRecord) => this.#persist({ ...r, state: 'pending', attempts: 0, nextAttemptAt: 0, lastError: null });
-      await again(record);
-      for (const dependent of this.#records.values()) {
-        if (dependent.dependsOn === operationId && dependent.state === 'attention' && !this.#leased(dependent)) {
-          await again(dependent);
-        }
+      const again = (r: PendingRecord): PendingRecord => ({ ...r, state: 'pending', attempts: 0, nextAttemptAt: 0, lastError: null });
+      await this.#persist(again(record));
+      for (const dependent of [...this.#records.values()]) {
+        if (dependent.dependsOn !== operationId) continue;
+        const next = { ...dependent, dependencyGeneration: (dependent.dependencyGeneration ?? 0) + 1 };
+        await this.#persist(next.state === 'attention' && !this.#leased(next) ? again(next) : next);
       }
     });
     void this.flush();
@@ -349,7 +356,11 @@ export class PendingQueue {
     if (!this.#maySend(record, generation)) return { kind: 'released' };
     try {
       return await classify(await this.#send(record.body, record.accountKey), record.operationId);
-    } catch {
+    } catch (error) {
+      // `send` aborts a request the server never answers (N5), so this tab keeps flushing later items.
+      if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+        return { kind: 'retry', error: { code: 'timeout', message: 'The server did not answer. Will retry.' } };
+      }
       return { kind: 'retry', error: { code: 'network', message: 'No connection. Will retry.' } };
     }
   }
@@ -386,6 +397,11 @@ export class PendingQueue {
     const record = this.#unleased(current);
     switch (outcome.kind) {
       case 'attention':
+        if ((current.dependencyGeneration ?? 0) !== (sent.dependencyGeneration ?? 0)) {
+          // Its predecessor was retried after this request left (N2): back in line behind it, same bytes.
+          await this.#persist({ ...record, state: 'pending', attempts: 0, nextAttemptAt: 0, lastError: null });
+          return;
+        }
         await this.#persist({ ...record, state: 'attention', lastError: outcome.error });
         return;
       case 'retry': {

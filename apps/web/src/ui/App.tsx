@@ -4,6 +4,7 @@ import { getSession, getTasks } from '../api.ts';
 import { completeTask, undoCompleteTask } from '../commands.ts';
 import { prefs } from '../prefs.ts';
 import type { PendingQueue } from '../queue/queue.ts';
+import { knownCommits, ReadSequencer } from '../reads.ts';
 import { plainWikilinks } from '../text.ts';
 import { buildView } from '../view.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
@@ -37,10 +38,11 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
   const revision = tasks?.revision ?? prefs.lastRevision();
 
   const knownRef = useRef<string[]>([]);
-  // Receipts not yet acknowledged by a read: ask whether the read includes them (A9).
-  knownRef.current = [
-    ...new Set(snapshot.items.flatMap((i) => (i.receipt && !i.acknowledged ? [i.receipt.commitSha] : []))),
-  ];
+  // Every retained receipt: the rendered read alone says whether it reflects them (A9, N3).
+  knownRef.current = knownCommits(snapshot.items);
+  // Overlapping reads: only a response newer than the last applied one may replace the screen (N3).
+  const readsRef = useRef<ReadSequencer | null>(null);
+  readsRef.current ??= new ReadSequencer();
 
   const refreshSession = useCallback(async () => {
     const res = await getSession();
@@ -57,7 +59,10 @@ export function App({ queue, receipts }: { queue: PendingQueue; receipts: EventT
   }, [queue]);
 
   const refreshTasks = useCallback(async () => {
+    const reads = readsRef.current;
+    const ticket = reads?.begin() ?? 0;
     const res = await getTasks(knownRef.current);
+    if (reads && !reads.accept(ticket)) return;
     if (res.kind === 'ok') {
       prefs.setLastRevision(res.data.revision);
       setTasks(res.data);
