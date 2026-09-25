@@ -24,7 +24,8 @@ decided with real probe evidence. K2 (`w3:p8`) and F2 (`w3:p9`) fix workers runn
 exists; `main` pushed. Claude tokens are running low: implementation is routed to Cloud and Astra-low.
 
 **In flight:** F4 (Opus, pane `w3:pF`, local branch `agent/queue-gate3`); D1 (Astra low, pane `w3:pG`, local branch
-`agent/spec-drift`); C (Cloud `session_01WxbFmRJdtnNWyYPcqLkmvt`, branch `agent/ci` on origin).
+`agent/spec-drift`); C (Cloud `session_01WxbFmRJdtnNWyYPcqLkmvt`, branch `agent/ci` on origin); P2-A (Cloud
+`session_01FyLWeGWnPruL9dXefaVGf3`, branch `agent/e2e-harness`, report `docs/briefs/P2A-report.md`).
 
 **Exact next action:** for each finished stream: read its report (F4: `docs/briefs/F4-report.md`; D1: `D1 DONE` line in
 `d1-run.log`; C: `git fetch` then `docs/briefs/C-report.md` on `origin/agent/ci`), review the diff, run `pnpm check`
