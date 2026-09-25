@@ -46,3 +46,23 @@ Owners: **L** = Lead (domain, stores, worker, contracts) · **K2** = kernel fix 
 - Integrated `main`: 408 tests / 26 files green; WebKit e2e 8/8. The property test needed a 60 s timeout under the
   full parallel suite (no assertion changed).
 - Next: gate rerun with fresh Opus + Astra (`phase-1-rereview-*.md`).
+
+## Rerun (2026-09-25) — `phase-1-rereview-astra.md` (BLOCK, 1 Critical) and `phase-1-rereview-opus.md` (PASS WITH FIXES)
+
+Original findings: Opus 20 fixed / 4 partial; Astra 17 fixed / 7 partial — every partial maps to a new finding below
+or to the R7 deferral. Both reviewers independently found the create-overwrite hole introduced by ADR-0011.
+All accepted.
+
+| New finding | Severity (max) | Decision | Owner |
+|---|---|---|---|
+| Astra N1 / Opus N1 / Opus N7: Git Data write has no create-only guard; listing omits directories and fails open (404 ⇒ empty); mode hard-coded | Critical | `WriteRequest.expect: 'absent' \| 'regular-file'` checked by every adapter against the **pinned tree** before committing (`precondition-failed` ⇒ `refused:structure`, not retried); listing includes all entry types; a missing directory is confirmed from its parent tree, otherwise the listing throws (fail closed); mode must be `100644` for updates. | L |
+| Astra N2: predecessor Retry overtakes an in-flight dependent Undo | Medium | Dependency generation: Retry bumps it; a dependent's refusal from an older generation is not final (requeue). | F3 |
+| Astra N3: acknowledged receipt vs late stale read | Medium | Read generations (drop out-of-order responses) plus revision watermark; reflection tied to the rendered response's `known`. | F3 |
+| Astra N4: sentinel test misses console output | Medium | Real-stack matrix captures `console.*`; service-console mutant must fail. | L |
+| Astra N5 / Opus N3: truncated listing ⇒ retryable 503 | Low | Map to non-retryable `refused:too-large` in the plan; HTTP-through-service test. | L |
+| Opus N2: GitHub `force:false` accepts any fast-forward (rewind to an ancestor of X) | Low | Out of contract (sync W1); ADR-0011 wording corrected; G2 ruleset blocks force-push. | L |
+| Opus N4: `onError` 503 untested | Low | Test. | L |
+| Opus N5: `postCommand` without timeout stalls the tab | Low | `AbortSignal.timeout` < lease; abort ⇒ retry. | F3 |
+| Opus N6: stale Undo of an already-undone completion reopens a later completion | Low | `Vault-Companion-Undoes: <opId>` trailer; Undo refused if its target already has an applied Undo in `T..X`. | L |
+| Opus N8: no A4 regression test | Low | Gate test. | L |
+| Opus note: Workers free-plan 50-subrequest cap vs paged dedupe | risk | Record for Phase 3 deploy sizing. | L |
