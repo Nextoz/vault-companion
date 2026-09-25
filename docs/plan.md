@@ -42,6 +42,7 @@ storage changes overlap, so no stream is reviewed only in isolation).
 | Hermetic git fixtures (P2-A follow-up) | Astra low → **PR #6** (55 package tests) | CodeRabbit/CI |
 | T1 Today layout (Overdue below, collapsed) | P4-B addendum | in flight |
 | P4-D Active Work Now read-only card | Cloud, after P4-A merges (reuses its renderer) | queued |
+| P4-E token-based Undo (ADR-0013: no paging, ≤ 10 calls/attempt, ≤ 3 attempts) | Cloud (P4-B session, repo attached), `agent/token-undo` | launching |
 | Whole-system review (Phase 2 gate + milestone 1 exit) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after **all** milestone-1 streams merge |
 
 **Worker reality check (14:45):** the five newer Cloud sessions (P2-B, P3-A, P4-A/B/C) have pushed nothing and are
@@ -83,7 +84,7 @@ Observations: none yet (recorded privately in milestone 2–3).
 | # | Decision | Status |
 |---|---|---|
 | T1 | Today meaning | **decided** (provisional) — ADR-0012 |
-| P1 | **Cloudflare Workers plan** — Undo needs 3 paged dedupe scans/attempt: shallow ≈ 92, worst ≈ 377 subrequests; Free allows 50, **Paid ($5/mo) 1,000** | **open** (Lead recommends Paid; a follow-up merges the three scans into one to cut latency either way) |
+| P1 | Cloudflare Workers plan | **on hold** — owner: redesign Undo first (ADR-0013, P4-E); Workers Paid only if a token Undo cannot work |
 | D2 | Linked-note allowlist | default `Projects/`, `Tasks/`, `Inbox/` (P4-A implements it) |
 | D3 | Task IDs | no `🆔` writes in first release |
 | D4 | Capture anchor | decided: top of Open (ADR-0010) |
