@@ -1,92 +1,84 @@
 # Current plan
 
-Lead: Claude Opus 5.5 (Herdr pane `w3:p1`). Orchestration, model routing and **resume protocol**:
-`docs/orchestration.md`. Latest checkpoint: `docs/checkpoint.md`. Updated: 2026-09-24 22:35.
+Lead: Claude Opus 5.5 (Herdr pane `w3:p1`). Orchestration, routing, handoffs, resume protocol: `docs/orchestration.md`.
+Checkpoint: `docs/checkpoint.md`. Updated: 2026-09-25 (after the independent product review of `e0979a0`).
 
-## Phase 0 — Discovery and real integration spike — DONE
+**Ambition (owner):** the app the owner naturally opens on the phone to see what matters, act, capture and retrieve
+vault context. The narrow first release (`docs/product-contract.md`) and the Markdown/Git architecture stay; later
+priorities are the owner's choice, informed by observed use (milestone 3).
 
-Findings `docs/discovery/phase-0-findings.md`; spike `tools/spikes/git-sync-spike.sh`; ADR-0001…0010;
-fresh-context Opus review PASS WITH FIXES, all 24 findings reconciled (`docs/reviews/phase-0-reconciliation.md`).
-Inherited, unverified: the Codex-updated desktop sync worker (absent from snapshot) — verify at canary.
+## Done
 
-## Phase 1 — Minimal safe kernel and authenticated phone shell — IN PROGRESS
+- Phase 0 discovery, ADR-0001…0011. Phase 1 kernel/stores/worker/PWA/queue — gate passed with fixes (run 3,
+  `docs/reviews/phase-1-reconciliation.md`). Spec drift (PR #1), public scrub (PR #2), CI on every PR (PR #3:
+  ubuntu + windows, WebKit e2e, audit, gitleaks).
+- Desktop sync worker (live, read-only inspection 2026-09-25): commits local edits before fetch, merges compatible
+  divergence via `merge-tree`, never force-pushes, on overlap preserves both commits **without** conflict markers and
+  records `conflict` in `.git/vault-sync-status.json` ⇒ W1–W4 met by design. Surfacing to the owner is log/status only.
 
-| Stream | Owner | Status |
+## Milestone 1 — Integrated first-release build (current)
+
+Exit: all streams below merged, `pnpm check` + e2e + CI green, Phase 2 gate passed, known limitations listed here.
+
+| Stream | Worker | Status |
 |---|---|---|
-| Stable interfaces (contracts, VaultStore port, kernel API) | Lead | done |
-| K Markdown kernel + fixtures | worker `kernel` (Opus 5.5, pane closed 2026-09-25 for memory; branch `agent/markdown-kernel` @ `71d8654`) | **merged** (`9aafad4`), 176 tests, report `docs/reviews/K-report.md` |
-| F PWA shell + queue | worker `frontend` (Opus 5.5, pane `w3:p3`, branch `agent/frontend-shell` @ `182dfca`) | **merged** (`86ef426`), 29 unit + 7 WebKit e2e, report `docs/reviews/F-report.md` |
-| B domain: time/path policy, JCS hash, pinned-commit executor, InMemoryStore | Lead | done, F1 guard mutation-checked |
-| B stores: LocalGitStore (real git), GitHubContentsStore, App token source, shared store contract | Lead | done; GitHub semantics verified on sandbox (G1) |
-| B worker HTTP: Access JWT, origin/CSRF, headers, allowlisted logger | Lead | done (29 tests) |
-| B command services (`packages/domain/src/commands.ts`) + read model | Lead | done; seam-tested against real kernel + goldens |
-| C CI (GitHub Actions + `pnpm ci:local`) | Codex **GPT-6 Sol** via `codex exec` (pane `w3:p7`, branch `agent/ci`, worktree `…-worktrees/ci`, log `sol-run.log` in Lead scratchpad) | **in flight** — brief `docs/briefs/C-ci.md`; runs on GitHub only once the app repo has a remote (owner action) |
+| P2-A real-Git e2e harness (PR #4) | Cloud `session_01FyLWeGWnPruL9dXefaVGf3` | fixing Astra review (`docs/reviews/P2A-review-astra.md`: forced CAS collision, same-anchor conflict, desktop push race, cleanup) |
+| P2-B service-worker offline shell e2e | Cloud `session_01LWfCSsJj1eCeWtXgpcYspN`, `agent/offline-shell-e2e` | in flight |
+| P3-A Cloudflare deploy scaffold + `docs/deploy.md` | Cloud `session_01BtqCxHaRkAXZ53YDZ4QSe4`, `agent/deploy-scaffold` | in flight; Lead dispositions sent (minimal `allowBuilds`, identifying values as secrets, `_headers` + drift test) |
+| P4-A linked note context (contract item 7) | Cloud `session_012WDdnkDZjTWRF4956Mjaoz`, `agent/linked-notes` | in flight; Astra adversarial review before merge |
+| P4-B client correctness: duplicate-task identity, read timeouts/error state, conflict next step, Undo in Done today | Cloud, `agent/client-correctness`, `docs/briefs/P4B-client-correctness.md` | launching |
+| P4-C capture draft recovery (account-aware, separate from the queue) | Cloud, `agent/draft-recovery`, `docs/briefs/P4C-draft-recovery.md` | launching |
+| Today definition | **owner decision** (below) | blocks only the Today change, nothing else |
+| Phase 2 gate (whole-system review) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after PR #4 merges |
 
-Test status: `pnpm lint`, `pnpm typecheck`, `pnpm test` green — 305 tests / 20 files.
-Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef426`.
+Every branch: PR → CodeRabbit loop → CI → handoff dispositions (`.agent/handoffs/`) → merge.
 
-### Work in progress (exact next actions)
+## Milestone 2 — Authorized phone-to-vault canary
 
-**Phase 1 gate: PASSED WITH FIXES** (run 3: Opus + Astra both PASS WITH FIXES, no Critical/High). Reconciliation:
-`docs/reviews/phase-1-reconciliation.md` ("Gate run 3"). App repo now has a private remote: `Nextoz/vault-companion`
-(created 2026-09-25 with owner approval; contains no vault content).
+Owner decision 2026-09-25: deploy against the **live vault** (no sandbox deploy), first write canary-gated.
+1. Owner G2 with `docs/deploy.md`: Cloudflare Access app + policy; GitHub App (Contents read/write) installed only on
+   the vault repo; `wrangler secret put`. Lead deploys, verifies reads against the live vault (read-only).
+2. Install the PWA on the iPhone; phone acceptance pass (below).
+3. **G3**: owner approves one exact write (target file, expected diff, pre-canary SHAs, Drive backup time, rollback
+   `git revert`). Evidence: GitHub commit with trailers, desktop worker log showing arrival, Obsidian renders it.
 
-| Stream | Owner | Status |
+## Milestone 3 — Several days of owner use
+
+Owner uses it daily; friction is recorded privately (`.private/observations.md`, git-ignored — never in the public
+repo), then the owner chooses the next improvement from observed use.
+
+### Phone targets (targets, not observations)
+
+| Moment | Target |
+|---|---|
+| Open app (warm, online) → task list visible | ≤ 1.5 s typical, ≤ 3 s worst |
+| Open app offline (cold) → shell + pending actions visible | ≤ 1.5 s; task list **not** available offline (by design) |
+| Tap Capture → keyboard ready | ≤ 0.5 s |
+| Tap complete/save → local acknowledgement (state chip) | ≤ 100 ms |
+| Online → "saved to GitHub" | ≤ 5 s typical |
+| Refused/conflicted action → resolved (refresh + redo, or discard) | ≤ 3 taps, no lost text |
+
+Observations: none yet (recorded privately in milestone 2–3).
+
+## Owner decisions
+
+| # | Decision | Status |
 |---|---|---|
-| Lead gate-3 items G3-3, F1, F2 | Lead | **done** `a3e442e`, `593d2f6` (443 tests, mutants killed) |
-| F4 queue gate-3 (G3-1 watermark, G3-2 atomic retry, F3 App wiring) | Opus 5.5 worker `f4` (retired) | **merged**, 454 tests, e2e 8/8 |
-| D1 spec drift (F6) | Codex **Astra low**, pane `w3:pG`, branch `agent/spec-drift` (local worktree), log `d1-run.log` in Lead scratchpad | in flight |
-| C CI + `pnpm ci:local` | **Claude Code Cloud** session `session_01WxbFmRJdtnNWyYPcqLkmvt`, branch `agent/ci` (pushed by the cloud) | in flight (first cloud trial) |
-| P2-A Phase 2 e2e harness (real Git, Node server, desktop clone, scenarios) | **Claude Code Cloud** session `session_01FyLWeGWnPruL9dXefaVGf3`, branch `agent/e2e-harness`, brief `docs/briefs/P2A-e2e-harness.md` | in flight |
-| P3-A Cloudflare deploy scaffolding (wrangler, assets, dry-run, runbook) | **Claude Code Cloud**, branch `agent/deploy-scaffold`, session `session_01BtqCxHaRkAXZ53YDZ4QSe4`, brief `docs/briefs/P3A-deploy-scaffold.md` | in flight (pushes a stub early) |
-| P4-A linked note context (contract item 7) | **Claude Code Cloud**, branch `agent/linked-notes`, session `session_012WDdnkDZjTWRF4956Mjaoz`, brief `docs/briefs/P4A-linked-notes.md` | in flight |
-| P2-B service-worker offline shell e2e | **Claude Code Cloud**, branch `agent/offline-shell-e2e`, session `session_01LWfCSsJj1eCeWtXgpcYspN`, brief `docs/briefs/P2B-offline-shell-e2e.md` | in flight |
-| F4-sizing (server deadline, concurrent `known=`) | — | Phase 3 sizing |
+| T1 | **Today meaning** — recommendation in `docs/checkpoint.md`; repo contract says `≤ today`, vault Build Contract says `= today` | **open** |
+| D2 | Linked-note allowlist | default `Projects/`, `Tasks/`, `Inbox/` (P4-A implements it) |
+| D3 | Task IDs | no `🆔` writes in first release |
+| D4 | Capture anchor | decided: top of Open (ADR-0010) |
 
-Next: review + merge F4, D1, C (cloud: `git fetch`, review `origin/agent/ci`, verify locally, merge); then Phase 2
-(disposable end-to-end) — to be decomposed into Cloud briefs (repo-contained) + Astra-low tasks.
+## Known limitations and risks (current only)
 
-### Path to the phone (owner decision 2026-09-25: live vault directly, no sandbox deploy)
-
-1. Merge P3-A (deploy scaffold) ⇒ `docs/deploy.md` runbook. Finish Phase 2 gate (review of PR #4 harness) in parallel.
-2. **Owner G2**: Cloudflare account + Access app/policy; GitHub App with Contents read/write installed **only on the
-   live vault repo**; `wrangler secret put`. Lead deploys and verifies reads (read-only use of the live vault is fine).
-3. **Canary (G3, owner approves the single first write)**: `docs/testing.md` "Canary evidence" — pre-canary SHA on
-   GitHub and desktop, Drive backup timestamp, exact target + expected diff, rollback = `git revert`. Must confirm the
-   real desktop sync worker meets W1–W4 (`docs/sync.md`; spike S4/S5: a snapshot-style worker blocks on local changes).
-4. After a clean canary: daily use from the iPhone; remaining Phase 4 acceptance on the real phone.
-
-P3-A dispositions (Lead): `allowBuilds` accepted as an explicit minimal list; identifying settings are Wrangler
-**secrets**, never committed vars (public repo); static pages get security headers via `apps/web/public/_headers`
-with a drift test against the Worker's header constant.
-
-### Unresolved issues / risks
-
-- Phase 3 sizing: an Undo can make two paged dedupes per attempt × 5 attempts; check the Workers subrequest limit
-  of the chosen plan before deploy (rerun Opus note).
-- Leftover empty directories `C:\c\Dev\vault-companion-worktrees` from a path-conversion mistake — owner may delete.
-
-- R7 residue (Low, deferred): semantic Undo leaves a blank line in Done when Done has other non-blank content
-  (K2 report note 1; needs a vault-contract §4.2 change).
-
-- Service-worker offline shell not e2e-tested (F-report open point 1) → real-phone checklist.
-- Recent receipts are memory-only in the PWA (F-report 4): F10 overlay lost on reload.
-- (closed) InMemoryStore ref race: head-CAS (ADR-0011) makes every non-head base a `head-moved`, the P12 case.
-- Worker pane cleanup: keep `kernel`/`frontend` panes until the Phase 1 review, then close panes and remove
-  worktrees (branches are fully merged).
-
-## Open owner decisions
-
-| # | Decision | Default in force | Needed by |
-|---|---|---|---|
-| D1 | Today definition | due/scheduled/start ≤ today or 🔺/⏫; overdue as own group | Phase 4 (non-blocking) |
-| D2 | Linked-note allowlist | `Projects/`, `Tasks/`, `Inbox/` only | Phase 4 (non-blocking) |
-| D3 | Task IDs (ADR-0003) | no `🆔` writes in first release | non-blocking |
-| D4 | App task-capture anchor | **Decided: top of Open** (ADR-0010) | done |
+- Cold offline launch shows the shell and pending actions, not the task list (reads are `no-store`, no vault content
+  on device by design). Stated in the UI copy by P4-B/P2-B.
+- Desktop conflicts are surfaced only in the sync log/status file; the app cannot see them until the owner resolves.
+- R7 residue (Low): semantic Undo leaves a blank line in Done when Done has other content (needs vault-contract §4.2).
+- Workers subrequest budget for Undo dedupe paging × 5 attempts — P3-A sizing note decides the plan.
+- Phone accessibility (keyboard visibility, long text, dictation, large text, focus, VoiceOver, one-handed) is
+  verified only on the installed iPhone app in milestone 2.
 
 ## Human gates
 
-- G1 Private sandbox `Nextoz/vault-companion-sandbox` — **approved, created, kept**; probe evidence
-  `docs/discovery/github-api-probe-2026-09-24.md`.
-- G2 GitHub App, Cloudflare account/Access/Worker, `main` ruleset (credentials, external services) — Phase 3.
-- G3 First live vault write (canary) — end of Phase 3.
+G1 sandbox (done) · G2 credentials (milestone 2) · G3 first live write (milestone 2).
