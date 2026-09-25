@@ -14,12 +14,9 @@ review. Herdr workers `kernel` (`w3:p4`), `frontend` (`w3:p3`) idle.
 
 **Risks:** `docs/plan.md` → Unresolved issues / risks.
 
-**Memory event (2026-09-25 ~02:40):** Claude Code reaped the Lead's background waiter because system memory was
-critically low (0.6 GB free of 15.4 GB). Not a review failure. The idle `kernel` pane (`w3:p4`, work merged) was
-closed to relieve pressure. Still running: `review-opus` (`w3:p5`), Astra `codex exec` (`w3:p6`), Sol `codex exec`
-(`w3:p7`). No automatic re-waiting was started.
+**Phase 1 gate (2026-09-25):** failed; reconciled (`docs/reviews/phase-1-reconciliation.md`), ADR-0011 head-CAS
+decided with real probe evidence. K2 (`w3:p8`) and F2 (`w3:p9`) fix workers running; panes w3:p4–p7 closed.
 
-**Exact next action:** check for `docs/reviews/phase-1-review-opus.md` and `docs/reviews/phase-1-review-astra.md`
-(Astra/Sol progress: `astra-run.log`/`sol-run.log` in the Lead scratchpad, UTF-16). If a reviewer process died,
-re-launch it from `docs/reviews/phase-1-review-brief.md` per `docs/plan.md` item 4 — only when memory allows.
-Then reconcile into `docs/reviews/phase-1-reconciliation.md`; then review and merge `agent/ci` (brief C).
+**Exact next action:** Lead implements head-CAS (ADR-0011) in `packages/domain/src/store.ts` port
+(`writeFile` gains `baseCommit`, result `head-moved`), InMemoryStore, LocalGitStore (`update-ref` old=X),
+GitHubContentsStore (Git Data API), executor (budget 5, paged dedupe), plus the other L items in the reconciliation.

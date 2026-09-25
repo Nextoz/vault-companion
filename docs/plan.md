@@ -27,16 +27,18 @@ Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef4
 
 ### Work in progress (exact next actions)
 
-1. ~~checkNoteInput / KernelInvariantError in commands.ts~~ — done.
-2. ~~Seam tests `packages/domain/src/commands.test.ts`~~ — done (21 tests; A28 guard mutation-checked). Found and
-   fixed an InMemoryStore atomicity bug (await between CAS check and commit let two writers pass).
-3. **Next:** wire `apps/worker` entry — production composition (GitHubContentsStore + Access verifier from env
-   bindings) and a Node composition over LocalGitStore for Phase 2 (`apps/worker/src/node.ts`).
-3b. ~~Production Workers entry~~ — done (`2e3e7f7`); Node/LocalGitStore composition moved to Phase 2 harness.
-4. **In flight:** Phase 1 gate reviews on `main` @ `2e3e7f7`+brief, brief `docs/reviews/phase-1-review-brief.md`:
-   Opus 5.5 `review-opus` (pane `w3:p5`) → `docs/reviews/phase-1-review-opus.md`; GPT-6 Astra via `codex exec`
-   (pane `w3:p6`, log in Lead scratchpad `astra-run.log`) → `docs/reviews/phase-1-review-astra.md`.
-   Next: reconcile both reports (`docs/reviews/phase-1-reconciliation.md`), fix, rerun; then CI via GPT-6 Sol.
+**Phase 1 gate FAILED** (Astra BLOCK, Opus PASS WITH FIXES). Reconciliation with owners:
+`docs/reviews/phase-1-reconciliation.md`. Fixes in flight:
+
+| Stream | Owner | Brief | Status |
+|---|---|---|---|
+| K2 kernel fixes (A1/R1, A5/R2, R6, R7, R13, R14) | Opus 5.5 worker `k2`, pane `w3:p8`, branch `agent/kernel-fixes` | `docs/briefs/K2-kernel-fixes.md` | in flight |
+| F2 queue fixes (A3, A7, A9, R4, R12) | Opus 5.5 worker `f2`, pane `w3:p9`, branch `agent/queue-fixes` | `docs/briefs/F2-queue-fixes.md` | in flight |
+| L head-CAS (ADR-0011: A2, A4, R8, R9), domain exact-undo via parent bytes (A1), JWT claims (A6), `X-VC-Account` check (A7), adapter path guards + allowlist (A8/R5), log/wiring tests (A10/R10), R11 | Lead on `main` | reconciliation table | next |
+
+Then: merge K2/F2, full check, **rerun the gate** (same brief, fresh Opus + Astra via `codex exec`).
+CI: GPT-6 Sol is **not available** on the owner's ChatGPT-account Codex (`model is not supported`); owner decision
+pending on a substitute — not started.
 
 ### Unresolved issues / risks
 
