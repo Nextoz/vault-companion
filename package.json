@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "build": "pnpm -r --if-present build"
+    "build": "pnpm -r --if-present build",
+    "deploy:dry": "pnpm --filter @vault-companion/worker build"
   },
   "devDependencies": {
     "@types/node": "^24.13.6",

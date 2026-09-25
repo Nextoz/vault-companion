@@ -1,0 +1,52 @@
+// Cloudflare Worker config (Phase 3 scaffold, brief P3-A). The owner's G2 steps: docs/deploy.md.
+// Public repo: placeholders only — no account IDs, domains, emails or secret values here, ever.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "vault-companion",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-20",
+  "send_metrics": false,
+  // No `nodejs_compat`: the dry-run bundle builds without it (P3A report).
+  // `account_id` is deliberately absent: wrangler reads CLOUDFLARE_ACCOUNT_ID from the owner's shell.
+
+  // PWA and API share one origin (app.ts origin/CSRF checks assume it). /api/* always reaches the Hono app;
+  // everything else is served from the web build without invoking the Worker.
+  "assets": {
+    "directory": "../web/dist",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "single-page-application",
+  },
+
+  // Non-secret settings (Env in src/index.ts). AUTH_MODE must stay "access": configProblems() refuses anything else.
+  "vars": {
+    "AUTH_MODE": "access",
+    "VAULT_BRANCH": "main",
+    "USER_TIME_ZONE": "Europe/Copenhagen",
+  },
+
+  // Everything else in REQUIRED is set per account with `wrangler secret put <NAME>` (docs/deploy.md step 4), never
+  // committed. Identifiers are secrets too so that the public repo carries no real account, domain or email:
+  //   wrangler secret put ACCESS_TEAM_DOMAIN       # https://<team>.cloudflareaccess.com
+  //   wrangler secret put ACCESS_AUD               # Access application audience (AUD) tag
+  //   wrangler secret put ALLOWED_EMAILS           # comma-separated; must match the Access policy
+  //   wrangler secret put APP_ORIGIN               # https://<worker-host>, no trailing slash
+  //   wrangler secret put GITHUB_APP_ID
+  //   wrangler secret put GITHUB_APP_PRIVATE_KEY   # PKCS#8 PEM (see docs/deploy.md step 1)
+  //   wrangler secret put GITHUB_INSTALLATION_ID
+  //   wrangler secret put VAULT_OWNER
+  //   wrangler secret put VAULT_REPO
+  // `secrets.required` is the machine-readable form of this list (wrangler types/dev validation; config.test.ts).
+  "secrets": {
+    "required": [
+      "ACCESS_TEAM_DOMAIN",
+      "ACCESS_AUD",
+      "ALLOWED_EMAILS",
+      "APP_ORIGIN",
+      "GITHUB_APP_ID",
+      "GITHUB_APP_PRIVATE_KEY",
+      "GITHUB_INSTALLATION_ID",
+      "VAULT_OWNER",
+      "VAULT_REPO",
+    ],
+  },
+}
