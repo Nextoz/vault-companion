@@ -32,10 +32,9 @@ exists; `main` pushed. Claude tokens are running low: implementation is routed t
 **Open work (2026-09-25):**
 - PRs #1 (D1) and #2 (D2 scrub) merged (`4915e36`, `7316ea2`). Lead merges PRs itself when checks pass.
 - Watcher `tools/wait-for-work.sh` runs in the background and wakes the Lead on CodeRabbit reviews / new `agent/*` branches.
-- Cloud C (`session_01WxbFmRJdtnNWyYPcqLkmvt`, `agent/ci`) and P2-A (`session_01FyLWeGWnPruL9dXefaVGf3`,
-  `agent/e2e-harness`) — **done but unpushed** (sessions were bundle uploads, no `origin`). Owner installs the Claude
-  GitHub App on the repo, then Lead sends each session `claude -p "<push instruction>" --cloud <id>`; then PRs as usual.
-
+- PR #3 `agent/ci` (C) and PR #4 `agent/e2e-harness` (P2-A, 15 real-Git scenarios, `pnpm check` green locally) —
+  open, awaiting CodeRabbit. Then: CodeRabbit loop → verify (PR #3: its own Actions run; PR #4: rebase on main) → merge.
+  PR #4 merge = Phase 2 evidence; next is the Phase 2 whole-system midpoint review.
 - P3-A deploy scaffolding — Cloud `session_01BtqCxHaRkAXZ53YDZ4QSe4`, branch `agent/deploy-scaffold` (launched after the
   App install; first stub push proves the session cloned rather than bundled).
 
