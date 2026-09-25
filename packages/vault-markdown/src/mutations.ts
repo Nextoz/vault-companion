@@ -2,7 +2,7 @@ import type { CaptureTaskInput, CompleteEffect, LocatorInput, MutationOk, Refusa
 import { EMOJI_BY_PRIORITY } from './fields.ts';
 import { isValidContext, sanitizeCaptureText } from './sanitize.ts';
 import { analyse, analyseDoc, captureInsertionPoint, matchTaskLine, type Analysis, type IndexedTask } from './todo-list.ts';
-import { ISO_DATE, isBlank, isListItem, isWellFormed, joinDoc, refuse, type Doc } from './text.ts';
+import { ISO_DATE, indentWidth, isBlank, isListItem, isWellFormed, joinDoc, refuse, type Doc } from './text.ts';
 
 /** Thrown when a post-condition of a splice does not hold: a kernel bug, never written to the vault. */
 export class KernelInvariantError extends Error {
@@ -36,9 +36,11 @@ function completedLine(t: IndexedTask, doneDate: string): string {
   const at = t.match.checkboxOffset + 1;
   invariant(line[at] === ' ', 'checkbox is open');
   const checked = line.slice(0, at) + 'x' + line.slice(at + 1);
-  const trimmed = checked.trimEnd();
-  const blockId = / \^[A-Za-z0-9-]+$/.exec(trimmed);
-  const head = (blockId ? trimmed.slice(0, blockId.index) : checked).replace(/[ \t]+$/, '');
+  // Only spaces and tabs are trimmed (R13). Other trailing whitespace after a block ID (NBSP) stays with the ID,
+  // which keeps it trailing as the parser (`trimEnd`) and Obsidian read it.
+  const trimmed = checked.replace(/[ \t]+$/, '');
+  const blockId = / \^[A-Za-z0-9-]+\s*$/u.exec(trimmed);
+  const head = (blockId ? trimmed.slice(0, blockId.index) : trimmed).replace(/[ \t]+$/, '');
   return `${head} ✅ ${doneDate}${blockId ? blockId[0] : ''}`;
 }
 
@@ -64,7 +66,14 @@ export function completeTask(text: string, locator: LocatorInput, doneDate: stri
   if (t.section === 'done') {
     const out = [...lines];
     out[i] = completed;
-    const effect: CompleteEffect = { ...base, insertedAt: i, anchorBefore: '', blankLinesAfterAnchor: 0, completedInPlace: true };
+    const effect: CompleteEffect = {
+      ...base,
+      insertedAt: i,
+      blankInserted: false,
+      anchorBefore: '',
+      blankLinesAfterAnchor: 0,
+      completedInPlace: true,
+    };
     return verifiedCompletion(a.doc, out, effect);
   }
 
@@ -88,6 +97,8 @@ export function completeTask(text: string, locator: LocatorInput, doneDate: stri
     target = last + 1;
     blankBefore = !isListItem(lines[last]!);
   }
+  // R6: Done must not leave a fence/comment open at the insertion point (the block would land inside it).
+  if (a.scan.cleanAfter[target - 1] !== true) return refuse('refused:structure', '"## Done" ends inside a fence or comment.');
 
   const inserted = [...(blankBefore ? [''] : []), completed, ...lines.slice(i + 1, t.blockEnd)];
   const out = [...lines];
@@ -104,6 +115,7 @@ export function completeTask(text: string, locator: LocatorInput, doneDate: stri
   const effect: CompleteEffect = {
     ...base,
     insertedAt,
+    blankInserted: blankBefore,
     anchorBefore: lines[anchor]!,
     blankLinesAfterAnchor: i - anchor - 1,
     completedInPlace: false,
@@ -134,9 +146,17 @@ export function undoCompleteTask(text: string, input: UndoInput): MutationOk<{ o
   return semanticInverse(a, c);
 }
 
+/** §4.2 step 1 on its own: the verified original, or `null` when the exact inverse declines (tests, not index.ts). */
+export function exactUndo(text: string, completion: CompleteEffect): MutationOk<{ openLineText: string }> | null {
+  const a = analyse(text);
+  if ('ok' in a || a.writeBlock) return null;
+  return exactInverse(text, a, completion);
+}
+
 /**
- * §4.2 step 1. The candidate original is accepted only if completing it again reproduces `text` byte for byte,
- * which proves it is the pre-completion file (and settles whether completion inserted a blank line).
+ * §4.2 step 1. A candidate original is accepted only if completing it again reproduces `text` byte for byte
+ * **and** the whole recorded effect, and only if it is the unique such candidate (review A1/R1: completion is not
+ * injective — with Done above Open a wrong candidate re-completes in place to the same bytes).
  */
 function exactInverse(text: string, a: Analysis, c: CompleteEffect): MutationOk<{ openLineText: string }> | null {
   const lines = a.doc.lines;
@@ -145,36 +165,48 @@ function exactInverse(text: string, a: Analysis, c: CompleteEffect): MutationOk<
   // final newline (F16) yields the first reading on re-parse, but the original needs the second.
   const readings: Doc[] = [a.doc];
   if (a.doc.finalNewline) readings.push({ ...a.doc, lines: [...lines, ''], finalNewline: false });
-  const candidates: { doc: Doc; out: string[] }[] = [];
+  const originals = new Set<string>();
   for (const doc of readings) {
+    const out = [...doc.lines];
     if (c.completedInPlace) {
-      const out = [...doc.lines];
       out[c.insertedAt] = c.openLineText;
-      candidates.push({ doc, out });
-      continue;
-    }
-    const children = doc.lines.slice(c.insertedAt + 1, c.insertedAt + c.blockLineCount);
-    for (const blank of [0, 1]) {
+    } else {
+      const blank = c.blankInserted ? 1 : 0;
       if (blank === 1 && doc.lines[c.insertedAt - 1] !== '') continue;
-      const out = [...doc.lines];
+      const children = doc.lines.slice(c.insertedAt + 1, c.insertedAt + c.blockLineCount);
       out.splice(c.insertedAt - blank, c.blockLineCount + blank);
       if (c.removedAt > out.length) continue;
       out.splice(c.removedAt, 0, c.openLineText, ...children);
-      candidates.push({ doc, out });
     }
-  }
-  for (const { doc, out } of candidates) {
     const original = joinDoc(doc, out);
     const again = completeTask(
       original,
       { lineIndex: c.removedAt, lineText: c.openLineText, occurrencesAtRead: 1, sameRevision: true },
       c.doneDate,
     );
-    if (again.ok && again.text === text && again.effect.insertedAt === c.insertedAt) {
-      return { ok: true, text: original, effect: { openLineText: c.openLineText } };
-    }
+    if (again.ok && again.text === text && sameEffect(again.effect, c)) originals.add(original);
   }
-  return null;
+  if (originals.size !== 1) return null;
+  const [original] = originals;
+  return { ok: true, text: original!, effect: { openLineText: c.openLineText } };
+}
+
+// Every CompleteEffect field; a new field is a compile error here until it is compared too.
+const EFFECT_FIELDS: Record<keyof CompleteEffect, true> = {
+  completedLineText: true,
+  openLineText: true,
+  removedAt: true,
+  blockLineCount: true,
+  insertedAt: true,
+  blankInserted: true,
+  anchorBefore: true,
+  blankLinesAfterAnchor: true,
+  completedInPlace: true,
+  doneDate: true,
+};
+
+function sameEffect(x: CompleteEffect, y: CompleteEffect): boolean {
+  return (Object.keys(EFFECT_FIELDS) as (keyof CompleteEffect)[]).every((k) => x[k] === y[k]);
 }
 
 /** §4.2 steps 2–3. */
@@ -188,12 +220,17 @@ function semanticInverse(a: Analysis, c: CompleteEffect): MutationOk<{ openLineT
   if (c.completedInPlace) {
     const out = [...lines];
     out[t.lineIndex] = c.openLineText;
-    return verifiedUndo(a.doc, out, t.lineIndex, c, 'done');
+    return verifiedUndo(a, t, out, t.lineIndex, c, 'done');
   }
 
   if (a.scan.cleanAfter[t.blockEnd - 1] !== true) return refuse('refused:structure', 'The task block cannot be moved safely.');
   const block = [c.openLineText, ...lines.slice(t.lineIndex + 1, t.blockEnd)];
-  const rest = [...lines.slice(0, t.lineIndex), ...lines.slice(t.blockEnd)];
+  // R7: drop the blank completion inserted into an empty Done, if it is still blank and Done has nothing else.
+  const done = a.done!;
+  const doneOtherwiseEmpty = lines.every((line, j) => j <= done.heading || j >= done.end || (j >= t.lineIndex && j < t.blockEnd) || isBlank(line));
+  // Line above the block is the heading (not blank) when the desktop already deleted the blank.
+  const residue = c.blankInserted && isBlank(lines[t.lineIndex - 1]!) && doneOtherwiseEmpty ? 1 : 0;
+  const rest = [...lines.slice(0, t.lineIndex - residue), ...lines.slice(t.blockEnd)];
   const mid = analyseDoc({ ...a.doc, lines: rest });
   if (mid.writeBlock) return mid.writeBlock;
   const open = mid.open!;
@@ -201,7 +238,8 @@ function semanticInverse(a: Analysis, c: CompleteEffect): MutationOk<{ openLineT
   let at = -1;
   if (c.anchorBefore !== '' && !isBlank(c.anchorBefore)) {
     const anchors: number[] = [];
-    for (let j = open.heading; j < open.end; j++) if (rest[j] === c.anchorBefore) anchors.push(j);
+    // R6: only visible lines count (a copy inside a fence or comment is not the anchor).
+    for (let j = open.heading; j < open.end; j++) if (mid.scan.visible[j] && rest[j] === c.anchorBefore) anchors.push(j);
     if (anchors.length === 1) {
       const k = anchors[0]!;
       let blanks = 0;
@@ -217,23 +255,36 @@ function semanticInverse(a: Analysis, c: CompleteEffect): MutationOk<{ openLineT
     if ('ok' in point) return point;
     ({ at, blankBefore } = point);
   }
+  // No adoption (A5/R2): an indented next non-blank line would become a child of the restored task.
+  let next = at;
+  while (next < rest.length && isBlank(rest[next]!)) next++;
+  if (next < rest.length && indentWidth(rest[next]!) > 0) {
+    return refuse('refused:structure', 'The restored task would adopt the indented line that follows it.');
+  }
   const out = [...rest.slice(0, at), ...(blankBefore ? [''] : []), ...block, ...rest.slice(at)];
-  return verifiedUndo(a.doc, out, at + (blankBefore ? 1 : 0), c, 'open');
+  return verifiedUndo(a, t, out, at + (blankBefore ? 1 : 0), c, 'open');
 }
 
+/** `before`/`completed`: the analysed current file and the completed task being reverted. */
 function verifiedUndo(
-  doc: Doc,
+  before: Analysis,
+  completed: IndexedTask,
   out: string[],
   at: number,
   c: CompleteEffect,
   section: 'open' | 'done',
 ): MutationOk<{ openLineText: string }> {
-  const after = analyseDoc({ ...doc, lines: out });
+  const after = analyseDoc({ ...before.doc, lines: out });
   const restored = after.tasks.find((t) => t.lineIndex === at);
   invariant(after.writeBlock === null, 'undo keeps the file writable');
   invariant(restored?.lineText === c.openLineText && restored.section === section, 'task restored');
   invariant(restored.parsed.status === 'open', 'restored task parses as open');
-  return { ok: true, text: joinDoc(doc, out), effect: { openLineText: c.openLineText } };
+  const size = (t: IndexedTask): number => t.blockEnd - t.lineIndex;
+  invariant(size(restored) === size(completed), 'restored task has exactly its completed block');
+  const others = (tasks: readonly IndexedTask[], skip: IndexedTask): string[] =>
+    tasks.filter((t) => t !== skip).map((t) => `${size(t)} ${t.lineText}`);
+  invariant(sameArray(others(after.tasks, restored), others(before.tasks, completed)), 'every other task keeps its block');
+  return { ok: true, text: joinDoc(before.doc, out), effect: { openLineText: c.openLineText } };
 }
 
 /** docs/vault-contract.md §4.3 line format; `text` already sanitised and non-empty. */
@@ -287,6 +338,6 @@ export function captureTask(text: string, input: CaptureTaskInput): MutationOk<{
   return { ok: true, text: joinDoc(a.doc, out), effect: { lineText } };
 }
 
-function sameArray(x: readonly boolean[], y: readonly boolean[]): boolean {
+function sameArray<T>(x: readonly T[], y: readonly T[]): boolean {
   return x.length === y.length && x.every((v, k) => v === y[k]);
 }

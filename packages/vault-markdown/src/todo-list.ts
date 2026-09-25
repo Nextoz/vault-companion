@@ -1,7 +1,7 @@
 import type { ParsedTask, ParseResult, Refusal } from './api.ts';
 import { PRIORITY_BY_EMOJI, parseTaskBody, type TaskFields } from './fields.ts';
 import { scanLines, type LineScan } from './scan.ts';
-import { indentWidth, isBlank, refuse, splitDoc, type Doc } from './text.ts';
+import { indentWidth, isBlank, isListItem, refuse, splitDoc, type Doc } from './text.ts';
 
 // docs/vault-contract.md §2 (Tasks bundle regex). `u`: the status char is one code point.
 const TASK_LINE = /^([\s\t>]*)([-*+]|[0-9]+[.)]) +\[(.)\] *(.*)$/u;
@@ -186,7 +186,8 @@ export function taskBlockEnd(lines: readonly string[], taskIndex: number): numbe
 /**
  * §4.4 (D4, ADR-0010): top of `## Open`, immediately before its first non-blank line. If Open has no non-blank
  * line: after the heading, preceded by exactly one blank line (an existing blank line is reused).
- * Refused when that first line is indented: the inserted task would adopt it as a child line.
+ * Refused when that first line is indented (the inserted task would adopt it as a child line) or is not a list
+ * item (prose would become a lazy continuation of the inserted task — review R14).
  */
 export function captureInsertionPoint(
   lines: readonly string[],
@@ -196,6 +197,7 @@ export function captureInsertionPoint(
     const line = lines[j]!;
     if (isBlank(line)) continue;
     if (indentWidth(line) > 0) return refuse('refused:structure', '"## Open" starts with an indented line.');
+    if (!isListItem(line)) return refuse('refused:structure', '"## Open" starts with a line that is not a list item.');
     return { at: j, blankBefore: false };
   }
   if (open.heading + 1 < open.end) return { at: open.heading + 2, blankBefore: false };
