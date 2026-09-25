@@ -107,6 +107,8 @@ heading). `doneDate` = user-zone date of `occurredAt` (§6).
 ### 4.2 Undo completion
 
 Input: the server-derived completion effect (commands.md) and the file at X.
+A completion is undone at most once (`Vault-Companion-Undoes` trailer); accepted residual under text-equality
+semantics: a delayed app Undo can reopen an identical line that the desktop unchecked and another device completed again.
 1. **Exact inverse:** if the file at X is byte-identical to the completion commit's blob, the domain writes the
    completion commit's **parent bytes** (the verified original; head-CAS guarantees they are what the completion
    was computed on). Guaranteed to restore the original bytes (acceptance A3). The kernel's own exact inverse must

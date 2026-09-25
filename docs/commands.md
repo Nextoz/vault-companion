@@ -59,6 +59,7 @@ All reads and the dedupe of one attempt refer to **one immutable commit X** (F1)
 4. Read file(s) and directory listings at X. Apply the pure mutation → new content, or refusal/conflict (no write).
 5. Commit parented on X with trailers; publish by fast-forward-only ref update from X (ADR-0011).
    - success → applied receipt.
+   - precondition-failed → refused:structure (not retryable); no write.
    - head-moved (any commit after X, 422 "not a fast forward") → back to 2; max 5 loops → conflict:stale.
    - unknown outcome (timeout, reset, 5xx on the ref update) → back to 2. Never blind-retry.
    - unavailable before the ref update → upstream-unavailable (retryable).
@@ -69,6 +70,14 @@ desktop sync, or an Undo that restored identical bytes (review A2, the ABA case)
 runs again against a newer X that contains it. Blob CAS alone was insufficient (ADR-0011).
 Dedupe pages the compare API (`per_page=250&page=n`) until `total_commits` are seen; the unpaged response returns
 only the newest 250 (probe 2026-09-25). More than 20 pages ⇒ `unknown`.
+
+Every write carries `expect: 'absent' | 'regular-file'`, checked by the adapter in the pinned tree X:
+note creation requires absence (no file or directory); task updates require a regular file (mode `100644`).
+See [ADR-0011](decisions/0011-head-cas-writes.md) for head-CAS and the create/update precondition.
+
+`MAX_TASK_LINE` is 16,000 (JavaScript string length): a write whose resulting task line would exceed it
+returns `invalid` before writing; longer existing task lines are omitted from reads and counted in
+`omittedLongLines`, never truncated.
 
 Account binding: `POST /api/commands` carries `X-VC-Account: <accountKey>` outside the hashed body. The Worker
 compares it with the key derived from the verified JWT; mismatch ⇒ 409 `account-mismatch` (not retryable).
@@ -81,7 +90,10 @@ The effect is never taken from the client. For a found or just-created commit C 
 - CaptureNote: the created path is taken from C's changed-file list.
 
 `UndoCompleteTask`: find the target's commit T by trailer in `target.baseRevision..X`, check the supplied
-target envelope's hash equals T's payload trailer, re-derive the completion effect from T as above, then:
+target envelope's hash equals T's payload trailer, then search `T..X` for
+`Vault-Companion-Undoes: <target operationId>`: found ⇒ `conflict:task-changed`; inconclusive ⇒ `dedupe-unknown`.
+A completion can be undone only once; Undo commits carry that trailer. If no prior Undo is found,
+re-derive the completion effect from T as above, then:
 - **exact inverse** — the file at X is byte-identical to `T:path`: write `T^:path` (the verified original bytes;
   review A1/R1);
 - otherwise the semantic inverse (vault-contract §4.2) on the file at X.
@@ -94,7 +106,7 @@ Per effect type:
 | CaptureTask append | dedupe at X; head-CAS from X |
 | CaptureNote create | dedupe at X; case-insensitive collision check on the Inbox tree at X; head-CAS from X |
 | CompleteTask | dedupe at X; already-done target ⇒ conflict, never a second `✅` |
-| UndoCompleteTask | dedupe at X; inverse only applies to the exact completed line |
+| UndoCompleteTask | dedupe at X; Undoes trailer prevents a second Undo of the same completion; inverse requires exact completed text |
 | task-ID assignment | not performed in first release |
 | recurrence successor | not performed (`refused:recurring`) |
 
@@ -115,6 +127,8 @@ effect and shows the view as `refreshing` — a saved completion never reappears
   released only after its predecessor has a receipt or a refusal **known not to have applied** (`refused:*`,
   `conflict:*`, `operation-id-reused`, `invalid`, `account-mismatch`). `dedupe-unknown`, unparseable 4xx and other
   non-final states keep dependents waiting; when the user retries a predecessor, its dependents stay behind it.
+  `retry` bumps each dependent's `dependencyGeneration` and requeues unleased dependents needing attention;
+  an in-flight dependent keeps its claim, but an attention response from the old generation requeues it.
   If the predecessor was provably *never sent by any tab*, Undo removes both locally; otherwise Undo is always a
   real queued command. Items for the same task are sent FIFO.
 - **Multiple tabs / installed PWA (A3):** claim, local cancellation, settlement and discard run inside
@@ -129,6 +143,7 @@ effect and shows the view as `refreshing` — a saved completion never reappears
   pending record, and kept until a read reports it `included`; only acknowledged receipts may be evicted. A 200 whose
   `operationId` differs from the sent one is not a receipt (retry).
 - Retries: backoff 1 s → 60 s, on `online`, start and focus; the identical stored envelope. No retry limit.
+- `postCommand` aborts after 30 s; the queue classifies the abort as `timeout` and retries.
 - Session expiry (F11): requests use `redirect: 'manual'`; an opaque redirect, 401, or Access 403 ⇒
   `signed-out` state: queue paused, "Sign in again" performs a top-level navigation, then the queue resumes
   under the accountKey check.

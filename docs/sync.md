@@ -31,14 +31,16 @@ health — no transport for that evidence exists or is approved.
 
 ## App write path invariants
 
-1. Every write is a single-file compare-and-swap: Contents API `PUT` with the blob `sha` read
-   during the same command execution (create: no `sha`, fails if the path exists).
+1. Every write is a single-file commit parented on pinned X, published by a fast-forward-only ref update
+   (head-CAS); `expect: 'absent' | 'regular-file'` is checked in X before writing. A failed precondition
+   returns `refused:structure`, never retried. See [ADR-0011](decisions/0011-head-cas-writes.md).
 2. Each commit message carries trailers:
    `Vault-Companion-Op: <operationId>` and `Vault-Companion-Payload: sha256:<hex>`.
+   Undo commits also carry `Vault-Companion-Undoes: <target operationId>`.
    Commit subject and body never contain task text or note text.
 3. The app never force-pushes, rewrites history, deletes branches, or writes outside allowed paths.
 4. On CAS failure the command re-reads and re-evaluates the *semantic* command against the new
-   content (safe replay per `vault-contract.md` §3), at most 3 attempts, then `conflict:stale`.
+   content (safe replay per `vault-contract.md` §3), at most 5 attempts, then `conflict:stale`.
 
 ## Requirements on the desktop sync worker (owned in the vault, not this repo)
 
