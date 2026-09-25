@@ -14,6 +14,5 @@ review. Herdr workers `kernel` (`w3:p4`), `frontend` (`w3:p3`) idle.
 
 **Risks:** `docs/plan.md` → Unresolved issues / risks.
 
-**Exact next action:** create `apps/worker/src/index.ts` (Workers entry: env bindings → Access verifier +
-GitHubContentsStore + createCommandService → createApp) and `apps/worker/src/node.ts` (Node server over
-LocalGitStore with a dev verifier) for Phase 2.
+**Exact next action:** wait for the two Phase 1 gate reports (`docs/reviews/phase-1-review-{opus,astra}.md`); if a
+reviewer died, re-launch it from `docs/reviews/phase-1-review-brief.md` (see `docs/plan.md` item 4); then reconcile.

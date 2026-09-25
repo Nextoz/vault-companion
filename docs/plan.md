@@ -32,8 +32,11 @@ Playwright WebKit e2e (`pnpm --filter @vault-companion/web e2e`) green at `86ef4
    fixed an InMemoryStore atomicity bug (await between CAS check and commit let two writers pass).
 3. **Next:** wire `apps/worker` entry — production composition (GitHubContentsStore + Access verifier from env
    bindings) and a Node composition over LocalGitStore for Phase 2 (`apps/worker/src/node.ts`).
-4. Phase 1 gate: fresh-context **Opus** adversarial review + **GPT-6 Astra** cross-model review of kernel and
-   retry/dedupe; reconcile; then CI via GPT-6 Sol.
+3b. ~~Production Workers entry~~ — done (`2e3e7f7`); Node/LocalGitStore composition moved to Phase 2 harness.
+4. **In flight:** Phase 1 gate reviews on `main` @ `2e3e7f7`+brief, brief `docs/reviews/phase-1-review-brief.md`:
+   Opus 5.5 `review-opus` (pane `w3:p5`) → `docs/reviews/phase-1-review-opus.md`; GPT-6 Astra via `codex exec`
+   (pane `w3:p6`, log in Lead scratchpad `astra-run.log`) → `docs/reviews/phase-1-review-astra.md`.
+   Next: reconcile both reports (`docs/reviews/phase-1-reconciliation.md`), fix, rerun; then CI via GPT-6 Sol.
 
 ### Unresolved issues / risks
 
