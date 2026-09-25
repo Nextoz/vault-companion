@@ -1,4 +1,4 @@
-import type { CommandType } from '@vault-companion/contracts';
+import type { CommandType, TasksResponse } from '@vault-companion/contracts';
 import { useState } from 'react';
 import { exportText } from '../commands.ts';
 import { knownNotApplied } from '../queue/classify.ts';
@@ -27,9 +27,12 @@ export function attentionText(item: QueueItem): string | null {
  * …) is final for these bytes: the server will refuse them again, so Retry is not offered (P4-B). Except a refusal
  * for Git conflict markers in the file: once the owner resolves the conflict on the desktop, the same bytes may apply.
  * `clock-skew` is final too: the stored envelope keeps its `occurredAt`, so identical bytes are refused again.
+ * While the read on screen is write-blocked, a task-list action would be refused again: no Retry until a fresh
+ * unblocked read. A note never touches the task list.
  */
-export function canRetry(item: QueueItem): boolean {
+export function canRetry(item: QueueItem, read: Pick<TasksResponse, 'writeBlock'> | null = null): boolean {
   if (item.accountMismatch || item.error?.code === 'clock-skew') return false;
+  if (read?.writeBlock && item.type !== 'CaptureNote') return false;
   return item.error?.code === 'refused:vault-conflict' || !knownNotApplied(item.error);
 }
 
@@ -43,8 +46,8 @@ export function ActionsPanel({
 }: {
   queue: PendingQueue;
   items: readonly QueueItem[];
-  /** The read on screen: clearing uses it as the watermark (G3-1). */
-  read: ReadEvidence | null;
+  /** The read on screen: clearing uses it as the watermark (G3-1); its writeBlock withholds Retry. */
+  read: (ReadEvidence & Pick<TasksResponse, 'writeBlock'>) | null;
   /** Re-read the tasks, so the user can act on the current row after a conflict. */
   onRefresh: () => void;
   /** Remove the action from the device (the App remembers that its task still needs attention). */
@@ -85,7 +88,7 @@ export function ActionsPanel({
                   <p className="muted small">Discarding removes only this action; the task will still need attention.</p>
                 )}
                 <div className="action-buttons">
-                  {canRetry(item) && (
+                  {canRetry(item, read) && (
                     <button type="button" onClick={() => void queue.retry(item.operationId)}>
                       Retry
                     </button>

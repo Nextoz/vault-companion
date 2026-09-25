@@ -439,3 +439,25 @@ test('a clock-skew refusal: check the date and time, then redo; no Retry, Copy t
   await expect(actions).toContainText('Needs attention');
   expect(api.bodies.length).toBe(attempts); // never re-sent automatically
 });
+
+test('a vault-conflict refusal offers Retry only once a fresh read is no longer write-blocked', async ({ page }) => {
+  await page.goto('/');
+  await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+
+  // The desktop commits a conflict after this read: the completion is refused.
+  api.writeBlock = { code: 'refused:vault-conflict', message: 'File contains Git conflict markers.', retryable: false };
+  api.commandMode = { refuse: { code: 'refused:vault-conflict', message: 'File contains Git conflict markers.', retryable: false } };
+  await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
+  const actions = region(page, 'Actions on this device');
+  await expect(actions).toContainText('Needs attention');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('alert').first()).toContainText('sync conflict');
+  await expect(actions.getByRole('button', { name: 'Retry' })).toHaveCount(0);
+
+  // Resolved on the desktop: a fresh unblocked read brings Retry back, and it lands.
+  api.writeBlock = null;
+  api.commandMode = 'ok';
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await actions.getByRole('button', { name: 'Retry' }).click();
+  await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['CompleteTask']);
+});

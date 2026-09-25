@@ -64,6 +64,9 @@ worker, docs or service-worker change. Base: `origin/main` `e37dc83` (main was *
 8. **Addendum 4: clock-skew**: no Retry (the stored envelope keeps its `occurredAt`, so identical bytes are refused
    again). The next step reads "Check your phone's date and time, then redo the action." Copy text and Discard stay.
    Unit test (`canRetry`, `attentionText`) and e2e (no Retry, no automatic re-send).
+9. **CodeRabbit (PR #9)**: `refused:vault-conflict` keeps Retry, but not for task-list actions (complete, Undo, task
+   capture) while the read on screen still has `writeBlock`, where it would only be refused again. Retry returns
+   after a fresh unblocked read. Notes are unaffected.
 
 ## Important discoveries
 
@@ -93,8 +96,8 @@ worker, docs or service-worker change. Base: `origin/main` `e37dc83` (main was *
 
 ## Verification
 
-- `pnpm check` (lint + typecheck + test): **green**, 33 files, 486 tests.
-- Web e2e: `vite build` + Playwright, **25/25 green on Chromium** (iPhone 15 profile) after addendum 4; stable under
+- `pnpm check` (lint + typecheck + test): **green**, 33 files, 487 tests.
+- Web e2e: `vite build` + Playwright, **26/26 green on Chromium** (iPhone 15 profile) after the PR #9 fix; stable under
   `--repeat-each 5` (before addendum 3) and `--repeat-each 3` (after addendum 3). WebKit not run locally (see above).
 - **Guards broken once, each confirmed to fail its test (then restored):**
 
@@ -115,6 +118,7 @@ worker, docs or service-worker change. Base: `origin/main` `e37dc83` (main was *
   | M13 | same-revision read settles a discarded refusal | attention test |
   | M14 | redo on another task settles it | attention test |
   | M15 | Retry offered for `clock-skew` | ActionsPanel test + e2e clock-skew |
+  | M16 | Retry offered for a task-list action while the read is write-blocked (CodeRabbit, PR #9) | ActionsPanel test + e2e vault-conflict Retry |
   | E1 | write-blocked rows stay completable | e2e sync-conflict |
   | E2 | task capture not blocked | e2e sync-conflict |
   | E3 | Overdue expanded by default | e2e ADR-0012 |

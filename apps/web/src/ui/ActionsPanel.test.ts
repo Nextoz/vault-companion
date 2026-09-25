@@ -42,6 +42,19 @@ describe('attention next steps (P4-B)', () => {
     for (const code of ['dedupe-unknown', 'http-418', 'forbidden', 'refused:vault-conflict']) expect(canRetry(attention(code)), code).toBe(true);
   });
 
+  it('withholds Retry for task-list actions while the read on screen is write-blocked, and restores it after', () => {
+    const blocked = { writeBlock: { code: 'refused:vault-conflict' as const, message: 'Conflict markers.', retryable: false } };
+    const conflicted = attention('refused:vault-conflict');
+    expect(canRetry(conflicted, blocked)).toBe(false);
+    expect(canRetry({ ...conflicted, type: 'CaptureTask' }, blocked)).toBe(false);
+    expect(canRetry({ ...conflicted, type: 'UndoCompleteTask' }, blocked)).toBe(false);
+    // A note does not touch the task list.
+    expect(canRetry({ ...conflicted, type: 'CaptureNote' }, blocked)).toBe(true);
+    // A fresh, unblocked read (or none yet): Retry is back.
+    expect(canRetry(conflicted, { writeBlock: null })).toBe(true);
+    expect(canRetry(conflicted, null)).toBe(true);
+  });
+
   it('explains a changed task in plain words; other errors keep the server message', () => {
     expect(attentionText(attention('conflict:task-changed'))).toBe('This task changed on another device.');
     expect(attentionText(attention('refused:recurring'))).toBe('Server words.');
