@@ -8,8 +8,9 @@ This system is **not end-to-end encrypted**: GitHub and the Worker process plain
 - Production: Cloudflare Access in front of the whole hostname (app + API), single allowed identity,
   MFA required by the identity provider policy. Session duration ≤ 24 h. (Provisioning = owner gate.)
 - The Worker **independently verifies** the `Cf-Access-Jwt-Assertion` JWT on every `/api/*` request:
-  RS256 signature against the team JWKS, `aud` = application AUD tag, `iss` = team domain, `exp`/`nbf`,
-  and `email` ∈ allowlist. Failing any check ⇒ 401, no body detail.
+  RS256 signature against the team JWKS, `aud` = application AUD tag, `iss` = team domain, `sub`, `email` ∈
+  allowlist, **`exp` and `iat` required** with `exp − iat` ≤ 24 h, `nbf` honoured, 5 min clock tolerance (review A6).
+  Failing any check ⇒ 401, no body detail. Mutations also require `X-VC-Account` equal to the identity's key.
 - Local/test: a dev verifier with a locally generated keypair. The production build refuses to start
   if `AUTH_MODE != access` or the JWKS/AUD bindings are missing.
 

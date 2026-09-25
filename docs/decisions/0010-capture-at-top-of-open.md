@@ -11,3 +11,6 @@ merge cleanly.
 
 **Consequences.** The most common concurrent case merges without conflict. Newest phone captures appear first
 in Open. Residual conflict: a desktop edit to the first Open task line in the same interval.
+
+**Amendment (Phase 1 gate, review R14):** capture is refused when the first non-blank Open line is not a list
+item, because inserting before prose turns that prose into a lazy continuation of the new task.

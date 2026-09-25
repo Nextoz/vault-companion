@@ -107,14 +107,21 @@ heading). `doneDate` = user-zone date of `occurredAt` (§6).
 ### 4.2 Undo completion
 
 Input: the server-derived completion effect (commands.md) and the file at X.
-1. **Exact inverse:** if the file at X is byte-identical to the completion's result blob, apply the inverse
-   splice (remove block at `insertedAt`, re-insert original block at `removedAt`). Guaranteed to restore the
-   original bytes (acceptance A3).
+1. **Exact inverse:** if the file at X is byte-identical to the completion commit's blob, the domain writes the
+   completion commit's **parent bytes** (the verified original; head-CAS guarantees they are what the completion
+   was computed on). Guaranteed to restore the original bytes (acceptance A3). The kernel's own exact inverse must
+   only accept a candidate whose re-completion reproduces the **whole effect** (not just the bytes) and must be
+   the unique such candidate, else fall through (review A1/R1 — Done above Open).
 2. **Semantic inverse** otherwise: locate `completedLineText` among Done indexed tasks (exact, unique; else
    `conflict:task-changed` / `conflict:ambiguous`). Replace the first line with `openLineText`; move the block
    back to Open directly after the nearest preceding **non-blank** line it had (recorded as `anchorBefore`, may
-   be the `## Open` heading itself) if that line is unique in Open, keeping the recorded number of blank lines
-   between; else at the capture insertion point (§4.4).
+   be the `## Open` heading itself) if that line is unique **and visible** in Open, keeping the recorded number of
+   blank lines between (never more than are present); else at the capture insertion point (§4.4).
+   **No adoption (review A5/R2):** if the next non-blank line after the insertion point is indented, or the
+   insertion would split another task block, refuse with `refused:structure`. The result must leave every other
+   task's block length unchanged and give the restored task exactly its completed block's child lines.
+   **Blank residue (R7):** if completion inserted a blank line into an empty Done (`blankInserted`), the semantic
+   inverse removes it when it is still blank and Done has no other non-blank content.
 3. Completed-in-place: revert the line in place.
 
 ### 4.3 Capture task
@@ -130,7 +137,8 @@ Emoji fields typed inside `<text>` are kept verbatim (QuickAdd behaviour). `cont
 **Top of Open:** immediately before the first non-blank line of the `## Open` section, so desktop QuickAdd
 (which appends at the end) and phone captures touch distant lines and merge cleanly (spike S6 vs S5b).
 If Open has no non-blank line: after the heading, preceded by exactly one blank line (reusing an existing
-blank line if present). No subheadings allowed (§2).
+blank line if present). No subheadings allowed (§2). If the first non-blank Open line is **not a list item**
+(prose would become a lazy continuation of the new task — review R14), capture is `refused:structure`.
 
 ### 4.5 Capture note
 

@@ -56,17 +56,22 @@ All reads and the dedupe of one attempt refer to **one immutable commit X** (F1)
    - found, same payloadHash  → return already-applied receipt with effect derived from that commit.
    - found, other payloadHash → operation-id-reused. No write.
    - unknown (truncated window, base unknown/not an ancestor, 404) → dedupe-unknown. No write.
-4. Read file(s) at ref X (blob S). Apply the pure mutation → new content, or refusal/conflict (no write).
-5. PUT with sha=S (create: no sha) + trailers.
+4. Read file(s) and directory listings at X. Apply the pure mutation → new content, or refusal/conflict (no write).
+5. Commit parented on X with trailers; publish by fast-forward-only ref update from X (ADR-0011).
    - success → applied receipt.
-   - cas-mismatch / exists → back to 2 (the winner may be our own earlier attempt); max 3 loops → conflict:stale.
-   - unknown outcome (timeout, reset, 5xx after send) → back to 2. Never blind-retry the PUT.
-   - unavailable before send → upstream-unavailable (retryable).
+   - head-moved (any commit after X, 422 "not a fast forward") → back to 2; max 5 loops → conflict:stale.
+   - unknown outcome (timeout, reset, 5xx on the ref update) → back to 2. Never blind-retry.
+   - unavailable before the ref update → upstream-unavailable (retryable).
 ```
 
-Why this is airtight: any commit that lands after X and touches the file — including our own earlier
-attempt — changes the blob, so the CAS in step 5 fails and step 3 runs again against a newer X that
-contains it. A test must commit the earlier attempt *between* dedupe and read and prove one effect.
+Why this is airtight: the ref can only advance from X, so **any** commit after X — our own earlier attempt, a
+desktop sync, or an Undo that restored identical bytes (review A2, the ABA case) — makes step 5 fail and step 3
+runs again against a newer X that contains it. Blob CAS alone was insufficient (ADR-0011).
+Dedupe pages the compare API (`per_page=250&page=n`) until `total_commits` are seen; the unpaged response returns
+only the newest 250 (probe 2026-09-25). More than 20 pages ⇒ `unknown`.
+
+Account binding: `POST /api/commands` carries `X-VC-Account: <accountKey>` outside the hashed body. The Worker
+compares it with the key derived from the verified JWT; mismatch ⇒ 409 `account-mismatch` (not retryable).
 
 ### Server-derived effects (F5)
 
@@ -76,16 +81,18 @@ The effect is never taken from the client. For a found or just-created commit C 
 - CaptureNote: the created path is taken from C's changed-file list.
 
 `UndoCompleteTask`: find the target's commit T by trailer in `target.baseRevision..X`, check the supplied
-target envelope's hash equals T's payload trailer, re-derive the completion effect from T as above, then
-apply the inverse (vault-contract §4.2) to the file at X. Target not found ⇒ `conflict:task-changed`
-(nothing to undo in Git).
+target envelope's hash equals T's payload trailer, re-derive the completion effect from T as above, then:
+- **exact inverse** — the file at X is byte-identical to `T:path`: write `T^:path` (the verified original bytes;
+  review A1/R1);
+- otherwise the semantic inverse (vault-contract §4.2) on the file at X.
+Target not found ⇒ `conflict:task-changed` (nothing to undo in Git).
 
 Per effect type:
 
 | Effect | Why no duplicate |
 |---|---|
-| CaptureTask append | dedupe at X; CAS on blob |
-| CaptureNote create | dedupe at X; create-without-sha; case-insensitive collision check (vault-contract §4.5) |
+| CaptureTask append | dedupe at X; head-CAS from X |
+| CaptureNote create | dedupe at X; case-insensitive collision check on the Inbox tree at X; head-CAS from X |
 | CompleteTask | dedupe at X; already-done target ⇒ conflict, never a second `✅` |
 | UndoCompleteTask | dedupe at X; inverse only applies to the exact completed line |
 | task-ID assignment | not performed in first release |
@@ -104,10 +111,20 @@ effect and shows the view as `refreshing` — a saved completion never reappears
   synchronously on tap (F19).
 - `accountKey` = SHA-256 of the Access identity (`sub`) from `/api/session`. Items are sent only when the
   current session's key matches; mismatch ⇒ attention with *Export* / *Discard*.
-- **Dependencies (F4):** Undo of a completion is queued as a dependent of the completion item. A dependent
-  is sent only after its predecessor has a receipt or a terminal refusal. If the predecessor was *never sent*,
-  Undo removes both locally. If it was ever sent (outcome possibly applied), Undo is always a real queued
-  command. Items for the same task are sent FIFO.
+- **Dependencies (F4, R4):** Undo of a completion is queued as a dependent of the completion item. A dependent is
+  released only after its predecessor has a receipt or a refusal **known not to have applied** (`refused:*`,
+  `conflict:*`, `operation-id-reused`, `invalid`, `account-mismatch`). `dedupe-unknown`, unparseable 4xx and other
+  non-final states keep dependents waiting; when the user retries a predecessor, its dependents stay behind it.
+  If the predecessor was provably *never sent by any tab*, Undo removes both locally; otherwise Undo is always a
+  real queued command. Items for the same task are sent FIFO.
+- **Multiple tabs / installed PWA (A3):** claim, local cancellation, settlement and discard run inside
+  `navigator.locks.request('vc-pending', …)` and re-read the IndexedDB record inside the lock; in-memory state is a
+  cache, never the basis of a decision. Without Web Locks, local cancellation is disabled (Undo is always sent).
+- **Session changes (A7):** the session/account is re-checked after every awaited step of a claim and immediately
+  before the request; the request carries `X-VC-Account`.
+- **Receipts (A9, R12):** a receipt is stored in IndexedDB (`receipts`) in the same transaction that removes the
+  pending record, and kept until a read reports it `included`; only acknowledged receipts may be evicted. A 200 whose
+  `operationId` differs from the sent one is not a receipt (retry).
 - Retries: backoff 1 s → 60 s, on `online`, start and focus; the identical stored envelope. No retry limit.
 - Session expiry (F11): requests use `redirect: 'manual'`; an opaque redirect, 401, or Access 403 ⇒
   `signed-out` state: queue paused, "Sign in again" performs a top-level navigation, then the queue resumes

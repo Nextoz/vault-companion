@@ -14,3 +14,5 @@ returns found / not-found / **unknown**; unknown never writes. Same payload ⇒ 
 **Consequences.** Correct after server restarts and with no database. Depends on sync worker W1 (no
 history rewrite). Costs one compare call per command — acceptable for a single user. Commit messages
 must never contain personal text.
+
+**Superseded in part by ADR-0011** (2026-09-25): writes are CAS on the branch head, not the file blob.
