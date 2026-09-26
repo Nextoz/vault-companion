@@ -11,34 +11,23 @@ That origin is the owner's **custom domain behind Cloudflare Access, and nothing
 `workers_dev: false` and `preview_urls: false` (asserted by `apps/worker/src/config.test.ts`), so no `*.workers.dev`
 or per-version preview hostname exists to bypass Access.
 
-## 0. Choose the plan (subrequest limit)
+## 0. Choose the plan (subrequests and CPU)
 
-Each Worker invocation may make a limited number of subrequests (outbound `fetch`): **Free 50, Paid 10,000** per
-invocation ([Workers limits](https://developers.cloudflare.com/workers/platform/limits/); re-check when you do this
-step). Every GitHub API call is one subrequest.
+Limits per Worker invocation ([Workers limits](https://developers.cloudflare.com/workers/platform/limits/); re-check):
+**Free: 50 subrequests, 10 ms CPU. Paid: 10,000 subrequests, 30 s CPU (default).** Every GitHub call is a subrequest.
 
-Current code, worst case: an `UndoCompleteTask` whose five attempts all lose the ref race and whose dedupe windows are
-each at the 20-page compare limit (`maxComparePages`, 250 commits/page) in `packages/github/src/contents-store.ts`:
+Measured on current `main` (whole-system review 2026-09-26, `docs/reviews/phase-2-review-opus.md`, real adapter with a
+counting `fetch`):
 
-| Per attempt | Subrequests |
-|---|---|
-| `head()` | 1 |
-| own dedupe `findOperation` (not found) | 20 |
-| Undo target `findOperation` (found on page 20) + commit detail | 21 |
-| "already undone?" `findOperation` | 20 |
-| `replayOnParent` (parent, read at parent, read at commit) | 3 |
-| read TODO at X, at completion, parent + read at parent | 4 |
-| `writeFile` (tree, base commit, blob, tree, commit, ref PATCH) | 6 |
-| **Attempt total** | **75** |
+| Request | GitHub calls | CPU (warm, fake network) |
+|---|---|---|
+| `UndoCompleteTask` (ADR-0013) | ≤ 10 per attempt, ≤ 3 attempts (+ token, + JWKS when cold) | — |
+| `CompleteTask` / `CaptureTask` / `CaptureNote` | 8 + p per attempt, ≤ 5 attempts (p = compare pages of `baseRevision..X`): 9 typical, 52 worst at p = 2 | Complete 8.5 ms on a 300-task list, 29.7 ms on 1,500 |
+| `GET /api/tasks` | 2 + one per `known` SHA until the read-budget fix lands (review O1), then ≤ 4 | 3.4–12.5 ms before network parsing |
 
-5 attempts = 375, plus 1 installation-token fetch and 1 Access JWKS fetch (both cached per isolate) = **377**.
-A shallow Undo (1 compare page each) is 18 per attempt, 92 for five attempts — already over 50.
-
-**With the current code, use Workers Paid** (377 ≪ 10,000). **Once ADR-0013 (token-based Undo) is merged**, Undo needs
-≈ 10 calls per attempt and at most 3 attempts (≈ 30 + token + JWKS), and the **Free plan suffices**. Caveat: ADR-0013
-leaves the other commands on ADR-0005 paging; their typical cost is ≈ 10 per attempt, but a completion whose dedupe
-window spans many compare pages can still exceed 50 on Free (it then fails as `upstream-unavailable`, never a
-partial write).
+**Free is not established** — CPU alone is near or over 10 ms for an ordinary list. Use **Workers Paid** for the canary,
+or first measure the real list with `wrangler dev --remote` / `wrangler tail` CPU time. Failures are safe either way
+(head-CAS; a killed request is an unknown outcome, deduplicated on retry) but the phone would see repeated 503s.
 
 ## 1. Create the GitHub App
 
@@ -59,6 +48,13 @@ GitHub → Settings → Developer settings → GitHub Apps → New GitHub App.
 
 App page → Install App → your account → **Only select repositories** → the vault repository. After installing, the
 URL is `https://github.com/settings/installations/<id>`: `<id>` is the **installation ID**.
+
+## 2b. Protect `main` on the vault repository (required)
+
+Vault repo → Settings → Rules → Rulesets → New branch ruleset: target `main`, enforcement **Active**, rules **Restrict
+deletions** and **Block force pushes**; no bypass list. The desktop sync never force-pushes, so it is unaffected. This
+is required, not advisory: the app's read watermark assumes published history is never rewritten (review O6). Repair
+mistakes with `git revert`, never a reset.
 
 ## 3. Cloudflare Access application and policy
 
