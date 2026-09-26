@@ -558,3 +558,27 @@ textarea:focus-visible {
 .vault-status summary { cursor: pointer; min-height: 44px; }
 .vault-status summary > span { display: block; }
 .vault-status button { min-height: 44px; min-width: 44px; }
+
+.task-edit {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  min-height: 44px;
+}
+.task-edit:disabled { opacity: 1; }
+.edit-sheet { max-height: 90dvh; overflow-y: auto; }
+.edit-sheet label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.edit-sheet input, .edit-sheet select {
+  min-height: 44px;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+}

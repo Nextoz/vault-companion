@@ -235,6 +235,23 @@ export class MockApi {
     const base = { operationId: command.operationId, status: 'applied' as const, commitSha: this.#revision, blobSha: sha() };
     if (command.type !== 'CaptureNote') this.blobSha = base.blobSha;
     switch (command.type) {
+      case 'EditTask': {
+        const { task: locator, changes } = command.payload;
+        const same = this.open.filter((t) => t.locator.lineText === locator.lineText);
+        const task = same.find((t) => t.locator.lineIndex === locator.lineIndex) ?? (same.length === 1 ? same[0] : undefined);
+        if (!task) throw new Error('mock: editing an unknown task');
+        const pick = <T,>(v: T | undefined, old: T): T => (v === undefined ? old : v);
+        const updated = { description: changes.text ?? task.description, due: pick(changes.due, task.due),
+          scheduled: pick(changes.scheduled, task.scheduled), priority: pick(changes.priority, task.priority) };
+        const icons = { highest: '🔺', high: '⏫', medium: '🔼', low: '🔽', lowest: '⏬' };
+        const afterLineText = ['- [ ]', updated.description, updated.priority ? icons[updated.priority] : '',
+          updated.scheduled ? '⏳ ' + updated.scheduled : '', updated.due ? '📅 ' + updated.due : ''].filter(Boolean).join(' ');
+        // Keep the wire TaskView strict: text is a changes field, not a TaskView field.
+        this.open = this.open.map((t) => t === task ? { ...task, description: updated.description,
+          due: updated.due, scheduled: updated.scheduled, priority: updated.priority,
+          locator: { ...task.locator, blobSha: base.blobSha, lineText: afterLineText } } : t);
+        return { ...base, path: locator.path, effect: { kind: 'edited', beforeLineText: locator.lineText, afterLineText } };
+      }
       case 'CompleteTask': {
         const { lineText, lineIndex } = command.payload.task;
         // The line the locator names (identical lines are different tasks), else the only one with its text.

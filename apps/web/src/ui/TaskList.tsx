@@ -14,6 +14,7 @@ interface Props {
   /** No completion from this list (Done today, or the file is write-blocked). */
   blocked: boolean;
   onComplete: (task: TaskView) => void;
+  onEdit?: (task: TaskView) => void;
   onOpenLink: (link: OpenLink) => void;
   /** Undo a saved app completion from its Done today row (P4-B); rows without `undo` offer none. */
   onUndo?: (target: CompleteTaskCommand, label: string) => void;
@@ -31,6 +32,7 @@ export function TaskList({
   tapped,
   blocked,
   onComplete,
+  onEdit,
   onUndo,
   onOpenLink,
   overdue = false,
@@ -63,6 +65,7 @@ export function TaskList({
               blocked={blocked}
               overdue={overdue}
               onComplete={onComplete}
+              onEdit={onEdit}
               onUndo={onUndo}
               onOpenLink={onOpenLink}
             />
@@ -79,6 +82,7 @@ function TaskRow({
   blocked,
   overdue,
   onComplete,
+  onEdit,
   onUndo,
   onOpenLink,
 }: {
@@ -88,14 +92,20 @@ function TaskRow({
   overdue: boolean;
   onComplete: (t: TaskView) => void;
   onUndo: Props['onUndo'];
+  onEdit: Props['onEdit'];
   onOpenLink: (link: OpenLink) => void;
 }) {
   const { task, action, undo } = row;
-  const busy = action !== null && action.state !== 'attention' && action.state !== 'saved';
+  const busy = action !== null && action.state !== 'attention' && (action.state !== 'saved' || action.type === 'EditTask');
   const readOnly = task?.readOnlyReason ?? null;
   const canComplete =
     !row.done && task !== null && readOnly === null && !blocked && !busy && !tapped.has(occurrenceKey(task.locator));
+  // ADR-0017: open tasks only; recurring/on-completion tasks are editable (no completion semantics involved).
+  const canEdit = !row.done && task !== null && !blocked && !busy && onEdit !== undefined &&
+    (readOnly === null || readOnly === 'refused:recurring' || readOnly === 'refused:on-completion');
   const text = plainWikilinks(row.description);
+  // A description made only of wikilinks has no text segment to tap: offer a named Edit button instead (CodeRabbit #26).
+  const textTappable = task !== null && taskSegments(row.description, task.links).some((seg) => seg.kind === 'text' && seg.text.trim() !== '');
 
   return (
     <li className={`task${row.done ? ' task-done' : ''}`} data-testid="task">
@@ -114,11 +124,15 @@ function TaskRow({
       )}
       <div className="task-body">
         <span className="task-text">
-          {task === null
+          {task === null || action?.type === 'EditTask'
             ? text
             : taskSegments(row.description, task.links).map((seg, i) =>
                 seg.kind === 'text' ? (
-                  <span key={i}>{seg.text}</span>
+                  canEdit ? (
+                    <button key={i} type="button" className="task-edit" aria-label={`Edit: ${text}`} onClick={() => onEdit?.(task)}>{seg.text}</button>
+                  ) : (
+                    <span key={i}>{seg.text}</span>
+                  )
                 ) : (
                   <button
                     key={i}
@@ -136,6 +150,11 @@ function TaskRow({
           {task?.due && !row.done && <span className={overdue ? 'due due-over' : 'due'}>{task.due}</span>}
           {readOnly && <span className="readonly">{readOnlyText(readOnly)}</span>}
           {action && <StateChip state={action.state} />}
+          {canEdit && !textTappable && task && (
+            <button type="button" className="task-edit-link" aria-label={`Edit: ${text}`} onClick={() => onEdit?.(task)}>
+              Edit
+            </button>
+          )}
         </span>
         {action?.state === 'attention' && action.error ? (
           <span className="error">{attentionText(action)}</span>

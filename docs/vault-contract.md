@@ -8,7 +8,7 @@ Any change here is consequential: update the golden tests and record an ADR.
 
 | Purpose | Paths | Operations |
 |---|---|---|
-| Task source | `Tasks/To-Do List.md` | read, complete, undo, append capture |
+| Task source | `Tasks/To-Do List.md` | read, complete, undo, edit, append capture |
 | Note capture | `Inbox/*.md` (new files only, no subfolders) | create |
 | Read-only context | `Tasks/Active Work Now.md` | read |
 | Linked notes | resolved **server-side** from a wikilink in a current task line (`{taskLocator, linkIndex}`), target under an allowlisted root: `Projects/`, `Tasks/`, `Inbox/` (owner decision D2 may widen) | read |
@@ -142,7 +142,29 @@ If Open has no non-blank line: after the heading, preceded by exactly one blank 
 blank line if present). No subheadings allowed (§2). If the first non-blank Open line is **not a list item**
 (prose would become a lazy continuation of the new task — review R14), capture is `refused:structure`.
 
-### 4.5 Capture note
+### 4.5 Edit task (ADR-0017)
+
+Preconditions as for Complete (§4.1): resolved **open** indexed task (ADR-0003 locator resolution), no conflict
+markers, one Open/one Done. `refused:duplicate-field` and `refused:unsupported-status` apply; a done/cancelled task
+⇒ `refused:already-completed`. `🔁`/`🏁` do **not** block an edit (no completion semantics involved).
+
+Minimal splice on the task's first line only; every other byte of the file (block children, EOL, BOM, final newline)
+is unchanged.
+1. Parse the line with the existing trailing-field parser: prefix (`- [ ] `), description, fields in original
+   order, optional block ID.
+2. `text`: replace the description span. `due`/`scheduled`/`priority`: replace the existing token's value **in
+   place**; `null` removes the token and its one leading space; a new token is appended after the last field and
+   before a trailing block ID (same position rule as `✅`, §4.1).
+3. **Round-trip check:** re-parse the new line. It must be an open indexed task whose description equals the
+   requested text (or the old one) and whose fields equal the old fields with exactly the requested changes —
+   `#todo` and every other tag/field kept. Otherwise `refused:invalid-edit` (e.g. new text ending in `📅 2026-…`
+   or a `#tag` that the parser would read as a field, or text that removes `#todo`).
+4. No change at all (result identical) ⇒ `refused:invalid-edit` "nothing to change".
+
+Effect: `{ kind: 'edited', beforeLineText, afterLineText }`. Idempotency, CAS, trailers and the one-page dedupe are
+the existing execution path (ADR-0005/0011/0015); replay verification compares the recorded effect.
+
+### 4.6 Capture note
 
 Path `Inbox/<Title> - <YYYY-MM-DD>.md`, collision suffix `Inbox/<Title> - <YYYY-MM-DD> (n).md`, n ≥ 2.
 - Title = first non-empty line, sanitised as §4.3, then `\/:*?"<>|#^[]%` removed (`%`: the path policy rejects it,
@@ -160,7 +182,7 @@ Path `Inbox/<Title> - <YYYY-MM-DD>.md`, collision suffix `Inbox/<Title> - <YYYY-
 
 `refused:recurring`, `refused:on-completion`, `refused:structure`, `refused:vault-conflict`,
 `refused:mixed-eol`, `refused:encoding`, `refused:unsupported-status`, `refused:duplicate-field`,
-`refused:path`, `refused:too-large`, `refused:already-completed`, `conflict:task-changed`,
+`refused:path`, `refused:too-large`, `refused:already-completed`, `refused:invalid-edit`, `conflict:task-changed`,
 `conflict:ambiguous`, `conflict:stale`. Refusals never write.
 
 ## 6. Time policy

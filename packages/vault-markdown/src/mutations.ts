@@ -1,5 +1,5 @@
-import type { CaptureTaskInput, CompleteEffect, LocatorInput, MutationOk, Refusal, UndoInput } from './api.ts';
-import { EMOJI_BY_PRIORITY } from './fields.ts';
+import type { CaptureTaskInput, CompleteEffect, EditChanges, EditEffect, LocatorInput, MutationOk, Refusal, UndoInput } from './api.ts';
+import { EMOJI_BY_PRIORITY, parseTaskBody } from './fields.ts';
 import { isValidContext, sanitizeCaptureText } from './sanitize.ts';
 import { analyse, analyseDoc, captureInsertionPoint, matchTaskLine, type Analysis, type IndexedTask } from './todo-list.ts';
 import { ISO_DATE, indentWidth, isBlank, isListItem, isWellFormed, joinDoc, refuse, type Doc } from './text.ts';
@@ -36,12 +36,84 @@ function completedLine(t: IndexedTask, doneDate: string): string {
   const at = t.match.checkboxOffset + 1;
   invariant(line[at] === ' ', 'checkbox is open');
   const checked = line.slice(0, at) + 'x' + line.slice(at + 1);
+  return appendField(checked, `✅ ${doneDate}`);
+}
+
+function appendField(line: string, token: string): string {
   // Only spaces and tabs are trimmed (R13). Other trailing whitespace after a block ID (NBSP) stays with the ID,
   // which keeps it trailing as the parser (`trimEnd`) and Obsidian read it.
-  const trimmed = checked.replace(/[ \t]+$/, '');
+  const trimmed = line.replace(/[ \t]+$/, '');
   const blockId = / \^[A-Za-z0-9-]+\s*$/u.exec(trimmed);
   const head = (blockId ? trimmed.slice(0, blockId.index) : trimmed).replace(/[ \t]+$/, '');
-  return `${head} ✅ ${doneDate}${blockId ? blockId[0] : ''}`;
+  return `${head} ${token}${blockId ? blockId[0] : ''}`;
+}
+
+/** ADR-0017 / §4.5: edit only the first line, preserving all unrequested fields. */
+export function editTask(text: string, locator: LocatorInput, changes: EditChanges): MutationOk<EditEffect> | Refusal {
+  const invalid = (message: string) => refuse('refused:invalid-edit', message);
+  if (changes.text !== undefined && (changes.text.length < 1 || changes.text.length > 2000 ||
+    /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(changes.text) || !isWellFormed(changes.text))) {
+    return invalid('Text must be 1–2000 characters on a single line.');
+  }
+  for (const kind of ['due', 'scheduled'] as const) {
+    const value = changes[kind];
+    if (value != null && !ISO_DATE.test(value)) return invalid('Dates must be YYYY-MM-DD.');
+  }
+  if (changes.priority != null && !Object.hasOwn(EMOJI_BY_PRIORITY, changes.priority)) return invalid('Unknown priority.');
+  const a = analyse(text);
+  if ('ok' in a) return a;
+  if (a.writeBlock) return a.writeBlock;
+  const t = resolve(a, locator);
+  if ('ok' in t) return t;
+  if (t.parsed.status === 'done' || t.parsed.status === 'cancelled') {
+    return refuse('refused:already-completed', 'The task is already completed.');
+  }
+  if (t.parsed.readOnlyReason && !['refused:recurring', 'refused:on-completion'].includes(t.parsed.readOnlyReason)) {
+    return refuse(t.parsed.readOnlyReason, 'The app does not edit this kind of task.');
+  }
+  const fields = parseTaskBody(t.match.body);
+  const expected = { ...fields.values };
+  const offset = t.lineText.length - t.match.body.length;
+  const splices: { start: number; end: number; text: string }[] = [];
+  if (changes.text !== undefined) {
+    splices.push({ start: fields.descriptionStart, end: fields.descriptionEnd,
+      text: changes.text + (fields.description === '' && t.match.body.length > 0 ? ' ' : '') });
+  }
+  const appended: string[] = [];
+  for (const kind of ['due', 'scheduled', 'priority'] as const) {
+    const value = changes[kind];
+    if (value === undefined) continue;
+    const replacement = value === null ? null : kind === 'priority' ? EMOJI_BY_PRIORITY[value as NonNullable<EditChanges['priority']>] : value;
+    if (replacement === null) delete expected[kind];
+    else expected[kind] = replacement;
+    const span = fields.spans.find((s) => s.kind === kind);
+    if (span) {
+      splices.push(replacement === null
+        ? { start: span.start - (t.match.body[span.start - 1] === ' ' ? 1 : 0), end: span.end, text: '' }
+        : { start: span.valueStart, end: span.valueEnd, text: replacement });
+    } else if (replacement !== null) {
+      appended.push(kind === 'priority' ? replacement : `${kind === 'due' ? '📅' : '⏳'} ${replacement}`);
+    }
+  }
+  let line = t.lineText;
+  for (const s of splices.sort((x, y) => y.start - x.start || y.end - x.end)) {
+    line = line.slice(0, offset + s.start) + s.text + line.slice(offset + s.end);
+  }
+  if (appended.length) line = appendField(line, appended.join(' '));
+  const lines = [...a.doc.lines];
+  lines[t.lineIndex] = line;
+  const parsed = analyseDoc({ ...a.doc, lines });
+  const edited = parsed.tasks.find((task) => task.lineIndex === t.lineIndex);
+  const after = edited && parseTaskBody(edited.match.body);
+  if (parsed.writeBlock || !edited || edited.parsed.status !== 'open' || !after || after.duplicateField ||
+    after.description !== (changes.text ?? fields.description) || after.blockId !== fields.blockId ||
+    JSON.stringify(after.tags) !== JSON.stringify(fields.tags) ||
+    new Set([...Object.keys(expected), ...Object.keys(after.values)]).size !== Object.keys(expected).length ||
+    Object.entries(expected).some(([kind, value]) => after.values[kind as keyof typeof expected] !== value)) {
+    return invalid('The edited line must preserve its description, tags and unrequested fields.');
+  }
+  if (line === t.lineText) return invalid('nothing to change');
+  return { ok: true, text: joinDoc(a.doc, lines), effect: { kind: 'edited', beforeLineText: t.lineText, afterLineText: line } };
 }
 
 /** docs/vault-contract.md §3 + §4.1. `doneDate` is YYYY-MM-DD. */

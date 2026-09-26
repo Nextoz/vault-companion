@@ -50,6 +50,60 @@ const ok = (r: Receipt | { code: string }): Receipt => {
   return r;
 };
 
+describe('EditTask', () => {
+  it('splices exactly one line and replays the same effect after a lost response', async () => {
+    const t = await task('Water the plants');
+    const before = text();
+    const afterLine = '- [ ] Water the herbs #todo 📅 2026-10-01 ➕ 2026-09-01 ⏳ 2026-09-30 ⏫';
+    const raw = envelope('EditTask', { task: t.locator, changes: { text: 'Water the herbs', due: '2026-10-01', scheduled: '2026-09-30', priority: 'high' } });
+    store.writeFaults.push('apply-then-unknown');
+    const first = ok(await run(raw));
+    expect(first.status).toBe('already-applied');
+    expect(first.effect).toEqual({ kind: 'edited', beforeLineText: t.locator.lineText, afterLineText: afterLine });
+    expect(text()).toBe(before.replace(`\n${t.locator.lineText}\n`, `\n${afterLine}\n`));
+    const head = store.headCommit;
+    expect(ok(await run(raw))).toEqual(first);
+    expect(store.headCommit).toBe(head);
+    expect(store.writeCalls).toBe(1);
+  });
+
+  it('re-resolves after a head CAS collision, preserving the desktop change', async () => {
+    const t = await task('Water the plants');
+    const before = text();
+    store.afterHead = async () => {
+      store.afterHead = null;
+      await store.commitFiles({ [TODO]: editLine('- [ ] Call the bike shop about the gears', '- [ ] Call the bike shop about the brakes') });
+    };
+    ok(await run(envelope('EditTask', { task: t.locator, changes: { due: null } })));
+    expect(text()).toBe(before.replace('Call the bike shop about the gears', 'Call the bike shop about the brakes')
+      .replace(`\n${t.locator.lineText}\n`, '\n- [ ] Water the plants #todo ➕ 2026-09-01\n'));
+  });
+
+  it('refuses a stale locator when the desktop edited the same task', async () => {
+    const t = await task('Water the plants');
+    await store.commitFiles({ [TODO]: editLine('- [ ] Water the plants', '- [ ] Water the herbs') });
+    const head = store.headCommit;
+    expect(await run(envelope('EditTask', { task: t.locator, changes: { due: null } }))).toMatchObject({ code: 'conflict:task-changed' });
+    expect(store.headCommit).toBe(head);
+    expect(store.writeCalls).toBe(0);
+  });
+
+  it('does not certify a forged edit commit whose bytes fail parent replay', async () => {
+    const t = await task('Water the plants');
+    const raw = envelope('EditTask', { task: t.locator, changes: { due: null } });
+    const crafted = await store.writeFile({
+      path: TODO as VaultPath, baseCommit: base, expect: 'regular-file',
+      bytes: new TextEncoder().encode(text().replace('Water the plants', 'Water the herbs')),
+      message: 'synthetic forged edit',
+      trailers: { [TRAILER_OP]: raw.operationId, [TRAILER_PAYLOAD]: await payloadHash(raw) },
+    });
+    if (!crafted.ok) throw new Error('write failed');
+    expect(await run(raw)).toMatchObject({ code: 'dedupe-unknown' });
+    expect(store.headCommit).toBe(crafted.commitSha);
+    expect(store.writeCalls).toBe(1);
+  });
+});
+
 describe('read model', () => {
   it('gets metadata for the pinned revision even when the desktop advances HEAD', async () => {
     store.afterHead = async () => { await store.commitFiles({ 'Inbox/next.md': 'synthetic' }); };

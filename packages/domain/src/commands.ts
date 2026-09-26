@@ -79,6 +79,22 @@ export function completePlan(cmd: CompleteTaskCommand, timeZone: string): WriteP
   };
 }
 
+/** Uses the executor's parent replay and exact committed-byte verification for duplicate requests. */
+export function editPlan(cmd: Extract<Command, { type: 'EditTask' }>): WritePlan<md.EditEffect> {
+  return {
+    message: 'Vault Companion: edit task',
+    async compute(store, at) {
+      const f = await readTodo(store, at);
+      if (!f.ok) return f.planned;
+      const t = cmd.payload.task;
+      return fromKernel(md.editTask(f.text, {
+        lineIndex: t.lineIndex, lineText: t.lineText, occurrencesAtRead: t.occurrencesAtRead,
+        sameRevision: f.blobSha === t.blobSha,
+      }, cmd.payload.changes), TODO, (e) => e);
+    },
+  };
+}
+
 const refused = (code: ErrorCode, message: string): Refused => ({ kind: 'refused', code, message });
 
 /**
@@ -206,6 +222,8 @@ function undoPlan(cmd: Extract<Command, { type: 'UndoCompleteTask' }>, raw: unkn
 
 function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePlan<Receipt['effect']> {
   switch (cmd.type) {
+    case 'EditTask':
+      return editPlan(cmd);
     case 'CompleteTask': {
       const inner = completePlan(cmd, deps.timeZone);
       return {
