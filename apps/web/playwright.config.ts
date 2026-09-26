@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const SW_SPEC = /offline-shell\.spec\.ts$/;
+const REAL_SPEC = /real-stack\.spec\.ts$/;
 // Optional: a preinstalled Chromium when Playwright's own download is unavailable (e.g. cloud sandboxes).
 const chromiumPath = process.env['PW_CHROMIUM_EXECUTABLE'];
 
@@ -9,6 +10,8 @@ const chromiumPath = process.env['PW_CHROMIUM_EXECUTABLE'];
 //   page.route sees every /api request (the SW never handles /api anyway).
 // - Chromium: the service-worker offline shell only. Playwright can route service-worker traffic and emulate
 //   offline for it in Chromium only, so those tests allow service workers and run there (docs/briefs/P2B-report.md).
+// - Chromium real stack (review O3): no mock. Each test serves the build and the real Worker app on one origin of its
+//   own (e2e/real-stack.ts), so it ignores `baseURL` and the preview server. Offline emulation needs Chromium.
 export default defineConfig({
   testDir: './e2e',
   outputDir: './test-results',
@@ -24,7 +27,7 @@ export default defineConfig({
   projects: [
     {
       name: 'iphone-15-webkit',
-      testIgnore: SW_SPEC,
+      testIgnore: [SW_SPEC, REAL_SPEC],
       use: { ...devices['iPhone 15'], browserName: 'webkit', serviceWorkers: 'block' },
     },
     {
@@ -33,6 +36,16 @@ export default defineConfig({
       use: {
         ...devices['Pixel 7'],
         serviceWorkers: 'allow',
+        ...(chromiumPath ? { launchOptions: { executablePath: chromiumPath } } : {}),
+      },
+    },
+    {
+      name: 'pixel-7-chromium-real-stack',
+      testMatch: REAL_SPEC,
+      use: {
+        ...devices['Pixel 7'],
+        serviceWorkers: 'block',
+        timezoneId: 'Europe/Copenhagen',
         ...(chromiumPath ? { launchOptions: { executablePath: chromiumPath } } : {}),
       },
     },

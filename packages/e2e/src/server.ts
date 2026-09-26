@@ -22,6 +22,8 @@ export interface HarnessServerOptions {
   readonly timeZone: string;
   /** Environment for the store's git processes (hermetic config). */
   readonly gitEnv: NodeJS.ProcessEnv;
+  /** The origin the command endpoint accepts (default `APP_ORIGIN`); a browser harness passes its own origin. */
+  readonly appOrigin?: string;
 }
 
 export interface HarnessServer {
@@ -53,7 +55,7 @@ export async function startServer(opts: HarnessServerOptions): Promise<HarnessSe
 
   const services = createCommandService({ store, now: opts.now, timeZone: opts.timeZone });
   const logs: LogRecord[] = [];
-  const app = createApp({ verify, appOrigin: APP_ORIGIN, services, log: (r) => logs.push(r) });
+  const app = createApp({ verify, appOrigin: opts.appOrigin ?? APP_ORIGIN, services, log: (r) => logs.push(r) });
 
   let dropArmed = false;
   const server = serve({

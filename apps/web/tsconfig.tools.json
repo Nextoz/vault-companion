@@ -10,6 +10,7 @@
   "references": [
     { "path": "../../packages/contracts" },
     { "path": "../../packages/domain" },
+    { "path": "../../packages/e2e" },
     { "path": "./tsconfig.app.json" }
   ],
   "include": ["vite.config.ts", "playwright.config.ts", "e2e", "test"]
