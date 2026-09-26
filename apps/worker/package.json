@@ -6,11 +6,17 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "build": "pnpm --filter @vault-companion/web build && wrangler deploy --dry-run --outdir dist"
+  },
   "dependencies": {
     "@vault-companion/contracts": "workspace:*",
     "@vault-companion/domain": "workspace:*",
+    "@vault-companion/github": "workspace:*",
     "hono": "^4.13.8",
-    "jose": "^6.2.12",
-    "@vault-companion/github": "workspace:*"
+    "jose": "^6.2.12"
+  },
+  "devDependencies": {
+    "wrangler": "4.138.0"
   }
 }
