@@ -23,14 +23,14 @@ sets privacy rules.
 | Increment | Brief | Engineering status |
 |---|---|---|
 | A handover visibility | — | done: PR #19, deployed |
-| B task editing | ADR-0017 | **PR #26** integrated (branch `agent/edit-task`): full check 884/884, web e2e 47/47, CI green; CodeRabbit rate-limited 22:40 → re-request 23:43 (session cron) → merge, deploy, owner phone test |
+| B task editing | ADR-0017 | **done:** PR #26 merged (d422b01), CodeRabbit real review (2 findings fixed); **deployed 467191a4**; owner phone test pending |
 | C Active Work in the app | `docs/briefs/C-active-work.md` | next; needs its ADR (writes to Active Work Now) + adversarial review |
 | S Part 2 scout status page | `docs/briefs/S2-scout-status-page.md` | **blocked** until S Part 1 status files exist (vault side); Lead derives fixture shapes from the real files |
 | D completion history | `docs/briefs/D-completion-history.md` | after S Part 2 |
 
 **Done in milestone 3 (all merged, CI green):** #18 write budget + review fixes · #19 A · #20 single-flight token ·
 #21 ancestry without patches (ADR-0016) · #22 one read per app switch · #23 CSP smoke + zod jitless · #24
-identity-safe duplicate-row fix · #25 e2e flakes. **Deployed: `fdad423f`.**
+identity-safe duplicate-row fix · #25 e2e flakes. **Deployed: `467191a4` (B). PR #27 O3 real-stack e2e (Cloud) open, CI green, CodeRabbit next.**
 
 **Capacity (2026-09-26 ~23:00):** Codex Astra ~4 % left, resets 02:29 · Antigravity quota out until ~2026-10-03 ·
 Claude Cloud $10 credit, but session `session_015TkdrdhYa8Z9fuRvTTLqhX` (O3) never pushed — owner to check it before
