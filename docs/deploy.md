@@ -50,12 +50,14 @@ GitHub → Settings → Developer settings → GitHub Apps → New GitHub App.
 App page → Install App → your account → **Only select repositories** → the vault repository. After installing, the
 URL is `https://github.com/settings/installations/<id>`: `<id>` is the **installation ID**.
 
-## 2b. Protect `main` on the vault repository (required)
+## 2b. History protection for the vault `main`
 
-Vault repo → Settings → Rules → Rulesets → New branch ruleset: target `main`, enforcement **Active**, rules **Restrict
-deletions** and **Block force pushes**; no bypass list. The desktop sync never force-pushes, so it is unaffected. This
-is required, not advisory: the app's read watermark assumes published history is never rewritten (review O6). Repair
-mistakes with `git revert`, never a reset.
+Rulesets and branch protection on a **private** repository need GitHub Pro (verified 2026-09-26: API 403). With the
+free plan the guarantee comes from the writers instead: the Worker's ref update is `force: false`
+(`packages/github/src/contents-store.ts`), and the desktop sync never force-pushes. Rule for humans: repair mistakes with
+`git revert`, never a reset or force-push. If history is ever rewritten anyway, the app offers "Reset saved-actions
+history on this device" after repeated stale reads (review O6), which clears receipts and the watermark, never pending
+actions. With GitHub Pro, add a `main` ruleset blocking force pushes and deletion.
 
 ## 3. Cloudflare Access application and policy
 
