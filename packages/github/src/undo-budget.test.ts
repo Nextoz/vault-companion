@@ -179,7 +179,7 @@ describe('Undo request budget with authentication (review P4E-Astra #5)', () => 
     expect(calls.length - auth(calls).length).toBe(10);
     expect(calls).toHaveLength(11);
 
-    calls.length = 0; // warm: the same Undo again is answered from dedupe without another token request
+    calls.length = 0; // warm: a second Undo attempt (this fixture re-plans and writes again) reuses the cached token — no token request
     await svc.execute(undo as never, undo);
     expect(auth(calls)).toHaveLength(0);
   });
