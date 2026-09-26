@@ -54,6 +54,32 @@ export type FindOperationResult =
   /** Window could not be searched completely (truncation, unknown or non-ancestor base). Never write. */
   | { readonly kind: 'unknown'; readonly reason: string };
 
+/** One commit as the Undo token check needs it (ADR-0013). */
+export interface CommitInfo {
+  readonly sha: string;
+  /** First parent; null for a root commit. */
+  readonly parent: string | null;
+  readonly trailers: Readonly<Record<string, string>>;
+  /** Files the commit changed (vs. its first parent) with their blob SHA after the commit; null for a deletion. */
+  readonly files: readonly { readonly path: string; readonly blobSha: string | null }[];
+}
+
+/** A commit listed by `commitsSince` (trailers only; details via `readCommit`). */
+export interface ListedCommit {
+  readonly sha: string;
+  readonly trailers: Readonly<Record<string, string>>;
+}
+
+export type CommitsSinceResult =
+  | { readonly kind: 'ok'; readonly commits: readonly ListedCommit[] }
+  /** `base` is unknown or not an ancestor of `until` (e.g. a forged or rewritten-away token). */
+  | { readonly kind: 'not-ancestor' }
+  /** More than one page (`COMPARE_PAGE` commits) lies between them. Never paged (ADR-0013). */
+  | { readonly kind: 'too-many' };
+
+/** One compare page (GitHub's maximum `per_page`). */
+export const COMPARE_PAGE = 250;
+
 export interface VaultStore {
   /** Resolve the vault branch to one immutable commit X. Every read of an attempt uses X (review F1). */
   head(): Promise<{ commitSha: string }>;
@@ -78,6 +104,23 @@ export interface VaultStore {
   isAncestor(commit: string, head: string): Promise<boolean>;
   /** Parent commit SHA (first parent), used to replay an operation on `C^` when deriving effects. */
   parentOf(commitSha: string): Promise<string>;
+  /** One commit's trailers, parent and changed files; `null` when the commit does not exist. One request. */
+  readCommit(commitSha: string): Promise<CommitInfo | null>;
+  /**
+   * The commits in `base..until` (excluding `base`) if they fit in one page of `COMPARE_PAGE`; one request, no paging.
+   * `until === base` is `ok` with no commits.
+   */
+  commitsSince(base: string, until: string): Promise<CommitsSinceResult>;
+}
+
+/** Git blob SHA-1 of `bytes` (= the GitHub Contents API `sha`). */
+export async function gitBlobSha(bytes: Uint8Array): Promise<string> {
+  const header = new TextEncoder().encode(`blob ${bytes.length}\0`);
+  const buf = new Uint8Array(header.length + bytes.length);
+  buf.set(header);
+  buf.set(bytes, header.length);
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-1', buf));
+  return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** Upstream unreachable before the request could have taken effect. Safe to retry later. */

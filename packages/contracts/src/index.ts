@@ -61,8 +61,12 @@ const envelope = <T extends string, P extends z.ZodType>(type: T, payload: P) =>
 export const CompleteTaskCommand = envelope('CompleteTask', CompleteTaskPayload);
 export type CompleteTaskCommand = z.infer<typeof CompleteTaskCommand>;
 
-/** Undo names its target by carrying the original CompleteTask envelope verbatim (commands.md, review F4/F5). */
-export const UndoCompleteTaskPayload = z.strictObject({ target: CompleteTaskCommand });
+/**
+ * Undo names its target by carrying the original CompleteTask envelope verbatim (commands.md, review F4/F5), plus the
+ * completion's commit from its receipt as a token (ADR-0013). The server verifies the token against Git; a wrong one
+ * can only be refused.
+ */
+export const UndoCompleteTaskPayload = z.strictObject({ target: CompleteTaskCommand, targetCommit: commitSha });
 
 export const Command = z.discriminatedUnion('type', [
   CompleteTaskCommand,
@@ -112,6 +116,8 @@ export const ErrorCode = z.enum([
   'conflict:task-changed',
   'conflict:ambiguous',
   'conflict:stale',
+  /** Undo: more than one compare page (250 commits) since the completion (ADR-0013). Undo it in Obsidian. */
+  'refused:undo-expired',
   'operation-id-reused',
   'dedupe-unknown',
   /** POST's X-VC-Account differs from the authenticated identity (review A7). Not retryable. */

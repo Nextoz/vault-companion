@@ -13,8 +13,13 @@
 //   until a read reports its commit `included`; only such acknowledged receipts are ever evicted (A9);
 // - evicting a receipt first records, in the same transaction, the revision of a read that reported it `included`
 //   (the watermark, G3-1). Every tab renders only reads that show the watermark included, so a receipt gone from
-//   IndexedDB can no longer be needed to overlay a stale read in any tab.
+//   IndexedDB can no longer be needed to overlay a stale read in any tab;
+// - an Undo made before its completion had a receipt is stored as a draft without `targetCommit` (ADR-0013). The claim
+//   fills the token from the completion's receipt and persists it before the request leaves, so every attempt sends
+//   the same bytes. A draft whose completion is refused (known not applied) is discarded locally; a receipt a draft
+//   still needs is never evicted.
 import type { Command, CommandType, CompleteTaskCommand, Receipt, TasksResponse } from '@vault-companion/contracts';
+import { isUndoDraft, withTargetCommit } from '../commands.ts';
 import { backoffMs, classify, knownNotApplied, type Outcome } from './classify.ts';
 import type { DraftBasis, PendingError, PendingRecord, PendingStore, ReceiptRecord, Watermark } from './db.ts';
 
@@ -91,6 +96,12 @@ export const LEASE_MS = 60_000;
 /** Acknowledged receipts kept for the "Saved to GitHub" list. Unacknowledged receipts are never evicted. */
 const MAX_ACKNOWLEDGED = 20;
 
+/** A draft Undo whose completion this device holds neither as a pending item nor as a receipt (ADR-0013). */
+const UNDO_TARGET_UNKNOWN: PendingError = {
+  code: 'refused:undo-target-unknown',
+  message: "This device has no record of the completion being saved, so the Undo can't be sent. Undo it in Obsidian if needed.",
+};
+
 const ACCOUNT_MISMATCH: PendingError = {
   code: 'account-mismatch',
   message: 'Saved on this device under a different account. It will not be sent.',
@@ -122,7 +133,8 @@ export class PendingQueue {
   #records = new Map<string, PendingRecord>();
   #receipts = new Map<string, ReceiptRecord>();
   #watermark: Watermark | null = null;
-  readonly #envelopes = new Map<string, Command>();
+  /** Parsed envelopes with the body they were parsed from: another tab may rewrite a body (an Undo's token). */
+  readonly #envelopes = new Map<string, { body: string; envelope: Command }>();
   readonly #listeners = new Set<() => void>();
 
   #accountKey: string | null = null;
@@ -372,8 +384,31 @@ export class PendingQueue {
         blocks();
         continue;
       }
+      const draft = this.#envelopeOf(record);
+      let body = record.body;
+      if (isUndoDraft(draft) && draft.type === 'UndoCompleteTask') {
+        const targetId = draft.payload.target.operationId;
+        const receipt = this.#receipts.get(targetId);
+        const predecessor = this.#records.get(targetId);
+        if (receipt) {
+          // The token, once: persisted with the claim below, before the request leaves (ADR-0013).
+          body = JSON.stringify(withTargetCommit(draft, receipt.receipt.commitSha));
+        } else if (predecessor?.state === 'attention' && knownNotApplied(predecessor.lastError)) {
+          // Nothing was completed, so there is nothing to undo (ADR-0013): dropped locally, never sent.
+          await this.#store.delete(record.operationId);
+          this.#records.delete(record.operationId);
+          this.#emit();
+          continue;
+        } else if (predecessor) {
+          blocks();
+          continue;
+        } else {
+          await this.#persist({ ...record, state: 'attention', lastError: UNDO_TARGET_UNKNOWN });
+          continue;
+        }
+      }
       // Mark before the request leaves: from here on its effect may exist in Git, and other tabs keep off it.
-      const claimed: PendingRecord = { ...record, everSent: true, leaseUntil: now + LEASE_MS, claimId: crypto.randomUUID() };
+      const claimed: PendingRecord = { ...record, body, everSent: true, leaseUntil: now + LEASE_MS, claimId: crypto.randomUUID() };
       await this.#persist(claimed);
       // The session is re-checked in #attempt, synchronously before the request and after every await here.
       return { record: claimed, generation };
@@ -502,7 +537,13 @@ export class PendingQueue {
    */
   #evictable(candidates: ReceiptRecord[], read: ReadEvidence): ReceiptRecord[] {
     if (!satisfiesWatermark(read, this.#watermark)) return [];
-    return candidates.filter((r) => read.known[r.receipt.commitSha] === 'included');
+    // A draft Undo takes its token from its completion's receipt (ADR-0013): keep that receipt until it has.
+    const needed = new Set<string>();
+    for (const r of this.#records.values()) {
+      const e = this.#envelopeOf(r);
+      if (isUndoDraft(e) && e.type === 'UndoCompleteTask') needed.add(e.payload.target.operationId);
+    }
+    return candidates.filter((r) => read.known[r.receipt.commitSha] === 'included' && !needed.has(r.operationId));
   }
 
   /** Under the lock. One transaction: acknowledgements, evictions, and the watermark that permits the evictions. */
@@ -568,12 +609,12 @@ export class PendingQueue {
     return [...this.#records.values()].sort((a, b) => a.seq - b.seq);
   }
 
+  /** The envelope of exactly this body (review P4E-Astra #2): a cached parse of an older body is never used. */
   #envelopeOf(record: { operationId: string; body: string }): Command {
-    let envelope = this.#envelopes.get(record.operationId);
-    if (!envelope) {
-      envelope = JSON.parse(record.body) as Command;
-      this.#envelopes.set(record.operationId, envelope);
-    }
+    const cached = this.#envelopes.get(record.operationId);
+    if (cached?.body === record.body) return cached.envelope;
+    const envelope = JSON.parse(record.body) as Command;
+    this.#envelopes.set(record.operationId, { body: record.body, envelope });
     return envelope;
   }
 

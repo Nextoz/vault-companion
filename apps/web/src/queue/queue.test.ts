@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { Command, type CompleteTaskCommand, type Receipt } from '@vault-companion/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { captureNote, completeTask, undoCompleteTask } from '../commands.ts';
+import { captureNote, completeTask, undoCompleteTask, undoDraft } from '../commands.ts';
 import { backoffMs } from './classify.ts';
 import { openPendingStore, type PendingStore } from './db.ts';
 import { PendingQueue } from './queue.ts';
@@ -257,7 +257,7 @@ describe('pending queue', () => {
 
   describe('Undo of a completion (F4)', () => {
     const complete = () => completeTask(mint(), LOCATOR);
-    const undoOf = (target: CompleteTaskCommand) => undoCompleteTask(mint(), target);
+    const undoOf = (target: CompleteTaskCommand) => undoDraft(mint(), target);
     const opts = { accountKey: ACCOUNT_A, label: 'Water the plants', taskKey: LOCATOR.lineText };
 
     it('cancels both locally when the completion was never sent', async () => {
@@ -311,9 +311,10 @@ describe('pending queue', () => {
       expect(send).toHaveBeenCalledTimes(1);
     });
 
-    it('sends a dependent Undo after its completion is terminally refused', async () => {
+    it('sends a dependent (tokened) Undo after its completion is terminally refused', async () => {
       const queue = await openQueue();
       const target = complete();
+      const undoOf = (t: CompleteTaskCommand) => undoCompleteTask(mint(), t, '5'.repeat(40));
       send.mockImplementationOnce(async () => unavailable503()).mockImplementationOnce(async () => refused409())
         .mockImplementation(async (body) => ok(body));
 
@@ -328,6 +329,111 @@ describe('pending queue', () => {
         'CompleteTask',
         'UndoCompleteTask',
       ]);
+    });
+  });
+
+  describe('Undo drafts: the token is filled from the receipt before the first send (ADR-0013)', () => {
+    const complete = () => completeTask(mint(), LOCATOR);
+    const opts = { accountKey: ACCOUNT_A, label: 'Water the plants', taskKey: LOCATOR.lineText };
+    const COMMIT = '3'.repeat(40); // receiptFor's commit
+    const undos = () => send.mock.calls.map(([b]) => b).filter((b) => (JSON.parse(b) as Command).type === 'UndoCompleteTask');
+
+    it('an Undo queued behind an unacknowledged completion gets targetCommit once and resends identical bytes after reload', async () => {
+      let queue = await openQueue();
+      const target = complete();
+      send
+        .mockImplementationOnce(async () => unavailable503()) // completion: ever sent, no receipt yet
+        .mockImplementationOnce(async (body) => ok(body)) // completion: receipt
+        .mockImplementationOnce(async () => unavailable503()) // Undo: first attempt fails
+        .mockImplementation(async (body) => ok(body));
+
+      await queue.enqueue(target, opts);
+      queue.setSession(ACCOUNT_A);
+      await queue.flush();
+      const draft = undoDraft(mint(), target);
+      expect(await queue.undoCompletion(target, draft, opts)).toBe('queued');
+      expect('targetCommit' in (JSON.parse((await store.get(draft.operationId))!.body) as { payload: object }).payload).toBe(false);
+
+      clock += backoffMs(1);
+      await queue.flush();
+      expect(undos()).toHaveLength(1);
+      // Persisted with the token before it was sent.
+      const stored = (await store.get(draft.operationId))!.body;
+      expect(stored).toBe(undos()[0]);
+      const sent = Command.parse(JSON.parse(stored));
+      expect(sent.type === 'UndoCompleteTask' && sent.payload).toEqual({ target, targetCommit: COMMIT });
+
+      store.close();
+      queue = await openQueue(); // reload
+      queue.setSession(ACCOUNT_A);
+      await queue.kick();
+      expect(undos()).toHaveLength(2);
+      expect(undos()[1]).toBe(undos()[0]); // identical bytes
+      expect(await store.all()).toEqual([]);
+    });
+
+    it('a draft whose completion ends refused is discarded locally, never sent', async () => {
+      const queue = await openQueue();
+      const target = complete();
+      send.mockImplementationOnce(async () => unavailable503()).mockImplementationOnce(async () => refused409());
+      await queue.enqueue(target, opts);
+      queue.setSession(ACCOUNT_A);
+      await queue.flush();
+      const draft = undoDraft(mint(), target);
+      await queue.undoCompletion(target, draft, opts);
+      await queue.kick();
+      expect(undos()).toEqual([]);
+      expect(await store.get(draft.operationId)).toBeUndefined();
+      expect(await store.get(target.operationId)).toMatchObject({ state: 'attention' });
+    });
+
+    it('a draft stays behind a completion whose outcome is unknown', async () => {
+      const queue = await openQueue();
+      const target = complete();
+      send
+        .mockImplementationOnce(async () => unavailable503())
+        .mockImplementationOnce(async () => json(409, { code: 'dedupe-unknown', message: 'x', retryable: false }));
+      await queue.enqueue(target, opts);
+      queue.setSession(ACCOUNT_A);
+      await queue.flush();
+      const draft = undoDraft(mint(), target);
+      await queue.undoCompletion(target, draft, opts);
+      await queue.kick();
+      await queue.kick();
+      expect(undos()).toEqual([]);
+      expect(await store.get(draft.operationId)).toMatchObject({ state: 'pending' });
+    });
+
+    it('a receipt a draft still needs is never evicted, even by "Clear saved"', async () => {
+      const queue = await openQueue();
+      const target = complete();
+      send.mockImplementation(async (body) => ok(body));
+      await queue.enqueue(target, opts);
+      queue.setSession(ACCOUNT_A);
+      await queue.flush(); // completion saved
+      queue.setSignedOut(); // nothing is claimed meanwhile
+      const draft = undoDraft(mint(), target);
+      await queue.undoCompletion(target, draft, opts);
+      const read = { revision: COMMIT, known: { [COMMIT]: 'included' as const } };
+      await queue.acknowledge(read);
+      await queue.forgetSaved([target.operationId], read);
+      expect((await store.receipts()).map((r) => r.operationId)).toContain(target.operationId);
+
+      queue.setSession(ACCOUNT_A);
+      await queue.flush();
+      const sent = Command.parse(JSON.parse(undos()[0]!));
+      expect(sent.type === 'UndoCompleteTask' && sent.payload.targetCommit).toBe(COMMIT);
+    });
+
+    it('a draft with neither its completion nor its receipt on the device needs attention, never sent', async () => {
+      const queue = await openQueue();
+      const target = complete();
+      const draft = undoDraft(mint(), target);
+      await queue.enqueue(draft, { ...opts, dependsOn: null });
+      queue.setSession(ACCOUNT_A);
+      await queue.flush();
+      expect(send).not.toHaveBeenCalled();
+      expect(await store.get(draft.operationId)).toMatchObject({ state: 'attention', lastError: { code: 'refused:undo-target-unknown' } });
     });
   });
 

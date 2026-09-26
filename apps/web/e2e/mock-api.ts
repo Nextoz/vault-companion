@@ -186,6 +186,10 @@ export class MockApi {
     }
     if (typeof mode === 'object') return this.#json(route, 409, ApiError.parse({ ...mode.refuse, operationId: command.operationId }));
 
+    // Like the Worker (ADR-0013): an Undo's token must be its completion's commit.
+    if (command.type === 'UndoCompleteTask' && this.#receipts.get(command.payload.target.operationId)?.commitSha !== command.payload.targetCommit) {
+      return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'Undo target does not match.', retryable: false }));
+    }
     const previous = this.#receipts.get(command.operationId);
     if (previous) return this.#json(route, 200, { ...previous, status: 'already-applied' });
     const receipt = Receipt.parse(this.#apply(command));

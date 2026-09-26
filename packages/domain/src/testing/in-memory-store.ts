@@ -3,11 +3,15 @@
 // commit and succeeds only if the branch head is still exactly that commit; trailers are searchable; blob SHAs are
 // real Git blob SHAs. Checked against real Git by packages/github/src/store-contract.test.ts.
 import {
+  COMPARE_PAGE,
   FileTooLarge,
+  gitBlobSha,
   StoreUnavailable,
   StoreUnknownOutcome,
   TRAILER_OP,
   TRAILER_PAYLOAD,
+  type CommitInfo,
+  type CommitsSinceResult,
   type FindOperationResult,
   type ListedFile,
   type StoredFile,
@@ -40,14 +44,7 @@ export type WriteFault =
   | 'drop-then-unknown'
   | 'unavailable';
 
-export async function gitBlobSha(bytes: Uint8Array): Promise<string> {
-  const header = new TextEncoder().encode(`blob ${bytes.length}\0`);
-  const buf = new Uint8Array(header.length + bytes.length);
-  buf.set(header);
-  buf.set(bytes, header.length);
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-1', buf));
-  return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
-}
+export { gitBlobSha };
 
 export class InMemoryStore implements VaultStore {
   private readonly commits = new Map<string, Commit>();
@@ -59,7 +56,11 @@ export class InMemoryStore implements VaultStore {
   afterHead: (() => Promise<void>) | null = null;
   /** Max commits `findOperation` may inspect before answering `unknown` (compare truncation). */
   dedupeWindowLimit = 250;
+  /** Max commits `commitsSince` returns before answering `too-many` (one compare page, ADR-0013). */
+  comparePageSize = COMPARE_PAGE;
   writeCalls = 0;
+  /** Every VaultStore method call, by name, in order (request budget tests). */
+  readonly calls: string[] = [];
 
   private constructor(root: Commit) {
     this.commits.set(root.sha, root);
@@ -73,7 +74,7 @@ export class InMemoryStore implements VaultStore {
   }
 
   /** Commit arbitrary changes as "the desktop" or "another tool" would (no CAS). `null` deletes. */
-  async commitFiles(files: Record<string, string | Uint8Array | null>, message = 'external edit'): Promise<string> {
+  async commitFiles(files: Record<string, string | Uint8Array | null>, message = 'external edit', trailers: Record<string, string> = {}): Promise<string> {
     const head = this.commits.get(this.headSha)!;
     const tree = new Map(head.tree);
     for (const [path, content] of Object.entries(files)) {
@@ -86,7 +87,7 @@ export class InMemoryStore implements VaultStore {
       this.blobs.set(sha, bytes);
       tree.set(path, sha);
     }
-    return this.pushCommit(tree, {}, Object.keys(files), message);
+    return this.pushCommit(tree, { ...trailers }, Object.keys(files), message);
   }
 
   private pushCommit(tree: Map<string, string>, trailers: Record<string, string>, changed: string[], message: string): string {
@@ -117,12 +118,14 @@ export class InMemoryStore implements VaultStore {
 
   // ---- VaultStore ----
   async head(): Promise<{ commitSha: string }> {
+    this.calls.push('head');
     const commitSha = this.headSha;
     if (this.afterHead) await this.afterHead();
     return { commitSha };
   }
 
   async readFile(path: VaultPath, atCommit: string): Promise<StoredFile | null> {
+    this.calls.push('readFile');
     guard(path);
     const commit = this.commits.get(atCommit);
     if (!commit) throw new StoreUnavailable(`unknown commit ${atCommit}`);
@@ -132,6 +135,7 @@ export class InMemoryStore implements VaultStore {
   }
 
   async listDir(dir: string, atCommit: string): Promise<readonly string[]> {
+    this.calls.push('listDir');
     guard(dir);
     const commit = this.commits.get(atCommit);
     if (!commit) throw new StoreUnavailable(`unknown commit ${atCommit}`);
@@ -159,6 +163,7 @@ export class InMemoryStore implements VaultStore {
   }
 
   async writeFile(req: WriteRequest): Promise<WriteResult> {
+    this.calls.push('writeFile');
     guard(req.path);
     this.writeCalls++;
     const fault = this.writeFaults.shift() ?? 'normal';
@@ -183,6 +188,7 @@ export class InMemoryStore implements VaultStore {
   }
 
   async findOperation(baseCommitSha: string, untilCommit: string, operationId: string, key: string = TRAILER_OP): Promise<FindOperationResult> {
+    this.calls.push('findOperation');
     if (!this.commits.has(baseCommitSha)) return { kind: 'unknown', reason: 'base commit unknown' };
     let sha: string | null = untilCommit;
     let inspected = 0;
@@ -199,6 +205,7 @@ export class InMemoryStore implements VaultStore {
   }
 
   async isAncestor(commit: string, head: string): Promise<boolean> {
+    this.calls.push('isAncestor');
     for (let sha: string | null = head; sha !== null; sha = this.commits.get(sha)?.parent ?? null) {
       if (sha === commit) return true;
     }
@@ -206,8 +213,37 @@ export class InMemoryStore implements VaultStore {
   }
 
   async parentOf(commitSha: string): Promise<string> {
+    this.calls.push('parentOf');
     const parent = this.commits.get(commitSha)?.parent;
     if (!parent) throw new StoreUnavailable(`no parent for ${commitSha}`);
     return parent;
+  }
+
+  async readCommit(commitSha: string): Promise<CommitInfo | null> {
+    this.calls.push('readCommit');
+    const c = this.commits.get(commitSha);
+    if (!c) return null;
+    const parentTree = c.parent === null ? new Map<string, string>() : this.commits.get(c.parent)!.tree;
+    const files = c.changed
+      .filter((path) => c.tree.get(path) !== parentTree.get(path))
+      .map((path) => ({ path, blobSha: c.tree.get(path) ?? null }));
+    return { sha: c.sha, parent: c.parent, trailers: { ...c.trailers }, files };
+  }
+
+  async commitsSince(base: string, until: string): Promise<CommitsSinceResult> {
+    this.calls.push('commitsSince');
+    if (!this.commits.has(base) || !this.commits.has(until)) return { kind: 'not-ancestor' };
+    // Like GitHub's compare `status`: ancestry is known before any page is read.
+    let reaches = false;
+    for (let sha: string | null = until; sha !== null; sha = this.commits.get(sha)!.parent) if (sha === base) reaches = true;
+    if (!reaches) return { kind: 'not-ancestor' };
+    const commits: { sha: string; trailers: Record<string, string> }[] = [];
+    for (let sha: string | null = until; sha !== base; sha = this.commits.get(sha)!.parent) {
+      if (sha === null) return { kind: 'not-ancestor' };
+      if (commits.length === this.comparePageSize) return { kind: 'too-many' };
+      const c: Commit = this.commits.get(sha)!;
+      commits.push({ sha: c.sha, trailers: { ...c.trailers } });
+    }
+    return { kind: 'ok', commits };
   }
 }

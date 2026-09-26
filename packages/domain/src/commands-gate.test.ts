@@ -3,7 +3,7 @@
 import { Command, type Receipt, type TaskView } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
 import { createCommandService } from './commands.ts';
-import { FileTooLarge, TRAILER_UNDOES, type WriteRequest } from './store.ts';
+import { FileTooLarge, type WriteRequest } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 const TODO = 'Tasks/To-Do List.md';
@@ -38,7 +38,7 @@ describe('Phase 1 gate regressions', () => {
     const original = '## Open\n\n- [ ] Water the plants #todo\n\n## Done\n\n- [x] Old #todo ✅ 2026-09-01\n';
     const { store, env, run, openTask } = await setup(original);
     const complete = env('CompleteTask', { task: (await openTask('Water the plants')).locator });
-    const undo = env('UndoCompleteTask', { target: complete });
+    let undo: ReturnType<typeof env> | null = null;
 
     // The first delivery of `complete` pauses right before its write; meanwhile a retry of the same envelope
     // lands and the user's Undo lands (restoring byte-identical content). Then the paused write resumes.
@@ -47,7 +47,8 @@ describe('Phase 1 gate regressions', () => {
     store.writeFile = async (req: WriteRequest) => {
       if (!paused && req.trailers['Vault-Companion-Op'] === complete.operationId) {
         paused = true;
-        ok(await run(complete));
+        const receipt = ok(await run(complete));
+        undo = env('UndoCompleteTask', { target: complete, targetCommit: receipt.commitSha });
         ok(await run(undo));
       }
       return realWrite(req);
@@ -56,7 +57,7 @@ describe('Phase 1 gate regressions', () => {
 
     expect(delayed.status).toBe('already-applied');
     expect(store.commitsWithOp(complete.operationId)).toHaveLength(1);
-    expect(store.commitsWithOp(undo.operationId)).toHaveLength(1);
+    expect(store.commitsWithOp(undo!.operationId)).toHaveLength(1);
     expect(store.text(TODO)).toBe(original); // the Undo stands
   });
 
@@ -79,24 +80,22 @@ describe('Phase 1 gate regressions', () => {
   it('rerun Opus N6: a stale second Undo of an already-undone completion is refused and does not reopen a later completion', async () => {
     const { store, env, run, openTask } = await setup('## Open\n\n- [ ] A #todo\n\n## Done\n');
     const c1 = env('CompleteTask', { task: (await openTask('A')).locator });
-    ok(await run(c1));
-    ok(await run(env('UndoCompleteTask', { target: c1 })));
+    const r1 = ok(await run(c1));
+    ok(await run(env('UndoCompleteTask', { target: c1, targetCommit: r1.commitSha })));
     const c2 = env('CompleteTask', { task: (await openTask('A')).locator });
     ok(await run(c2)); // same bytes as after c1
     const afterC2 = store.text(TODO);
-    expect(await run(env('UndoCompleteTask', { target: c1 }))).toMatchObject({ code: 'conflict:task-changed' });
+    expect(await run(env('UndoCompleteTask', { target: c1, targetCommit: r1.commitSha }))).toMatchObject({ code: 'conflict:task-changed' });
     expect(store.text(TODO)).toBe(afterC2);
   });
 
-  it('gate-3 F2 (mutant M20): if the "already undone?" search is inconclusive, the Undo is refused, not applied', async () => {
+  it('gate-3 F2 (ADR-0013 form): if C..X cannot be listed in one page, the Undo is refused, not applied', async () => {
     const { store, env, run, openTask } = await setup('## Open\n\n- [ ] A #todo\n\n## Done\n');
     const c1 = env('CompleteTask', { task: (await openTask('A')).locator });
-    ok(await run(c1));
+    const r1 = ok(await run(c1));
     const afterC1 = store.text(TODO);
-    const real = store.findOperation.bind(store);
-    store.findOperation = async (base, until, value, key) =>
-      key === TRAILER_UNDOES ? { kind: 'unknown', reason: 'window truncated' } : real(base, until, value, key);
-    expect(await run(env('UndoCompleteTask', { target: c1 }))).toMatchObject({ code: 'dedupe-unknown' });
+    store.commitsSince = async () => ({ kind: 'too-many' });
+    expect(await run(env('UndoCompleteTask', { target: c1, targetCommit: r1.commitSha }))).toMatchObject({ code: 'refused:undo-expired' });
     expect(store.text(TODO)).toBe(afterC1);
   });
 
@@ -133,9 +132,9 @@ describe('Phase 1 gate regressions', () => {
   ])('A1/R1 (Critical): exact Undo restores the original bytes when Done is above Open — %s', async (_n, original) => {
     const { store, env, run, openTask } = await setup(original);
     const complete = env('CompleteTask', { task: (await openTask('A')).locator });
-    ok(await run(complete));
+    const r = ok(await run(complete));
     expect(store.text(TODO)).not.toBe(original);
-    ok(await run(env('UndoCompleteTask', { target: complete })));
+    ok(await run(env('UndoCompleteTask', { target: complete, targetCommit: r.commitSha })));
     expect(store.text(TODO)).toBe(original);
   });
 });

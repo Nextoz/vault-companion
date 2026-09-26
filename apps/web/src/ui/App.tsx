@@ -2,7 +2,7 @@ import type { CompleteTaskCommand, TaskView } from '@vault-companion/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { getSession, getTasks } from '../api.ts';
 import { notRedoneBy, stillUnresolved, UNRESOLVED_TEXT, unresolvedFrom, type Unresolved } from '../attention.ts';
-import { completeTask, undoCompleteTask } from '../commands.ts';
+import { completeTask, undoCompleteTask, undoDraft } from '../commands.ts';
 import { unreachableText, wake as wakeUp, type Connection } from '../connection.ts';
 import { prefs } from '../prefs.ts';
 import type { DraftStore } from '../draft.ts';
@@ -220,13 +220,15 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
       setToast(null);
       // The server refuses every task-list write while it is blocked (writeBlock.ts).
       if (!accountKey || !revision || tasks?.writeBlock) return;
-      const undone = queue
-        .getSnapshot()
-        .items.some((i) => i.envelope.type === 'UndoCompleteTask' && i.envelope.payload.target.operationId === target.operationId);
+      const items = queue.getSnapshot().items;
+      const undone = items.some((i) => i.envelope.type === 'UndoCompleteTask' && i.envelope.payload.target.operationId === target.operationId);
       if (undone || undoingRef.current.has(target.operationId)) return;
       undoingRef.current.add(target.operationId);
       try {
-        const envelope = undoCompleteTask({ baseRevision: revision }, target);
+        // The completion's commit is the Undo's token (ADR-0013). Without a receipt yet, the queue fills it in later.
+        const receipt = items.find((i) => i.operationId === target.operationId)?.receipt ?? null;
+        const ctx = { baseRevision: revision };
+        const envelope = receipt ? undoCompleteTask(ctx, target, receipt.commitSha) : undoDraft(ctx, target);
         await queue.undoCompletion(target, envelope, { accountKey, label, taskKey: occurrenceKey(target.payload.task) });
       } catch {
         setNotice('Could not keep this action on the device.');

@@ -1,7 +1,7 @@
 // Write executor: docs/commands.md "Execution algorithm". Generic over a per-command plan so the
 // retry/dedupe/CAS logic is independent of what the mutation does.
 import type { ErrorCode } from '@vault-companion/contracts';
-import { StoreUnavailable, StoreUnknownOutcome, TRAILER_OP, TRAILER_PAYLOAD, type VaultPath, type VaultStore } from './store.ts';
+import { StoreUnavailable, StoreUnknownOutcome, TRAILER_OP, TRAILER_PAYLOAD, type FindOperationResult, type VaultPath, type VaultStore } from './store.ts';
 
 /** Head-CAS (ADR-0011) fails on any concurrent commit, so allow a few more re-plans than blob CAS needed. */
 export const MAX_ATTEMPTS = 5;
@@ -19,11 +19,20 @@ export interface WritePlan<E> {
    * commit's parent and require byte-identical output at the same path.
    */
   deriveApplied?(store: VaultStore, commitSha: string, changedPaths: readonly string[]): Promise<Derived<E>>;
+  /**
+   * Replace the default dedupe (a paged search of `baseRevision..X`) with the plan's own bounded check at X, which may
+   * also refuse (Undo, ADR-0013). Runs once per attempt, before `compute` at the same X.
+   */
+  findApplied?(store: VaultStore, atCommit: string, operationId: string): Promise<FindOperationResult | Refused>;
+  /** Attempts (head-moved re-plans) for this plan; default `MAX_ATTEMPTS`. */
+  readonly maxAttempts?: number;
   /** Commit subject; must not contain personal text. */
   readonly message: string;
   /** Extra commit trailers (IDs only, never personal text). */
   readonly trailers?: Readonly<Record<string, string>>;
 }
+
+export type Refused = { readonly kind: 'refused'; readonly code: ErrorCode; readonly message: string };
 
 export type Derived<E> = { readonly ok: true; readonly path: string; readonly effect: E } | { readonly ok: false; readonly reason: string };
 
@@ -58,11 +67,14 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 export async function executeWrite<E>(store: VaultStore, input: ExecuteInput, plan: WritePlan<E>): Promise<ExecuteResult<E>> {
   let lastWasUnknown = false;
   try {
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    for (let attempt = 1; attempt <= (plan.maxAttempts ?? MAX_ATTEMPTS); attempt++) {
       // One immutable commit X per attempt: dedupe window and reads both end at X (review F1).
       const { commitSha: x } = await store.head();
 
-      const found = await store.findOperation(input.baseRevision, x, input.operationId);
+      const found = plan.findApplied
+        ? await plan.findApplied(store, x, input.operationId)
+        : await store.findOperation(input.baseRevision, x, input.operationId);
+      if (found.kind === 'refused') return fail(found.code, found.message);
       if (found.kind === 'unknown') return fail('dedupe-unknown', `cannot establish whether the operation was applied (${found.reason})`);
       if (found.kind === 'found') {
         if (found.op.payloadHash !== input.payloadHash) return fail('operation-id-reused', 'operation ID was already used for a different payload');
