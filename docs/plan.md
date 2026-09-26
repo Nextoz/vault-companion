@@ -19,12 +19,12 @@ Owner's first-use feedback reconciled with the vault Ideas Backlog (private; can
 the backlog. Remaining candidates (owner ranks later): B task editing, C curated Active Work, D completion history,
 E, F preview-before-production.
 
-| Work | Worker | Where | Status |
-|---|---|---|---|
-| PR #18 review (+ ubuntu A3 e2e failure: duplicate row or flake) | Codex `gpt-6-astra` high, pane `w3:pV` | clone `C:\Dev\vault-companion-clones\pr18-review`; report `docs/reviews/pr18-review-astra.md` there | running |
-| A1 vault handover visibility (brief `docs/briefs/A1-vault-handover.md` in the clone) | Codex `gpt-6-astra` medium, pane `w3:pW` | clone `C:\Dev\vault-companion-clones\handover`, branch `agent/vault-handover` (= #18 + main), uncommitted | running |
+| Work | Result |
+|---|---|
+| PR #18 (ADR-0015 + review P18-1/P18-2 fixes) | merged 57aeaa6; Astra high review; CodeRabbit: 1 finding rejected with reason, fix commit rate-limited |
+| A1 vault handover visibility, PR #19 | merged 1292f48; **deployed version 79ac4949** (app.karpov.dk); CodeRabbit rate-limited (not a pass) |
 
-Next: disposition #18 review → merge #18 → Lead reviews/commits A1 → PR → merge → deploy → owner tests on the phone.
+Next: owner tests A on the phone (first resume may need one app reopen: the old client predates the forward-compat strip), collect feedback; then owner ranks B/C/D/E/F. Follow-up: transient duplicate Today row on read/receipt ordering (Antigravity task prepared in clone dup-row, launch blocked pending permission rule match). R3 CPU re-measure from the live log.
 
 ## Status (2026-09-26): the app is live on the owner's phone
 
