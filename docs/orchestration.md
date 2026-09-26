@@ -57,6 +57,12 @@ line ranges, never "read docs/…"); workers follow the AGENTS.md token rules (t
 check); default effort `low`, `medium` for features, `high` only for risky reviews; free tiers first for low-risk work
 (Antigravity), Claude Cloud credits ( left) for substantial self-contained tasks (e2e suites).
 
+**Antigravity (agy 1.2.11):** `-p -` with a stdin brief sometimes starts with an empty prompt ("How can I help you
+today?"). Pass the prompt as text instead: `agy.exe -p "Read the file .agent/brief.md in the current directory and carry
+out that task exactly as written." --model gemini-3.8-flash-medium --dangerously-skip-permissions` (still via
+`AGENT_STDIN=… bash tools/agent-pane.sh`). First results: dup-row test good but fix removed an identity guard (held);
+O11 CSP smoke good and found a real Zod CSP violation (PR #23). Review its diffs like any worker's.
+
 Wait for completion with the log's last line (Codex: `tokens used`) rather than polling the pane.
 
 ## Herdr mechanics learned (Windows / Git Bash)
