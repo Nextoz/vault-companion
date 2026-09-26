@@ -143,6 +143,24 @@ lines at the top of the Codex log). Codex quota can run out (2026-09-25: until 1
 Every brief is small: owned files, dependencies, acceptance checks, evidence-based handoff. Codex sandbox cannot
 reach the pnpm store: the Lead runs `pnpm install` in the clone **before** launching Astra.
 
+## Cheaper tiers and judgment helpers (owner, 2026-09-26)
+
+Lead stays Opus 5.5; paid heavy models (Astra high, Claude Cloud) only for hard work (concurrency, identity,
+integrity, security). Offload simple work downward; token economy is a standing owner requirement.
+
+| Tier | Use | Tool |
+|---|---|---|
+| Free, local | tiny deterministic edits when ≥ 5 GB RAM free (often not: ~2.7 GB observed) | `qwen-agent` / Ollama |
+| Free, cloud | bounded low-risk repo tasks: docs, mechanical edits, test scaffolds, triage summaries (public repo content only; never vault text) | Antigravity CLI `%LOCALAPPDATA%\agy\bin\agy.exe -p "<prompt>" --effort low --sandbox` (free tier, weekly caps — expect refusals; reroute, never wait) |
+| Cheap | simple edits/docs; searches/summaries on the Lead side | Astra `low`; Claude subagents with `model: haiku` |
+| Heavy | as in the routing table above | Astra `medium`/`high`, Claude Cloud |
+
+**Jev** (TypeSafe System One; free; typed yes/no/choice/score with probability, no text): a judgment helper, never a
+worker or Lead. Use for first-cut triage — "is this CodeRabbit comment an actionable defect?", "is this brief a
+mechanical edit?" — with the rule applied in code/by the Lead; high-risk areas always get the Lead's own read. Only
+public repo content goes to Jev (`Tools/jev.ps1` in the vault; key in the owner's environment). Product use (E, AI
+capture triage) needs an ADR on where private note text may go.
+
 ## Worker → Lead handoff (owner, 2026-09-25)
 
 Every implementation worker (Cloud, Astra, Qwen) commits a short branch-local `.agent/handoffs/<brief-name>.md` with:
