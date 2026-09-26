@@ -33,6 +33,12 @@ export function completeTask(ctx: MintContext, task: TaskLocator): CompleteTaskC
   return checked({ ...base(ctx), type: 'CompleteTask', payload: { task } }) as CompleteTaskCommand;
 }
 
+export type TaskChanges = Extract<Command, { type: 'EditTask' }>['payload']['changes'];
+
+export function editTask(ctx: MintContext, task: TaskLocator, changes: TaskChanges) {
+  return checked({ ...base(ctx), type: 'EditTask', payload: { task, changes } });
+}
+
 /**
  * Undo names its target by carrying the original CompleteTask envelope verbatim, and the completion's commit from its
  * receipt as a token (ADR-0013).
@@ -80,6 +86,8 @@ export function exportText(envelope: Command): string {
     case 'CaptureTask':
     case 'CaptureNote':
       return envelope.payload.text;
+    case 'EditTask':
+      return envelope.payload.changes.text ?? envelope.payload.task.lineText;
     case 'CompleteTask':
       return envelope.payload.task.lineText;
     case 'UndoCompleteTask':

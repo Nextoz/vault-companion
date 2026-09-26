@@ -14,6 +14,7 @@ import { buildView, occurrenceKey, overdueSummary } from '../view.ts';
 import { FROZEN_NOTE, taskListLock } from '../writeBlock.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
 import { ActiveWorkCard } from './ActiveWorkCard.tsx';
+import { EditSheet } from './EditSheet.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
 import { VaultStatus } from './VaultStatus.tsx';
@@ -41,6 +42,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const [sessionSignedOut, setSessionSignedOut] = useState(false);
   const [accountKey, setAccountKey] = useState<string | null>(() => prefs.lastAccountKey());
   const [tab, setTab] = useState<Tab>('today');
+  const [editing, setEditing] = useState<{ task: TaskView; account: string | null; revision: string } | null>(null);
   const [captureOpen, setCaptureOpen] = useState(false);
   // The open note is bound to the account it was opened under: signing out or switching account closes it (the
   // render guard below hides it in the same frame; the effect drops the state).
@@ -62,6 +64,9 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   useEffect(() => {
     if (openLink && !noteOpen) setOpenLink(null);
   }, [openLink, noteOpen]);
+  useEffect(() => {
+    if (editing && (signedOut || editing.account !== accountKey)) setEditing(null);
+  }, [editing, signedOut, accountKey]);
   const openNote = useCallback((link: OpenLink) => setOpenLink({ ...link, account: accountKey }), [accountKey]);
   // A read checked against an older watermark than the snapshot's may predate receipts evicted since (G3-1).
   const fresh = rendered !== null && renderable(rendered, snapshot.watermark);
@@ -279,7 +284,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
   return (
     <div className="app">
-      <header className="top" inert={noteOpen}>
+      <header className="top" inert={noteOpen || editing !== null}>
         <nav className="tabs" aria-label="Views">
           <button type="button" aria-pressed={tab === 'today'} onClick={() => setTab('today')}>
             Today
@@ -290,7 +295,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         </nav>
       </header>
 
-      <main className="content" inert={noteOpen}>
+      <main className="content" inert={noteOpen || editing !== null}>
         <VaultStatus read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0} onRefresh={() => refreshTasks()} />
         {lock && (
           <div className="banner banner-warn" role="alert">
@@ -370,14 +375,14 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {tasks &&
           (tab === 'today' ? (
             <>
-              <TaskList title="Today" rows={view.today} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onOpenLink={openNote} empty="Nothing due today." />
+              <TaskList title="Today" rows={view.today} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} empty="Nothing due today." />
               <TaskList
                 title="Overdue"
                 rows={view.overdue}
                 tapped={tapped}
                 blocked={writeBlocked}
                 frozen={frozen}
-                onComplete={complete}
+                onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })}
                 onOpenLink={openNote}
                 overdue
                 collapsible={{
@@ -386,10 +391,10 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
                   onToggle: () => setOverdueOpen((open) => !open),
                 }}
               />
-              <TaskList title="Done today" rows={view.doneToday} tapped={tapped} blocked frozen={frozen} onComplete={complete} onUndo={undo} onOpenLink={openNote} />
+              <TaskList title="Done today" rows={view.doneToday} tapped={tapped} blocked frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onUndo={undo} onOpenLink={openNote} />
             </>
           ) : (
-            <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onOpenLink={openNote} empty="No open tasks." />
+            <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} empty="No open tasks." />
           ))}
 
         {!needsAttention && (
@@ -397,10 +402,14 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         )}
       </main>
 
-      <button type="button" className="fab" inert={noteOpen} onClick={() => setCaptureOpen(true)} aria-label="Capture">
+      <button type="button" className="fab" inert={noteOpen || editing !== null} onClick={() => setCaptureOpen(true)} aria-label="Capture">
         +
       </button>
 
+      {editing && editing.account === accountKey && !signedOut && (
+        <EditSheet queue={queue} task={editing.task} accountKey={accountKey} baseRevision={editing.revision}
+          blocked={writeBlocked} onClose={() => setEditing(null)} />
+      )}
       {captureOpen && (
         <CaptureSheet
           queue={queue}

@@ -14,6 +14,7 @@ interface Props {
   /** No completion from this list (Done today, or the file is write-blocked). */
   blocked: boolean;
   onComplete: (task: TaskView) => void;
+  onEdit?: (task: TaskView) => void;
   onOpenLink: (link: OpenLink) => void;
   /** Undo a saved app completion from its Done today row (P4-B); rows without `undo` offer none. */
   onUndo?: (target: CompleteTaskCommand, label: string) => void;
@@ -31,6 +32,7 @@ export function TaskList({
   tapped,
   blocked,
   onComplete,
+  onEdit,
   onUndo,
   onOpenLink,
   overdue = false,
@@ -63,6 +65,7 @@ export function TaskList({
               blocked={blocked}
               overdue={overdue}
               onComplete={onComplete}
+              onEdit={onEdit}
               onUndo={onUndo}
               onOpenLink={onOpenLink}
             />
@@ -79,6 +82,7 @@ function TaskRow({
   blocked,
   overdue,
   onComplete,
+  onEdit,
   onUndo,
   onOpenLink,
 }: {
@@ -88,10 +92,11 @@ function TaskRow({
   overdue: boolean;
   onComplete: (t: TaskView) => void;
   onUndo: Props['onUndo'];
+  onEdit: Props['onEdit'];
   onOpenLink: (link: OpenLink) => void;
 }) {
   const { task, action, undo } = row;
-  const busy = action !== null && action.state !== 'attention' && action.state !== 'saved';
+  const busy = action !== null && action.state !== 'attention' && (action.state !== 'saved' || action.type === 'EditTask');
   const readOnly = task?.readOnlyReason ?? null;
   const canComplete =
     !row.done && task !== null && readOnly === null && !blocked && !busy && !tapped.has(occurrenceKey(task.locator));
@@ -114,11 +119,11 @@ function TaskRow({
       )}
       <div className="task-body">
         <span className="task-text">
-          {task === null
+          {task === null || action?.type === 'EditTask'
             ? text
             : taskSegments(row.description, task.links).map((seg, i) =>
                 seg.kind === 'text' ? (
-                  <span key={i}>{seg.text}</span>
+                  <button key={i} type="button" className="task-edit" disabled={!canComplete || !onEdit} aria-label={`Edit: ${text}`} onClick={() => onEdit?.(task)}>{seg.text}</button>
                 ) : (
                   <button
                     key={i}

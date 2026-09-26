@@ -7,6 +7,7 @@ import { StateChip } from './StateChip.tsx';
 
 const VERB: Record<CommandType, string> = {
   CompleteTask: 'Complete',
+  EditTask: 'Edit',
   UndoCompleteTask: 'Undo',
   CaptureTask: 'Task',
   CaptureNote: 'Note',

@@ -1,6 +1,6 @@
 import { TasksResponse, type Receipt, type TaskView } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
-import { completeTask, undoCompleteTask } from './commands.ts';
+import { completeTask, editTask, undoCompleteTask } from './commands.ts';
 import type { ItemState, QueueItem } from './queue/queue.ts';
 import { dateIn } from './time.ts';
 import { buildView, occurrenceKey, overdueSummary } from './view.ts';
@@ -337,5 +337,41 @@ describe('review O1 fallback: an unacknowledged receipt the rendered read did no
     // Only an acknowledged receipt (covered by the watermark) may be treated as reflected without an answer.
     const acknowledged = buildView(read([], [task(DONE, 3, true)], {}), [{ ...saved, acknowledged: true }]);
     expect(acknowledged.doneToday).toMatchObject([{ task: { locator: { lineText: DONE } } }]);
+  });
+});
+
+
+describe('EditTask overlay', () => {
+  const edit = editTask({ baseRevision: REV }, openTask.locator, { text: 'Water the herbs' });
+  const receipt: Receipt = { ...completedReceipt, operationId: edit.operationId,
+    effect: { kind: 'edited', beforeLineText: OPEN, afterLineText: '- [ ] Water the herbs' } };
+  it.each(['pending', 'saving', 'saved'] as const)('shows new text while %s and unreflected', (state) => {
+    const v = buildView(read([openTask], [], { [COMMIT]: 'not-included' }), [item(edit, state, { receipt })]);
+    expect(v.today).toMatchObject([{ description: 'Water the herbs', task: openTask, action: { type: 'EditTask', state } }]);
+    expect(v.doneToday).toEqual([]);
+  });
+  it('uses the read row once reflected, and overlays again on an older read', () => {
+    const saved = item(edit, 'saved', { receipt, acknowledged: true });
+    const changed = { ...openTask, description: 'Read description', locator: { ...openTask.locator, lineText: '- [ ] Water the herbs' } };
+    expect(buildView(read([changed], [], { [COMMIT]: 'included' }), [saved]).all)
+      .toMatchObject([{ description: 'Read description', task: changed, action: null }]);
+    expect(buildView(read([openTask], [], { [COMMIT]: 'not-included' }), [saved]).all)
+      .toMatchObject([{ description: 'Water the herbs', action: { type: 'EditTask' } }]);
+  });
+  it('leaves refused edits out of the row overlay', () => {
+    expect(buildView(read([openTask], []), [item(edit, 'attention')]).all)
+      .toMatchObject([{ description: openTask.description, action: null }]);
+  });
+  it('does not change an identical neighbouring task', () => {
+    const neighbour = { ...openTask, locator: { ...openTask.locator, lineIndex: 11 } };
+    expect(buildView(read([openTask, neighbour], []), [item(edit, 'pending')]).all.map((r) => r.description))
+      .toEqual(['Water the herbs', 'Water the plants']);
+  });
+  it('keeps date-only edits and unresolved locators visible', () => {
+    const dateEdit = editTask({ baseRevision: REV }, openTask.locator, { due: null });
+    expect(buildView(read([openTask], []), [item(dateEdit, 'pending')]).all)
+      .toMatchObject([{ description: openTask.description, action: { type: 'EditTask' } }]);
+    expect(buildView(read([], []), [item(edit, 'pending')]).all)
+      .toMatchObject([{ description: 'Water the herbs', task: null }]);
   });
 });
