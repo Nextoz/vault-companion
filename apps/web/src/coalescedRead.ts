@@ -1,26 +1,23 @@
 export type ReadReason = 'wake' | 'refresh' | 'receipt';
 
-/** Per read kind: wakes share pending work and a one-second completion window.
- * Explicit refresh bypasses the window; receipts must read after the saved action,
- * even when an older read is pending. No I/O or scheduling belongs here.
+/** Per read kind: wakes that fire together (focus + visibilitychange + online on one app switch) share one read.
+ * A wake joins only an in-flight read another wake started; every other read runs fresh, so a read that must see a
+ * newer vault state (a receipt, the Refresh button, a wake after a read finished) never gets an older answer.
+ * No I/O or scheduling belongs here.
  */
-export function coalescedRead<T>(read: () => Promise<T>, now: () => number = Date.now) {
-  const pending = new Set<Promise<T>>();
-  let completed: Promise<T> | undefined;
-  let completedAt = -Infinity;
+export function coalescedRead<T>(read: () => Promise<T>) {
+  let wakeFlight: Promise<T> | null = null;
 
   return (reason: ReadReason = 'refresh'): Promise<T> => {
-    if (reason !== 'receipt') {
-      const active = [...pending].at(-1);
-      if (active) return active;
-      if (reason === 'wake' && completed && now() - completedAt < 1000) return completed;
+    if (reason === 'wake' && wakeFlight) return wakeFlight;
+    const flight = Promise.resolve().then(read);
+    if (reason === 'wake') {
+      wakeFlight = flight;
+      const clear = () => {
+        if (wakeFlight === flight) wakeFlight = null;
+      };
+      flight.then(clear, clear);
     }
-    const result = Promise.resolve().then(read).finally(() => {
-      pending.delete(result);
-      completed = result;
-      completedAt = now();
-    });
-    pending.add(result);
-    return result;
+    return flight;
   };
 }

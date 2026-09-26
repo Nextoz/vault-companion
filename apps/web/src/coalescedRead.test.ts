@@ -1,58 +1,58 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { coalescedRead } from './coalescedRead.ts';
 
-beforeEach(() => { vi.useFakeTimers(); });
-afterEach(() => { vi.useRealTimers(); });
+const deferred = () => {
+  let resolve!: (v: string) => void;
+  const promise = new Promise<string>((res) => (resolve = res));
+  return { promise, resolve };
+};
 
-it('shares a slow read, then measures the wake cooldown from completion', async () => {
-  const read = vi.fn(() => new Promise<string>((resolve) => setTimeout(() => resolve('ok'), 2000)));
+it('wakes that fire together share one read', async () => {
+  const d = deferred();
+  const read = vi.fn(() => d.promise);
   const run = coalescedRead(read);
   const first = run('wake');
   expect(run('wake')).toBe(first);
-  expect(run('refresh')).toBe(first);
-  await vi.advanceTimersByTimeAsync(2000);
-  await first;
-  await vi.advanceTimersByTimeAsync(999);
   expect(run('wake')).toBe(first);
+  d.resolve('ok');
+  await expect(first).resolves.toBe('ok');
   expect(read).toHaveBeenCalledTimes(1);
-  await vi.advanceTimersByTimeAsync(1);
-  const next = run('wake');
-  expect(next).not.toBe(first);
-  await vi.advanceTimersByTimeAsync(2000);
-  await next;
+});
+
+it('a wake after the shared read finished reads again (no reuse window)', async () => {
+  const read = vi.fn(async () => 'ok');
+  const run = coalescedRead(read);
+  await run('wake');
+  await run('wake');
   expect(read).toHaveBeenCalledTimes(2);
 });
 
-it('refresh and receipts bypass cooldown; a receipt cannot join a pre-save read', async () => {
-  const read = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 10)));
+it('refresh and receipt reads never join a wake read, and a wake never joins them', async () => {
+  const d = deferred();
+  const read = vi.fn(() => d.promise);
   const run = coalescedRead(read);
-  const initial = run('wake');
-  await vi.advanceTimersByTimeAsync(10);
-  await initial;
-  const refresh = run();
-  expect(run('wake')).toBe(refresh);
+  const wake = run('wake');
+  const refresh = run('refresh');
   const receipt = run('receipt');
+  expect(refresh).not.toBe(wake);
+  expect(receipt).not.toBe(wake);
   expect(receipt).not.toBe(refresh);
-  expect(run('wake')).toBe(receipt);
-  await vi.advanceTimersByTimeAsync(10);
-  await Promise.all([refresh, receipt]);
-  const saved = run('receipt');
-  expect(run('wake')).toBe(saved);
-  await vi.advanceTimersByTimeAsync(10);
-  await saved;
-  expect(read).toHaveBeenCalledTimes(4);
+  d.resolve('ok');
+  await Promise.all([wake, refresh, receipt]);
+  expect(read).toHaveBeenCalledTimes(3);
+  const d2 = deferred();
+  read.mockImplementation(() => d2.promise);
+  const receipt2 = run('receipt');
+  expect(run('wake')).not.toBe(receipt2);
+  d2.resolve('ok');
 });
 
-it('releases rejected flights and keeps read kinds independent', async () => {
-  const session = coalescedRead(vi.fn().mockRejectedValue(new Error('offline')));
-  const tasks = coalescedRead(vi.fn().mockResolvedValue('tasks'));
-  const failed = session('wake');
-  expect(session('wake')).toBe(failed);
+it('a failed wake read is released so the next wake retries', async () => {
+  const read = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce('ok');
+  const run = coalescedRead(read);
+  const failed = run('wake');
+  expect(run('wake')).toBe(failed);
   await expect(failed).rejects.toThrow('offline');
-  await expect(tasks('wake')).resolves.toBe('tasks');
-  expect(session('wake')).toBe(failed);
-  await vi.advanceTimersByTimeAsync(1000);
-  const retry = session('wake');
-  expect(retry).not.toBe(failed);
-  await expect(retry).rejects.toThrow('offline');
+  await expect(run('wake')).resolves.toBe('ok');
+  expect(read).toHaveBeenCalledTimes(2);
 });
