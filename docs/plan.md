@@ -34,7 +34,8 @@ e2e-flakes keeps its brief for Codex low. Claude Cloud O3 session_015TkdrdhYa8Z9
 branch after 25 min — ask it: claude -p "status? push your branch" --cloud <id>, when RAM allows).
 2026-09-26 ~17:50: RAM 1.3/15.4 GB free; Claude Code reaped the Lead's background watchers. Keep ≤ 1 heavy local job
 (Playwright) at a time.
-**Codex limit resets 21:26** (owner): session cron at 21:28 resumes Codex work (dup-row high, then next backlog).
+21:28 Codex resumed: astra-high · dup-row (w3:p1A; spec = Antigravity test; identity rule in the brief) · astra-low ·
+e2e-flakes (w3:p1B; tests/config only, --workers 2). Clones rebased on main 26cf771.
 Token economy: AGENTS.md worker rules + docs/orchestration.md.
 
 Next: owner tests A on the phone (first resume may need one app reopen: the old client predates the forward-compat strip), collect feedback; then owner ranks B/C/D/E/F. Follow-up: transient duplicate Today row on read/receipt ordering (Antigravity task prepared in clone dup-row, launch blocked pending permission rule match). R3 CPU re-measure from the live log.
