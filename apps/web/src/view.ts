@@ -53,12 +53,12 @@ export function overdueSummary(count: number): string {
   return `${count} overdue`;
 }
 
-const isTaskAction = (i: QueueItem) => i.type === 'CompleteTask' || i.type === 'UndoCompleteTask';
+const isTaskAction = (i: QueueItem) => i.type === 'CompleteTask' || i.type === 'UndoCompleteTask' || i.type === 'EditTask';
 
 /** The open line an action is about: a completion's task, or the task an Undo re-opens. */
 function locatorOf(item: QueueItem): TaskLocator | null {
   const e = item.envelope;
-  if (e.type === 'CompleteTask') return e.payload.task;
+  if (e.type === 'CompleteTask' || e.type === 'EditTask') return e.payload.task;
   if (e.type === 'UndoCompleteTask') return e.payload.target.payload.task;
   return null;
 }
@@ -125,7 +125,7 @@ export function buildView(
   });
   const overlay = (a: QueueItem, done: boolean): Row => ({
     key: `op:${a.operationId}`,
-    description: a.label,
+    description: a.envelope.type === 'EditTask' ? (a.envelope.payload.changes.text ?? a.label) : a.label,
     task: null,
     done,
     action: a,
@@ -140,6 +140,13 @@ export function buildView(
   for (const a of [...latest.values()].sort((x, y) => x.seq - y.seq)) {
     const locator = locatorOf(a);
     if (!locator) continue;
+    if (a.type === 'EditTask') {
+      if (!live(a)) continue;
+      const match = resolve(locator, allOpen);
+      if (match.kind === 'row') onRow.set(rowKey(match.task), a);
+      else ownOpen.push(overlay(a, false));
+      continue;
+    }
     if (a.type === 'CompleteTask') {
       const match = resolve(locator, allOpen);
       if (match.kind === 'row') onRow.set(rowKey(match.task), a);
@@ -171,7 +178,9 @@ export function buildView(
   const openRow = (t: TaskView): Row | null => {
     const a = onRow.get(rowKey(t)) ?? null;
     if (a?.type === 'CompleteTask' && live(a)) return null;
-    return { ...row(t, a), unresolved: flagged.has(rowKey(t)) };
+    return { ...row(t, a),
+      description: a?.envelope.type === 'EditTask' ? (a.envelope.payload.changes.text ?? t.description) : t.description,
+      unresolved: flagged.has(rowKey(t)) };
   };
   const openRows = (list: readonly TaskView[]) => list.map(openRow).filter((r): r is Row => r !== null);
 
