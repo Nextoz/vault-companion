@@ -43,13 +43,19 @@ Rules:
 Every non-interactive worker starts through `tools/agent-pane.sh` so the owner can watch it live:
 one labelled pane per agent (`<model>-<effort> · <task>`) in the **Agents** tab (created on demand, never focused),
 output streamed in the pane and tee'd to the log, pane closes itself 60 s after the command ends (the tab closes with
-its last pane). Codex runs add `-c model_reasoning_summary=detailed` so reasoning summaries are visible.
+its last pane). Codex runs add `-c model_reasoning_summary=concise -c model_verbosity=low` so reasoning summaries are visible.
 
 ```sh
 AGENT_STDIN=<clone>/.agent/brief.md bash tools/agent-pane.sh "astra-high · pr18" <clone> <clone>/.agent/run.log \
-  codex exec -m gpt-6-astra -c model_reasoning_effort=high -c model_reasoning_summary=detailed \
+  codex exec -m gpt-6-astra -c model_reasoning_effort=high -c model_reasoning_summary=concise -c model_verbosity=low \
   --sandbox workspace-write -C <clone> -
 ```
+
+**Token economy (owner, 2026-09-26):** measured 59k tokens for a 10-line fix and 95–130k per review, mostly whole-doc
+reads and 8–16 full `pnpm check` runs per worker. Rules: briefs are self-contained (quote the finding, name files +
+line ranges, never "read docs/…"); workers follow the AGENTS.md token rules (targeted tests only; the Lead runs the full
+check); default effort `low`, `medium` for features, `high` only for risky reviews; free tiers first for low-risk work
+(Antigravity), Claude Cloud credits ( left) for substantial self-contained tasks (e2e suites).
 
 Wait for completion with the log's last line (Codex: `tokens used`) rather than polling the pane.
 
