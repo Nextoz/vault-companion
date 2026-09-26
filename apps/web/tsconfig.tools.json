@@ -7,6 +7,10 @@
     "rootDir": ".",
     "tsBuildInfoFile": ".tsc/tools.tsbuildinfo"
   },
-  "references": [{ "path": "../../packages/contracts" }],
+  "references": [
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/domain" },
+    { "path": "./tsconfig.app.json" }
+  ],
   "include": ["vite.config.ts", "playwright.config.ts", "e2e", "test"]
 }
