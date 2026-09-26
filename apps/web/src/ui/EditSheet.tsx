@@ -27,13 +27,16 @@ export function EditSheet({ queue, task, accountKey, baseRevision, blocked, onCl
     dialog.current?.querySelector('textarea')?.focus();
     return () => { if (invoker instanceof HTMLElement) invoker.focus(); };
   }, []);
+  // The kernel compares the parsed (trimmed) description with changes.text; a trailing space from a phone keyboard
+  // would otherwise always be refused as invalid-edit (CodeRabbit #26).
+  const normalized = text.trim();
   const changes: TaskChanges = {
-    ...(text !== task.description ? { text } : {}),
+    ...(normalized !== task.description ? { text: normalized } : {}),
     ...(due !== (task.due ?? '') ? { due: due || null } : {}),
     ...(scheduled !== (task.scheduled ?? '') ? { scheduled: scheduled || null } : {}),
     ...(priority !== (task.priority ?? '') ? { priority: priority || null } : {}),
   };
-  const canSave = accountKey !== null && !blocked && !saving && text.trim().length > 0 &&
+  const canSave = accountKey !== null && !blocked && !saving && normalized.length > 0 &&
     !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(text) && Object.keys(changes).length > 0;
   const save = async () => {
     if (!canSave || savingRef.current || accountKey === null) return;
@@ -41,7 +44,7 @@ export function EditSheet({ queue, task, accountKey, baseRevision, blocked, onCl
     setSaving(true);
     try {
       await queue.enqueue(editTask({ baseRevision }, task.locator, changes), {
-        accountKey, label: text, taskKey: occurrenceKey(task.locator),
+        accountKey, label: normalized, taskKey: occurrenceKey(task.locator),
       });
       onClose();
     } catch {

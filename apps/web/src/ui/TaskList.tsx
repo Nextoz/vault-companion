@@ -104,6 +104,8 @@ function TaskRow({
   const canEdit = !row.done && task !== null && !blocked && !busy && onEdit !== undefined &&
     (readOnly === null || readOnly === 'refused:recurring' || readOnly === 'refused:on-completion');
   const text = plainWikilinks(row.description);
+  // A description made only of wikilinks has no text segment to tap: offer a named Edit button instead (CodeRabbit #26).
+  const textTappable = task !== null && taskSegments(row.description, task.links).some((seg) => seg.kind === 'text' && seg.text.trim() !== '');
 
   return (
     <li className={`task${row.done ? ' task-done' : ''}`} data-testid="task">
@@ -148,6 +150,11 @@ function TaskRow({
           {task?.due && !row.done && <span className={overdue ? 'due due-over' : 'due'}>{task.due}</span>}
           {readOnly && <span className="readonly">{readOnlyText(readOnly)}</span>}
           {action && <StateChip state={action.state} />}
+          {canEdit && !textTappable && task && (
+            <button type="button" className="task-edit-link" aria-label={`Edit: ${text}`} onClick={() => onEdit?.(task)}>
+              Edit
+            </button>
+          )}
         </span>
         {action?.state === 'attention' && action.error ? (
           <span className="error">{attentionText(action)}</span>
