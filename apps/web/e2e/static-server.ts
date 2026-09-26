@@ -58,8 +58,10 @@ export class StaticServer {
   }
 
   close(): Promise<void> {
-    // Keep-alive connections of a still-open page would otherwise hold the close until they time out.
+    // Stop accepting first, then drop keep-alive connections of a still-open page, which would otherwise hold the
+    // close until they time out (Node: close() before closeAllConnections()).
+    const closed = new Promise<void>((resolve) => this.#server.close(() => resolve()));
     this.#server.closeAllConnections();
-    return new Promise((resolve) => this.#server.close(() => resolve()));
+    return closed;
   }
 }
