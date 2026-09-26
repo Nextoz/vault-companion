@@ -1,6 +1,7 @@
 import type { CompleteTaskCommand, TaskView } from '@vault-companion/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { getSession, getTasks } from '../api.ts';
+import { coalescedRead, type ReadReason } from '../coalescedRead.ts';
 import { notRedoneBy, stillUnresolved, UNRESOLVED_TEXT, unresolvedFrom, type Unresolved } from '../attention.ts';
 import { completeTask, undoCompleteTask, undoDraft } from '../commands.ts';
 import { unreachableText, wake as wakeUp, type Connection } from '../connection.ts';
@@ -78,7 +79,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
     receipts: () => knownRef.current,
   });
 
-  const refreshSession = useCallback(async () => {
+  const refreshSession = useMemo(() => coalescedRead(async () => {
     const res = await getSession();
     if (res.kind === 'ok') {
       prefs.setLastAccountKey(res.data.accountKey);
@@ -90,12 +91,12 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
       queue.setSignedOut();
     }
     return res.kind;
-  }, [queue]);
+  }), [queue]);
 
   // Consecutive stale reads (O6): a watermark no read ever contains again (e.g. history rewritten) would stall for ever.
   const staleRef = useRef(0);
   const [staleStreak, setStaleStreak] = useState(0);
-  const refreshTasks = useCallback(async () => {
+  const refreshTasks = useMemo(() => coalescedRead(async () => {
     const reads = readsRef.current;
     if (!reads) return;
     setReadsInFlight((n) => n + 1);
@@ -144,14 +145,14 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
     } finally {
       setReadsInFlight((n) => n - 1);
     }
-  }, [queue]);
+  }), [queue]);
 
   const wake = useCallback(
-    () =>
+    (reason: ReadReason = 'wake') =>
       wakeUp({
-        session: refreshSession,
+        session: () => refreshSession(reason),
         kick: () => void queue.kick(),
-        tasks: refreshTasks,
+        tasks: () => refreshTasks(reason),
         setConnection,
       }),
     [queue, refreshSession, refreshTasks],
@@ -159,33 +160,34 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
   // Start, `online`, focus: re-confirm the session, then retry the queue immediately.
   useEffect(() => {
-    void wake();
+    const onWake = () => void wake();
+    onWake();
     const onVisible = () => {
       if (document.visibilityState === 'visible') void wake();
     };
     const onOffline = () => setConnection('offline');
-    window.addEventListener('online', wake);
+    window.addEventListener('online', onWake);
     window.addEventListener('offline', onOffline);
-    window.addEventListener('focus', wake);
+    window.addEventListener('focus', onWake);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
-      window.removeEventListener('online', wake);
+      window.removeEventListener('online', onWake);
       window.removeEventListener('offline', onOffline);
-      window.removeEventListener('focus', wake);
+      window.removeEventListener('focus', onWake);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [wake]);
 
   // A receipt means the server read may now include (or trail) the commit: re-read with `known=`.
   useEffect(() => {
-    const onReceipt = () => void refreshTasks();
+    const onReceipt = () => void refreshTasks('receipt');
     receipts.addEventListener('receipt', onReceipt);
     return () => receipts.removeEventListener('receipt', onReceipt);
   }, [receipts, refreshTasks]);
 
   // Another tab evicted receipts under a newer watermark than the screen was checked against: read again.
   useEffect(() => {
-    if (rendered && !fresh) void refreshTasks();
+    if (rendered && !fresh) void refreshTasks('receipt');
   }, [rendered, fresh, refreshTasks]);
 
   useEffect(() => {
@@ -289,7 +291,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
       </header>
 
       <main className="content" inert={noteOpen}>
-        <VaultStatus read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0} onRefresh={refreshTasks} />
+        <VaultStatus read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0} onRefresh={() => refreshTasks()} />
         {lock && (
           <div className="banner banner-warn" role="alert">
             {lock.banner}
@@ -306,7 +308,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {!signedOut && (connection === 'offline' || connection === 'error') && (
           <div className={connection === 'error' ? 'banner banner-warn' : 'banner'} role="status">
             <span>{unreachableText(connection)}</span>
-            <button type="button" onClick={() => void wake()}>
+            <button type="button" onClick={() => void wake('refresh')}>
               Try again
             </button>
           </div>
@@ -354,7 +356,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         ))}
 
         {needsAttention && (
-          <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={refreshTasks} onDiscard={discard} />
+          <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
 
         {tab === 'today' && <ActiveWorkCard revision={tasks?.revision ?? null} />}
@@ -391,7 +393,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           ))}
 
         {!needsAttention && (
-          <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={refreshTasks} onDiscard={discard} />
+          <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
       </main>
 
