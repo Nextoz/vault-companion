@@ -11,9 +11,13 @@
 //   Without Web Locks, local cancellation is disabled;
 // - nothing is dropped except on receipt or explicit user discard. No retry limit. A receipt is kept in IndexedDB
 //   until a read reports its commit `included`; only such acknowledged receipts are ever evicted (A9);
-// - evicting a receipt first records, in the same transaction, the revision of a read that reported it `included`
-//   (the watermark, G3-1). Every tab renders only reads that show the watermark included, so a receipt gone from
-//   IndexedDB can no longer be needed to overlay a stale read in any tab;
+// - acknowledging a receipt records, in the same transaction, the revision of the read that reported it `included`
+//   as the watermark (G3-1, review O1). Every tab renders only reads that show the watermark included, so under W1
+//   (no history rewrite) an acknowledged receipt is in every rendered read: it is never asked about again, and may be
+//   evicted without losing an overlay in any tab. Reads therefore ask only about the watermark and unacknowledged
+//   receipts (reads.ts, `MAX_KNOWN`);
+// - "Reset saved-actions history" (review O6) drops every receipt and neutralises the watermark in one transaction;
+//   pending items are never touched;
 // - an Undo made before its completion had a receipt is stored as a draft without `targetCommit` (ADR-0013). The claim
 //   fills the token from the completion's receipt and persists it before the request leaves, so every attempt sends
 //   the same bytes. A draft whose completion is refused (known not applied) is discarded locally; a receipt a draft
@@ -56,8 +60,12 @@ export type ReadEvidence = Pick<TasksResponse, 'revision' | 'known'>;
 
 /** True if the read contains the watermark commit, so every receipt evicted under it is reflected in the read. */
 export function satisfiesWatermark(read: ReadEvidence, watermark: Watermark | null): boolean {
-  return watermark === null || read.revision === watermark.commitSha || read.known[watermark.commitSha] === 'included';
+  if (watermark === null || watermark.commitSha === RESET_WATERMARK) return true;
+  return read.revision === watermark.commitSha || read.known[watermark.commitSha] === 'included';
 }
+
+/** The watermark commit after a history reset (O6): satisfied by every read, while its version keeps increasing. */
+export const RESET_WATERMARK = '';
 
 export interface EnqueueOptions {
   accountKey: string;
@@ -280,16 +288,19 @@ export class PendingQueue {
     const ids = new Set(operationIds);
     await this.#locked(async () => {
       const chosen = [...this.#receipts.values()].filter((r) => r.acknowledged && ids.has(r.operationId));
-      await this.#writeReceipts(read, [], this.#evictable(chosen, read));
+      await this.#writeReceipts([], this.#evictable(chosen, read), null);
     });
   }
 
   /**
-   * A rendered read: receipts it reports `included` become acknowledged. Acknowledged receipts beyond the retention
-   * limit are evicted, with this read's revision as the new watermark, if this read reports them `included` too.
+   * A rendered read: receipts it reports `included` become acknowledged, and in the same transaction the watermark moves
+   * to this read's revision, so every later rendered read contains them (O1). Acknowledged receipts beyond the retention
+   * limit are evicted. A read that does not contain the current watermark changes nothing. Resolves with the new
+   * watermark version when one was written (the read it came from satisfies it).
    */
-  async acknowledge(read: ReadEvidence): Promise<void> {
-    await this.#locked(async () => {
+  async acknowledge(read: ReadEvidence): Promise<number | null> {
+    return this.#locked(async () => {
+      if (!satisfiesWatermark(read, this.#watermark)) return null;
       const now = [...this.#receipts.values()]
         .filter((r) => !r.acknowledged && read.known[r.receipt.commitSha] === 'included')
         .map((r) => ({ ...r, acknowledged: true }));
@@ -297,7 +308,21 @@ export class PendingQueue {
       for (const r of now) receipts.set(r.operationId, r);
       const acknowledged = [...receipts.values()].filter((r) => r.acknowledged).sort((a, b) => a.seq - b.seq);
       const excess = acknowledged.slice(0, Math.max(0, acknowledged.length - MAX_ACKNOWLEDGED));
-      await this.#writeReceipts(read, now, this.#evictable(excess, read));
+      const evict = this.#evictable(excess, read);
+      const watermark = now.length > 0 ? this.#nextWatermark(read.revision, evict.map((r) => r.operationId)) : null;
+      await this.#writeReceipts(now, evict, watermark);
+      return watermark?.version ?? null;
+    });
+  }
+
+  /**
+   * Review O6: forget every receipt and neutralise the watermark, in one transaction. For a device whose reads stay
+   * stale (e.g. the vault history was rewritten, so the watermark commit is gone). Pending items are never touched.
+   */
+  async resetHistory(): Promise<void> {
+    await this.#locked(async () => {
+      const all = [...this.#receipts.values()];
+      await this.#writeReceipts([], all, this.#nextWatermark(RESET_WATERMARK, all.map((r) => r.operationId)));
     });
   }
 
@@ -532,8 +557,8 @@ export class PendingQueue {
   }
 
   /**
-   * Under the lock. Those of `candidates` that `read` proves are in its revision, provided the read contains the
-   * current watermark (so the watermark only moves forward). Otherwise none.
+   * Under the lock. The acknowledged ones of `candidates` — the watermark covers them (O1) — provided `read` contains
+   * the current watermark. Otherwise none.
    */
   #evictable(candidates: ReceiptRecord[], read: ReadEvidence): ReceiptRecord[] {
     if (!satisfiesWatermark(read, this.#watermark)) return [];
@@ -543,18 +568,18 @@ export class PendingQueue {
       const e = this.#envelopeOf(r);
       if (isUndoDraft(e) && e.type === 'UndoCompleteTask') needed.add(e.payload.target.operationId);
     }
-    return candidates.filter((r) => read.known[r.receipt.commitSha] === 'included' && !needed.has(r.operationId));
+    return candidates.filter((r) => r.acknowledged && !needed.has(r.operationId));
   }
 
-  /** Under the lock. One transaction: acknowledgements, evictions, and the watermark that permits the evictions. */
-  async #writeReceipts(read: ReadEvidence, put: ReceiptRecord[], evict: ReceiptRecord[]): Promise<void> {
-    if (put.length === 0 && evict.length === 0) return;
+  #nextWatermark(commitSha: string, receiptOpIds: string[]): Watermark {
+    return { commitSha, receiptOpIds, version: (this.#watermark?.version ?? 0) + 1 };
+  }
+
+  /** Under the lock. One transaction: acknowledgements, evictions, and the watermark that covers the acknowledgements. */
+  async #writeReceipts(put: ReceiptRecord[], evict: ReceiptRecord[], watermark: Watermark | null): Promise<void> {
+    if (put.length === 0 && evict.length === 0 && watermark === null) return;
     const remove = evict.map((r) => r.operationId);
-    const watermark: Watermark | undefined =
-      remove.length > 0
-        ? { commitSha: read.revision, receiptOpIds: remove, version: (this.#watermark?.version ?? 0) + 1 }
-        : undefined;
-    await this.#store.writeReceipts({ put: put.filter((r) => !remove.includes(r.operationId)), remove, watermark });
+    await this.#store.writeReceipts({ put: put.filter((r) => !remove.includes(r.operationId)), remove, watermark: watermark ?? undefined });
     for (const r of put) this.#receipts.set(r.operationId, r);
     for (const id of remove) this.#receipts.delete(id);
     if (watermark) this.#watermark = watermark;

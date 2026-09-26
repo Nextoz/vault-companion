@@ -435,3 +435,62 @@ describe('CaptureNote', () => {
     expect(store.text('Inbox/Existing - 2026-09-20.md')).toBe('x\n');
   });
 });
+
+describe('task read: bounded `known` answers (review O1)', () => {
+  const known = async (asked: readonly string[]) => {
+    const r = await svc.readTasks(asked);
+    if ('code' in r) throw new Error(r.code);
+    return r.known;
+  };
+  const listings = () => store.calls.filter((k) => k === 'commitsSince').length;
+
+  it('answers the watermark and newer receipts with one listing; X itself needs none', async () => {
+    const w = base;
+    const c1 = await store.commitFiles({ 'Inbox/a.md': 'a\n' });
+    const c2 = await store.commitFiles({ 'Inbox/b.md': 'b\n' });
+    const x = await store.commitFiles({ 'Inbox/c.md': 'c\n' });
+    store.calls.length = 0;
+    expect(await known([w, c1, c2, x])).toEqual({ [w]: 'included', [c1]: 'included', [c2]: 'included', [x]: 'included' });
+    expect(listings()).toBe(1);
+    expect(store.calls).not.toContain('isAncestor');
+  });
+
+  it('a receipt older than the watermark (acknowledged elsewhere first) is resolved by a second listing', async () => {
+    const older = await store.commitFiles({ 'Inbox/a.md': 'a\n' });
+    const w = await store.commitFiles({ 'Inbox/b.md': 'b\n' });
+    await store.commitFiles({ 'Inbox/c.md': 'c\n' });
+    store.calls.length = 0;
+    expect(await known([w, older])).toEqual({ [w]: 'included', [older]: 'included' });
+    expect(listings()).toBe(2);
+  });
+
+  it('a commit not in the history is not-included; the rest are still answered', async () => {
+    const c1 = await store.commitFiles({ 'Inbox/a.md': 'a\n' });
+    await store.commitFiles({ 'Inbox/b.md': 'b\n' });
+    const gone = 'f'.repeat(40);
+    expect(await known([gone, c1])).toEqual({ [gone]: 'not-included', [c1]: 'included' });
+  });
+
+  it('more than one page since the base: the base is still an ancestor (included); unlisted commits are not-included, never an error', async () => {
+    store.comparePageSize = 3;
+    const w = base;
+    const c1 = await store.commitFiles({ 'Inbox/a.md': 'a\n' });
+    for (let i = 0; i < 4; i++) await store.commitFiles({ [`Inbox/x${i}.md`]: 'x\n' });
+    const answer = await known([w, c1]);
+    expect(answer[w]).toBe('included'); // ancestry is decided before listing (port contract)
+    expect(['included', 'not-included']).toContain(answer[c1]);
+    // A base that is not an ancestor is never mistaken for one, however long the history.
+    expect(await known(['f'.repeat(40)])).toEqual({ ['f'.repeat(40)]: 'not-included' });
+  });
+
+  it('answers at most MAX_KNOWN commits, with ≤ 4 store calls per read for any N', async () => {
+    const commits: string[] = [];
+    for (let i = 0; i < 20; i++) commits.push(await store.commitFiles({ [`Inbox/n${i}.md`]: `${i}\n` }));
+    for (const n of [0, 1, 8, 20]) {
+      store.calls.length = 0;
+      const answer = await known(commits.slice(0, n).reverse()); // worst order: newest first
+      expect(Object.keys(answer).length).toBe(Math.min(n, 8));
+      expect(store.calls.length).toBeLessThanOrEqual(4);
+    }
+  });
+});

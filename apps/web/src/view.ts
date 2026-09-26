@@ -88,7 +88,12 @@ export function buildView(
   unresolved: readonly Unresolved[] = [],
 ): ScreenView {
   const reflected = (i: QueueItem) =>
-    i.state === 'saved' && i.receipt !== null && tasks?.known[i.receipt.commitSha] === 'included';
+    i.state === 'saved' &&
+    i.receipt !== null &&
+    tasks !== null &&
+    // Asked about: the rendered read decides (N3). Not asked: acknowledged ⇒ covered by the watermark the rendered read
+    // satisfies (O1).
+    (tasks.known[i.receipt.commitSha] ?? (i.acknowledged ? 'included' : 'not-included')) === 'included';
   /** Still ahead of the server read: pending, saving, or saved-but-not-included. */
   const live = (i: QueueItem) => i.state !== 'attention' && !reflected(i);
 

@@ -885,7 +885,9 @@ describe('G3-1 — a shared durable read watermark protects receipts evicted by 
     expect(await b.queue.readWatermark()).toMatchObject({ commitSha: REV_B, receiptOpIds: [ops[0]] });
 
     await a.queue.kick(); // A reloads durable state: receipt 1 is gone from its cache too
-    expect(openShown(R0, a)).toEqual(['Synthetic 1']); // what rendering R0 would show: the hazard
+    // What rendering R0 would show: the hazard. Since O1 acknowledged receipts rely on the watermark too, so all 21
+    // would reappear open; only the watermark gate below keeps R0 off the screen.
+    expect(openShown(R0, a)).toHaveLength(N);
     call(0).reply.resolve({ kind: 'ok', data: R0 });
     expect(await r0).toEqual({ kind: 'stale', retry: true }); // R0 never asked about the watermark
 
@@ -934,7 +936,7 @@ describe('G3-1 — a shared durable read watermark protects receipts evicted by 
     expect(renderable(rendered.read, a.queue.getSnapshot().watermark)).toBe(false);
   });
 
-  it('explicit saved-entry removal ("Clear saved") sets the watermark in the same transaction', async () => {
+  it('acknowledging sets the watermark in the same transaction; "Clear saved" then evicts under it (O1)', async () => {
     const a = await openTab();
     const b = await openTab();
     const { reads, calls, call } = readerOf(a);
@@ -944,28 +946,30 @@ describe('G3-1 — a shared durable read watermark protects receipts evicted by 
     const ops = await completeAll(b, 2);
     const RB = readAt(REV_B, [1, 2], included([commitOf(1), commitOf(2)]));
     await b.queue.acknowledge(RB);
-    expect(await b.queue.readWatermark()).toBeNull(); // nothing evicted yet
+    expect(await b.queue.readWatermark()).toMatchObject({ commitSha: REV_B }); // the acknowledgement moved it
     await b.queue.forgetSaved(ops, RB);
     expect(await b.store.receipts()).toEqual([]);
-    expect(await b.queue.readWatermark()).toMatchObject({ commitSha: REV_B, receiptOpIds: ops });
+    expect(await b.queue.readWatermark()).toMatchObject({ commitSha: REV_B });
 
     await a.queue.kick();
     call(0).reply.resolve({ kind: 'ok', data: readAt(REV, [], {}) });
     expect(await r0).toEqual({ kind: 'stale', retry: true });
   });
 
-  it('a receipt is evicted only by a read that itself reports it included, so the watermark contains it', async () => {
+  it('only acknowledged receipts are evicted: the watermark written with their acknowledgement contains them (O1)', async () => {
     const b = await openTab();
     const ops = await completeAll(b, N);
-    await b.queue.acknowledge(readAt(REV_B, upTo(20), included(upTo(20).map(commitOf))));
-    // 21 acknowledged now, but this read says nothing about the oldest one (receipt 1).
-    await b.queue.acknowledge(readAt(REV_B, [N], included([commitOf(N)])));
+    // A read that reports none of them included acknowledges nothing and moves nothing.
+    await b.queue.acknowledge(readAt(REV, [], {}));
+    await b.queue.forgetSaved(ops, readAt(REV, [], {}));
     expect(await b.store.receipts()).toHaveLength(N);
     expect(await b.queue.readWatermark()).toBeNull();
 
-    await b.queue.forgetSaved(ops, readAt(REV_B, [], {})); // "Clear saved" on a read that answers nothing
-    expect(await b.store.receipts()).toHaveLength(N);
-    expect(await b.queue.readWatermark()).toBeNull();
+    await b.queue.acknowledge(readAt(REV_B, upTo(20), included(upTo(20).map(commitOf))));
+    expect(await b.queue.readWatermark()).toMatchObject({ commitSha: REV_B });
+    // Receipt 21 was not answered: it stays unacknowledged, and "Clear saved" cannot evict it.
+    await b.queue.forgetSaved(ops, readAt(REV_B, [], {}));
+    expect((await b.store.receipts()).map((r) => r.operationId)).toEqual([ops[N - 1]]);
   });
 
   it('a read that does not satisfy the current watermark can neither evict nor move it', async () => {
@@ -1065,11 +1069,14 @@ describe('N3 — a late stale read never regresses the screen', () => {
     tab = await openTab(); // reload: nothing in memory survives
     const items = tab.queue.getSnapshot().items;
     expect(items).toMatchObject([{ state: 'saved', acknowledged: true }]);
-    // The next read is asked about the acknowledged receipt too, or its answer could not be checked.
-    expect(knownCommits(items)).toEqual([COMMIT_C]);
-
+    // O1: an acknowledged receipt is no longer asked about; the watermark written with its acknowledgement covers it,
+    // and only reads that contain the watermark are rendered.
+    expect(knownCommits(items)).toEqual([]);
+    expect(await tab.queue.readWatermark()).toMatchObject({ commitSha: '7'.repeat(40) });
+    // A read that does answer for it still decides (N3)…
     expect(shown(buildView(readAt(REV, false, { [COMMIT_C]: 'not-included' }), items))).toEqual({ open: 0, done: ['saved'] });
-    expect(shown(buildView(readAt('7'.repeat(40), true, { [COMMIT_C]: 'included' }), items))).toEqual({ open: 0, done: ['server'] });
+    // …and a rendered read that does not answer reflects it through the watermark.
+    expect(shown(buildView(readAt('7'.repeat(40), true, {}), items))).toEqual({ open: 0, done: ['server'] });
   });
 });
 

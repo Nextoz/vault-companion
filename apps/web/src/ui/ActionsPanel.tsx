@@ -57,10 +57,10 @@ export function ActionsPanel({
   // A capture is discarded only from the dialog that shows its text: nothing typed is lost unseen.
   const [discarding, setDiscarding] = useState<QueueItem | null>(null);
   if (items.length === 0) return null;
-  // Only receipts a read has acknowledged, and the read on screen includes, may be cleared; the rest still keep
-  // the screen honest (A9, G3-1).
+  // Only acknowledged receipts may be cleared (the watermark the read on screen satisfies covers them, O1); the rest
+  // still keep the screen honest (A9, G3-1).
   const saved = read
-    ? items.filter((i) => i.state === 'saved' && i.acknowledged && read.known[i.receipt?.commitSha ?? ''] === 'included')
+    ? items.filter((i) => i.state === 'saved' && i.acknowledged && read.known[i.receipt?.commitSha ?? ''] !== 'not-included')
     : [];
 
   return (

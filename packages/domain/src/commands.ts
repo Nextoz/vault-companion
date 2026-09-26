@@ -1,6 +1,6 @@
 // Application services: one WritePlan per command type (docs/commands.md) and the task read model.
 // Pure orchestration over the VaultStore port and the Markdown kernel; no HTTP, no GitHub.
-import { MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type TasksResponse, type TaskView } from '@vault-companion/contracts';
+import { MAX_KNOWN, MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type TasksResponse, type TaskView } from '@vault-companion/contracts';
 import * as md from '@vault-companion/vault-markdown';
 import { executeWrite, type Planned, type Refused, type WritePlan } from './execute.ts';
 import { canWrite, INBOX_DIR, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
@@ -323,8 +323,7 @@ export function createCommandService(deps: CommandServiceDeps) {
       const open = views.filter((v) => v.status === 'open');
       const overdue = open.filter((v) => classifyOpenTask(v, today) === 'overdue');
       const isToday = (v: TaskView) => classifyOpenTask(v, today) === 'today';
-      const knownMap: Record<string, 'included' | 'not-included'> = {};
-      for (const sha of known) knownMap[sha] = (await deps.store.isAncestor(sha, x)) ? 'included' : 'not-included';
+      const knownMap = await answerKnown(deps.store, known, x);
       return {
         revision: x,
         blobSha: f.blobSha,
@@ -340,6 +339,34 @@ export function createCommandService(deps: CommandServiceDeps) {
       };
     },
   };
+}
+
+/** Single-page listings a task read may make to answer `known` (review O1): ≤ 4 store calls per read with head + file. */
+export const KNOWN_LISTINGS = 2;
+
+/**
+ * Review O1: answer up to `MAX_KNOWN` commits with at most `KNOWN_LISTINGS` single-page listings, never one call per
+ * commit. Each listing is `commitsSince(first unanswered, X)`: its base is answered exactly (a listing — even one too long
+ * to return — exists only for an ancestor of X, per the port), every commit it lists is `included`, and X itself is.
+ * The client asks the watermark first, then the oldest unacknowledged receipts, so under W1 the first listing usually
+ * answers everything; a receipt older than the watermark becomes the base of the second. Anything still unanswered is
+ * `not-included`: the client keeps overlaying it and asks again.
+ */
+async function answerKnown(store: VaultStore, known: readonly string[], x: string): Promise<Record<string, 'included' | 'not-included'>> {
+  const answer: Record<string, 'included' | 'not-included'> = {};
+  let pending = [...new Set(known)].slice(0, MAX_KNOWN).filter((sha) => {
+    if (sha === x) answer[sha] = 'included';
+    return sha !== x;
+  });
+  for (let listing = 0; listing < KNOWN_LISTINGS && pending.length > 0; listing++) {
+    const [base] = pending as [string];
+    const since = await store.commitsSince(base, x);
+    answer[base] = since.kind === 'not-ancestor' ? 'not-included' : 'included';
+    if (since.kind === 'ok') for (const c of since.commits) if (pending.includes(c.sha)) answer[c.sha] = 'included';
+    pending = pending.filter((sha) => answer[sha] === undefined);
+  }
+  for (const sha of pending) answer[sha] = 'not-included';
+  return answer;
 }
 
 function toView(t: md.ParsedTask, blobSha: string): TaskView {
