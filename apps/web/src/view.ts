@@ -14,6 +14,7 @@
 import type { CompleteTaskCommand, TaskLocator, TaskView, TasksResponse } from '@vault-companion/contracts';
 import type { Unresolved } from './attention.ts';
 import type { QueueItem } from './queue/queue.ts';
+import { dateIn } from './time.ts';
 
 export interface Row {
   key: string;
@@ -142,7 +143,9 @@ export function buildView(
     if (a.type === 'CompleteTask') {
       const match = resolve(locator, allOpen);
       if (match.kind === 'row') onRow.set(rowKey(match.task), a);
-      if (live(a)) ownDone.push(overlay(a, true));
+      // Review P2-A4: Done today holds a completion only if it is dated today where the server dates it; an older
+      // one (queued before midnight) stays off the list, as the server will leave it, and is still in Actions.
+      if (live(a) && tasks !== null && dateIn(a.envelope.occurredAt, tasks.timeZone) === tasks.today) ownDone.push(overlay(a, true));
       // A refusal that no single row can carry is shown on its own; one whose task is gone lives in Actions.
       else if (a.state === 'attention' && match.kind === 'ambiguous') ownOpen.push(overlay(a, false));
       continue;

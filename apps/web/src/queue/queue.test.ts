@@ -44,6 +44,7 @@ let store: PendingStore;
 let clock: number;
 let send: ReturnType<typeof vi.fn<(body: string, accountKey: string) => Promise<Response>>>;
 let receipts: Receipt[];
+let latestRevision: string | null;
 
 /** Single-tab stand-in for navigator.locks (the multi-tab cases live in queue.gate.test.ts). */
 const locks = {
@@ -64,6 +65,7 @@ async function openQueue(): Promise<PendingQueue> {
     now: () => clock,
     setTimer: () => () => undefined, // tests drive time and flushes explicitly
     onReceipt: (r) => receipts.push(r),
+    latestRevision: () => latestRevision,
   });
 }
 
@@ -75,6 +77,7 @@ beforeEach(() => {
   clock = Date.UTC(2026, 8, 24, 10, 0, 0);
   send = vi.fn<(body: string, accountKey: string) => Promise<Response>>();
   receipts = [];
+  latestRevision = null;
 });
 
 afterEach(() => store.close());
@@ -553,5 +556,47 @@ describe('review O6 — "Reset saved-actions history on this device"', () => {
     // …and the next acknowledgement starts a real watermark, still moving forward.
     await queue.acknowledge({ revision: X, known: {} });
     expect((await queue.readWatermark())!.version).toBe(after!.version);
+  });
+});
+
+describe('ADR-0015 — a never-sent item takes the newest read revision as its base, once', () => {
+  const baseOf = (body: string) => (JSON.parse(body) as Command).baseRevision;
+
+  it('rebases before the first send; every later attempt (and a reload) sends the same bytes', async () => {
+    let queue = await openQueue();
+    const capture = note('Rebased'); // minted at REV
+    await queue.enqueue(capture, { accountKey: ACCOUNT_A, label: 'r' });
+    latestRevision = '8'.repeat(40); // a newer read arrived while it waited
+    send.mockImplementationOnce(async () => unavailable503()).mockImplementation(async (body) => ok(body));
+    queue.setSession(ACCOUNT_A);
+    await queue.flush();
+    expect(baseOf(send.mock.calls[0]![0])).toBe('8'.repeat(40));
+    expect((await store.get(capture.operationId))!.body).toBe(send.mock.calls[0]![0]); // persisted with the claim
+
+    latestRevision = '9'.repeat(40); // yet another read: the item was sent, so its bytes never change again
+    store.close();
+    queue = await openQueue(); // reload
+    queue.setSession(ACCOUNT_A);
+    await queue.kick();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1]![0]).toBe(send.mock.calls[0]![0]);
+    const sent = Command.parse(JSON.parse(send.mock.calls[1]![0]));
+    expect({ ...sent, baseRevision: REV }).toEqual(capture); // only the base moved
+  });
+
+  it('leaves the base alone without a newer read, and never touches an item already sent', async () => {
+    const queue = await openQueue();
+    const first = note('No read yet');
+    await queue.enqueue(first, { accountKey: ACCOUNT_A, label: 'a' });
+    send.mockImplementation(async () => unavailable503());
+    queue.setSession(ACCOUNT_A);
+    await queue.flush();
+    expect(baseOf(send.mock.calls[0]![0])).toBe(REV);
+
+    latestRevision = '8'.repeat(40);
+    clock += backoffMs(1);
+    await queue.flush();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1]![0]).toBe(send.mock.calls[0]![0]); // ever sent: identical bytes, old base kept
   });
 });

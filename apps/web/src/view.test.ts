@@ -2,9 +2,12 @@ import { TasksResponse, type Receipt, type TaskView } from '@vault-companion/con
 import { describe, expect, it } from 'vitest';
 import { completeTask, undoCompleteTask } from './commands.ts';
 import type { ItemState, QueueItem } from './queue/queue.ts';
+import { dateIn } from './time.ts';
 import { buildView, occurrenceKey, overdueSummary } from './view.ts';
 
 const REV = '1'.repeat(40);
+/** Actions in these fixtures happen on the read's `today` (2026-09-24, Copenhagen). */
+const ON_READ_DAY = new Date('2026-09-24T10:00:00Z');
 const ACCOUNT = 'a'.repeat(64);
 const COMMIT = '5'.repeat(40);
 const OPEN = '- [ ] Water the plants 📅 2026-09-24';
@@ -44,7 +47,7 @@ function read(open: TaskView[], doneToday: TaskView[], known: Record<string, 'in
 }
 
 const openTask = task(OPEN, 10);
-const complete = completeTask({ baseRevision: REV }, openTask.locator);
+const complete = completeTask({ baseRevision: REV, now: ON_READ_DAY }, openTask.locator);
 
 function item(envelope: QueueItem['envelope'], state: ItemState, extra: Partial<QueueItem> = {}): QueueItem {
   return {
@@ -111,7 +114,7 @@ describe('buildView', () => {
   });
 
   it('shows a task re-opened by a live Undo even when the read still has it done', () => {
-    const undo = undoCompleteTask({ baseRevision: REV }, complete, COMMIT);
+    const undo = undoCompleteTask({ baseRevision: REV, now: ON_READ_DAY }, complete, COMMIT);
     const items = [item(complete, 'saved', { receipt: completedReceipt }), item(undo, 'pending', { seq: 2 })];
     const v = buildView(read([], [task(DONE, 3, true)], { [COMMIT]: 'included' }), items);
     expect(v.doneToday).toEqual([]);
@@ -135,7 +138,7 @@ describe('buildView with identical task lines (P4-B)', () => {
   const indexes = (rows: { task: TaskView | null }[]) => rows.map((r) => r.task?.locator.lineIndex ?? null);
   const a10 = at(10, 2);
   const a12 = at(12, 2);
-  const c10 = completeTask({ baseRevision: REV }, a10.locator);
+  const c10 = completeTask({ baseRevision: REV, now: ON_READ_DAY }, a10.locator);
   const receiptOf = (c: typeof c10, commitSha: string): Receipt => ({ ...completedReceipt, operationId: c.operationId, commitSha });
   const saved10 = (extra: Partial<QueueItem> = {}) => item(c10, 'saved', { receipt: receiptOf(c10, COMMIT), ...extra });
 
@@ -157,7 +160,7 @@ describe('buildView with identical task lines (P4-B)', () => {
   it('hides a task in a stale read (desktop edit shifted lines) only when the locator names it unambiguously', () => {
     const unique = at(10, 1);
     const shifted = at(14, 1, BLOB2);
-    const c = completeTask({ baseRevision: REV }, unique.locator);
+    const c = completeTask({ baseRevision: REV, now: ON_READ_DAY }, unique.locator);
     const one = buildView(read([shifted], []), [item(c, 'pending')]);
     expect(one.today).toEqual([]);
     expect(one.doneToday).toMatchObject([{ task: null, action: { operationId: c.operationId } }]);
@@ -191,7 +194,7 @@ describe('buildView with identical task lines (P4-B)', () => {
   });
 
   it('shows a live Undo as its own row and never hides the identical task that stayed open', () => {
-    const undo = undoCompleteTask({ baseRevision: REV }, c10, COMMIT);
+    const undo = undoCompleteTask({ baseRevision: REV, now: ON_READ_DAY }, c10, COMMIT);
     const twin = at(11, 1, BLOB2);
     const items = [saved10(), item(undo, 'pending', { seq: 2 })];
     const v = buildView(read([twin], [done(40)], { [COMMIT]: 'included' }), items);
@@ -210,7 +213,7 @@ describe('buildView with identical task lines (P4-B)', () => {
 
   it('lets the remaining identical task be completed after the first, and pairs no Undo it cannot tell apart', () => {
     const after = at(11, 1, BLOB2);
-    const c11 = completeTask({ baseRevision: REV }, after.locator);
+    const c11 = completeTask({ baseRevision: REV, now: ON_READ_DAY }, after.locator);
     const first = saved10({ acknowledged: true });
     const pending = buildView(read([after], [done(40)], { [COMMIT]: 'included' }), [first, item(c11, 'pending', { seq: 2 })]);
     expect(pending.today).toEqual([]);
@@ -245,7 +248,7 @@ describe('Undo from Done today (P4-B)', () => {
   it('offers none for a completion of another account, without a session, or already being undone', () => {
     expect(buildView(included, [saved], 'b'.repeat(64)).doneToday[0]?.undo).toBeNull();
     expect(buildView(included, [saved], null).doneToday[0]?.undo).toBeNull();
-    const undo = undoCompleteTask({ baseRevision: REV }, complete, COMMIT);
+    const undo = undoCompleteTask({ baseRevision: REV, now: ON_READ_DAY }, complete, COMMIT);
     const undoing = buildView(included, [saved, item(undo, 'attention', { seq: 2, error: { code: 'x', message: 'x' } })], ACCOUNT);
     expect(undoing.doneToday).toMatchObject([{ undo: null }]);
   });
@@ -279,5 +282,46 @@ describe('occurrenceKey (P4-B)', () => {
     expect(occurrenceKey(a)).not.toBe(occurrenceKey(b));
     expect(occurrenceKey(a)).toBe(occurrenceKey({ ...a }));
     expect(occurrenceKey(a)).not.toBe(occurrenceKey({ ...a, blobSha: '9'.repeat(40) }));
+  });
+});
+
+describe('review P2-A4: Done today holds only completions dated today (Copenhagen), across midnight', () => {
+  // Completed at 23:59 on 25 September (Copenhagen); the phone stays offline past midnight.
+  const lateNight = completeTask({ baseRevision: REV, now: new Date('2026-09-25T21:59:00Z') }, openTask.locator);
+  const readOn = (today: string, open: TaskView[], known: Record<string, 'included' | 'not-included'> = {}) =>
+    TasksResponse.parse({ ...read(open, [], known), today });
+
+  it('pending: in Done today on its own day, not on the next — and the open row stays hidden either way', () => {
+    const pending = item(lateNight, 'pending');
+    const same = buildView(readOn('2026-09-25', [openTask]), [pending]);
+    expect(same.doneToday).toMatchObject([{ task: null, action: { operationId: lateNight.operationId } }]);
+    expect(same.today).toEqual([]);
+
+    const next = buildView(readOn('2026-09-26', [openTask]), [pending]);
+    expect(next.doneToday).toEqual([]);
+    expect(next.today).toEqual([]);
+    expect(next.all).toEqual([]);
+  });
+
+  it('saved but not yet in the read: the same rule', () => {
+    const saved = item(lateNight, 'saved', { receipt: { ...completedReceipt, operationId: lateNight.operationId } });
+    expect(buildView(readOn('2026-09-26', [openTask], { [COMMIT]: 'not-included' }), [saved]).doneToday).toEqual([]);
+    expect(buildView(readOn('2026-09-25', [openTask], { [COMMIT]: 'not-included' }), [saved]).doneToday).toHaveLength(1);
+  });
+
+  it('reflected: the server decides (its doneToday excludes a completion dated yesterday)', () => {
+    const saved = item(lateNight, 'saved', { receipt: { ...completedReceipt, operationId: lateNight.operationId } });
+    expect(buildView(readOn('2026-09-26', [], { [COMMIT]: 'included' }), [saved]).doneToday).toEqual([]);
+  });
+});
+
+describe('dateIn (Europe/Copenhagen, DST)', () => {
+  it('dates instants by the zone’s own calendar, across both DST changes', () => {
+    expect(dateIn('2026-09-25T21:59:00Z', 'Europe/Copenhagen')).toBe('2026-09-25');
+    expect(dateIn('2026-09-25T22:00:00Z', 'Europe/Copenhagen')).toBe('2026-09-26');
+    expect(dateIn('2026-10-24T22:30:00Z', 'Europe/Copenhagen')).toBe('2026-10-25'); // still CEST (+2)
+    expect(dateIn('2026-10-25T22:30:00Z', 'Europe/Copenhagen')).toBe('2026-10-25'); // CET (+1): 23:30
+    expect(dateIn('2026-03-28T23:30:00Z', 'Europe/Copenhagen')).toBe('2026-03-29');
+    expect(dateIn('2026-03-29T21:59:00Z', 'Europe/Copenhagen')).toBe('2026-03-29'); // CEST: 23:59
   });
 });

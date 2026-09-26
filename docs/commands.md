@@ -54,15 +54,16 @@ All reads and the dedupe of one attempt refer to **one immutable commit X** (F1)
 ```
 1. Validate envelope (schema, path policy, occurredAt skew).
 2. X := resolve main → commit SHA.
-3. DEDUPE: findOperation(baseRevision..X, operationId) → found | not-found | unknown   (F9)
+3. DEDUPE: one single-page listing of baseRevision..X (≤ 250 commits, ADR-0015) → found | not-found   (F9)
    - found, same payloadHash  → return already-applied receipt with effect derived from that commit.
    - found, other payloadHash → operation-id-reused. No write.
-   - unknown (truncated window, base unknown/not an ancestor, 404) → dedupe-unknown. No write.
+   - base unknown/not an ancestor, or more than one page → dedupe-unknown ("this may already be applied — check
+     Obsidian"). Never paged. No write.
 4. Read file(s) and directory listings at X. Apply the pure mutation → new content, or refusal/conflict (no write).
 5. Commit parented on X with trailers; publish by fast-forward-only ref update from X (ADR-0011).
    - success → applied receipt.
    - precondition-failed → refused:structure (not retryable); no write.
-   - head-moved (any commit after X, 422 "not a fast forward") → back to 2; max 5 loops → conflict:stale.
+   - head-moved (any commit after X, 422 "not a fast forward") → back to 2; max 3 attempts (ADR-0015) → conflict:stale.
    - unknown outcome (timeout, reset, 5xx on the ref update) → back to 2. Never blind-retry.
    - unavailable before the ref update → upstream-unavailable (retryable).
 ```
@@ -72,8 +73,9 @@ this attempt's publication — such as a desktop sync or an Undo that restored i
 case) — makes step 5 fail. If the ref update has an unknown outcome, `executeWrite` starts another attempt; step 3
 dedupes at the newly resolved X before any new write. If the earlier update succeeded, dedupe can return
 `already-applied`. Blob CAS alone was insufficient (ADR-0011).
-Dedupe pages the compare API (`per_page=250&page=n`) until `total_commits` are seen; the unpaged response returns
-only the newest 250 (probe 2026-09-25). More than 20 pages ⇒ `unknown`.
+Dedupe reads one compare page (`per_page=250&page=1`, oldest-first; `total_commits` says whether it holds them all).
+The client keeps windows small: a never-sent item's `baseRevision` moves to its newest read revision just before its
+first send, persisted with the claim (ADR-0015).
 
 Every write carries `expect: 'absent' | 'regular-file'`, checked by the adapter in the pinned tree X:
 note creation requires absence (no file or directory); task updates require a regular file (mode `100644`).
@@ -111,7 +113,7 @@ installation-token overhead: one request per token lifetime). Per attempt at X:
      review A1/R1);
    - otherwise the semantic inverse (vault-contract §4.2) on the file at X — refused (`conflict:task-changed`) when
      the completed line was not unique among Done lines in C's own result: a match at X may then be the twin.
-Other commands keep the paged dedupe of `baseRevision..X` (ADR-0005).
+Other commands dedupe with one page of `baseRevision..X` (ADR-0015).
 
 Per effect type:
 

@@ -96,6 +96,11 @@ export interface QueueOptions {
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => () => void;
   onReceipt?: (receipt: Receipt, envelope: Command) => void;
+  /**
+   * The revision of the newest task read (ADR-0015). Just before a never-sent item's first send, its `baseRevision`
+   * moves here: no commit can carry an operation never sent, so the server's one-page dedupe window stays small.
+   */
+  latestRevision?: () => string | null;
 }
 
 const LOCK_NAME = 'vc-pending';
@@ -136,6 +141,7 @@ export class PendingQueue {
   readonly #now: () => number;
   readonly #setTimer: NonNullable<QueueOptions['setTimer']>;
   readonly #onReceipt: QueueOptions['onReceipt'];
+  readonly #latestRevision: () => string | null;
 
   // Caches of IndexedDB, refreshed inside every lock. Never trusted for a decision outside one.
   #records = new Map<string, PendingRecord>();
@@ -166,6 +172,7 @@ export class PendingQueue {
         return () => clearTimeout(id);
       });
     this.#onReceipt = options.onReceipt;
+    this.#latestRevision = options.latestRevision ?? (() => null);
   }
 
   static async open(options: QueueOptions): Promise<PendingQueue> {
@@ -432,6 +439,13 @@ export class PendingQueue {
           await this.#persist({ ...record, state: 'attention', lastError: UNDO_TARGET_UNKNOWN });
           continue;
         }
+      }
+      // ADR-0015: the first send of a never-sent item carries the newest read revision as its base. Rewritten here, once,
+      // and persisted with the claim before the request leaves: every later attempt sends exactly these bytes.
+      const latest = record.everSent ? null : this.#latestRevision();
+      if (latest && /^[0-9a-f]{40}$/.test(latest)) {
+        const envelope = JSON.parse(body) as Command;
+        if (envelope.baseRevision !== latest) body = JSON.stringify({ ...envelope, baseRevision: latest });
       }
       // Mark before the request leaves: from here on its effect may exist in Git, and other tabs keep off it.
       const claimed: PendingRecord = { ...record, body, everSent: true, leaseUntil: now + LEASE_MS, claimId: crypto.randomUUID() };

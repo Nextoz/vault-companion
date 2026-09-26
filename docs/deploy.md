@@ -17,28 +17,12 @@ Each Worker invocation may make a limited number of subrequests (outbound `fetch
 invocation ([Workers limits](https://developers.cloudflare.com/workers/platform/limits/); re-check when you do this
 step). Every GitHub API call is one subrequest.
 
-Current code, worst case: an `UndoCompleteTask` whose five attempts all lose the ref race and whose dedupe windows are
-each at the 20-page compare limit (`maxComparePages`, 250 commits/page) in `packages/github/src/contents-store.ts`:
-
-| Per attempt | Subrequests |
-|---|---|
-| `head()` | 1 |
-| own dedupe `findOperation` (not found) | 20 |
-| Undo target `findOperation` (found on page 20) + commit detail | 21 |
-| "already undone?" `findOperation` | 20 |
-| `replayOnParent` (parent, read at parent, read at commit) | 3 |
-| read TODO at X, at completion, parent + read at parent | 4 |
-| `writeFile` (tree, base commit, blob, tree, commit, ref PATCH) | 6 |
-| **Attempt total** | **75** |
-
-5 attempts = 375, plus 1 installation-token fetch and 1 Access JWKS fetch (both cached per isolate) = **377**.
-A shallow Undo (1 compare page each) is 18 per attempt, 92 for five attempts — already over 50.
-
-**With the current code, use Workers Paid** (377 ≪ 10,000). **Once ADR-0013 (token-based Undo) is merged**, Undo needs
-≈ 10 calls per attempt and at most 3 attempts (≈ 30 + token + JWKS), and the **Free plan suffices**. Caveat: ADR-0013
-leaves the other commands on ADR-0005 paging; their typical cost is ≈ 10 per attempt, but a completion whose dedupe
-window spans many compare pages can still exceed 50 on Free (it then fails as `upstream-unavailable`, never a
-partial write).
+Every command is bounded (ADR-0013 Undo, review O1 reads, [ADR-0015](decisions/0015-bounded-write-budget.md) writes):
+one compare page per dedupe, at most 3 attempts. Measured worst cases (full 250-commit page, the head moved on every
+attempt, cold installation token, cold Access JWKS): **CompleteTask / CaptureTask / CaptureNote 26, UndoCompleteTask 32,
+task read 6** subrequests. **The Free plan suffices for subrequests.** CPU time (Free: 10 ms per invocation) is a
+separate limit: measure the owner's real task list (`wrangler dev --remote`, `wrangler tail`) before relying on Free
+(review O2).
 
 ## 1. Create the GitHub App
 
