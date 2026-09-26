@@ -133,7 +133,8 @@ export class PendingQueue {
   #records = new Map<string, PendingRecord>();
   #receipts = new Map<string, ReceiptRecord>();
   #watermark: Watermark | null = null;
-  readonly #envelopes = new Map<string, Command>();
+  /** Parsed envelopes with the body they were parsed from: another tab may rewrite a body (an Undo's token). */
+  readonly #envelopes = new Map<string, { body: string; envelope: Command }>();
   readonly #listeners = new Set<() => void>();
 
   #accountKey: string | null = null;
@@ -408,7 +409,6 @@ export class PendingQueue {
       }
       // Mark before the request leaves: from here on its effect may exist in Git, and other tabs keep off it.
       const claimed: PendingRecord = { ...record, body, everSent: true, leaseUntil: now + LEASE_MS, claimId: crypto.randomUUID() };
-      if (body !== record.body) this.#envelopes.delete(record.operationId);
       await this.#persist(claimed);
       // The session is re-checked in #attempt, synchronously before the request and after every await here.
       return { record: claimed, generation };
@@ -609,12 +609,12 @@ export class PendingQueue {
     return [...this.#records.values()].sort((a, b) => a.seq - b.seq);
   }
 
+  /** The envelope of exactly this body (review P4E-Astra #2): a cached parse of an older body is never used. */
   #envelopeOf(record: { operationId: string; body: string }): Command {
-    let envelope = this.#envelopes.get(record.operationId);
-    if (!envelope) {
-      envelope = JSON.parse(record.body) as Command;
-      this.#envelopes.set(record.operationId, envelope);
-    }
+    const cached = this.#envelopes.get(record.operationId);
+    if (cached?.body === record.body) return cached.envelope;
+    const envelope = JSON.parse(record.body) as Command;
+    this.#envelopes.set(record.operationId, { body: record.body, envelope });
     return envelope;
   }
 

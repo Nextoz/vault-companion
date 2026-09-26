@@ -11,7 +11,7 @@ import {
 } from '@vault-companion/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { COMMAND_TIMEOUT_MS, postCommand } from '../api.ts';
-import { captureNote, completeTask, undoCompleteTask } from '../commands.ts';
+import { captureNote, completeTask, undoCompleteTask, undoDraft } from '../commands.ts';
 import type { Fetched } from '../api.ts';
 import { knownCommits, ReadSequencer, renderable, TaskReads } from '../reads.ts';
 import { buildView } from '../view.ts';
@@ -241,6 +241,43 @@ describe('A3 / R3 — two tabs over one IndexedDB database', () => {
 
     expect(await b.queue.undoCompletion(target, undoOf(target), taskOpts)).toBe('cancelled');
     expect(await a.store.all()).toEqual([]);
+  });
+});
+
+describe('review P4E-Astra #2 — a tab never acts on a stale parse of a record another tab rewrote', () => {
+  it("tab A cached the tokenless draft; tab B filled the token, sent, failed and cleared the receipt; A still sends it", async () => {
+    const a = await openTab();
+    const b = await openTab();
+    const target = complete();
+    a.send.mockImplementationOnce(async () => unavailable503()); // C: ever sent, no receipt
+    await a.queue.enqueue(target, taskOpts);
+    a.queue.setSession(ACCOUNT_A);
+    await a.queue.flush();
+    const draft = undoDraft(mint(), target);
+    expect(await a.queue.undoCompletion(target, draft, taskOpts)).toBe('queued'); // A parses and caches the draft
+    a.queue.setSignedOut(); // A pauses (e.g. backgrounded)
+
+    clock += 60_000;
+    b.send
+      .mockImplementationOnce(async (body) => ok(body)) // C: receipt
+      .mockImplementationOnce(async () => unavailable503()); // U (token filled by B): transient failure
+    b.queue.setSession(ACCOUNT_A);
+    await b.queue.flush();
+    expect(b.send.mock.calls.map(([body]) => typeOf(body))).toEqual(['CompleteTask', 'UndoCompleteTask']);
+    const persisted = (await b.store.get(draft.operationId))!.body;
+    expect((Command.parse(JSON.parse(persisted)) as { payload: { targetCommit?: string } }).payload.targetCommit).toBe(COMMIT);
+    // B acknowledges and clears C's receipt: allowed, the Undo no longer needs it.
+    const read = { revision: COMMIT, known: { [COMMIT]: 'included' as const } };
+    await b.queue.acknowledge(read);
+    await b.queue.forgetSaved([target.operationId], read);
+    expect(await b.store.receipts()).toEqual([]);
+
+    clock += 60_000;
+    a.send.mockImplementation(async (body) => ok(body));
+    a.queue.setSession(ACCOUNT_A);
+    await a.queue.kick();
+    expect(a.send.mock.calls.map(([body]) => body).slice(1)).toEqual([persisted]); // the stored bytes, not a stale draft
+    expect(await a.store.get(draft.operationId)).toBeUndefined();
   });
 });
 
