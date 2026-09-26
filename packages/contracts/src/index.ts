@@ -52,6 +52,17 @@ export const CaptureTaskPayload = z.strictObject({
   context: Context.optional(),
 });
 
+/** ADR-0017: edit one open task's first line in place; only the named changes; null removes a date/priority. */
+export const EditTaskChanges = z
+  .strictObject({
+    text: z.string().min(1).max(2000).refine((s) => !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(s), 'must be a single line without control characters').optional(),
+    due: z.iso.date().nullable().optional(),
+    scheduled: z.iso.date().nullable().optional(),
+    priority: Priority.nullable().optional(),
+  })
+  .refine((c) => Object.keys(c).length > 0, 'at least one change');
+export const EditTaskPayload = z.strictObject({ task: TaskLocator, changes: EditTaskChanges });
+
 export const CaptureNotePayload = z.strictObject({
   text: z.string().min(1).max(50_000),
   context: Context.optional(),
@@ -82,6 +93,7 @@ export const Command = z.discriminatedUnion('type', [
   envelope('UndoCompleteTask', UndoCompleteTaskPayload),
   envelope('CaptureTask', CaptureTaskPayload),
   envelope('CaptureNote', CaptureNotePayload),
+  envelope('EditTask', EditTaskPayload),
 ]);
 export type Command = z.infer<typeof Command>;
 export type CommandType = Command['type'];
@@ -96,7 +108,8 @@ export const CompleteEffect = z.strictObject({
 export const ReopenEffect = z.strictObject({ kind: z.literal('reopened'), openLineText: singleLine });
 export const CaptureTaskEffect = z.strictObject({ kind: z.literal('task-captured'), lineText: singleLine });
 export const CaptureNoteEffect = z.strictObject({ kind: z.literal('note-captured'), path: z.string() });
-export const Effect = z.discriminatedUnion('kind', [CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect]);
+export const EditEffect = z.strictObject({ kind: z.literal('edited'), beforeLineText: singleLine, afterLineText: singleLine });
+export const Effect = z.discriminatedUnion('kind', [CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect]);
 export type Effect = z.infer<typeof Effect>;
 
 export const Receipt = z.strictObject({
@@ -122,6 +135,8 @@ export const ErrorCode = z.enum([
   'refused:unsupported-status',
   'refused:duplicate-field',
   'refused:path',
+  /** ADR-0017: the edit would not round-trip as the requested task line, or changes nothing. */
+  'refused:invalid-edit',
   'conflict:task-changed',
   'conflict:ambiguous',
   'conflict:stale',
