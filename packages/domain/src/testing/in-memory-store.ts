@@ -74,7 +74,7 @@ export class InMemoryStore implements VaultStore {
   }
 
   /** Commit arbitrary changes as "the desktop" or "another tool" would (no CAS). `null` deletes. */
-  async commitFiles(files: Record<string, string | Uint8Array | null>, message = 'external edit'): Promise<string> {
+  async commitFiles(files: Record<string, string | Uint8Array | null>, message = 'external edit', trailers: Record<string, string> = {}): Promise<string> {
     const head = this.commits.get(this.headSha)!;
     const tree = new Map(head.tree);
     for (const [path, content] of Object.entries(files)) {
@@ -87,7 +87,7 @@ export class InMemoryStore implements VaultStore {
       this.blobs.set(sha, bytes);
       tree.set(path, sha);
     }
-    return this.pushCommit(tree, {}, Object.keys(files), message);
+    return this.pushCommit(tree, { ...trailers }, Object.keys(files), message);
   }
 
   private pushCommit(tree: Map<string, string>, trailers: Record<string, string>, changed: string[], message: string): string {

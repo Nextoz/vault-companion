@@ -5,7 +5,7 @@ import { loadFixture } from '@vault-companion/test-vault';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createCommandService } from './commands.ts';
 import { payloadHash } from './payload-hash.ts';
-import { TRAILER_OP, TRAILER_PAYLOAD, type VaultPath } from './store.ts';
+import { TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type VaultPath } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 const TODO = 'Tasks/To-Do List.md';
@@ -265,6 +265,39 @@ describe('UndoCompleteTask (token, ADR-0013)', () => {
     expect(text()).toBe(original);
   });
 
+  describe('review P4E-Astra #3: an Undo commit found by dedupe must be the inverse', () => {
+    async function craftedUndo(content: string | null) {
+      const c = await complete('Water the plants');
+      const undo = undoOf(c);
+      const trailers = { [TRAILER_OP]: undo.operationId as string, [TRAILER_PAYLOAD]: await payloadHash(undo), [TRAILER_UNDOES]: c.raw.operationId as string };
+      await store.commitFiles({ [TODO]: content === null ? null : content }, 'crafted', trailers);
+      return { undo, head: store.headCommit };
+    }
+
+    it('wrong content (the task stays completed, a blank line appended) is not certified as already-applied', async () => {
+      const { undo, head } = await craftedUndo(text() + '\n');
+      expect(await run(undo)).toMatchObject({ code: 'dedupe-unknown' });
+      expect(store.headCommit).toBe(head);
+    });
+
+    it('a U that deletes the task list is not certified either', async () => {
+      const { undo, head } = await craftedUndo(null);
+      expect(await run(undo)).toMatchObject({ code: 'dedupe-unknown' });
+      expect(store.headCommit).toBe(head);
+    });
+
+    it('a genuine U after a lost response is certified within the call budget', async () => {
+      const c = await complete('Water the plants');
+      await store.commitFiles({ [TODO]: editLine('- [ ] Call the bike shop about the gears', '- [ ] Call the bike shop about the brakes') });
+      const undo = undoOf(c);
+      store.writeFaults.push('apply-then-unknown');
+      const first = ok(await run(undo));
+      store.calls.length = 0;
+      expect(ok(await run(undo))).toMatchObject({ status: 'already-applied', commitSha: first.commitSha, effect: first.effect });
+      expect(store.calls.length).toBeLessThanOrEqual(10);
+    });
+  });
+
   it('a second Undo of the same completion is refused', async () => {
     const c = await complete('Water the plants');
     ok(await run(undoOf(c)));
@@ -290,6 +323,53 @@ describe('UndoCompleteTask (token, ADR-0013)', () => {
 
     store.comparePageSize = 5;
     ok(await run(undoOf(c)));
+  });
+
+  describe('review P4E-Astra #1: an identical completed twin in C', () => {
+    const TWINS = [
+      '## Open',
+      '',
+      '- [ ] A #todo',
+      '  - child of target A',
+      '',
+      '## Done',
+      '',
+      '- [x] A #todo ✅ 2026-09-24',
+      '  - child of unrelated B',
+      '',
+    ].join('\n');
+    async function completeTarget() {
+      store = await InMemoryStore.create({ [TODO]: TWINS });
+      svc = createCommandService({ store, now: () => NOW, timeZone: TZ });
+      base = store.headCommit;
+      const target = (await svc.readTasks([])) as { allOpen: TaskView[] };
+      const raw = envelope('CompleteTask', { task: target.allOpen[0]!.locator });
+      const receipt = ok(await run(raw));
+      expect(text().split('\n').filter((l) => l === '- [x] A #todo ✅ 2026-09-24')).toHaveLength(2);
+      return { raw, receipt };
+    }
+
+    it('the desktop edits the intended task: Undo refuses and never reopens the twin', async () => {
+      const c = await completeTarget();
+      // Edit A's completed line, identified by its own child (B stays byte-identical).
+      const lines = text().split('\n');
+      const i = lines.indexOf('  - child of target A') - 1;
+      lines[i] = '- [x] A changed on desktop #todo ✅ 2026-09-24';
+      await store.commitFiles({ [TODO]: lines.join('\n') });
+      const before = text();
+      const head = store.headCommit;
+
+      expect(await run(undoOf(c))).toMatchObject({ code: 'conflict:task-changed' });
+      expect(store.headCommit).toBe(head);
+      expect(text()).toBe(before);
+      expect(text()).toContain('- [x] A #todo ✅ 2026-09-24\n  - child of unrelated B');
+    });
+
+    it('nothing changed since C: the exact-bytes inverse still restores the original', async () => {
+      const c = await completeTarget();
+      ok(await run(undoOf(c)));
+      expect(text()).toBe(TWINS);
+    });
   });
 
   it('call budget: one attempt makes ≤ 10 store calls and no paged search', async () => {
