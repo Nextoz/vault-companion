@@ -214,6 +214,8 @@ Config: `.coderabbit.yaml`.
   (check existing comments first; never duplicate). Confirm an actual review arrived (review comments or a
   "Actionable comments posted: N" summary) — a "Review skipped"/rate-limit/unavailable reply is **not** a pass; record
   which it was in the PR. Actionable findings: fix with a test or reject with a reason.
+- **CodeRabbit allowance: 1 full review per hour** (its own review footer, 2026-09-26). More PRs than that get "Review rate
+  limited". Batch small changes into fewer PRs and request reviews for the riskiest PR first.
 - CodeRabbit auto-review stopped (free OSS plan requires ≥ 10 repo stars, 2026-09-26). Trigger manually as above; **CodeRabbit availability never blocks a merge** — CI, the Lead's review and, for
   risky code, an Astra or local reviewer are the gate.
 - Codex `--sandbox workspace-write` cannot write a git **worktree's** git dir (it lives in the main repo's `.git`), so
