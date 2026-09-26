@@ -1,6 +1,9 @@
 // Wire contracts shared by apps/web and apps/worker. See docs/commands.md.
 import { z } from 'zod';
 
+// Disallow runtime code generation (eval/Function probe) under strict CSP (script-src 'self') and Cloudflare Workers.
+z.config({ jitless: true });
+
 const isoInstant = z.iso.datetime({ offset: true });
 const commitSha = z.string().regex(/^[0-9a-f]{40}$/, 'expected a 40-hex commit SHA');
 const blobSha = z.string().regex(/^[0-9a-f]{40}$/, 'expected a 40-hex blob SHA');
