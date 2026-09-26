@@ -5,6 +5,9 @@ import { MockApi, taskView } from './mock-api.ts';
 let api: MockApi;
 
 test.beforeEach(async ({ page }) => {
+  // The mock serves reads dated 2026-09-24 (Copenhagen); actions must be made that day too, or Done today rightly
+  // leaves them out (review P2-A4). The clock still runs; tests may fast-forward it.
+  await page.clock.install({ time: new Date('2026-09-24T10:00:00Z') });
   api = new MockApi();
   api.open = [taskView(10, 'Water the plants'), taskView(11, 'Call the bike shop')];
   await api.install(page);
@@ -222,7 +225,6 @@ test('a stale read with shifted identical lines shows the pending completion on 
 });
 
 test('Undo from Done today after the toast expired sends exactly one valid UndoCompleteTask', async ({ page }) => {
-  await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
   await expect.poll(() => api.applied.length).toBe(1);
@@ -294,7 +296,6 @@ for (const [what, set] of [
 
 for (const which of ['session', 'tasks'] as const) {
   test(`a ${which} read that never answers is given up after 10 s`, async ({ page }) => {
-    await page.clock.install();
     if (which === 'session') api.sessionMode = 'hang';
     else api.tasksMode = 'hang';
     const hung = page.waitForRequest(which === 'session' ? '**/api/session' : '**/api/tasks**');

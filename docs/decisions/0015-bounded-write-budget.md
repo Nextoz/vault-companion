@@ -35,7 +35,7 @@ attempt, 3 attempts, cold installation token; +1 Access JWKS).**
 | CaptureTask | 8 | 25 | 26 | ≤ 50 |
 | CaptureNote, Inbox present | 7 (the listing is also the precondition) | 22 | 23 | ≤ 50 |
 | CaptureNote, Inbox absent | 8 (Inbox 404 + root listing) | 25 | 26 | ≤ 50 |
-| any, already applied (lost response) | 8 | — | — | ≤ 50 |
+| CompleteTask / CaptureTask already applied (lost response) | 7 | 8 (1 attempt + cold token) | 9 | ≤ 50 |
 | UndoCompleteTask (ADR-0013) | ≤ 10 | 31 | 32 | ≤ 50 |
 | task read (review O1) | ≤ 4 | 5 | 6 | ≤ 50 |
 

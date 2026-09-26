@@ -24,6 +24,8 @@ interface Options {
   refStatus: number;
   /** The command's own commit already in the window, as after a lost response. */
   appliedAs?: { operationId: string; payloadHash: string; bytes: string };
+  /** A head that does not move (default: a new head for every ref read). */
+  head?: string;
 }
 
 async function fakeGitHub(o: Options) {
@@ -37,7 +39,7 @@ async function fakeGitHub(o: Options) {
     const u = url.replace('https://api.github.com/repos/o/r', '');
     calls.push(`${m} ${u}`);
     if (m === 'POST' && u.endsWith('/access_tokens')) return json(201, { token: 'ghs_synthetic', expires_at: new Date(NOW.getTime() + 3_600_000).toISOString() });
-    if (u === '/git/ref/heads/main') return json(200, { object: { sha: o.appliedAs ? X : hex(248 + ++heads) } });
+    if (u === '/git/ref/heads/main') return json(200, { object: { sha: o.head ?? (o.appliedAs ? X : hex(248 + ++heads)) } });
     const cmp = /^\/compare\/([0-9a-f]{40})\.\.\.([0-9a-f]{40})\?per_page=250&page=1$/.exec(u);
     if (cmp && cmp[1] === BASE) {
       const head = parseInt(cmp[2]!, 16);
@@ -137,6 +139,15 @@ describe('write request budget on Workers Free (ADR-0015)', () => {
     expect(await svc.execute(cmd as never, cmd)).toMatchObject({ status: 'already-applied', commitSha: X });
     expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
     expect(calls.length + JWKS).toBeLessThanOrEqual(WORKERS_FREE);
+  });
+
+  it('CaptureNote, absent Inbox, nothing since the base (no compare commit to take the tree from): 7 requests', async () => {
+    const { svc, calls } = await fakeGitHub({ inbox: false, refStatus: 200, head: BASE });
+    const cmd = (await commands('0'.repeat(40))).CaptureNote;
+    expect(await svc.execute(cmd as never, cmd)).toMatchObject({ status: 'applied' });
+    // ref, compare, Inbox 404, root listing (its tree SHA is the base tree), blob, tree, commit, ref + token.
+    expect(calls.some((c) => c.startsWith('GET /git/commits/'))).toBe(false);
+    expect(calls.length).toBe(9);
   });
 
   it('more than one page since baseRevision: typed dedupe-unknown after one compare, nothing written', async () => {
