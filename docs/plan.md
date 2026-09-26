@@ -1,105 +1,70 @@
 # Current plan
 
-Lead: Claude Opus 5.5 (Herdr pane `w3:p1`). Orchestration, routing, handoffs, resume protocol: `docs/orchestration.md`.
-Checkpoint: `docs/checkpoint.md`. Updated: 2026-09-25 (after the independent product review of `e0979a0`).
+Lead: Claude Opus 5.5. Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint.md`.
+Updated 2026-09-26. **Goal now: the agreed first release (`docs/product-contract.md`) on the owner's phone.**
+Ambition beyond that stays the owner's choice, informed by observed use (milestone 3).
 
-**Ambition (owner):** the app the owner naturally opens on the phone to see what matters, act, capture and retrieve
-vault context. The narrow first release (`docs/product-contract.md`) and the Markdown/Git architecture stay; later
-priorities are the owner's choice, informed by observed use (milestone 3).
+## Verified done (merged on `main`, CI green on ubuntu + windows)
 
-## Done
+Kernel, stores, worker, auth, PWA shell + queue (Phase 1 gate) · CI (#3) · real-Git e2e harness, 19 scenarios (#4) ·
+Today rule ADR-0012 (#5) · hermetic fixtures (#6) · offline service worker + `Vary` fix (#7) · linked notes, security
+review PASS (#8) · client correctness: duplicate-task identity, read timeouts, conflict next steps, Undo in Done today,
+Overdue below Today (#9) · account-aware drafts, one submitter per draft, ADR-0014 (#11) · 30 s test timeout (#12) ·
+deploy scaffold: wrangler, `_headers`, secrets-only identifiers, `workers.dev` off, runbook `docs/deploy.md` (#10).
 
-- Phase 0 discovery, ADR-0001…0011. Phase 1 kernel/stores/worker/PWA/queue — gate passed with fixes (run 3,
-  `docs/reviews/phase-1-reconciliation.md`). Spec drift (PR #1), public scrub (PR #2), CI on every PR (PR #3:
-  ubuntu + windows, WebKit e2e, audit, gitleaks).
-- Desktop sync worker (live, read-only inspection 2026-09-25): commits local edits before fetch, merges compatible
-  divergence via `merge-tree`, never force-pushes, on overlap preserves both commits **without** conflict markers and
-  records `conflict` in `.git/vault-sync-status.json` ⇒ W1–W4 met by design. Surfacing to the owner is log/status only.
-- **Desktop sync worker is broken (found 2026-09-25, read-only):** the module version installed 2026-09-24 ~21:00 has
-  failed every hourly run. Its `git add -A -- . ':(exclude)<path>'` names paths that `.gitignore` also covers; Git exits
-  1 on those after staging the other changes, and the add sits outside the worker's unstage-on-error block, so the
-  staged leftovers make every later run refuse. Its tests use repos without `.gitignore`. Recurs on every run until
-  fixed. **Canary prerequisite** (W2). Proposed fix (owner-approved vault change): stage with only non-ignored
-  excludes, then `restore --staged` the tracked-but-ignored paths; put the add inside the unstage-on-error block; add a
-  `.gitignore` + tracked-ignored-file case to its test script. Clear the current state with `git restore --staged -- .`
-  (working files untouched). Verified on a copied index, never the live one. **Patch ready (2026-09-25 15:50, kept local — the worker
-  lives in the private vault):** module + new `.gitignore` regression case; its own suite passes 18/18 patched, the
-  new case fails on the original with the exact production error. Applying it = owner-approved vault write.
+## Remaining blockers to the phone
 
-## Milestone 1 — Integrated first-release build (current)
+| # | Blocker | Owner | Status |
+|---|---|---|---|
+| B1 | Token Undo, ADR-0013 (PR #14) | Cloud P4-B session | Astra high **BLOCK** (`docs/reviews/P4E-review-astra.md`: wrong-twin reopen, stale tab cache, dedupe byte check, adapter tests, budget wording) → fixing; then focused Astra re-review |
+| B2 | Active Work Now card (PR #13) | Lead | main merged, 721 tests; CI + CodeRabbit |
+| B3 | Whole-system review of the combined build (incl. delayed offline captures, per-command request budgets, phone experience) | Cloud Opus + Astra high | after B1 + B2 merge; `docs/reviews/phase-2-review-brief.md` |
+| B4 | Desktop sync worker broken since 2026-09-24 21:06 (canary prerequisite) | **Owner approval** → Lead applies | tested patch ready (suite 18/18; new case reproduces the live failure) |
+| B5 | Cloudflare setup G2: GitHub App on vault repo, Access, secrets, first deploy | **Owner** (`docs/deploy.md` §1–§7) → Lead §8–§9 | ready to start |
+| B6 | Canary G3: one approved phone → GitHub → desktop → Obsidian write | **Owner approval** | after B3, B4, B5 |
 
-Exit: all streams below merged, `pnpm check` + e2e + CI green, known limitations listed here, **and** the whole-system
-review passed against the **combined merged build** (P2-A, P2-B, P3-A, P4-A/B/C/D and T1 together — their UI and
-storage changes overlap, so no stream is reviewed only in isolation).
+**Next demonstrable result:** the app installed on the iPhone, reading the live vault (after B5); then the canary (B6).
 
-| Stream | Worker | Status |
-|---|---|---|
-| P2-A real-Git e2e harness | — | **merged** (#4) |
-| P2-B service-worker offline shell e2e | — | **merged** (#7) |
-| P3-A Cloudflare deploy scaffold + `docs/deploy.md` | — | **merged** (#10) |
-| P4-A linked note context | — | **merged** (#8) |
-| P4-B client correctness | — | **merged** (#9) |
-| P4-C capture draft recovery | — | **merged** (#11) |
-| T1 Today rule | — | **merged** (#5) |
-| Hermetic git fixtures | — | **merged** (#6) |
-| T1 Today layout | — | **merged** with P4-B (#9) |
-| P4-D Active Work Now read-only card | Cloud (P4-A session, repo attached), `agent/active-work-now` from `agent/linked-notes` | in flight |
-| P4-E token-based Undo (ADR-0013: no paging, ≤ 10 calls/attempt, ≤ 3 attempts) | Cloud (P4-B session, repo attached), `agent/token-undo` | launching |
-| Whole-system review (Phase 2 gate + milestone 1 exit) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after **all** milestone-1 streams merge |
+## Phone experience — verified vs. untested
 
-**Worker reality check (14:45):** the five newer Cloud sessions (P2-B, P3-A, P4-A/B/C) have pushed nothing and are
-not observable from the Lead. Suspected cause: sessions wait for repo attach/push approval (as C and P2-A did). Probe confirmed
-(14:45): CLI-launched sessions have no `origin` and cannot push ⇒ owner connects GitHub to claude.ai (`/web-setup`) and
-approves repo attach in each session; no new cloud tasks until a probe push succeeds. Codex quota exhausted until 18:55.
+Verified in tests (WebKit iPhone viewport + unit/e2e): Today/Overdue grouping, Active Work Now card (pending merge),
+complete + Undo (toast and Done today), task/note capture offline with exact-once send, draft recovery across reload
+and two windows, conflict banner and next steps, linked note view with sanitised rendering, session/read errors.
+**Untested until the installed iPhone app:** real network latency and the phone targets below, keyboard visibility,
+long text, dictation, large text, VoiceOver, one-handed use, PWA install/update on iOS, real Access login.
 
-Every branch: PR → CodeRabbit loop → CI → handoff dispositions (`.agent/handoffs/`) → merge.
-
-## Milestone 2 — Authorized phone-to-vault canary
-
-Owner decision 2026-09-25: deploy against the **live vault** (no sandbox deploy), first write canary-gated.
-1. Owner G2 with `docs/deploy.md`: Cloudflare Access app + policy; GitHub App (Contents read/write) installed only on
-   the vault repo; `wrangler secret put`. Lead deploys, verifies reads against the live vault (read-only).
-2. Install the PWA on the iPhone; phone acceptance pass (below).
-3. **G3**: owner approves one exact write (target file, expected diff, pre-canary SHAs, Drive backup time, rollback
-   `git revert`). Evidence: GitHub commit with trailers, desktop worker log showing arrival, Obsidian renders it.
-
-## Milestone 3 — Several days of owner use
-
-Owner uses it daily; friction is recorded privately (`.private/observations.md`, git-ignored — never in the public
-repo), then the owner chooses the next improvement from observed use.
-
-### Phone targets (targets, not observations)
-
-| Moment | Target |
+| Phone target | Target |
 |---|---|
-| Open app (warm, online) → task list visible | ≤ 1.5 s typical, ≤ 3 s worst |
-| Open app offline (cold) → shell + pending actions visible | ≤ 1.5 s; task list **not** available offline (by design) |
+| Open (warm, online) → task list | ≤ 1.5 s typical, ≤ 3 s worst |
 | Tap Capture → keyboard ready | ≤ 0.5 s |
-| Tap complete/save → local acknowledgement (state chip) | ≤ 100 ms |
+| Tap complete/save → local acknowledgement | ≤ 100 ms |
 | Online → "saved to GitHub" | ≤ 5 s typical |
-| Refused/conflicted action → clear, safe next step | ≤ 3 taps, no lost text; dismissing is **not** resolving the conflict |
+| Refused/conflicted action → clear, safe next step | ≤ 3 taps, no lost text; dismissing ≠ resolving |
 
-Observations: none yet (recorded privately in milestone 2–3).
+Observations: none yet; recorded privately (`.private/`, git-ignored) during milestones 2–3.
 
 ## Owner decisions
 
-| # | Decision | Status |
-|---|---|---|
-| T1 | Today meaning | **decided** (provisional) — ADR-0012 |
-| P1 | Cloudflare Workers plan | **on hold** — owner: redesign Undo first (ADR-0013, P4-E: ≈10 calls/attempt, ≤3 attempts ⇒ Free plan’s 50 suffices); Workers Paid (10,000 subrequests) only if a token Undo cannot work |
-| D2 | Linked-note allowlist | default `Projects/`, `Tasks/`, `Inbox/` (P4-A implements it) |
-| D3 | Task IDs | no `🆔` writes in first release |
-| D4 | Capture anchor | decided: top of Open (ADR-0010) |
+T1 Today — decided, provisional (ADR-0012) · P1 Workers plan — on hold; token Undo fits Free (≤ 10 store calls ×
+≤ 3 attempts + auth); Paid (10,000) only if B1 fails · D2 linked-note roots `Projects/`, `Tasks/`, `Inbox/` ·
+D3 no `🆔` writes · D4 capture at top of Open (ADR-0010).
 
-## Known limitations and risks (current only)
+## Known limitations (accepted for the first release)
 
-- Cold offline launch shows the shell and pending actions, not the task list (reads are `no-store`, no vault content
-  on device by design). Stated in the UI copy by P4-B/P2-B.
-- Desktop conflicts are surfaced only in the sync log/status file; the app cannot see them until the owner resolves.
-- R7 residue (Low): semantic Undo leaves a blank line in Done when Done has other content (needs vault-contract §4.2).
-- Phone accessibility (keyboard visibility, long text, dictation, large text, focus, VoiceOver, one-handed) is
-  verified only on the installed iPhone app in milestone 2.
+- Cold offline launch shows the shell and pending actions, not the task list (no vault content on device by design).
+- Desktop conflicts surface only in the sync log/status file until the owner resolves them.
+- Empty `## Open`: phone and desktop captures conflict (ADR-0010 residual). Undo of a completion whose line the desktop
+  reopened and re-completed can reopen the later completion (text-equality residual, `docs/vault-contract.md`).
+- Undo expires after 250 commits since the completion (`undo-expired`); an Undo whose completion receipt was lost
+  cannot be sent (undo in Obsidian).
+- R7 (Low): semantic Undo leaves a blank line in Done when Done has other content.
+
+## Follow-ups (not blocking the first release)
+
+Per-task conflict flags from the worker · single-page dedupe bound for other commands if budgets demand ·
+shared lazy renderer loader · "Load latest draft" in a superseded window · lease reclaim after reload (60 s
+"Saving…") · NFD/recursive-tree GitHub probes · A3 two-tab e2e flaked once under full parallel WebKit load.
 
 ## Human gates
 
-G1 sandbox (done) · G2 credentials (milestone 2) · G3 first live write (milestone 2).
+G1 sandbox (done) · G2 credentials (B5) · G3 first live write (B6). Vault writes only with owner approval.

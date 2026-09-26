@@ -1,20 +1,17 @@
-# Checkpoint — 2026-09-25 (Milestone 1: integrated first-release build)
+# Checkpoint — 2026-09-26 (first release → phone)
 
-**HEAD:** `main`, clean. CI (GitHub Actions) gates every PR. Plan, milestones, workers, targets: `docs/plan.md`.
+**HEAD:** `main`, clean; PRs #1–#12 merged. Plan with blockers B1–B6 and owners: `docs/plan.md`.
 
 ## In flight
-
-Merged: PRs #1–#12 (CI, harness, Today rule, fixtures, offline SW, linked notes, client correctness, drafts, deploy).
-Cloud: P4-D Active Work Now (`agent/active-work-now`, P4-A session) and P4-E token Undo (`agent/token-undo`, P4-B
-session). Watcher: `tools/wait-for-work.sh` in the background.
+- PR #14 token Undo — Cloud P4-B session (`session_01TLT6gLxkoKtDHSy8CcCpmb`) fixing Astra's BLOCK; then a focused Astra
+  high re-review of the changed code.
+- PR #13 Active Work Now — CI + CodeRabbit; merge when green (P4-A session `session_012WDdnkDZjTWRF4956Mjaoz` can fix).
+- Watcher off (memory); Lead checks PRs directly.
 
 ## Exact next actions
+1. Merge #13; after #14's fixes: re-review → merge.
+2. Whole-system review of the combined build (Cloud Opus + Astra high) → reconcile → milestone 1 done.
+3. Owner: approve sync patch (B4) and do G2 (B5); Lead verifies §8–§9, then canary (B6) with owner approval.
 
-1. P4-D and P4-E: PR → CodeRabbit → CI → handoff dispositions → merge (P4-E: Astra high review — identity/concurrency).
-2. Then the whole-system review of the combined build (`docs/reviews/phase-2-review-brief.md`, Cloud Opus + Astra high).
-3. Owner G2 now possible with `docs/deploy.md` §1–§7 (skip §0: P1 on hold, token Undo fits Free). Lead then runs §8–§9.
-4. Canary (G3) needs the desktop sync worker patch applied first.
-
-## Desktop sync worker broken — canary dependency. Tested patch ready (Lead scratchpad `syncfix/`); awaiting owner approval to apply to the vault.
-
-## T1 Today — decided 2026-09-25 (ADR-0012), provisional; implementation split per `docs/plan.md`.
+## Sync worker patch (B4)
+Tested copy in the Lead scratchpad `syncfix/` (not in the repo: the worker lives in the private vault).
