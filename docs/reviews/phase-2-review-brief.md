@@ -39,6 +39,13 @@ Edit any file except your report. No git commands that change state. Never open
 3. **Cross-layer seams**: receipt/`known=` watermark vs. read model after desktop merges; conflict markers committed
    by the desktop and every command's behaviour afterwards; capture anchor vs. QuickAdd; Undo after desktop edits.
 4. **Phase 3 blockers**: anything that must change before the first live write (G3), ranked.
+5. **Delayed offline captures**: a capture or completion queued offline for hours or days, sent after many desktop
+   commits — dedupe window, stale `baseRevision`, capture anchor, Today/Done dates across midnight, draft vs. queue.
+6. **Request budget per write command** (CompleteTask, UndoCompleteTask, CaptureTask, CaptureNote): count GitHub calls
+   per attempt and worst case over retries, including token acquisition and paged dedupe for non-Undo commands with an
+   old `baseRevision`; compare with Workers Free (50/invocation) and GitHub's ~5,000/h installation limit.
+7. **Phone experience end to end**: Today usefulness (Active Work Now + rule), capture speed, draft recovery,
+   understandable save/conflict states, safe Undo, readable linked context — list what is verified vs. untested.
 5. **Vacuous tests** among the e2e scenarios (name the line whose breakage should fail each).
 
 ## Output
