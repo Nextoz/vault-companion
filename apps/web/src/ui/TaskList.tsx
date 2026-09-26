@@ -100,6 +100,9 @@ function TaskRow({
   const readOnly = task?.readOnlyReason ?? null;
   const canComplete =
     !row.done && task !== null && readOnly === null && !blocked && !busy && !tapped.has(occurrenceKey(task.locator));
+  // ADR-0017: open tasks only; recurring/on-completion tasks are editable (no completion semantics involved).
+  const canEdit = !row.done && task !== null && !blocked && !busy && onEdit !== undefined &&
+    (readOnly === null || readOnly === 'refused:recurring' || readOnly === 'refused:on-completion');
   const text = plainWikilinks(row.description);
 
   return (
@@ -123,7 +126,11 @@ function TaskRow({
             ? text
             : taskSegments(row.description, task.links).map((seg, i) =>
                 seg.kind === 'text' ? (
-                  <button key={i} type="button" className="task-edit" disabled={!canComplete || !onEdit} aria-label={`Edit: ${text}`} onClick={() => onEdit?.(task)}>{seg.text}</button>
+                  canEdit ? (
+                    <button key={i} type="button" className="task-edit" aria-label={`Edit: ${text}`} onClick={() => onEdit?.(task)}>{seg.text}</button>
+                  ) : (
+                    <span key={i}>{seg.text}</span>
+                  )
                 ) : (
                   <button
                     key={i}

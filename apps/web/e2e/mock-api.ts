@@ -240,7 +240,9 @@ export class MockApi {
         const same = this.open.filter((t) => t.locator.lineText === locator.lineText);
         const task = same.find((t) => t.locator.lineIndex === locator.lineIndex) ?? (same.length === 1 ? same[0] : undefined);
         if (!task) throw new Error('mock: editing an unknown task');
-        const updated = { ...task, ...changes, description: changes.text ?? task.description };
+        const pick = <T,>(v: T | undefined, old: T): T => (v === undefined ? old : v);
+        const updated = { description: changes.text ?? task.description, due: pick(changes.due, task.due),
+          scheduled: pick(changes.scheduled, task.scheduled), priority: pick(changes.priority, task.priority) };
         const icons = { highest: '🔺', high: '⏫', medium: '🔼', low: '🔽', lowest: '⏬' };
         const afterLineText = ['- [ ]', updated.description, updated.priority ? icons[updated.priority] : '',
           updated.scheduled ? '⏳ ' + updated.scheduled : '', updated.due ? '📅 ' + updated.due : ''].filter(Boolean).join(' ');

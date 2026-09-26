@@ -150,7 +150,9 @@ test('read-only tasks have no active checkbox and show a short reason', async ({
   await page.goto('/');
   const row = region(page, 'Today').getByTestId('task');
   await expect(row).toContainText('Recurring — complete in Obsidian');
-  await expect(row.getByRole('button')).toHaveCount(0);
+  await expect(row.getByRole('button', { name: /^Complete:/ })).toHaveCount(0);
+  // ADR-0017: a recurring task can still be edited (no completion semantics involved).
+  await expect(row.getByRole('button', { name: 'Edit: Take out the recycling' })).toBeEnabled();
 });
 
 test('task text is rendered as text, and wikilinks as plain text', async ({ page }) => {
