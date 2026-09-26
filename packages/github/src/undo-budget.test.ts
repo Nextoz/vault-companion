@@ -104,12 +104,12 @@ describe('GitHub commitsSince guards through a full Undo (review P4E-Astra #4)',
     Array.from({ length: n }, (_, i) => ({ sha: i === n - 1 ? x : sha(String(i % 10)), commit: { message: 'desktop edit', tree: { sha: sha('e') } } }));
   it.each([
     // X holds exactly C's completed bytes, so only the ancestry guard stands between the token and a write.
-    ['diverged, matching bytes at X', () => json(200, { status: 'diverged', total_commits: 1, commits: listed(1, sha('d')) }), 'conflict:task-changed'],
-    ['behind', () => json(200, { status: 'behind', total_commits: 0, commits: [] }), 'conflict:task-changed'],
-    ['404', () => json(404, { message: 'Not Found' }), 'conflict:task-changed'],
-    ['422', () => json(422, { message: 'No common ancestor' }), 'conflict:task-changed'],
-    ['251 total, 250 returned (the real overflow shape)', () => json(200, { status: 'ahead', total_commits: 251, commits: listed(250, sha('d')) }), 'refused:undo-expired'],
-    ['short page below the limit (2 total, 1 returned)', () => json(200, { status: 'ahead', total_commits: 2, commits: listed(1, sha('d')) }), 'refused:undo-expired'],
+    ['diverged, matching bytes at X', () => json(200, { status: 'diverged', total_commits: 1, commits: listed(1, sha('d')) }), 'dedupe-unknown'],
+    ['behind', () => json(200, { status: 'behind', total_commits: 0, commits: [] }), 'dedupe-unknown'],
+    ['404', () => json(404, { message: 'Not Found' }), 'dedupe-unknown'],
+    ['422', () => json(422, { message: 'No common ancestor' }), 'dedupe-unknown'],
+    ['251 total, 250 returned (the real overflow shape)', () => json(200, { status: 'ahead', total_commits: 251, commits: listed(250, sha('d')) }), 'dedupe-unknown'],
+    ['short page below the limit (2 total, 1 returned)', () => json(200, { status: 'ahead', total_commits: 2, commits: listed(1, sha('d')) }), 'dedupe-unknown'],
   ] as const)('%s ⇒ typed refusal, one compare, no writes', async (_name, answer, code) => {
     const k = await completed();
     const { store, calls } = fakeGitHub(k, 1, 200, answer);
@@ -135,12 +135,12 @@ describe('Undo request budget (ADR-0013)', () => {
     expect(atob(blobs[0]!)).toBe(ORIGINAL); // exact inverse
   });
 
-  it('beyond one page: refused:undo-expired after one compare, nothing written', async () => {
+  it('beyond one page: dedupe-unknown ("may already be applied", O5) after one compare, nothing written', async () => {
     const k = await completed();
     const { store, calls } = fakeGitHub(k, 251);
     const svc = createCommandService({ store, now: () => NOW, timeZone: TZ });
     const undo = { schemaVersion: 1, operationId: '00000000-0000-4000-8000-00000000000c', type: 'UndoCompleteTask', occurredAt: '2026-09-24T14:01:00+02:00', baseRevision: k.c, payload: { target: k.raw, targetCommit: k.c } };
-    expect(await svc.execute(undo as never, undo)).toMatchObject({ code: 'refused:undo-expired' });
+    expect(await svc.execute(undo as never, undo)).toMatchObject({ code: 'dedupe-unknown' });
     expect(calls.filter((c) => c.startsWith('GET /compare/'))).toHaveLength(1);
     expect(calls.some((c) => c.startsWith('POST') || c.startsWith('PATCH'))).toBe(false);
   });

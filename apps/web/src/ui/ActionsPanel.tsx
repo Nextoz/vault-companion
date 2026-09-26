@@ -15,10 +15,14 @@ const VERB: Record<CommandType, string> = {
 /** The action's time is too far from the server's; the stored bytes carry that time, so only a redo can pass. */
 export const CLOCK_SKEW_TEXT = "Check your phone's date and time, then redo the action.";
 
+export const UNDO_UNKNOWN_TEXT = 'This Undo may already have been applied. Check the task before you retry or discard it.';
+
 /** The line shown for an action that needs attention: the conflict in plain words, else the server's message. */
 export function attentionText(item: QueueItem): string | null {
   if (item.error?.code === 'conflict:task-changed') return 'This task changed on another device.';
   if (item.error?.code === 'clock-skew') return CLOCK_SKEW_TEXT;
+  // Review O5: the outcome is unknown, not refused — never tell the owner to redo something that may have happened.
+  if (item.error?.code === 'dedupe-unknown' && item.type === 'UndoCompleteTask') return UNDO_UNKNOWN_TEXT;
   return item.error?.message ?? null;
 }
 

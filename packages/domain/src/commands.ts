@@ -161,8 +161,11 @@ function undoPlan(cmd: Extract<Command, { type: 'UndoCompleteTask' }>, raw: unkn
       const c = await readToken(store);
       if ('kind' in c) return c;
       const since = await store.commitsSince(c.sha, x);
-      if (since.kind === 'not-ancestor') return refused('conflict:task-changed', 'that completion is not on the vault branch');
-      if (since.kind === 'too-many') return refused('refused:undo-expired', 'too much changed since; undo it in Obsidian');
+      // Review O5: neither answer can tell whether an earlier attempt of THIS Undo already applied (its own commit would be
+      // in the unlisted range), so neither may claim "not applied".
+      if (since.kind === 'not-ancestor' || since.kind === 'too-many') {
+        return refused('dedupe-unknown', 'this Undo may already have been applied; check the task in Obsidian');
+      }
       const own = since.commits.find((k) => k.trailers[TRAILER_OP] === operationId);
       if (own) {
         const info = await store.readCommit(own.sha);

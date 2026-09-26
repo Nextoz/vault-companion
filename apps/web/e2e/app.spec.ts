@@ -666,3 +666,54 @@ test.describe('linked note dialog: session binding and modal focus', () => {
     await expect(page.getByRole('button', { name: 'Open note: the garden plan' })).toBeFocused();
   });
 });
+
+test('review O6: reads that stay stale offer "Reset saved-actions history", which keeps pending actions', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
+  await expect(region(page, 'Done today').getByText('Saved to GitHub')).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event('focus'))); // a read acknowledges it: watermark set
+
+  // A pending capture that must survive the reset.
+  api.commandMode = 'unavailable';
+  await page.getByRole('button', { name: 'Capture' }).click();
+  await page.getByRole('button', { name: 'Note', exact: true }).click();
+  await page.getByLabel('Note text').fill('Kept through the reset');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+  api.rewriteHistory(); // against the runbook: every later read lacks the watermark commit
+  const reset = page.getByRole('button', { name: 'Reset saved-actions history on this device' });
+  for (let i = 0; i < 3; i++) {
+    await expect(reset).toHaveCount(0);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await page.waitForTimeout(150);
+  }
+  await expect(reset).toBeVisible();
+  await reset.click();
+
+  await expect(reset).toHaveCount(0);
+  await expect(page.getByText('Refreshing…')).toHaveCount(0);
+  await expect(region(page, 'Today').getByText('Call the bike shop')).toBeVisible();
+  await expect(region(page, 'Actions on this device').getByTestId('action').filter({ hasText: 'Kept through the reset' })).toHaveCount(1);
+});
+
+test('review O1: after a burst of captures made offline, every task read asks about at most 8 commits', async ({ page, context }) => {
+  await page.goto('/');
+  await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+  api.commandMode = 'offline';
+  await context.setOffline(true);
+  for (let i = 0; i < 12; i++) {
+    await page.getByRole('button', { name: 'Capture' }).click();
+    await page.getByRole('button', { name: 'Note', exact: true }).click();
+    await page.getByLabel('Note text').fill(`Burst note ${i}`);
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+  }
+  api.commandMode = 'ok';
+  await context.setOffline(false);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect.poll(() => api.applied.length, { timeout: 15_000 }).toBe(12);
+  await expect(region(page, 'Actions on this device').getByTestId('action').filter({ hasText: 'Saved to GitHub' })).toHaveCount(12);
+  // Acknowledged in bounded reads: "Clear saved" appears once all are covered by the watermark.
+  for (let i = 0; i < 3; i++) await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(region(page, 'Actions on this device').getByRole('button', { name: 'Clear saved' })).toBeVisible();
+  expect(api.maxKnownAsked).toBeLessThanOrEqual(8);
+});

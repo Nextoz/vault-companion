@@ -62,6 +62,9 @@ export class MockApi {
   tasksMode: ReadMode = 'ok';
   /** The read's writeBlock, e.g. a committed Git conflict in the task list. */
   writeBlock: ApiError | null = null;
+  /** Largest `known=` list any task read asked about (review O1). */
+  maxKnownAsked = 0;
+  #rewritten = false;
   /** Blob of the task file in every read; change it to model a desktop edit. */
   blobSha = '2'.repeat(40);
   commandMode: CommandMode = 'ok';
@@ -140,7 +143,9 @@ export class MockApi {
     if (await this.#readFailure(route, this.tasksMode)) return;
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     const asked = new URL(route.request().url()).searchParams.get('known')?.split(',').filter(Boolean) ?? [];
-    const known = Object.fromEntries(asked.map((c) => [c, 'included' as const]));
+    this.maxKnownAsked = Math.max(this.maxKnownAsked, asked.length);
+    // After a history rewrite no earlier commit is on main any more (review O6).
+    const known = Object.fromEntries(asked.map((c) => [c, this.#rewritten ? ('not-included' as const) : ('included' as const)]));
     // Locators as the Worker builds them: this read's blob, and how many indexed lines share the text.
     const lines = [...this.open, ...this.doneToday].map((t) => t.locator.lineText);
     const located = (t: TaskView): TaskView => ({
@@ -203,6 +208,12 @@ export class MockApi {
     this.#revision = sha();
     this.blobSha = sha();
     this.open = open;
+  }
+
+  /** Someone force-pushed main: new head, and none of the earlier commits is an ancestor of it any more (O6). */
+  rewriteHistory(): void {
+    this.#revision = sha();
+    this.#rewritten = true;
   }
 
   /** Answer every held request (as `ok`) and stop holding new ones. */

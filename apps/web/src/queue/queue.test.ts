@@ -5,7 +5,7 @@ import { captureNote, completeTask, undoCompleteTask, undoDraft } from '../comma
 import { backoffMs } from './classify.ts';
 import { openPendingStore, type PendingStore } from './db.ts';
 import { knownCommits, TaskReads } from '../reads.ts';
-import { PendingQueue } from './queue.ts';
+import { PendingQueue, satisfiesWatermark } from './queue.ts';
 
 const ACCOUNT_A = 'a'.repeat(64);
 const ACCOUNT_B = 'b'.repeat(64);
@@ -523,5 +523,35 @@ describe('review O1 — a burst of 30 actions queued offline', () => {
     expect((await store.receipts()).length).toBeLessThanOrEqual(20); // the rest evicted under the watermark
     expect(await queue.readWatermark()).toMatchObject({ commitSha: X });
     expect(await store.all()).toEqual([]);
+  });
+});
+
+describe('review O6 — "Reset saved-actions history on this device"', () => {
+  it('drops every receipt and neutralises the watermark in one step, never a pending item; versions keep increasing', async () => {
+    const queue = await openQueue();
+    send.mockImplementationOnce(async (body) => ok(body)); // one saved
+    await queue.enqueue(note('saved one'), { accountKey: ACCOUNT_A, label: 's' });
+    queue.setSession(ACCOUNT_A);
+    await queue.flush();
+    const X = 'f'.repeat(40);
+    await queue.acknowledge({ revision: X, known: { ['3'.repeat(40)]: 'included' } });
+    const before = await queue.readWatermark();
+    expect(before).toMatchObject({ commitSha: X });
+
+    send.mockImplementation(async () => unavailable503()); // one pending
+    const pending = note('still pending');
+    await queue.enqueue(pending, { accountKey: ACCOUNT_A, label: 'p' });
+    await queue.flush();
+
+    await queue.resetHistory();
+    expect(await store.receipts()).toEqual([]);
+    expect((await store.all()).map((r) => r.operationId)).toEqual([pending.operationId]);
+    const after = await queue.readWatermark();
+    expect(after!.version).toBeGreaterThan(before!.version);
+    // Every read satisfies it again: nothing stays stale for ever.
+    expect(satisfiesWatermark({ revision: '9'.repeat(40), known: {} }, after)).toBe(true);
+    // …and the next acknowledgement starts a real watermark, still moving forward.
+    await queue.acknowledge({ revision: X, known: {} });
+    expect((await queue.readWatermark())!.version).toBe(after!.version);
   });
 });

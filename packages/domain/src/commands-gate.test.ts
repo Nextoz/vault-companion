@@ -95,7 +95,7 @@ describe('Phase 1 gate regressions', () => {
     const r1 = ok(await run(c1));
     const afterC1 = store.text(TODO);
     store.commitsSince = async () => ({ kind: 'too-many' });
-    expect(await run(env('UndoCompleteTask', { target: c1, targetCommit: r1.commitSha }))).toMatchObject({ code: 'refused:undo-expired' });
+    expect(await run(env('UndoCompleteTask', { target: c1, targetCommit: r1.commitSha }))).toMatchObject({ code: 'dedupe-unknown' });
     expect(store.text(TODO)).toBe(afterC1);
   });
 

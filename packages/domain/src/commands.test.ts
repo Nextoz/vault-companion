@@ -212,7 +212,7 @@ describe('UndoCompleteTask (token, ADR-0013)', () => {
     store.rewindHead(1); // C rewritten away…
     await store.commitFiles({ [TODO]: completedText }); // …and the same completed file committed by someone else
     const head = store.headCommit;
-    expect(await run(undoOf(c))).toMatchObject({ code: 'conflict:task-changed' });
+    expect(await run(undoOf(c))).toMatchObject({ code: 'dedupe-unknown' }); // never applied; never "known not applied" (O5)
     expect(store.headCommit).toBe(head);
   });
 
@@ -298,7 +298,22 @@ describe('UndoCompleteTask (token, ADR-0013)', () => {
     });
   });
 
-  it('a second Undo of the same completion is refused', async () => {
+  it('review O5: an Undo that applied with a lost response, retried after > 1 page, is "may already be applied", never known-not-applied', async () => {
+    store.comparePageSize = 3;
+    const original = text();
+    const c = await complete('Water the plants');
+    const undo = undoOf(c);
+    store.writeFaults.push('apply-then-unknown');
+    await run(undo); // applied; the phone never heard back
+    expect(text()).toBe(original);
+    for (let i = 0; i < 4; i++) await store.commitFiles({ [`Inbox/later ${i}.md`]: 'x\n' });
+    const retry = await run(undo);
+    expect(retry).toMatchObject({ code: 'dedupe-unknown', retryable: false });
+    expect((retry as { code: string }).code.startsWith('refused:')).toBe(false);
+    expect(store.commitsWithOp(undo.operationId as string)).toHaveLength(1);
+  });
+
+    it('a second Undo of the same completion is refused', async () => {
     const c = await complete('Water the plants');
     ok(await run(undoOf(c)));
     const after = text();
@@ -306,7 +321,7 @@ describe('UndoCompleteTask (token, ADR-0013)', () => {
     expect(text()).toBe(after);
   });
 
-  it('beyond one compare page since the completion ⇒ refused:undo-expired, nothing written; exactly one page still works', async () => {
+  it('beyond one compare page since the completion ⇒ dedupe-unknown (O5), nothing written; exactly one page still works', async () => {
     store.comparePageSize = 3;
     const c = await complete('Water the plants');
     for (let i = 0; i < 3; i++) await store.commitFiles({ [`Inbox/other ${i}.md`]: `${i}\n` });
@@ -318,7 +333,7 @@ describe('UndoCompleteTask (token, ADR-0013)', () => {
     expect(inPage).toBe('ok');
     await store.commitFiles({ 'Inbox/other 3.md': '3\n' });
     const head = store.headCommit;
-    expect(await run(undoOf(c))).toMatchObject({ code: 'refused:undo-expired', retryable: false });
+    expect(await run(undoOf(c))).toMatchObject({ code: 'dedupe-unknown', retryable: false });
     expect(store.headCommit).toBe(head);
 
     store.comparePageSize = 5;
