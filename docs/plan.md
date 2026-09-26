@@ -45,8 +45,9 @@ Observations: none yet; recorded privately (`.private/`, git-ignored) during mil
 
 ## Owner decisions
 
-T1 Today — decided, provisional (ADR-0012) · P1 Workers plan — **reopened**: measured CPU (8.5 ms per completion on a 300-task
-list; Free allows 10 ms) and 8 + p calls for other writes ⇒ Lead recommends **Paid ($5/mo)** for the canary · D2 linked-note roots `Projects/`, `Tasks/`, `Inbox/` ·
+T1 Today — decided, provisional (ADR-0012) · P1 Workers plan — **decided: Free** (owner, 2026-09-26). Real list 16 KB / 39 tasks ⇒ est. 4–5 ms CPU (10 ms cap);
+read budget fixed by O1; measure real CPU with `wrangler tail` after the read-only deploy; optimise (O7: commits listing
+instead of patch-carrying compare) only if a request nears the cap · D2 linked-note roots `Projects/`, `Tasks/`, `Inbox/` ·
 D3 no `🆔` writes · D4 capture at top of Open (ADR-0010).
 
 ## Known limitations (accepted for the first release)

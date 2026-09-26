@@ -25,8 +25,9 @@ counting `fetch`):
 | `CompleteTask` / `CaptureTask` / `CaptureNote` | 8 + p per attempt, ≤ 5 attempts (p = compare pages of `baseRevision..X`): 9 typical, 52 worst at p = 2 | Complete 8.5 ms on a 300-task list, 29.7 ms on 1,500 |
 | `GET /api/tasks` | 2 + one per `known` SHA until the read-budget fix lands (review O1), then ≤ 4 | 3.4–12.5 ms before network parsing |
 
-**Free is not established** — CPU alone is near or over 10 ms for an ordinary list. Use **Workers Paid** for the canary,
-or first measure the real list with `wrangler dev --remote` / `wrangler tail` CPU time. Failures are safe either way
+**Owner decision (2026-09-26): Free.** The owner's list is ~16 KB / 39 tasks (est. 4–5 ms). After the first deploy,
+measure real CPU per request with `wrangler tail` (read-only requests first) before the canary; if a request nears 10 ms,
+optimise it rather than change plan. Failures are safe either way
 (head-CAS; a killed request is an unknown outcome, deduplicated on retry) but the phone would see repeated 503s.
 
 ## 1. Create the GitHub App
