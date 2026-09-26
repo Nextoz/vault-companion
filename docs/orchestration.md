@@ -115,9 +115,9 @@ the only record.
 - **Routing under Claude-token pressure (owner, 2026-09-25):** most implementation goes to Claude Code Cloud; small or
   low-risk tasks to Codex GPT-6 Astra at effort `low` (`cmd /c "codex exec -m gpt-6-astra -c model_reasoning_effort=low …"`).
   The local Lead stays lean: decompose, review, integrate.
-- **Local Qwen** (tiny deterministic tasks, one at a time): `cmd /c "codex exec --oss --local-provider ollama -m qwen3.5:4b
-  --sandbox workspace-write - < <prompt> > <log> 2>&1"` in a full clone. Only with **≥ 5 GB free RAM** (the 4B model
-  needs ~3.4 GB; at 1.2 GB free on 2026-09-25 background work was reaped). No Qwen CLI is installed.
+- **Local Qwen** (tiny deterministic tasks, one at a time): `qwen-agent` is installed and verified by the owner (npm
+  shim `qwen-agent.cmd`; a `pi`-based agent with read/bash/edit/write). Non-interactive: `cmd /c "qwen-agent -p
+  --no-session \"<prompt>\""` in a full clone. Only with **≥ 5 GB free RAM** (the 4B model needs ~3.4 GB).
 
 ## Routing and effort (owner, 2026-09-25 — supersedes earlier routing notes where they conflict)
 
@@ -130,7 +130,7 @@ the combined result. Private vault investigation stays local (Lead, read-only); 
 | Claude Code Cloud | substantial bounded repo work (features, test suites, reviews) |
 | Codex GPT-6 Astra | bounded implementation/review; effort chosen per task (below) |
 | Local Claude subagent | small local tasks when Codex is unavailable — sparingly: it spends the Lead's own quota |
-| Local Qwen | tiny deterministic edits, only with ≥ 5 GB free RAM |
+| Local Qwen (`qwen-agent`) | tiny deterministic edits, only with ≥ 5 GB free RAM |
 
 Astra effort (`-c model_reasoning_effort=<level>`), starting defaults:
 **low** mechanical edits, docs, straightforward tests, small fixes with a clear cause · **medium** bounded features,
@@ -165,6 +165,9 @@ through a PR opened by the Lead: open PR → wait for CodeRabbit → hand the Co
 - Run `gh pr merge` from the main checkout: from a temporary worktree it merges remotely, then fails the local
   `main` checkout (`'main' is already used by worktree`).
 Config: `.coderabbit.yaml`.
+- CodeRabbit auto-review stopped (free OSS plan requires ≥ 10 repo stars, 2026-09-26). Trigger manually with a PR comment
+  `@coderabbitai review` where useful; **CodeRabbit availability never blocks a merge** — CI, the Lead's review and, for
+  risky code, an Astra or local reviewer are the gate.
 - Codex `--sandbox workspace-write` cannot write a git **worktree's** git dir (it lives in the main repo's `.git`), so
   Codex tasks run in a **full clone** under `C:\Devault-companion-clones\<task>` and push their own branch.
 - Codex `workspace-write` keeps `.git` **read-only** and has no GitHub credentials (verified 2026-09-25): Astra edits

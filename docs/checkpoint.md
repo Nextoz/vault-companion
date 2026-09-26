@@ -1,17 +1,11 @@
 # Checkpoint — 2026-09-26 (first release → phone)
 
-**HEAD:** `main`, clean; PRs #1–#12 merged. Plan with blockers B1–B6 and owners: `docs/plan.md`.
+**HEAD:** `main`; PRs #1–#13 merged. Plan with blockers and owners: `docs/plan.md`.
 
-## In flight
-- PR #14 token Undo — Cloud P4-B session (`session_01TLT6gLxkoKtDHSy8CcCpmb`) fixing Astra's BLOCK; then a focused Astra
-  high re-review of the changed code.
-- PR #13 Active Work Now — **merged**.
-- Watcher off (memory); Lead checks PRs directly.
-
-## Exact next actions
-1. Merge #13; after #14's fixes: re-review → merge.
-2. Whole-system review of the combined build (Cloud Opus + Astra high) → reconcile → milestone 1 done.
-3. Owner: approve sync patch (B4) and do G2 (B5); Lead verifies §8–§9, then canary (B6) with owner approval.
-
-## Sync worker patch (B4)
-Tested copy in the Lead scratchpad `syncfix/` (not in the repo: the worker lives in the private vault).
+## State
+- B4 desktop sync: **verified live** (03:06 run `current`, local = remote, no runtime files published). Cleanup v2
+  (unstage all on failure; 19/19) ready in the Lead scratchpad `syncfix/` for the owner to install.
+- B1 PR #14 token Undo: Astra BLOCK fixed; focused re-review **PASS**; merge when CI is green.
+- B3 whole-system review: next, on combined `main` after #14 (Cloud Opus now; Astra high after Codex refills 07:36).
+- B5 G2 Cloudflare: owner doing `docs/deploy.md` §1 (GitHub App); Lead guides step by step.
+- CodeRabbit: manual trigger only (see orchestration); never a merge blocker. Watcher off (memory).
