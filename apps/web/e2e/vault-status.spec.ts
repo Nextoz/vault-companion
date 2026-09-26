@@ -1,6 +1,37 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
 
+test('coalesces a wake burst and cooldown while Refresh still reads', async ({ page }) => {
+  await page.clock.install();
+  const api = new MockApi();
+  await api.install(page);
+  let sessions = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/session') sessions++;
+  });
+  await page.goto('/');
+  const refresh = page.getByRole('button', { name: 'Refresh vault' });
+  await expect(refresh).toBeEnabled();
+  await expect(page.getByRole('region', { name: 'Vault status' })).toContainText('Checked');
+  await page.clock.runFor(1100);
+  const before = { tasks: api.taskReads, sessions };
+  const burst = () => page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('online'));
+  });
+  await burst();
+  await expect.poll(() => api.taskReads).toBe(before.tasks + 1);
+  await expect(refresh).toBeEnabled();
+  await burst();
+  // Allow every event continuation and routed request to settle, still inside cooldown.
+  await page.waitForTimeout(200);
+  expect(api.taskReads).toBe(before.tasks + 1);
+  expect(sessions).toBe(before.sessions + 1);
+  await refresh.click();
+  await expect.poll(() => api.taskReads).toBe(before.tasks + 2);
+});
+
 test('shows vault state, refreshes once, and preserves the last check after a failure', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-09-26T12:10:00Z') });
   const api = new MockApi();
