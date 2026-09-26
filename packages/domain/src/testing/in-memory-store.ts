@@ -4,6 +4,7 @@
 // real Git blob SHAs. Checked against real Git by packages/github/src/store-contract.test.ts.
 import {
   COMPARE_PAGE,
+  FileTooLarge,
   gitBlobSha,
   StoreUnavailable,
   StoreUnknownOutcome,
@@ -12,6 +13,7 @@ import {
   type CommitInfo,
   type CommitsSinceResult,
   type FindOperationResult,
+  type ListedFile,
   type StoredFile,
   type VaultPath,
   type VaultStore,
@@ -144,6 +146,20 @@ export class InMemoryStore implements VaultStore {
     const names = new Set<string>();
     for (const p of commit.tree.keys()) if (p.startsWith(prefix)) names.add(p.slice(prefix.length).split('/')[0]!);
     return [...names];
+  }
+
+  /** More files than this under a directory make `listFiles` fail like a truncated GitHub tree. */
+  listFilesLimit = Number.POSITIVE_INFINITY;
+
+  async listFiles(dir: string, atCommit: string): Promise<readonly ListedFile[]> {
+    guard(dir);
+    const commit = this.commits.get(atCommit);
+    if (!commit) throw new StoreUnavailable(`unknown commit ${atCommit}`);
+    if (commit.tree.has(dir)) throw new StoreUnavailable('not a directory');
+    const prefix = `${dir}/`;
+    const out = [...commit.tree].filter(([p]) => p.startsWith(prefix)).map(([path, blobSha]) => ({ path, blobSha }));
+    if (out.length > this.listFilesLimit) throw new FileTooLarge('listing truncated');
+    return out;
   }
 
   async writeFile(req: WriteRequest): Promise<WriteResult> {

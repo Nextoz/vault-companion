@@ -189,6 +189,10 @@ describe('production composition (review R10)', () => {
     const good = await app.fetch(new Request(`${ORIGIN}/api/session`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
     expect(good.status).toBe(200);
     expect((await good.json()).accountKey).toMatch(/^[0-9a-f]{64}$/);
+    // The linked-note route is composed in production: a malformed request is a 400 from the route, not the 404 an
+    // unwired service gives (P4-A handoff).
+    const note = await app.fetch(new Request(`${ORIGIN}/api/linked-note`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
+    expect(note.status).toBe(400);
     const other = await new SignJWT({ email: 'owner@example.com' })
       .setProtectedHeader({ alg: 'RS256', kid: 'k' })
       .setIssuer('https://team.cloudflareaccess.com')

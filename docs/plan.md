@@ -22,7 +22,9 @@ priorities are the owner's choice, informed by observed use (milestone 3).
   fixed. **Canary prerequisite** (W2). Proposed fix (owner-approved vault change): stage with only non-ignored
   excludes, then `restore --staged` the tracked-but-ignored paths; put the add inside the unstage-on-error block; add a
   `.gitignore` + tracked-ignored-file case to its test script. Clear the current state with `git restore --staged -- .`
-  (working files untouched). Verified on a copied index, never the live one.
+  (working files untouched). Verified on a copied index, never the live one. **Patch ready (2026-09-25 15:50, kept local — the worker
+  lives in the private vault):** module + new `.gitignore` regression case; its own suite passes 18/18 patched, the
+  new case fails on the original with the exact production error. Applying it = owner-approved vault write.
 
 ## Milestone 1 — Integrated first-release build (current)
 
@@ -32,16 +34,16 @@ storage changes overlap, so no stream is reviewed only in isolation).
 
 | Stream | Worker | Status |
 |---|---|---|
-| P2-A real-Git e2e harness (PR #4) | Cloud `session_01FyLWeGWnPruL9dXefaVGf3` | fixing Astra review (`docs/reviews/P2A-review-astra.md`: forced CAS collision, same-anchor conflict, desktop push race, cleanup) |
-| P2-B service-worker offline shell e2e | Cloud `session_01LWfCSsJj1eCeWtXgpcYspN`, `agent/offline-shell-e2e` | in flight |
-| P3-A Cloudflare deploy scaffold + `docs/deploy.md` | Cloud `session_01BtqCxHaRkAXZ53YDZ4QSe4`, `agent/deploy-scaffold` | in flight; Lead dispositions sent (minimal `allowBuilds`, identifying values as secrets, `_headers` + drift test) |
-| P4-A linked note context (contract item 7) | Cloud `session_012WDdnkDZjTWRF4956Mjaoz`, `agent/linked-notes` | in flight; Astra adversarial review before merge |
-| P4-B client correctness: duplicate-task identity, read timeouts/error state, conflict next step, Undo in Done today | Cloud `session_01TLT6gLxkoKtDHSy8CcCpmb`, `agent/client-correctness` | in flight |
-| P4-C capture draft recovery (account-aware, separate from the queue) | Cloud `session_01H7tmZxTqo9BDE7UHb5esX1`, `agent/draft-recovery` | in flight |
-| T1 Today rule (domain read model) | Astra low → **PR #5** (495 tests, mutation-checked) | CodeRabbit/CI |
-| Hermetic git fixtures (P2-A follow-up) | Astra low → **PR #6** (55 package tests) | CodeRabbit/CI |
-| T1 Today layout (Overdue below, collapsed) | P4-B addendum | in flight |
-| P4-D Active Work Now read-only card | Cloud, after P4-A merges (reuses its renderer) | queued |
+| P2-A real-Git e2e harness | — | **merged** (#4) |
+| P2-B service-worker offline shell e2e | — | **merged** (#7) |
+| P3-A Cloudflare deploy scaffold + `docs/deploy.md` | — | **merged** (#10) |
+| P4-A linked note context | — | **merged** (#8) |
+| P4-B client correctness | — | **merged** (#9) |
+| P4-C capture draft recovery | — | **merged** (#11) |
+| T1 Today rule | — | **merged** (#5) |
+| Hermetic git fixtures | — | **merged** (#6) |
+| T1 Today layout | — | **merged** with P4-B (#9) |
+| P4-D Active Work Now read-only card | Cloud (P4-A session, repo attached), `agent/active-work-now` from `agent/linked-notes` | in flight |
 | P4-E token-based Undo (ADR-0013: no paging, ≤ 10 calls/attempt, ≤ 3 attempts) | Cloud (P4-B session, repo attached), `agent/token-undo` | launching |
 | Whole-system review (Phase 2 gate + milestone 1 exit) | Cloud Opus + Astra, `docs/reviews/phase-2-review-brief.md` | after **all** milestone-1 streams merge |
 
@@ -84,7 +86,7 @@ Observations: none yet (recorded privately in milestone 2–3).
 | # | Decision | Status |
 |---|---|---|
 | T1 | Today meaning | **decided** (provisional) — ADR-0012 |
-| P1 | Cloudflare Workers plan | **on hold** — owner: redesign Undo first (ADR-0013, P4-E); Workers Paid only if a token Undo cannot work |
+| P1 | Cloudflare Workers plan | **on hold** — owner: redesign Undo first (ADR-0013, P4-E: ≈10 calls/attempt, ≤3 attempts ⇒ Free plan’s 50 suffices); Workers Paid (10,000 subrequests) only if a token Undo cannot work |
 | D2 | Linked-note allowlist | default `Projects/`, `Tasks/`, `Inbox/` (P4-A implements it) |
 | D3 | Task IDs | no `🆔` writes in first release |
 | D4 | Capture anchor | decided: top of Open (ADR-0010) |

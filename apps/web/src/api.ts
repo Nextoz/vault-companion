@@ -1,6 +1,13 @@
 // Same-origin HTTP API (packages/contracts). `redirect: 'manual'` makes an expired Access session visible as an
 // opaque redirect instead of silently following it to a login page (F11).
-import { SessionResponse, TasksResponse } from '@vault-companion/contracts';
+import {
+  encodeLinkedNoteHeader,
+  LINKED_NOTE_HEADER,
+  LinkedNoteResponse,
+  SessionResponse,
+  TasksResponse,
+  type LinkedNoteRequest,
+} from '@vault-companion/contracts';
 import type { z } from 'zod';
 
 export type Fetched<T> =
@@ -19,14 +26,14 @@ const base: RequestInit = { redirect: 'manual', credentials: 'same-origin', cach
 
 const TIMED_OUT = 'The server did not answer in time.';
 
-export async function getJson<S extends z.ZodType>(url: string, schema: S): Promise<Fetched<z.infer<S>>> {
+export async function getJson<S extends z.ZodType>(url: string, schema: S, headers: Record<string, string> = {}): Promise<Fetched<z.infer<S>>> {
   // A timer rather than AbortSignal.timeout: it bounds the body as well as the headers, and tests can drive it.
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), READ_TIMEOUT_MS);
   try {
     let res: Response;
     try {
-      res = await fetch(url, { ...base, signal: abort.signal, headers: { Accept: 'application/json' } });
+      res = await fetch(url, { ...base, signal: abort.signal, headers: { Accept: 'application/json', ...headers } });
     } catch {
       return abort.signal.aborted ? { kind: 'error', message: TIMED_OUT } : { kind: 'offline' };
     }
@@ -47,6 +54,13 @@ export const getSession = () => getJson('/api/session', SessionResponse);
 
 export const getTasks = (known: readonly string[]) =>
   getJson(known.length ? `/api/tasks?known=${known.join(',')}` : '/api/tasks', TasksResponse);
+
+/**
+ * Linked note: the server resolves the note from the task locator; the request rides in a header so task text is never part
+ * of a URL. `no-store` (base) and the service worker's `/api/*` bypass keep note text out of every cache.
+ */
+export const getLinkedNote = (req: LinkedNoteRequest) =>
+  getJson('/api/linked-note', LinkedNoteResponse, { [LINKED_NOTE_HEADER]: encodeLinkedNoteHeader(req) });
 
 /** `accountKey` is the queued item's binding, checked by the Worker against the session (A7), outside the body. */
 export const postCommand = (body: string, accountKey: string) =>

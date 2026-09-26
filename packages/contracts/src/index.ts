@@ -175,3 +175,79 @@ export const TasksResponse = z.strictObject({
 export type TasksResponse = z.infer<typeof TasksResponse>;
 
 export const SessionResponse = z.strictObject({ accountKey: z.string().regex(/^[0-9a-f]{64}$/) });
+
+/** Most wikilinks a request may address in one task line (bounds the index; real lines carry a handful). */
+export const MAX_LINK_INDEX = 99;
+
+/**
+ * Read-only linked note (vault-contract §1 "Linked notes"): the server resolves the n-th wikilink of the task the
+ * locator names. There is deliberately no path field — a client path is never accepted.
+ */
+export const LinkedNoteRequest = z.strictObject({
+  taskLocator: TaskLocator,
+  linkIndex: z.number().int().nonnegative().max(MAX_LINK_INDEX),
+});
+export type LinkedNoteRequest = z.infer<typeof LinkedNoteRequest>;
+
+/** The request travels base64url(JSON) in this header, so task text never appears in a URL or an access log. */
+export const LINKED_NOTE_HEADER = 'X-VC-Locator';
+/** Header values above this are refused before decoding (a maximal task line is 16,000 code points). */
+export const MAX_LINKED_NOTE_HEADER = 96 * 1024;
+
+export function encodeLinkedNoteHeader(req: LinkedNoteRequest): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(req));
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** `null` for anything that is not exactly a valid request. */
+export function decodeLinkedNoteHeader(value: string | undefined): LinkedNoteRequest | null {
+  if (!value || value.length > MAX_LINKED_NOTE_HEADER || !/^[A-Za-z0-9_-]+$/.test(value)) return null;
+  try {
+    const bin = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+    const parsed = LinkedNoteRequest.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export const LinkedNoteRefusalCode = z.enum([
+  /** The link names no allowlisted note (or the task has no link at that index). */
+  'not-found',
+  /** A bare-name link matches several notes. */
+  'ambiguous',
+  /** Unsafe or out-of-scope target: traversal, absolute, backslash, `%`, denied or non-allowlisted root. */
+  'outside-allowlist',
+  /** The note, or a folder that must be searched, exceeds what can be read safely (1 MB guard). */
+  'too-large',
+  /** The task line is no longer where, or what, the locator says. Reload the task list. */
+  'task-changed',
+  /** The note is not valid UTF-8. */
+  'encoding',
+]);
+export type LinkedNoteRefusalCode = z.infer<typeof LinkedNoteRefusalCode>;
+
+/** 1 MB guard (vault-contract §1): the same limit the GitHub adapter enforces. */
+export const MAX_NOTE_BYTES = 1024 * 1024;
+
+export const LinkedNoteResponse = z.discriminatedUnion('status', [
+  z.strictObject({
+    status: z.literal('ok'),
+    /** Commit X every read of this request was pinned to. */
+    revision: commitSha,
+    path: z.string().min(1).max(512),
+    blobSha,
+    /** Raw Markdown. The client renders it with raw HTML disabled, then sanitises. */
+    markdown: z.string().max(MAX_NOTE_BYTES),
+  }),
+  z.strictObject({
+    status: z.literal('refused'),
+    revision: commitSha,
+    code: LinkedNoteRefusalCode,
+    message: z.string(),
+  }),
+]);
+export type LinkedNoteResponse = z.infer<typeof LinkedNoteResponse>;
