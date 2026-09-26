@@ -972,6 +972,17 @@ describe('G3-1 — a shared durable read watermark protects receipts evicted by 
     expect((await b.store.receipts()).map((r) => r.operationId)).toEqual([ops[N - 1]]);
   });
 
+  it('an older read (below the watermark) can neither acknowledge nor move the watermark backwards (O1)', async () => {
+    const b = await openTab();
+    await completeAll(b, 2);
+    await b.queue.acknowledge(readAt(REV_B, [1], included([commitOf(1)])));
+    expect(await b.queue.readWatermark()).toMatchObject({ commitSha: REV_B });
+    // A late read at REV (before REV_B) reports receipt 2 included, but does not contain the watermark.
+    expect(await b.queue.acknowledge(readAt(REV, [2], included([commitOf(2)])))).toBeNull();
+    expect(await b.queue.readWatermark()).toMatchObject({ commitSha: REV_B });
+    expect((await b.store.receipts()).find((r) => r.receipt.commitSha === commitOf(2))?.acknowledged).toBe(false);
+  });
+
   it('a read that does not satisfy the current watermark can neither evict nor move it', async () => {
     const b = await openTab();
     const ops = await completeAll(b, N);

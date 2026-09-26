@@ -287,7 +287,8 @@ export class PendingQueue {
   async forgetSaved(operationIds: Iterable<string>, read: ReadEvidence): Promise<void> {
     const ids = new Set(operationIds);
     await this.#locked(async () => {
-      const chosen = [...this.#receipts.values()].filter((r) => r.acknowledged && ids.has(r.operationId));
+      // `#evictable` keeps the unacknowledged ones: only the watermark covers acknowledged receipts (O1).
+      const chosen = [...this.#receipts.values()].filter((r) => ids.has(r.operationId));
       await this.#writeReceipts([], this.#evictable(chosen, read), null);
     });
   }
