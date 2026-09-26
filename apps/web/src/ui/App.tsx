@@ -26,6 +26,8 @@ interface Toast {
 const UNDO_WINDOW_MS = 8000;
 /** Re-reads after a stale response that predates the watermark; each asks about the newest one. */
 const STALE_REREADS = 3;
+/** Review O6: consecutive stale reads after which the device offers to reset its saved-actions history. */
+export const STALE_BEFORE_RESET = 3;
 
 export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: DraftStore; receipts: EventTarget }) {
   const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
@@ -86,21 +88,33 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
     return res.kind;
   }, [queue]);
 
+  // Consecutive stale reads (O6): a watermark no read ever contains again (e.g. history rewritten) would stall for ever.
+  const staleRef = useRef(0);
+  const [staleStreak, setStaleStreak] = useState(0);
   const refreshTasks = useCallback(async () => {
     const reads = readsRef.current;
     if (!reads) return;
     for (let attempt = 0; ; attempt++) {
       const out = await reads.read();
       switch (out.kind) {
-        case 'apply':
+        case 'apply': {
           prefs.setLastRevision(out.read.data.revision);
-          setRendered(out.read);
-          void queue.acknowledge(out.read.data);
+          staleRef.current = 0;
+          setStaleStreak(0);
+          const read = out.read;
+          setRendered(read);
+          // Acknowledging moves the watermark to this read's own revision (O1): the read still satisfies it.
+          void queue.acknowledge(read.data).then((version) => {
+            if (version !== null) setRendered((r) => (r === read ? { ...r, watermarkVersion: version } : r));
+          });
           setConnection('online');
           return;
+        }
         case 'superseded':
           return;
         case 'stale':
+          staleRef.current += 1;
+          setStaleStreak(staleRef.current);
           setConnection('refreshing');
           if (out.retry && attempt < STALE_REREADS) continue;
           return;
@@ -276,6 +290,26 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             <span>{unreachableText(connection)}</span>
             <button type="button" onClick={() => void wake()}>
               Try again
+            </button>
+          </div>
+        )}
+        {!signedOut && staleStreak >= STALE_BEFORE_RESET && (
+          <div className="banner banner-warn" role="alert">
+            <span>
+              Tasks can't be refreshed on this device: its saved-actions history no longer matches the vault. Resetting
+              it keeps every pending action.
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                void queue.resetHistory().then(() => {
+                  staleRef.current = 0;
+                  setStaleStreak(0);
+                  return refreshTasks();
+                })
+              }
+            >
+              Reset saved-actions history on this device
             </button>
           </div>
         )}

@@ -2,18 +2,19 @@
 //
 // - Reads can overlap and their responses can arrive out of order: a response older than the newest one already
 //   applied is dropped, so a late stale read never replaces a newer screen.
-// - Every retained receipt is asked about on every read, acknowledged or not: whether the screen reflects a saved
-//   action is decided by the `known` map of the response being rendered. Acknowledgement only permits eviction.
-// - Receipts evicted in any tab are covered by the shared watermark instead: a read is rendered only if it shows the
-//   watermark commit `included`. One that does not is stale; the screen keeps the last good read, or says it is
-//   refreshing. Every read asks about the watermark first.
-import type { ActiveWorkResponse, TasksResponse } from '@vault-companion/contracts';
+// - A read asks about the watermark first, then the oldest unacknowledged receipts, at most `MAX_KNOWN` commits in all
+//   (review O1: the server's cost is bounded however many receipts the device holds). Whether the screen reflects an
+//   unacknowledged saved action is decided by the `known` map of the response being rendered.
+// - Acknowledged receipts are covered by the shared watermark instead (acknowledging moves it to the acknowledging
+//   read's revision, queue.ts): a read is rendered only if it shows the watermark commit `included`, so under W1 it
+//   contains every acknowledged commit. One that does not is stale; the screen keeps the last good read, or says it is
+//   refreshing.
+import { MAX_KNOWN, type ActiveWorkResponse, type TasksResponse } from '@vault-companion/contracts';
 import type { Fetched } from './api.ts';
 import type { Watermark } from './queue/db.ts';
-import { satisfiesWatermark, type QueueItem } from './queue/queue.ts';
+import { RESET_WATERMARK, satisfiesWatermark, type QueueItem } from './queue/queue.ts';
 
-/** The Worker answers at most this many `known=` commits (apps/worker `GET /api/tasks`). */
-export const MAX_KNOWN = 50;
+export { MAX_KNOWN };
 
 export class ReadSequencer {
   #issued = 0;
@@ -33,16 +34,13 @@ export class ReadSequencer {
 }
 
 /**
- * The commits of retained receipts, unacknowledged first (they still gate eviction), newest first within each.
- * A commit beyond the Worker's limit gets no answer, and an unanswered receipt keeps overlaying: the safe side.
+ * The commits of unacknowledged receipts, oldest first (items arrive in seq order): the server resolves the oldest
+ * unanswered one exactly. Acknowledged receipts are covered by the watermark and never asked about (O1). A commit
+ * beyond the limit gets no answer this time, and an unanswered receipt keeps overlaying: the safe side.
  */
 export function knownCommits(items: readonly QueueItem[]): string[] {
-  const saved = items.filter((i) => i.receipt !== null);
-  const ordered = [
-    ...saved.filter((i) => !i.acknowledged).reverse(),
-    ...saved.filter((i) => i.acknowledged).reverse(),
-  ];
-  return [...new Set(ordered.map((i) => i.receipt?.commitSha ?? ''))].slice(0, MAX_KNOWN);
+  const unacknowledged = items.filter((i) => i.receipt !== null && !i.acknowledged);
+  return [...new Set(unacknowledged.map((i) => i.receipt?.commitSha ?? ''))].slice(0, MAX_KNOWN);
 }
 
 /** A read that passed the watermark current when it arrived. */
@@ -92,7 +90,8 @@ export class TaskReads {
   async read(): Promise<ReadOutcome> {
     const ticket = this.#order.begin();
     const asked = await this.#deps.watermark();
-    const known = [...new Set([...(asked ? [asked.commitSha] : []), ...this.#deps.receipts()])].slice(0, MAX_KNOWN);
+    const mark = asked && asked.commitSha !== RESET_WATERMARK ? [asked.commitSha] : [];
+    const known = [...new Set([...mark, ...this.#deps.receipts()])].slice(0, MAX_KNOWN);
     const res = await this.#deps.getTasks(known);
     const current = res.kind === 'ok' ? await this.#deps.watermark() : null;
     if (!this.#order.accept(ticket)) return { kind: 'superseded' };

@@ -4,6 +4,7 @@ import {
   Command,
   decodeLinkedNoteHeader,
   LINKED_NOTE_HEADER,
+  MAX_KNOWN,
   type ActiveWorkResponse,
   type ApiError,
   type ErrorCode,
@@ -93,7 +94,8 @@ export function createApp(deps: AppDeps) {
   app.get('/api/session', (c) => c.json({ accountKey: c.get('identity').accountKey }));
 
   app.get('/api/tasks', async (c) => {
-    const known = (c.req.query('known') ?? '').split(',').filter((s) => SHA.test(s)).slice(0, 50);
+    // Review O1: the same bound the client asks within; the rest are left unanswered (the client keeps overlaying them).
+    const known = (c.req.query('known') ?? '').split(',').filter((s) => SHA.test(s)).slice(0, MAX_KNOWN);
     const result = await deps.services.readTasks(known);
     if (isApiError(result)) {
       c.get('logMeta').errorCode = result.code;

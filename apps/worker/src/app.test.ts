@@ -11,10 +11,12 @@ const SHA1 = '1'.repeat(40);
 let logs: LogRecord[];
 let executed: { command: Command; raw: unknown }[];
 let nextResult: Receipt | ApiError;
+let askedKnown: readonly string[] | null;
 
 function makeApp() {
   const services: Services = {
-    async readTasks() {
+    async readTasks(known) {
+      askedKnown = known;
       return { code: 'upstream-unavailable', message: 'x', retryable: true };
     },
     async execute(command, raw) {
@@ -60,6 +62,15 @@ beforeEach(() => {
   logs = [];
   executed = [];
   nextResult = receipt;
+  askedKnown = null;
+});
+
+describe('GET /api/tasks known= (review O1)', () => {
+  it('passes at most MAX_KNOWN (8) well-formed commits to the read, in the order asked', async () => {
+    const shas = Array.from({ length: 12 }, (_, i) => (i + 1).toString(16).padStart(40, '0'));
+    await makeApp().request(`/api/tasks?known=${['not-a-sha', ...shas].join(',')}`, { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+    expect(askedKnown).toEqual(shas.slice(0, 8));
+  });
 });
 
 describe('authentication (A19)', () => {

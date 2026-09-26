@@ -12,6 +12,12 @@ const blobSha = z.string().regex(/^[0-9a-f]{40}$/, 'expected a 40-hex blob SHA')
 export const MAX_TASK_LINE = 16_000;
 const singleLine = z.string().min(1).max(MAX_TASK_LINE).refine((s) => !/[\r\n]/.test(s), 'must be a single line');
 
+/**
+ * Most `known=` commits a task read asks about and the Worker answers (review O1): the watermark plus the oldest
+ * unacknowledged receipts. The server answers them all with at most two single-page listings.
+ */
+export const MAX_KNOWN = 8;
+
 export const TaskLocator = z.strictObject({
   path: z.literal('Tasks/To-Do List.md'),
   blobSha,

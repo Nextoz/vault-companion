@@ -27,14 +27,15 @@ describe('knownCommits (N3)', () => {
       receipt: { commitSha: n.toString(16).padStart(40, '0') } as Receipt,
     }) as QueueItem;
 
-  it('asks about acknowledged receipts too, after the unacknowledged ones, within the Worker limit', () => {
+  it('asks only about unacknowledged receipts, oldest first, within MAX_KNOWN (≤ 8, review O1)', () => {
+    expect(MAX_KNOWN).toBeLessThanOrEqual(8);
     const items = [saved(1, true), saved(2, false), saved(3, true), saved(4, false)];
-    expect(knownCommits(items).map((c) => parseInt(c, 16))).toEqual([4, 2, 3, 1]);
+    expect(knownCommits(items).map((c) => parseInt(c, 16))).toEqual([2, 4]);
 
-    const many = Array.from({ length: MAX_KNOWN + 5 }, (_, i) => saved(i + 1, i < 10));
+    const many = Array.from({ length: 50 }, (_, i) => saved(i + 1, i < 10));
     const asked = knownCommits(many);
     expect(asked).toHaveLength(MAX_KNOWN);
-    expect(asked.slice(0, MAX_KNOWN - 10).every((c) => parseInt(c, 16) > 10)).toBe(true);
+    expect(asked.map((c) => parseInt(c, 16))).toEqual(Array.from({ length: MAX_KNOWN }, (_, i) => 11 + i));
   });
 });
 

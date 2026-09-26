@@ -1,10 +1,11 @@
 import { IDBFactory } from 'fake-indexeddb';
-import { Command, type CompleteTaskCommand, type Receipt } from '@vault-companion/contracts';
+import { Command, MAX_KNOWN, TasksResponse, type CompleteTaskCommand, type Receipt } from '@vault-companion/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { captureNote, completeTask, undoCompleteTask, undoDraft } from '../commands.ts';
 import { backoffMs } from './classify.ts';
 import { openPendingStore, type PendingStore } from './db.ts';
-import { PendingQueue } from './queue.ts';
+import { knownCommits, TaskReads } from '../reads.ts';
+import { PendingQueue, satisfiesWatermark } from './queue.ts';
 
 const ACCOUNT_A = 'a'.repeat(64);
 const ACCOUNT_B = 'b'.repeat(64);
@@ -473,5 +474,84 @@ describe('pending queue', () => {
       target.operationId,
       capture.operationId,
     ]);
+  });
+});
+
+describe('review O1 — a burst of 30 actions queued offline', () => {
+  it('is sent, then acknowledged and evicted by bounded reads (≤ MAX_KNOWN asked each), never locking', async () => {
+    const queue = await openQueue();
+    const commitOf = new Map<string, string>();
+    let n = 0;
+    send.mockImplementation(async (body) => {
+      const r = receiptFor(body);
+      const commitSha = (++n).toString(16).padStart(40, 'c');
+      commitOf.set(r.operationId, commitSha);
+      return json(200, { ...r, commitSha });
+    });
+    for (let i = 0; i < 30; i++) await queue.enqueue(note(`Synthetic ${i}`), { accountKey: ACCOUNT_A, label: `n${i}` });
+    queue.setSession(ACCOUNT_A);
+    await queue.flush();
+    expect(send).toHaveBeenCalledTimes(30);
+
+    // The server: X after all 30; every asked commit that is on main is included (the domain's answerKnown result).
+    const X = 'f'.repeat(40);
+    const onMain = new Set([...commitOf.values(), X]);
+    const asked: number[] = [];
+    const reads = new TaskReads({
+      getTasks: async (known) => {
+        asked.push(known.length);
+        const data = TasksResponse.parse({
+          revision: X, blobSha: BLOB, today: '2026-09-24', timeZone: 'Europe/Copenhagen', writeBlock: null,
+          known: Object.fromEntries(known.map((k) => [k, onMain.has(k) ? 'included' : 'not-included'])),
+          todayTasks: [], overdue: [], allOpen: [], doneToday: [],
+        });
+        return { kind: 'ok', data };
+      },
+      watermark: () => queue.readWatermark(),
+      receipts: () => knownCommits(queue.getSnapshot().items),
+    });
+
+    let rounds = 0;
+    while (queue.getSnapshot().items.some((i) => i.receipt && !i.acknowledged)) {
+      if (++rounds > 10) throw new Error('reads never acknowledged the burst');
+      const out = await reads.read();
+      if (out.kind !== 'apply') throw new Error(`read ${out.kind}`);
+      await queue.acknowledge(out.read.data);
+    }
+    expect(Math.max(...asked)).toBeLessThanOrEqual(8); // the review's bound, not the constant under test
+    expect(rounds).toBeLessThanOrEqual(Math.ceil(30 / (MAX_KNOWN - 1)));
+    expect((await store.receipts()).length).toBeLessThanOrEqual(20); // the rest evicted under the watermark
+    expect(await queue.readWatermark()).toMatchObject({ commitSha: X });
+    expect(await store.all()).toEqual([]);
+  });
+});
+
+describe('review O6 — "Reset saved-actions history on this device"', () => {
+  it('drops every receipt and neutralises the watermark in one step, never a pending item; versions keep increasing', async () => {
+    const queue = await openQueue();
+    send.mockImplementationOnce(async (body) => ok(body)); // one saved
+    await queue.enqueue(note('saved one'), { accountKey: ACCOUNT_A, label: 's' });
+    queue.setSession(ACCOUNT_A);
+    await queue.flush();
+    const X = 'f'.repeat(40);
+    await queue.acknowledge({ revision: X, known: { ['3'.repeat(40)]: 'included' } });
+    const before = await queue.readWatermark();
+    expect(before).toMatchObject({ commitSha: X });
+
+    send.mockImplementation(async () => unavailable503()); // one pending
+    const pending = note('still pending');
+    await queue.enqueue(pending, { accountKey: ACCOUNT_A, label: 'p' });
+    await queue.flush();
+
+    await queue.resetHistory();
+    expect(await store.receipts()).toEqual([]);
+    expect((await store.all()).map((r) => r.operationId)).toEqual([pending.operationId]);
+    const after = await queue.readWatermark();
+    expect(after!.version).toBeGreaterThan(before!.version);
+    // Every read satisfies it again: nothing stays stale for ever.
+    expect(satisfiesWatermark({ revision: '9'.repeat(40), known: {} }, after)).toBe(true);
+    // …and the next acknowledgement starts a real watermark, still moving forward.
+    await queue.acknowledge({ revision: X, known: {} });
+    expect((await queue.readWatermark())!.version).toBe(after!.version);
   });
 });

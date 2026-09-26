@@ -97,9 +97,10 @@ The effect is never taken from the client. For a found or just-created commit C 
 installation-token overhead: one request per token lifetime). Per attempt at X:
 1. Read commit C = `targetCommit`. Unknown ⇒ `conflict:task-changed` (nothing to undo). Its `Vault-Companion-Op` must
    equal the target's operation ID and its payload trailer the target envelope's hash, else `invalid`.
-2. One single-page listing of `C..X` (≤ 250 commits; GitHub: one `compare` page). C not an ancestor of X ⇒
-   `conflict:task-changed`. More than one page ⇒ `refused:undo-expired` ("too much changed since; undo it in
-   Obsidian"), never paged. The same page answers: this Undo's own operation ID present ⇒ dedupe (`already-applied`,
+2. One single-page listing of `C..X` (≤ 250 commits; GitHub: one `compare` page), never paged. C not an ancestor of
+   X, or more than one page ⇒ `dedupe-unknown` ("this Undo may already have been applied", review O5): this Undo's own
+   commit could be in the unlisted range, so neither answer may claim "not applied" (`refused:undo-expired` is no
+   longer returned). The same page answers: this Undo's own operation ID present ⇒ dedupe (`already-applied`,
    only after rebuilding the inverse against that commit's first-parent task list and matching its blob; otherwise
    `dedupe-unknown`);
    another commit with `Vault-Companion-Undoes: <target operationId>` ⇒ `conflict:task-changed` (a completion is undone
@@ -128,6 +129,15 @@ Per effect type:
 `GET /api/tasks?known=<sha,…>` returns tasks parsed at X plus `known: { sha: 'included' | 'not-included' }`
 for commit SHAs the client holds receipts for. For a `not-included` receipt the client overlays the receipt's
 effect and shows the view as `refreshing` — a saved completion never reappears as authoritative open.
+
+Bounded (review O1): the client asks about at most `MAX_KNOWN` = 8 commits — the read watermark first, then the oldest
+**unacknowledged** receipts. Acknowledging a receipt moves the watermark to the acknowledging read's revision in the
+same transaction, and only reads that contain the watermark are rendered, so under W1 every acknowledged commit is in
+every rendered read without being asked about. The Worker caps `known` at the same 8 and answers with at most two
+single-page listings `commitsSince(first unanswered, X)`: the base is exactly answered (a listing exists only for an
+ancestor), listed commits and X are `included`, the rest `not-included` (asked again later). ≤ 4 store requests per
+read. After 3 consecutive stale reads (a watermark no read contains again, e.g. a rewritten history — O6) the app
+offers "Reset saved-actions history on this device": receipts and the watermark are dropped, pending items kept.
 
 ## Client pending queue (PWA)
 

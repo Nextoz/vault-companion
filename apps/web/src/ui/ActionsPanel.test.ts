@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { completeTask } from '../commands.ts';
 import type { QueueItem } from '../queue/queue.ts';
-import { attentionText, canRetry, CLOCK_SKEW_TEXT } from './ActionsPanel.tsx';
+import { knownNotApplied } from '../queue/classify.ts';
+import { attentionText, canRetry, CLOCK_SKEW_TEXT, UNDO_UNKNOWN_TEXT } from './ActionsPanel.tsx';
 
 const envelope = completeTask({ baseRevision: '1'.repeat(40) }, {
   path: 'Tasks/To-Do List.md',
@@ -53,6 +54,15 @@ describe('attention next steps (P4-B)', () => {
     // A fresh, unblocked read (or none yet): Retry is back.
     expect(canRetry(conflicted, { writeBlock: null })).toBe(true);
     expect(canRetry(conflicted, null)).toBe(true);
+  });
+
+  it('review O5: an Undo with an unknown outcome says it may already be applied, keeps Retry, and is not known-not-applied', () => {
+    const undo = attention('dedupe-unknown', { type: 'UndoCompleteTask' });
+    expect(attentionText(undo)).toBe(UNDO_UNKNOWN_TEXT);
+    expect(UNDO_UNKNOWN_TEXT).toMatch(/may already have been applied/);
+    expect(attentionText(undo)).not.toMatch(/Obsidian/);
+    expect(canRetry(undo)).toBe(true);
+    expect(knownNotApplied(undo.error)).toBe(false);
   });
 
   it('explains a changed task in plain words; other errors keep the server message', () => {

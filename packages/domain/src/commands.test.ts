@@ -212,7 +212,7 @@ describe('UndoCompleteTask (token, ADR-0013)', () => {
     store.rewindHead(1); // C rewritten away…
     await store.commitFiles({ [TODO]: completedText }); // …and the same completed file committed by someone else
     const head = store.headCommit;
-    expect(await run(undoOf(c))).toMatchObject({ code: 'conflict:task-changed' });
+    expect(await run(undoOf(c))).toMatchObject({ code: 'dedupe-unknown' }); // never applied; never "known not applied" (O5)
     expect(store.headCommit).toBe(head);
   });
 
@@ -298,7 +298,22 @@ describe('UndoCompleteTask (token, ADR-0013)', () => {
     });
   });
 
-  it('a second Undo of the same completion is refused', async () => {
+  it('review O5: an Undo that applied with a lost response, retried after > 1 page, is "may already be applied", never known-not-applied', async () => {
+    store.comparePageSize = 3;
+    const original = text();
+    const c = await complete('Water the plants');
+    const undo = undoOf(c);
+    store.writeFaults.push('apply-then-unknown');
+    await run(undo); // applied; the phone never heard back
+    expect(text()).toBe(original);
+    for (let i = 0; i < 4; i++) await store.commitFiles({ [`Inbox/later ${i}.md`]: 'x\n' });
+    const retry = await run(undo);
+    expect(retry).toMatchObject({ code: 'dedupe-unknown', retryable: false });
+    expect((retry as { code: string }).code.startsWith('refused:')).toBe(false);
+    expect(store.commitsWithOp(undo.operationId as string)).toHaveLength(1);
+  });
+
+    it('a second Undo of the same completion is refused', async () => {
     const c = await complete('Water the plants');
     ok(await run(undoOf(c)));
     const after = text();
@@ -306,7 +321,7 @@ describe('UndoCompleteTask (token, ADR-0013)', () => {
     expect(text()).toBe(after);
   });
 
-  it('beyond one compare page since the completion ⇒ refused:undo-expired, nothing written; exactly one page still works', async () => {
+  it('beyond one compare page since the completion ⇒ dedupe-unknown (O5), nothing written; exactly one page still works', async () => {
     store.comparePageSize = 3;
     const c = await complete('Water the plants');
     for (let i = 0; i < 3; i++) await store.commitFiles({ [`Inbox/other ${i}.md`]: `${i}\n` });
@@ -318,7 +333,7 @@ describe('UndoCompleteTask (token, ADR-0013)', () => {
     expect(inPage).toBe('ok');
     await store.commitFiles({ 'Inbox/other 3.md': '3\n' });
     const head = store.headCommit;
-    expect(await run(undoOf(c))).toMatchObject({ code: 'refused:undo-expired', retryable: false });
+    expect(await run(undoOf(c))).toMatchObject({ code: 'dedupe-unknown', retryable: false });
     expect(store.headCommit).toBe(head);
 
     store.comparePageSize = 5;
@@ -433,5 +448,64 @@ describe('CaptureNote', () => {
     const r = ok(await run(envelope('CaptureNote', { text: 'EXISTING' }, { occurredAt: '2026-09-20T10:00:00+02:00' })));
     expect(r.path).toBe('Inbox/EXISTING - 2026-09-20 (2).md');
     expect(store.text('Inbox/Existing - 2026-09-20.md')).toBe('x\n');
+  });
+});
+
+describe('task read: bounded `known` answers (review O1)', () => {
+  const known = async (asked: readonly string[]) => {
+    const r = await svc.readTasks(asked);
+    if ('code' in r) throw new Error(r.code);
+    return r.known;
+  };
+  const listings = () => store.calls.filter((k) => k === 'commitsSince').length;
+
+  it('answers the watermark and newer receipts with one listing; X itself needs none', async () => {
+    const w = base;
+    const c1 = await store.commitFiles({ 'Inbox/a.md': 'a\n' });
+    const c2 = await store.commitFiles({ 'Inbox/b.md': 'b\n' });
+    const x = await store.commitFiles({ 'Inbox/c.md': 'c\n' });
+    store.calls.length = 0;
+    expect(await known([w, c1, c2, x])).toEqual({ [w]: 'included', [c1]: 'included', [c2]: 'included', [x]: 'included' });
+    expect(listings()).toBe(1);
+    expect(store.calls).not.toContain('isAncestor');
+  });
+
+  it('a receipt older than the watermark (acknowledged elsewhere first) is resolved by a second listing', async () => {
+    const older = await store.commitFiles({ 'Inbox/a.md': 'a\n' });
+    const w = await store.commitFiles({ 'Inbox/b.md': 'b\n' });
+    await store.commitFiles({ 'Inbox/c.md': 'c\n' });
+    store.calls.length = 0;
+    expect(await known([w, older])).toEqual({ [w]: 'included', [older]: 'included' });
+    expect(listings()).toBe(2);
+  });
+
+  it('a commit not in the history is not-included; the rest are still answered', async () => {
+    const c1 = await store.commitFiles({ 'Inbox/a.md': 'a\n' });
+    await store.commitFiles({ 'Inbox/b.md': 'b\n' });
+    const gone = 'f'.repeat(40);
+    expect(await known([gone, c1])).toEqual({ [gone]: 'not-included', [c1]: 'included' });
+  });
+
+  it('more than one page since the base: the base is still an ancestor (included); unlisted commits are not-included, never an error', async () => {
+    store.comparePageSize = 3;
+    const w = base;
+    const c1 = await store.commitFiles({ 'Inbox/a.md': 'a\n' });
+    for (let i = 0; i < 4; i++) await store.commitFiles({ [`Inbox/x${i}.md`]: 'x\n' });
+    const answer = await known([w, c1]);
+    expect(answer[w]).toBe('included'); // ancestry is decided before listing (port contract)
+    expect(['included', 'not-included']).toContain(answer[c1]);
+    // A base that is not an ancestor is never mistaken for one, however long the history.
+    expect(await known(['f'.repeat(40)])).toEqual({ ['f'.repeat(40)]: 'not-included' });
+  });
+
+  it('answers at most MAX_KNOWN commits, with ≤ 4 store calls per read for any N', async () => {
+    const commits: string[] = [];
+    for (let i = 0; i < 20; i++) commits.push(await store.commitFiles({ [`Inbox/n${i}.md`]: `${i}\n` }));
+    for (const n of [0, 1, 8, 20]) {
+      store.calls.length = 0;
+      const answer = await known(commits.slice(0, n).reverse()); // worst order: newest first
+      expect(Object.keys(answer).length).toBe(Math.min(n, 8));
+      expect(store.calls.length).toBeLessThanOrEqual(4);
+    }
   });
 });

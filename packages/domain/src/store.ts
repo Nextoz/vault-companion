@@ -74,7 +74,10 @@ export type CommitsSinceResult =
   | { readonly kind: 'ok'; readonly commits: readonly ListedCommit[] }
   /** `base` is unknown or not an ancestor of `until` (e.g. a forged or rewritten-away token). */
   | { readonly kind: 'not-ancestor' }
-  /** More than one page (`COMPARE_PAGE` commits) lies between them. Never paged (ADR-0013). */
+  /**
+   * More than one page (`COMPARE_PAGE` commits) lies between them. Never paged (ADR-0013). Answered only when `base`
+   * IS an ancestor of `until`: ancestry is decided before any listing (task reads rely on it, review O1).
+   */
   | { readonly kind: 'too-many' };
 
 /** One compare page (GitHub's maximum `per_page`). */
