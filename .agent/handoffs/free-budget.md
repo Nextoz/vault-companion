@@ -33,6 +33,21 @@ Branched from `agent/read-budget` (`00b46c6`), so it includes O1/O5/O6.
    - `docs/commands.md` execution algorithm (dedupe step, 3 attempts, one page, the client's base refresh);
    - `docs/deploy.md` §0: Free suffices for subrequests, with measured worst cases; CPU is still to be measured (O2).
 
+## PR #15 review fixes (after merging `origin/main`)
+
+`docs/deploy.md` §0 conflicted with main's owner decision. Both are kept: the bounded measured table replaces the
+superseded "8 + p, ≤ 5 attempts" row, and main's Free decision and CPU guidance stay.
+
+- **F1:** a view test for the O1 fallback. An unacknowledged receipt that the rendered read did not answer keeps
+  overlaying. It fails if the fallback becomes `'included'`; only this new test catches that mutation.
+- **F2:** `resetHistory()` keeps the receipts a pending Undo draft still needs for its token. The rule is shared with
+  `#evictable` through `#neededByDrafts()`. Kept receipts become **unacknowledged**: the neutral watermark no longer
+  covers them, so reads ask about them again.
+  - Test: an unsent draft survives the reset; the unrelated receipt is dropped; the draft then sends its token.
+  - Mutations "drop all" and "kept stays acknowledged" each fail it.
+- **F3:** the reset banner adds "a recently saved action may briefly show as not yet reflected"; the O6 Playwright
+  spec asserts it.
+
 ## Measured budget (`packages/github/src/write-budget.test.ts`)
 
 Worst case: a full 250-commit dedupe page, the head moving on every attempt (nothing cached carries over), 3 lost ref
@@ -80,7 +95,7 @@ The tests also assert:
 
 ## Verification
 
-- `pnpm check`: **green**, 49 files, 791 tests.
+- `pnpm check`: **green**, 49 files, 793 tests (after the PR #15 fixes).
 - Playwright (`vite build`, Chromium, iPhone 15): `app.spec.ts` 34/34 after the clock pin. The 5 `offline-shell`
   specs fail in this sandbox as before (service worker never takes control under this Chromium; same on a clean main).
 - **Guards broken once, each confirmed to fail its tests:**

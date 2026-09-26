@@ -689,6 +689,9 @@ test('review O6: reads that stay stale offer "Reset saved-actions history", whic
     await page.waitForTimeout(150);
   }
   await expect(reset).toBeVisible();
+  await expect(page.getByRole('alert').filter({ has: reset })).toContainText(
+    'a recently saved action may briefly show as not yet reflected',
+  );
   await reset.click();
 
   await expect(reset).toHaveCount(0);

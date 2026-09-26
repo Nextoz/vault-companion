@@ -325,3 +325,15 @@ describe('dateIn (Europe/Copenhagen, DST)', () => {
     expect(dateIn('2026-03-29T21:59:00Z', 'Europe/Copenhagen')).toBe('2026-03-29'); // CEST: 23:59
   });
 });
+
+describe('review O1 fallback: an unacknowledged receipt the rendered read did not answer keeps overlaying', () => {
+  it('is not reflected when `known` has no entry for it (not asked, e.g. beyond MAX_KNOWN)', () => {
+    const saved = item(complete, 'saved', { receipt: completedReceipt, acknowledged: false });
+    const unanswered = buildView(read([openTask], [], {}), [saved]);
+    expect(unanswered.today).toEqual([]); // the task stays completed on screen…
+    expect(unanswered.doneToday).toMatchObject([{ task: null, action: { state: 'saved' } }]); // …as the overlay
+    // Only an acknowledged receipt (covered by the watermark) may be treated as reflected without an answer.
+    const acknowledged = buildView(read([], [task(DONE, 3, true)], {}), [{ ...saved, acknowledged: true }]);
+    expect(acknowledged.doneToday).toMatchObject([{ task: { locator: { lineText: DONE } } }]);
+  });
+});

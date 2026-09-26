@@ -329,8 +329,13 @@ export class PendingQueue {
    */
   async resetHistory(): Promise<void> {
     await this.#locked(async () => {
+      // A receipt a pending Undo draft still needs for its token is kept (same rule as eviction), but as
+      // unacknowledged: the neutral watermark no longer covers it, so reads ask about it again.
+      const needed = this.#neededByDrafts();
       const all = [...this.#receipts.values()];
-      await this.#writeReceipts([], all, this.#nextWatermark(RESET_WATERMARK, all.map((r) => r.operationId)));
+      const keep = all.filter((r) => needed.has(r.operationId)).map((r) => ({ ...r, acknowledged: false }));
+      const drop = all.filter((r) => !needed.has(r.operationId));
+      await this.#writeReceipts(keep, drop, this.#nextWatermark(RESET_WATERMARK, drop.map((r) => r.operationId)));
     });
   }
 
@@ -577,13 +582,18 @@ export class PendingQueue {
    */
   #evictable(candidates: ReceiptRecord[], read: ReadEvidence): ReceiptRecord[] {
     if (!satisfiesWatermark(read, this.#watermark)) return [];
-    // A draft Undo takes its token from its completion's receipt (ADR-0013): keep that receipt until it has.
+    const needed = this.#neededByDrafts();
+    return candidates.filter((r) => r.acknowledged && !needed.has(r.operationId));
+  }
+
+  /** Under the lock. Completions whose receipt a pending Undo draft still needs for its token (ADR-0013). */
+  #neededByDrafts(): Set<string> {
     const needed = new Set<string>();
     for (const r of this.#records.values()) {
       const e = this.#envelopeOf(r);
       if (isUndoDraft(e) && e.type === 'UndoCompleteTask') needed.add(e.payload.target.operationId);
     }
-    return candidates.filter((r) => r.acknowledged && !needed.has(r.operationId));
+    return needed;
   }
 
   #nextWatermark(commitSha: string, receiptOpIds: string[]): Watermark {

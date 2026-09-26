@@ -297,7 +297,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <div className="banner banner-warn" role="alert">
             <span>
               Tasks can't be refreshed on this device: its saved-actions history no longer matches the vault. Resetting
-              it keeps every pending action.
+              it keeps every pending action; a recently saved action may briefly show as not yet reflected.
             </span>
             <button
               type="button"
