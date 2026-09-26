@@ -38,7 +38,8 @@ branch after 25 min — ask it: claude -p "status? push your branch" --cloud <id
 **Increment B (task editing) — owner chose B, 2026-09-26.** ADR-0017 + EditTask contract on `agent/edit-task-base`
 (d1b1756). Workers: astra-high · edit-server (w3:p1C: vault-markdown editTask + golden diffs + domain + e2e +
 vault-contract §4.5) · astra-medium · edit-web (w3:p1D: EditSheet, queue, view overlay, one Playwright spec).
-Integrate: merge both onto the base branch, full check, one PR, deploy, owner phone test.
+Integrated as **PR #26** (branch agent/edit-task): full check 884/884, web e2e 47/47, CI green. CodeRabbit rate-limited
+22:40 -> re-request at 23:43 (session cron), then merge + deploy + owner phone test. #24 dup-row merged (real review, clean).
 Token economy: AGENTS.md worker rules + docs/orchestration.md.
 
 Next: owner tests A on the phone (first resume may need one app reopen: the old client predates the forward-compat strip), collect feedback; then owner ranks B/C/D/E/F. Follow-up: transient duplicate Today row on read/receipt ordering (Antigravity task prepared in clone dup-row, launch blocked pending permission rule match). R3 CPU re-measure from the live log.
