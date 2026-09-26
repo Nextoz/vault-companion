@@ -38,6 +38,14 @@ Rules:
   comparison or review.
 - Introduce a Codex agent when a genuinely suitable task appears; never interrupt a milestone just to add one.
 
+## Sources of truth and vault access (owner, 2026-09-26; ADR-0018)
+
+- **Priority and product decisions:** the owner's vault note `Projects/Vault Companion/Vault Companion - Ready
+  Backlog.md`. The Lead reads it (read-only) before choosing work and never edits it.
+- **Engineering status:** `docs/plan.md`, written only by the Lead; it links to the Ready Backlog, not copies it.
+- **Live vault reads:** the local Lead only, read-only, paths per ADR-0018. Workers of any kind (Cloud, Codex,
+  Antigravity, Qwen, Jev) never touch the live vault; their briefs are synthetic, with shapes derived by the Lead.
+
 ## Visible agents (owner, 2026-09-26)
 
 Every non-interactive worker starts through `tools/agent-pane.sh` so the owner can watch it live:

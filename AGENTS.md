@@ -11,6 +11,8 @@ Private mobile execution layer over an Obsidian vault. **Markdown + Git are auth
 ## Non-negotiables
 
 1. Never write to `C:\Dev\vault-companion-vault-reference` or the live vault. Live writes need the owner's approval.
+   Only the local Lead may **read** the live vault, read-only, limited to the paths in ADR-0018
+   (`docs/decisions/0018-lead-live-vault-read-access.md`); never cloud or other-vendor workers.
 2. No private vault text in this repository: fixtures, tests, logs, screenshots, commit messages are synthetic.
 3. Mutations are minimal span splices with exact golden-diff tests. Unsupported ⇒ typed refusal, never a guess.
 4. Every write: operation ID, base revision, CAS on blob SHA, commit trailers, dedupe before write.

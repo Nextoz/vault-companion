@@ -12,37 +12,35 @@ review PASS (#8) · client correctness: duplicate-task identity, read timeouts, 
 Overdue below Today (#9) · account-aware drafts, one submitter per draft, ADR-0014 (#11) · 30 s test timeout (#12) ·
 deploy scaffold: wrangler, `_headers`, secrets-only identifiers, `workers.dev` off, runbook `docs/deploy.md` (#10).
 
-## Milestone 3 — product improvement (started 2026-09-26, Lead session `2c2489c5`, Herdr agent `lead`)
+## Milestone 3 — product improvement (Lead session `2c2489c5`, Herdr agent `lead`)
 
-Owner's first-use feedback reconciled with the vault Ideas Backlog (private; candidates recorded there). Owner chose
-**A handover visibility** first; E (AI condensation of Active Work) marked interesting; AI capture triage parked in
-the backlog. Remaining candidates (owner ranks later): B task editing, C curated Active Work, D completion history,
-E, F preview-before-production.
+**Priority and product decisions:** the owner's vault note *Projects/Vault Companion/Vault Companion - Ready Backlog*
+(read-only for the Lead, ADR-0018). This file tracks engineering status only.
 
-| Work | Result |
-|---|---|
-| PR #18 (ADR-0015 + review P18-1/P18-2 fixes) | merged 57aeaa6; Astra high review; CodeRabbit: 1 finding rejected with reason, fix commit rate-limited |
-| A1 vault handover visibility, PR #19 | merged 1292f48; **deployed version 79ac4949** (app.karpov.dk); CodeRabbit rate-limited (not a pass) |
+**Order (owner, 2026-09-26):** B → C → S Part 2 → D. E dropped. F parked. AI capture triage parked until the owner
+sets privacy rules.
 
-Merged + **deployed version 0d20189f** (2026-09-26): #20 O10 single-flight token · #21 O7 ancestry without patches
-(ADR-0016) · #22 one read per app switch. CodeRabbit rate-limited on all three (recorded; not a pass).
-Held, not merged: dup-row (Antigravity; clone dup-row) removes an identity guard — redo with Astra high after 21:26:
-attach a live Undo to an open row only when the completed line is absent from the read; keep its test as the spec.
-#23 O11 CSP smoke + zod jitless merged; CodeRabbit real review (3 findings fixed). **Deployed version fdad423f.**
-**Antigravity free quota exhausted until ~2026-10-03** (429, resets in 166 h): e2e-flakes run died, no changes; clone
-e2e-flakes keeps its brief for Codex low. Claude Cloud O3 session_015TkdrdhYa8Z9fuRvTTLqhX (no
-branch after 25 min — ask it: claude -p "status? push your branch" --cloud <id>, when RAM allows).
-2026-09-26 ~17:50: RAM 1.3/15.4 GB free; Claude Code reaped the Lead's background watchers. Keep ≤ 1 heavy local job
-(Playwright) at a time.
-#25 e2e flakes merged. #24 dup-row (identity-safe) CI green, awaiting CodeRabbit.
-**Increment B (task editing) — owner chose B, 2026-09-26.** ADR-0017 + EditTask contract on `agent/edit-task-base`
-(d1b1756). Workers: astra-high · edit-server (w3:p1C: vault-markdown editTask + golden diffs + domain + e2e +
-vault-contract §4.5) · astra-medium · edit-web (w3:p1D: EditSheet, queue, view overlay, one Playwright spec).
-Integrated as **PR #26** (branch agent/edit-task): full check 884/884, web e2e 47/47, CI green. CodeRabbit rate-limited
-22:40 -> re-request at 23:43 (session cron), then merge + deploy + owner phone test. #24 dup-row merged (real review, clean).
-Token economy: AGENTS.md worker rules + docs/orchestration.md.
+| Increment | Brief | Engineering status |
+|---|---|---|
+| A handover visibility | — | done: PR #19, deployed |
+| B task editing | ADR-0017 | **PR #26** integrated (branch `agent/edit-task`): full check 884/884, web e2e 47/47, CI green; CodeRabbit rate-limited 22:40 → re-request 23:43 (session cron) → merge, deploy, owner phone test |
+| C Active Work in the app | `docs/briefs/C-active-work.md` | next; needs its ADR (writes to Active Work Now) + adversarial review |
+| S Part 2 scout status page | `docs/briefs/S2-scout-status-page.md` | **blocked** until S Part 1 status files exist (vault side); Lead derives fixture shapes from the real files |
+| D completion history | `docs/briefs/D-completion-history.md` | after S Part 2 |
 
-Next: owner tests A on the phone (first resume may need one app reopen: the old client predates the forward-compat strip), collect feedback; then owner ranks B/C/D/E/F. Follow-up: transient duplicate Today row on read/receipt ordering (Antigravity task prepared in clone dup-row, launch blocked pending permission rule match). R3 CPU re-measure from the live log.
+**Done in milestone 3 (all merged, CI green):** #18 write budget + review fixes · #19 A · #20 single-flight token ·
+#21 ancestry without patches (ADR-0016) · #22 one read per app switch · #23 CSP smoke + zod jitless · #24
+identity-safe duplicate-row fix · #25 e2e flakes. **Deployed: `fdad423f`.**
+
+**Capacity (2026-09-26 ~23:00):** Codex Astra ~4 % left, resets 02:29 · Antigravity quota out until ~2026-10-03 ·
+Claude Cloud $10 credit, but session `session_015TkdrdhYa8Z9fuRvTTLqhX` (O3) never pushed — owner to check it before
+more Cloud work · CodeRabbit 1 review/hour · RAM 2–4 GB free: ≤ 1 Playwright job at a time.
+
+**Open technical follow-ups:** O3 real-queue e2e (Cloud, stuck) · R3 CPU re-measure after the latest deploys · O8
+completion queued before midnight disappears · O4 harness through production composition · R7 blank line in Done ·
+B follow-up: an edit applied but not yet receipted can briefly render twice.
+
+**Owner decisions pending:** G3 (count the day's owner-initiated writes as the canary?) · phone feedback on A and B.
 
 ## Status (2026-09-26): the app is live on the owner's phone
 
