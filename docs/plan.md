@@ -16,9 +16,9 @@ deploy scaffold: wrangler, `_headers`, secrets-only identifiers, `workers.dev` o
 
 | # | Blocker | Owner | Status |
 |---|---|---|---|
-| B1 | Token Undo, ADR-0013 (PR #14) | Cloud P4-B session → Lead | all 5 Astra findings fixed (83fed8f, 6959255, e61eb45), CI green; focused re-review running (local reviewer; Codex quota low until 07:36) |
+| B1 | Token Undo, ADR-0013 | — | **merged** (#14; Astra BLOCK fixed, re-review PASS) |
 | B2 | Active Work Now card | — | **merged** (#13) |
-| B3 | Whole-system review of the combined build (incl. delayed offline captures, per-command request budgets, phone experience) | Cloud Opus + Astra high | after B1 + B2 merge; `docs/reviews/phase-2-review-brief.md` |
+| B3 | Whole-system review of the combined build | Cloud Opus done; Astra high running | Opus **PASS WITH FIXES** (`docs/reviews/phase-2-review-opus.md`): O1 read budget + O5 Undo unknown-outcome + O6 stale escape → Cloud (P4-B session, `agent/read-budget`); O2 deploy sizing fixed in `docs/deploy.md` §0 |
 | B4 | Desktop sync worker | Owner (applied) → Lead verified | **done**: patch installed 2026-09-26 02:56; first real run 03:06 `state: current`, local = remote `67c90fc`, nothing staged, 0 runtime files published. Cleanup-on-failure fix v2 (19/19; old cleanup fails the new case) ready for the owner to install |
 | B5 | Cloudflare setup G2: GitHub App on vault repo, Access, secrets, first deploy | **Owner** (`docs/deploy.md` §1–§7) → Lead §8–§9 | ready to start |
 | B6 | Canary G3: one approved phone → GitHub → desktop → Obsidian write | **Owner approval** | after B3, B4, B5 |
@@ -45,8 +45,9 @@ Observations: none yet; recorded privately (`.private/`, git-ignored) during mil
 
 ## Owner decisions
 
-T1 Today — decided, provisional (ADR-0012) · P1 Workers plan — on hold; token Undo fits Free (≤ 10 store calls ×
-≤ 3 attempts + auth); Paid (10,000) only if B1 fails · D2 linked-note roots `Projects/`, `Tasks/`, `Inbox/` ·
+T1 Today — decided, provisional (ADR-0012) · P1 Workers plan — **decided: Free** (owner, 2026-09-26). Real list 16 KB / 39 tasks ⇒ est. 4–5 ms CPU (10 ms cap);
+read budget fixed by O1; measure real CPU with `wrangler tail` after the read-only deploy; optimise (O7: commits listing
+instead of patch-carrying compare) only if a request nears the cap · D2 linked-note roots `Projects/`, `Tasks/`, `Inbox/` ·
 D3 no `🆔` writes · D4 capture at top of Open (ADR-0010).
 
 ## Known limitations (accepted for the first release)
