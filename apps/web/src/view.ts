@@ -151,11 +151,14 @@ export function buildView(
       continue;
     }
     if (!live(a)) continue;
-    // A live Undo: its completion is in the read (or its receipt was evicted under the watermark, so it is), so
-    // the line it re-opens cannot be open in the read yet: its own row. Otherwise it may name a row still open.
+    // Receipt knowledge can lag the Markdown: a reflected completion may already have been undone.
+    // doneToday proves absence only for that date; otherwise an open match could be a same-text twin.
     const target = byId.get(a.envelope.type === 'UndoCompleteTask' ? a.envelope.payload.target.operationId : '');
     const completionInRead = !target || reflected(target);
-    const match = completionInRead ? ({ kind: 'none' } as const) : resolve(locator, allOpen);
+    const effect = target?.receipt?.effect;
+    const completionAbsent = tasks !== null && effect?.kind === 'completed' && effect.doneDate === tasks.today &&
+      !tasks.doneToday.some((t) => t.locator.lineText === effect.completedLineText);
+    const match = completionInRead && !completionAbsent ? ({ kind: 'none' } as const) : resolve(locator, allOpen);
     if (match.kind === 'row') onRow.set(rowKey(match.task), a);
     else ownOpen.push(overlay(a, false));
   }

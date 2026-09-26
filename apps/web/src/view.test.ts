@@ -122,6 +122,15 @@ describe('buildView', () => {
     expect(v.today).toMatchObject([{ task: null, done: false, action: { type: 'UndoCompleteTask', state: 'pending' } }]);
   });
 
+  it('does not duplicate a task when the read already has it re-opened while Undo is live', () => {
+    const undo = undoCompleteTask({ baseRevision: REV, now: ON_READ_DAY }, complete, COMMIT);
+    const items = [item(complete, 'saved', { receipt: completedReceipt }), item(undo, 'pending', { seq: 2 })];
+    const v = buildView(read([openTask], [], { [COMMIT]: 'included' }), items);
+    expect(v.doneToday).toEqual([]);
+    expect(v.today).toHaveLength(1);
+    expect(v.today).toMatchObject([{ task: openTask, action: { type: 'UndoCompleteTask', state: 'pending' } }]);
+  });
+
   it('ignores captures for the task lists', () => {
     const v = buildView(read([openTask], []), [item(complete, 'saving', { type: 'CaptureTask', taskKey: null })]);
     expect(v.today).toMatchObject([{ task: openTask, action: null }]);
@@ -204,6 +213,23 @@ describe('buildView with identical task lines (P4-B)', () => {
       { task: twin, action: null },
     ]);
     expect(v.doneToday).toEqual([]);
+  });
+
+  it('keeps a live Undo separate from an exact-locator twin unless the completed line is proven absent', () => {
+    const undo = undoCompleteTask({ baseRevision: REV, now: ON_READ_DAY }, c10, COMMIT);
+    const twin = at(10, 1);
+    const items = [saved10(), item(undo, 'pending', { seq: 2 })];
+    const stillDone = read([twin], [done(40)], { [COMMIT]: 'included' });
+    // Tomorrow's doneToday cannot prove absence of today's completed line.
+    const outsideReadDay = TasksResponse.parse({ ...stillDone, today: '2026-09-25', doneToday: [] });
+    for (const tasks of [stillDone, outsideReadDay]) {
+      const v = buildView(tasks, items);
+      expect(v.today).toMatchObject([
+        { task: null, action: { operationId: undo.operationId } },
+        { task: twin, action: null },
+      ]);
+      expect(v.doneToday).toEqual([]);
+    }
   });
 
   it('identifies actions by their envelopes, so items stored before P4-B (text keys) resolve the same way', () => {
