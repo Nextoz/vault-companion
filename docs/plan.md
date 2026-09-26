@@ -35,7 +35,7 @@ branch after 25 min — ask it: claude -p "status? push your branch" --cloud <id
 2026-09-26 ~17:50: RAM 1.3/15.4 GB free; Claude Code reaped the Lead's background watchers. Keep ≤ 1 heavy local job
 (Playwright) at a time.
 #25 e2e flakes merged. #24 dup-row (identity-safe) CI green, awaiting CodeRabbit.
-**Increment B (task editing) — owner chose B, 2026-09-26.** ADR-0017 + EditTask contract on 
+**Increment B (task editing) — owner chose B, 2026-09-26.** ADR-0017 + EditTask contract on `agent/edit-task-base`
 (d1b1756). Workers: astra-high · edit-server (w3:p1C: vault-markdown editTask + golden diffs + domain + e2e +
 vault-contract §4.5) · astra-medium · edit-web (w3:p1D: EditSheet, queue, view overlay, one Playwright spec).
 Integrate: merge both onto the base branch, full check, one PR, deploy, owner phone test.
