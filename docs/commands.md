@@ -93,19 +93,23 @@ The effect is never taken from the client. For a found or just-created commit C 
   byte-for-byte; the mutation's own effect object is then the receipt effect. Mismatch ⇒ `dedupe-unknown`.
 - CaptureNote: the created path is taken from C's changed-file list.
 
-`UndoCompleteTask` (ADR-0013 — no paged scans; at most 3 attempts, ≈ 10 GitHub calls each). Per attempt at X:
+`UndoCompleteTask` (ADR-0013 — no paged scans; at most 3 attempts of 10 store requests each, plus
+installation-token overhead: one request per token lifetime). Per attempt at X:
 1. Read commit C = `targetCommit`. Unknown ⇒ `conflict:task-changed` (nothing to undo). Its `Vault-Companion-Op` must
    equal the target's operation ID and its payload trailer the target envelope's hash, else `invalid`.
 2. One single-page listing of `C..X` (≤ 250 commits; GitHub: one `compare` page). C not an ancestor of X ⇒
    `conflict:task-changed`. More than one page ⇒ `refused:undo-expired` ("too much changed since; undo it in
-   Obsidian"), never paged. The same page answers: this Undo's own operation ID present ⇒ dedupe (`already-applied`);
+   Obsidian"), never paged. The same page answers: this Undo's own operation ID present ⇒ dedupe (`already-applied`,
+   only after rebuilding the inverse against that commit's first-parent task list and matching its blob; otherwise
+   `dedupe-unknown`);
    another commit with `Vault-Companion-Undoes: <target operationId>` ⇒ `conflict:task-changed` (a completion is undone
    at most once; Undo commits carry that trailer).
 3. Re-derive the completion effect: C must change only the task list, and replaying the target on `C^` must give
    exactly C's blob. Then:
    - **exact inverse** — the file at X is byte-identical to `C:path`: write `C^:path` (the verified original bytes;
      review A1/R1);
-   - otherwise the semantic inverse (vault-contract §4.2) on the file at X.
+   - otherwise the semantic inverse (vault-contract §4.2) on the file at X — refused (`conflict:task-changed`) when
+     the completed line was not unique among Done lines in C's own result: a match at X may then be the twin.
 Other commands keep the paged dedupe of `baseRevision..X` (ADR-0005).
 
 Per effect type:

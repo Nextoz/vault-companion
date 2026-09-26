@@ -58,11 +58,51 @@ Spec: `docs/decisions/0013-token-undo.md`. Brief: `docs/briefs/P4E-token-undo.md
     `already-applied`, second Undo refused, `Undoes` trailer); forged or unknown token refused, nothing written.
 - **Docs:** `docs/commands.md` Undo section (payload, per-attempt algorithm, client drafts).
 
+## Review fixes (Astra, `docs/reviews/P4E-review-astra.md`, BLOCK → all five addressed)
+
+`origin/main` was merged into the branch first (one conflict: imports in `in-memory-store.ts`, both kept).
+
+1. **High — the wrong twin could be reopened.** `verifiedCompletion` now counts the completed line among Done lines in
+   C's own result (the verified replay output). If it wasn't unique there, the semantic inverse is refused with
+   `conflict:task-changed`, even when the line is unique at X. The exact-bytes inverse is unchanged.
+   - Regression (reviewer's case, with distinguishable children): twin B `child of unrelated B`; the desktop edits A's
+     completed line. The Undo is refused, nothing is written, and B stays byte-identical in Done.
+   - With no edit, the exact inverse still restores the original.
+   - The kernel (`vault-markdown`) is unchanged; the guard lives in the domain.
+2. **Stale envelope cache across tabs.** `#envelopes` now caches `{ body, envelope }` and re-parses whenever a record's
+   body differs from the cached one. The reviewer's two-tab sequence is now a test (`queue.gate.test.ts`):
+   - A caches the draft; B fills the token, sends, fails, and clears the receipt; A then sends exactly the persisted
+     bytes.
+   - It failed before the fix, with nothing sent.
+3. **Dedupe certified an unverified U.** `deriveApplied` rebuilds the inverse against U's first-parent task list (same
+   exact/semantic rules and ambiguity guard). It requires U to change only the task list, and the rebuilt bytes to
+   hash to U's blob; otherwise `dedupe-unknown`.
+   - It reuses the C and U commit info from `findApplied`.
+   - Tests: wrong content (blank line appended), deleted task list, and a genuine U after a lost response, which stays
+     `already-applied` within ≤ 10 store calls.
+4. **GitHub guard coverage.** `undo-budget.test.ts` now runs a full Undo through the adapter for:
+   - diverged (X holds C's completed bytes) and behind → `conflict:task-changed`;
+   - 404 and 422 → `conflict:task-changed`;
+   - the real overflow shape, 251 total / 250 returned → `refused:undo-expired`;
+   - a short page, 2 total / 1 returned → `refused:undo-expired`.
+
+   Each asserts one compare and no POST/PATCH. A short page below the limit is treated like an overflow: the listing
+   is incomplete, so Undo refuses instead of guessing.
+5. **Budget wording.** The bound is **10 store requests per attempt, plus token/authentication overhead** (one
+   installation-token request per token lifetime). A composition test uses the real `createInstallationTokenSource`
+   on the same fake API:
+   - a cold Undo is 10 + 1 = 11 requests;
+   - a warm retry makes no token request;
+   - 3 head-moved attempts are ≤ 30 + 1.
+
+   `docs/commands.md` is updated to match.
+
 ## Important discoveries
 
-- **Measured budget:** exactly **10 GitHub calls per Undo attempt**, whether 0, 1 or 250 commits lie between C and X:
+- **Measured budget:** exactly **10 store requests per Undo attempt** (plus one installation-token request when the token
+  is cold), whether 0, 1 or 250 commits lie between C and X:
   ref, `/commits/C`, compare, contents at `C^`, contents at X, trees at X for the precondition, then
-  blob/tree/commit/ref. That is ≤ 30 over 3 attempts, with no paging. The ADR's "≈ 10" leaves out the write's
+  blob/tree/commit/ref. That is ≤ 30 (+1 token) over 3 attempts, with no paging. The ADR's "≈ 10" leaves out the write's
   precondition tree read and base-commit read; reusing the tree SHA from the compare response brings it back to 10.
 - `packages/e2e` had **no** Undo scenario before; two were added.
 - **Outside the owned-file list (necessary):** `apps/worker/src/wiring.test.ts` posted an Undo without a token. It now
@@ -81,15 +121,20 @@ Spec: `docs/decisions/0013-token-undo.md`. Brief: `docs/briefs/P4E-token-undo.md
 
 - Apply the same single-page bound to the other commands' dedupe if P3-A measurements show it is needed (ADR-0013
   "Consequences").
-- The P3-A sizing note can now use 10 / 30 calls for Undo.
+- The P3-A sizing note can now use 10 / 30 store requests for Undo, plus 1 per cold installation token.
+- Reviewer's accepted residuals (not changed here): Undo succeeding as commit 251 cannot be recovered by a lost-response
+  retry (the retry sees > 250 and answers `undo-expired`, never applying twice); a merge commit whose first-parent change
+  equals the replay passes as a token; desktop re-open + re-complete remains the vault-contract text-equality residual.
 - `findOperation`'s trailer-key parameter is no longer used by Undo. Keep it until the other commands move too, then
   simplify.
 
 ## Verification
 
-- `pnpm check` (lint + typecheck + tests, including `packages/e2e` on real Git): **green**, 37 files, 572 tests.
-- Web e2e (`vite build` + Playwright): **26/26** on the pre-installed Chromium with the iPhone 15 profile. WebKit
-  can't be downloaded in this sandbox; CI runs WebKit.
+- `pnpm check` (lint + typecheck + tests, including `packages/e2e` on real Git) after merging main and all fixes:
+  **green**, 45 files, 743 tests.
+- Web e2e (`vite build` + Playwright, pre-installed Chromium, iPhone 15 profile): **33/38**. The 5 failures are all
+  in `offline-shell.spec.ts` (from main, P2-B): the service worker never takes control under this sandbox's Chromium
+  stand-in. The same 5 fail on a clean `origin/main` worktree, so they are environmental. CI runs WebKit.
 - **Guards broken once, each confirmed to fail its tests:**
 
   | # | Mutation | Caught by |
@@ -108,6 +153,15 @@ Spec: `docs/decisions/0013-token-undo.md`. Brief: `docs/briefs/P4E-token-undo.md
   | C1 | draft sent without its token | queue drafts (3 tests) |
   | C2 | draft of a refused completion kept | queue: dropped locally |
   | C3 | receipt a draft needs evictable | queue: never evicted |
+  | R1 | semantic inverse despite a twin in C | domain: desktop edits the intended task (reopened B without it) |
+  | R2 | cached parse used regardless of body | gate: two-tab stale parse |
+  | R3a | U's rebuilt inverse not compared | domain: wrong-content U |
+  | R3b | … and U's file check removed too | domain: wrong-content U and deleted-file U |
+  | A1 | GitHub status guard removed | adapter: diverged, behind |
+  | A2 | GitHub 404/422 not mapped | adapter: 404, 422 |
+  | A3 | GitHub `total > 250` ignored | adapter: 251/251 overflow (the 251/250 shape is also caught by A4's guard) |
+  | A4 | GitHub short page ignored | adapter: 2 total / 1 returned |
+  | T1 | installation-token cache disabled | composition: cold token, warm retry, head-moving attempts |
 
 ## Commit
 
