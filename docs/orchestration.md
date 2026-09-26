@@ -165,8 +165,11 @@ through a PR opened by the Lead: open PR → wait for CodeRabbit → hand the Co
 - Run `gh pr merge` from the main checkout: from a temporary worktree it merges remotely, then fails the local
   `main` checkout (`'main' is already used by worktree`).
 Config: `.coderabbit.yaml`.
-- CodeRabbit auto-review stopped (free OSS plan requires ≥ 10 repo stars, 2026-09-26). Trigger manually with a PR comment
-  `@coderabbitai review` where useful; **CodeRabbit availability never blocks a merge** — CI, the Lead's review and, for
+- **Every PR (owner, 2026-09-26):** the Lead posts `@coderabbitai full review` once, after the PR's final pushes
+  (check existing comments first; never duplicate). Confirm an actual review arrived (review comments or a
+  "Actionable comments posted: N" summary) — a "Review skipped"/rate-limit/unavailable reply is **not** a pass; record
+  which it was in the PR. Actionable findings: fix with a test or reject with a reason.
+- CodeRabbit auto-review stopped (free OSS plan requires ≥ 10 repo stars, 2026-09-26). Trigger manually as above; **CodeRabbit availability never blocks a merge** — CI, the Lead's review and, for
   risky code, an Astra or local reviewer are the gate.
 - Codex `--sandbox workspace-write` cannot write a git **worktree's** git dir (it lives in the main repo's `.git`), so
   Codex tasks run in a **full clone** under `C:\Devault-companion-clones\<task>` and push their own branch.
