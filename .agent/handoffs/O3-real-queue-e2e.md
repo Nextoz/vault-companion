@@ -11,4 +11,4 @@ Harness changes (minimal): `startServer({ appOrigin? })` (default `APP_ORIGIN`);
 
 **Verification.** `vite build` + `PW_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium playwright test --project=pixel-7-chromium-real-stack --repeat-each=6` → 18 passed. `tsc -b` → 0 errors. `pnpm -r exec tsc --noEmit` → exit 0 (after `tsc -b`; before that it fails on unbuilt reference d.ts files, which is pre-existing). eslint on the touched files → clean. Full `pnpm check` and other e2e not run (Lead).
 
-**Commit SHA:** see `git log -1 agent/o3-real-queue`. Push FAILED: this checkout has no `origin` remote.
+**Commit SHA:** `1a99ad2` (work) on `4abc582` (stub), pushed to `origin/agent/o3-real-queue` (Nextoz/vault-companion). Branch base `d07deee`; main has moved since, no rebase done.
