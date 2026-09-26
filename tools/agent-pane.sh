@@ -13,20 +13,21 @@ label=$1 cwd=$2 log=$3; shift 3
 [ $# -gt 0 ] || { echo "usage: agent-pane.sh <label> <cwd> <log> <command...>" >&2; exit 2; }
 
 ws=${HERDR_WORKSPACE_ID:?}
-id_of() { grep -o "\"$1\":\"[^\"]*\"" | head -1 | cut -d'"' -f4; }
+# jq-free JSON field access: js <expression over r = parsed stdin>
+js() { node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const r=JSON.parse(d).result;const v=('"$1"');console.log(v??"")})'; }
 
 # Find or create the Agents tab (never focused: the owner's view stays where it is).
-tab=$(herdr tab list --workspace "$ws" | tr '{' '\n' | grep '"label":"Agents"' | id_of tab_id || true)
+tab=$(herdr tab list --workspace "$ws" | js 'r.tabs.find(t=>t.label==="Agents")?.tab_id')
 if [ -z "$tab" ]; then
   created=$(herdr tab create --workspace "$ws" --cwd "$cwd" --label Agents --no-focus)
-  tab=$(echo "$created" | tr '{' '\n' | grep '"tab_id"' | id_of tab_id)
-  pane=$(echo "$created" | tr '{' '\n' | grep '"pane_id"' | id_of pane_id)
+  pane=$(echo "$created" | js 'r.root_pane.pane_id')
 else
   # Split the most recently created pane of the tab; alternate direction to keep panes usable.
-  last=$(herdr pane list --workspace "$ws" | tr '{' '\n' | grep "\"tab_id\":\"$tab\"" | id_of pane_id | tail -1)
-  count=$(herdr pane list --workspace "$ws" | grep -o "\"tab_id\":\"$tab\"" | wc -l)
+  panes=$(herdr pane list --workspace "$ws")
+  last=$(echo "$panes" | js "r.panes.filter(p=>p.tab_id==='$tab').map(p=>p.pane_id).pop()")
+  count=$(echo "$panes" | js "r.panes.filter(p=>p.tab_id==='$tab').length")
   dir=right; [ $((count % 2)) -eq 0 ] && dir=down
-  pane=$(herdr pane split --pane "$last" --direction "$dir" --cwd "$cwd" --no-focus | tr '{' '\n' | grep '"pane_id"' | id_of pane_id)
+  pane=$(herdr pane split --pane "$last" --direction "$dir" --cwd "$cwd" --no-focus | js 'r.pane.pane_id')
 fi
 herdr pane rename "$pane" "$label" >/dev/null
 
