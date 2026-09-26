@@ -163,6 +163,7 @@ export const TaskView = z.strictObject({
 export type TaskView = z.infer<typeof TaskView>;
 
 export const TasksResponse = z.strictObject({
+  vault: z.strictObject({ committedAt: z.iso.datetime({ offset: true }), fromApp: z.boolean() }).nullable(),
   revision: commitSha,
   blobSha,
   today: z.iso.date(),

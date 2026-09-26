@@ -15,6 +15,7 @@ import { ActionsPanel } from './ActionsPanel.tsx';
 import { ActiveWorkCard } from './ActiveWorkCard.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
+import { VaultStatus } from './VaultStatus.tsx';
 import { TaskList } from './TaskList.tsx';
 
 type Tab = 'today' | 'all';
@@ -32,6 +33,9 @@ export const STALE_BEFORE_RESET = 3;
 export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: DraftStore; receipts: EventTarget }) {
   const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
   const [rendered, setRendered] = useState<RenderedRead | null>(null);
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  const [readFailed, setReadFailed] = useState(false);
+  const [readsInFlight, setReadsInFlight] = useState(0);
   const [connection, setConnection] = useState<Connection>('loading');
   const [sessionSignedOut, setSessionSignedOut] = useState(false);
   const [accountKey, setAccountKey] = useState<string | null>(() => prefs.lastAccountKey());
@@ -94,38 +98,51 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const refreshTasks = useCallback(async () => {
     const reads = readsRef.current;
     if (!reads) return;
-    for (let attempt = 0; ; attempt++) {
-      const out = await reads.read();
-      switch (out.kind) {
-        case 'apply': {
-          prefs.setLastRevision(out.read.data.revision);
-          staleRef.current = 0;
-          setStaleStreak(0);
-          const read = out.read;
-          setRendered(read);
-          // Acknowledging moves the watermark to this read's own revision (O1): the read still satisfies it.
-          void queue.acknowledge(read.data).then((version) => {
-            if (version !== null) setRendered((r) => (r === read ? { ...r, watermarkVersion: version } : r));
-          });
-          setConnection('online');
-          return;
+    setReadsInFlight((n) => n + 1);
+    try {
+      for (let attempt = 0; ; attempt++) {
+        const out = await reads.read();
+        switch (out.kind) {
+          case 'apply': {
+            setCheckedAt(Date.now());
+            setReadFailed(false);
+            prefs.setLastRevision(out.read.data.revision);
+            staleRef.current = 0;
+            setStaleStreak(0);
+            const read = out.read;
+            setRendered(read);
+            // Acknowledging moves the watermark to this read's own revision (O1): the read still satisfies it.
+            void queue.acknowledge(read.data).then((version) => {
+              if (version !== null) setRendered((r) => (r === read ? { ...r, watermarkVersion: version } : r));
+            });
+            setConnection('online');
+            return;
+          }
+          case 'superseded':
+            return;
+          case 'stale':
+            setReadFailed(true);
+            staleRef.current += 1;
+            setStaleStreak(staleRef.current);
+            setConnection('refreshing');
+            if (out.retry && attempt < STALE_REREADS) continue;
+            return;
+          case 'signed-out':
+            setReadFailed(true);
+            setSessionSignedOut(true);
+            queue.setSignedOut();
+            return;
+          default:
+            setReadFailed(true);
+            setConnection(out.kind === 'offline' ? 'offline' : 'error');
+            return;
         }
-        case 'superseded':
-          return;
-        case 'stale':
-          staleRef.current += 1;
-          setStaleStreak(staleRef.current);
-          setConnection('refreshing');
-          if (out.retry && attempt < STALE_REREADS) continue;
-          return;
-        case 'signed-out':
-          setSessionSignedOut(true);
-          queue.setSignedOut();
-          return;
-        default:
-          setConnection(out.kind === 'offline' ? 'offline' : 'error');
-          return;
       }
+    } catch {
+      setReadFailed(true);
+      setConnection('error');
+    } finally {
+      setReadsInFlight((n) => n - 1);
     }
   }, [queue]);
 
@@ -272,6 +289,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
       </header>
 
       <main className="content" inert={noteOpen}>
+        <VaultStatus read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0} onRefresh={refreshTasks} />
         {lock && (
           <div className="banner banner-warn" role="alert">
             {lock.banner}

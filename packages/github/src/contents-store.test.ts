@@ -24,6 +24,19 @@ function store(handler: Handler) {
 const SHA = (c: string) => c.repeat(40);
 
 describe('GitHubContentsStore', () => {
+  it.each([
+    ['Synthetic desktop sync', false],
+    ['Synthetic operation\n\nVault-Companion-Op: operation-id\n', true],
+    ['Subject mentions Vault-Companion-Op: but is not a trailer', false],
+  ])('returns only date and origin for recorded Git commit shape: %s', async (message, fromApp) => {
+    const { s, calls } = store(() => json(200, { sha: SHA('a'), author: { date: '2026-09-25T09:00:00Z' }, committer: { date: '2026-09-26T12:07:00Z' }, message, tree: { sha: SHA('b') }, parents: [] }));
+    expect(await s.commitMeta(SHA('a'))).toEqual({ committedAt: '2026-09-26T12:07:00Z', fromApp });
+    expect(calls.map((c) => [c.init.method, c.url])).toEqual([['GET', `https://api.github.com/repos/o/r/git/commits/${SHA('a')}`]]);
+  });
+  it('returns null for missing metadata and throws on upstream failure', async () => {
+    expect(await store(() => json(404, {})).s.commitMeta(SHA('a'))).toBeNull();
+    await expect(store(() => json(503, {})).s.commitMeta(SHA('a'))).rejects.toBeInstanceOf(StoreUnavailable);
+  });
   it('decodes base64 with embedded newlines exactly (captured shape) and pins the read to a commit', async () => {
     // Captured from octocat/Hello-World README: "SGVsbG8gV29ybGQhCg==\n"
     const { s, calls } = store(() => json(200, { type: 'file', sha: '980a0d5f19a64b4b30a87d4206aade58726b60e3', size: 13, encoding: 'base64', content: 'SGVsbG8gV29y\nbGQhCg==\n' }));

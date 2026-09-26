@@ -1,6 +1,6 @@
 import { SessionResponse } from '@vault-companion/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getJson, READ_TIMEOUT_MS } from './api.ts';
+import { getJson, getTasks, READ_TIMEOUT_MS } from './api.ts';
 
 const ok = { accountKey: 'a'.repeat(64) };
 const json = (body: unknown, status = 200) =>
@@ -65,5 +65,16 @@ describe('getJson: bounded session and task reads (P4-B)', () => {
     vi.stubGlobal('fetch', vi.fn(async () => json(ok)));
     await getJson('/api/session', SessionResponse);
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('getTasks: forward compatible with a newer server', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('ignores an unknown top-level field instead of reporting an unexpected reply', async () => {
+    const read = { vault: null, revision: 'a'.repeat(40), blobSha: 'b'.repeat(40), today: '2026-09-26', timeZone: 'Europe/Copenhagen',
+      writeBlock: null, known: {}, todayTasks: [], overdue: [], allOpen: [], doneToday: [] };
+    vi.stubGlobal('fetch', vi.fn(async () => json({ ...read, addedLater: { any: 1 } })));
+    await expect(getTasks([])).resolves.toEqual({ kind: 'ok', data: read });
   });
 });

@@ -1,7 +1,7 @@
 // One behavioural contract, two implementations: the in-memory test double must behave like real Git.
 import { TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type VaultPath, type VaultStore } from '@vault-companion/domain';
 import { gitBlobSha, InMemoryStore } from '@vault-companion/domain/testing';
-import { symlinkSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LocalGitStore } from './local-git-store.ts';
 import { createTempRepos, git, type TempRepos } from './git-fixture.ts';
@@ -18,6 +18,7 @@ const dec = (b: Uint8Array) => new TextDecoder().decode(b);
 interface Harness {
   store: VaultStore;
   external(files: Record<string, string | null>): Promise<string>;
+  committedAt(sha: string): string;
   cleanup(): void;
 }
 
@@ -26,12 +27,12 @@ const harnesses: Record<string, (limit?: number, page?: number) => Promise<Harne
     const s = await InMemoryStore.create(SEED);
     if (limit) s.dedupeWindowLimit = limit;
     if (page) s.comparePageSize = page;
-    return { store: s, external: (f) => s.commitFiles(f), cleanup: () => {} };
+    return { store: s, external: (f) => s.commitFiles(f), committedAt: () => '2026-09-26T12:07:00Z', cleanup: () => {} };
   },
   'local-git': async (limit, page) => {
     const repos: TempRepos = createTempRepos(SEED);
     const store = new LocalGitStore({ repo: repos.bare, ...(limit ? { dedupeWindowLimit: limit } : {}), ...(page ? { comparePageSize: page } : {}) });
-    return { store, external: async (f) => repos.commitExternal(f), cleanup: () => repos.cleanup() };
+    return { store, external: async (f) => repos.commitExternal(f), committedAt: (sha) => git(repos.bare, 'show', '-s', '--format=%cI', sha), cleanup: () => repos.cleanup() };
   },
 };
 
@@ -44,6 +45,19 @@ const write = (store: VaultStore, path: VaultPath, baseCommit: string, text: str
 // Real git on Windows spawns many processes per case (3–5 s observed); allow headroom under parallel load.
 describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_000 }, (name) => {
   const make = async (limit?: number, page?: number) => (current = await harnesses[name]!(limit, page));
+
+  it('exposes only commit date and app origin, pinned to the requested commit', async () => {
+    const { store, committedAt } = await make();
+    const x = (await store.head()).commitSha;
+    const desktop = await store.commitMeta(x);
+    expect(desktop).toEqual({ committedAt: committedAt(x), fromApp: false });
+    expect(Number.isFinite(Date.parse(desktop!.committedAt))).toBe(true);
+    const result = await write(store, TODO, x, 'changed');
+    if (!result.ok) throw new Error('write failed');
+    expect(await store.commitMeta(result.commitSha)).toEqual({ committedAt: committedAt(result.commitSha), fromApp: true });
+    expect(await store.commitMeta(x)).toEqual(desktop);
+    expect(await store.commitMeta('f'.repeat(40))).toBeNull();
+  });
 
   it('reads exact bytes (CRLF, Unicode) and reports the real Git blob SHA', async () => {
     const { store } = await make();
@@ -223,7 +237,7 @@ describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_0
 describe('LocalGitStore mode precondition (gate-3 F2, mutant M13)', { timeout: 30_000 }, () => {
   it('refuses to update a file stored as 100755 (the write would silently change its mode)', async () => {
     const repos = createTempRepos(SEED);
-    current = { store: new LocalGitStore({ repo: repos.bare }), external: async () => '', cleanup: () => repos.cleanup() };
+    current = { store: new LocalGitStore({ repo: repos.bare }), external: async () => '', committedAt: (sha) => git(repos.bare, 'show', '-s', '--format=%cI', sha), cleanup: () => repos.cleanup() };
     const writer = `${repos.root}/writer`;
     git(writer, 'pull', '-q', '--ff-only');
     git(writer, 'update-index', '--chmod=+x', 'Tasks/To-Do List.md');
@@ -239,11 +253,13 @@ describe('LocalGitStore mode precondition (gate-3 F2, mutant M13)', { timeout: 3
 describe('LocalGitStore listFiles returns regular files only (P4-A: a symlink could point outside the allowlist)', { timeout: 30_000 }, () => {
   it('omits symlinks, keeps 100644 and 100755 files', async () => {
     const repos = createTempRepos({ ...SEED, 'Projects/plain.md': 'p\n', 'Projects/exec.md': 'e\n', 'Finance/secret.md': 's\n' });
-    current = { store: new LocalGitStore({ repo: repos.bare }), external: async () => '', cleanup: () => repos.cleanup() };
+    current = { store: new LocalGitStore({ repo: repos.bare }), external: async () => '', committedAt: () => '', cleanup: () => repos.cleanup() };
     const writer = `${repos.root}/writer`;
     git(writer, 'pull', '-q', '--ff-only');
-    symlinkSync('../Finance/secret.md', `${writer}/Projects/link.md`);
-    git(writer, 'add', '-A');
+    // Stage a real Git symlink without requiring Windows filesystem symlink privileges.
+    writeFileSync(`${writer}/Projects/link.md`, '../Finance/secret.md');
+    const linkBlob = git(writer, 'hash-object', '-w', 'Projects/link.md');
+    git(writer, 'update-index', '--add', '--cacheinfo', `120000,${linkBlob},Projects/link.md`);
     git(writer, 'update-index', '--chmod=+x', 'Projects/exec.md');
     git(writer, 'commit', '-q', '-m', 'link');
     git(writer, 'push', '-q', 'origin', 'main');

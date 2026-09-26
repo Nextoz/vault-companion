@@ -32,6 +32,7 @@ const read = (revision: string, open: TaskView[]) =>
     blobSha: open[0]?.locator.blobSha ?? '2'.repeat(40),
     today: '2026-09-24',
     timeZone: 'Europe/Copenhagen',
+    vault: null,
     writeBlock: null,
     known: {},
     todayTasks: open,

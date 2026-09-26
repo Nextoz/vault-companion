@@ -37,6 +37,7 @@ function read(open: TaskView[], doneToday: TaskView[], known: Record<string, 'in
     blobSha: '2'.repeat(40),
     today: '2026-09-24',
     timeZone: 'Europe/Copenhagen',
+    vault: null,
     writeBlock: null,
     known,
     todayTasks: open,
@@ -256,6 +257,7 @@ describe('Undo from Done today (P4-B)', () => {
   it('offers none while the task list is write-blocked (a sync conflict refuses every write)', () => {
     const blocked = TasksResponse.parse({
       ...included,
+      vault: null,
       writeBlock: { code: 'refused:vault-conflict', message: 'File contains Git conflict markers.', retryable: false },
     });
     expect(buildView(blocked, [saved], ACCOUNT).doneToday).toMatchObject([{ action: { operationId: complete.operationId }, undo: null }]);

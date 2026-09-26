@@ -95,6 +95,12 @@ export class GitHubContentsStore implements VaultStore {
     return `/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
   }
 
+  async commitMeta(commitSha: string) {
+    const commit = await this.getJson<{ committer: { date: string }; message: string }>(`/git/commits/${commitSha}`);
+    if (!commit) return null;
+    return { committedAt: commit.committer.date, fromApp: TRAILER_OP in parseTrailers(commit.message) };
+  }
+
   async head(): Promise<{ commitSha: string }> {
     const ref = await this.getJson<{ object: { sha: string } }>(`/git/ref/heads/${encodeURIComponent(this.branch)}`);
     if (!ref) throw new StoreUnavailable('branch not found');
