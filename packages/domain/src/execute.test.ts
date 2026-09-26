@@ -99,14 +99,32 @@ describe('executeWrite', () => {
     expect(store.text(PATH)).toBe('- [ ] one\n- [ ] desktop\n- [ ] two\n');
   });
 
-  it('A32/F9: an unsearchable dedupe window never writes (unknown base, truncated window)', async () => {
+  it('A32/F9 + ADR-0015: an unsearchable dedupe window never writes (unknown base; more than one compare page)', async () => {
     const unknownBase = await executeWrite(store, { operationId: OP, baseRevision: 'f'.repeat(40), payloadHash: HASH }, appendPlan('- [ ] two'));
     expect(unknownBase).toMatchObject({ ok: false, code: 'dedupe-unknown' });
     for (let i = 0; i < 3; i++) await store.commitFiles({ 'Inbox/x.md': `v${i}` });
-    store.dedupeWindowLimit = 2;
-    const truncated = await executeWrite(store, { operationId: OP, baseRevision: base, payloadHash: HASH }, appendPlan('- [ ] two'));
-    expect(truncated).toMatchObject({ ok: false, code: 'dedupe-unknown' });
+    store.comparePageSize = 2;
+    const beyondOnePage = await executeWrite(store, { operationId: OP, baseRevision: base, payloadHash: HASH }, appendPlan('- [ ] two'));
+    expect(beyondOnePage).toMatchObject({ ok: false, code: 'dedupe-unknown', message: 'this may already be applied — check Obsidian', retryable: false });
     expect(store.writeCalls).toBe(0);
+    expect(store.calls).not.toContain('findOperation'); // one listing, never a paged search
+    // Exactly one page still dedupes normally.
+    store.comparePageSize = 3;
+    expect(await executeWrite(store, { operationId: OP, baseRevision: base, payloadHash: HASH }, appendPlan('- [ ] two'))).toMatchObject({ ok: true, status: 'applied' });
+  });
+
+  it('ADR-0015: applied with a lost response, then more than one page later ⇒ dedupe-unknown, never a second commit', async () => {
+    store.comparePageSize = 2;
+    store.writeFaults.push('apply-then-unknown', 'unavailable');
+    await executeWrite(store, { operationId: OP, baseRevision: base, payloadHash: HASH }, appendPlan('- [ ] two'));
+    for (let i = 0; i < 3; i++) await store.commitFiles({ 'Inbox/x.md': `v${i}` });
+    const retry = await executeWrite(store, { operationId: OP, baseRevision: base, payloadHash: HASH }, appendPlan('- [ ] two'));
+    expect(retry).toMatchObject({ ok: false, code: 'dedupe-unknown' });
+    expect(store.commitsWithOp(OP)).toHaveLength(1);
+  });
+
+  it('ADR-0015: MAX_ATTEMPTS is 3 for every command', () => {
+    expect(MAX_ATTEMPTS).toBe(3);
   });
 
   it('already-applied commit whose effect cannot be re-derived is reported, not trusted', async () => {

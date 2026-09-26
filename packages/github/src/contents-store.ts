@@ -33,6 +33,8 @@ export interface GitHubStoreOptions {
 }
 
 const MAX_CONTENT_BYTES = 1024 * 1024;
+/** Entries kept per in-memory cache (keys are immutable commit SHAs; a full cache is simply dropped). */
+const CACHE_LIMIT = 256;
 
 interface TreeEntry {
   readonly path: string;
@@ -48,6 +50,12 @@ export class GitHubContentsStore implements VaultStore {
   private readonly maxPages: number;
   /** Commit → tree SHA seen in commit/compare responses, so a write on that commit skips re-reading it (ADR-0013). */
   private readonly trees = new Map<string, string>();
+  /**
+   * Directory listings per (commit, dir): a commit's tree never changes, so planning's listing also serves the write's
+   * precondition on the same commit (ADR-0015: CaptureNote with an absent Inbox no longer pays for both). Only settled
+   * answers are kept (entries, or confirmed absence); failures always throw afresh.
+   */
+  private readonly listings = new Map<string, TreeEntry[] | null>();
 
   constructor(private readonly opts: GitHubStoreOptions) {
     this.branch = opts.branch ?? 'main';
@@ -126,10 +134,21 @@ export class GitHubContentsStore implements VaultStore {
    * `dir` is **confirmed absent** from its parent tree. Any other 404 or failure throws — fail closed (rerun Opus N1).
    */
   private async treeEntries(commit: string, dir: string, recursive = false): Promise<TreeEntry[] | null> {
+    const key = `${commit}\0${dir}\0${recursive ? 'r' : ''}`;
+    if (this.listings.has(key)) return this.listings.get(key)!;
+    const settled = await this.fetchTreeEntries(commit, dir, recursive);
+    if (this.listings.size >= CACHE_LIMIT) this.listings.clear();
+    this.listings.set(key, settled);
+    return settled;
+  }
+
+  private async fetchTreeEntries(commit: string, dir: string, recursive: boolean): Promise<TreeEntry[] | null> {
     const ref = dir === '' ? commit : `${commit}:${dir.split('/').map(encodeURIComponent).join('/')}`;
-    const t = await this.getJson<{ truncated: boolean; tree: TreeEntry[] }>(`/git/trees/${ref}${recursive ? '?recursive=1' : ''}`);
+    const t = await this.getJson<{ sha: string; truncated: boolean; tree: TreeEntry[] }>(`/git/trees/${ref}${recursive ? '?recursive=1' : ''}`);
     if (t) {
       if (t.truncated) throw new FileTooLarge('directory listing truncated');
+      // The root listing names the commit's tree: a later write on this commit needs no base-commit read.
+      if (dir === '' && /^[0-9a-f]{40}$/.test(commit)) this.rememberTree(commit, t.sha);
       return t.tree;
     }
     if (dir === '') throw new StoreUnavailable('commit tree not found');
@@ -137,6 +156,11 @@ export class GitHubContentsStore implements VaultStore {
     const parent = await this.treeEntries(commit, cut < 0 ? '' : dir.slice(0, cut));
     if (parent === null || !parent.some((e) => e.path === dir.slice(cut + 1))) return null;
     throw new StoreUnavailable('directory listing failed although the directory exists');
+  }
+
+  private rememberTree(commit: string, tree: string): void {
+    if (this.trees.size >= CACHE_LIMIT) this.trees.clear();
+    this.trees.set(commit, tree);
   }
 
   /** POST to the Git object endpoints: failures here leave only unreachable objects, never a durable effect. */
@@ -222,7 +246,7 @@ export class GitHubContentsStore implements VaultStore {
       commit: { message: string; tree: { sha: string } };
       files?: { filename: string; sha: string | null; status: string }[];
     };
-    this.trees.set(c.sha, c.commit.tree.sha);
+    this.rememberTree(c.sha, c.commit.tree.sha);
     return {
       sha: c.sha,
       parent: c.parents[0]?.sha ?? null,
@@ -243,7 +267,7 @@ export class GitHubContentsStore implements VaultStore {
     };
     if (cmp.status !== 'ahead' && cmp.status !== 'identical') return { kind: 'not-ancestor' };
     if (cmp.total_commits > COMPARE_PAGE || cmp.commits.length < cmp.total_commits) return { kind: 'too-many' };
-    for (const c of cmp.commits) this.trees.set(c.sha, c.commit.tree.sha);
+    for (const c of cmp.commits) this.rememberTree(c.sha, c.commit.tree.sha);
     return { kind: 'ok', commits: cmp.commits.map((c) => ({ sha: c.sha, trailers: parseTrailers(c.commit.message) })) };
   }
 
