@@ -38,6 +38,21 @@ Rules:
   comparison or review.
 - Introduce a Codex agent when a genuinely suitable task appears; never interrupt a milestone just to add one.
 
+## Visible agents (owner, 2026-09-26)
+
+Every non-interactive worker starts through `tools/agent-pane.sh` so the owner can watch it live:
+one labelled pane per agent (`<model>-<effort> · <task>`) in the **Agents** tab (created on demand, never focused),
+output streamed in the pane and tee'd to the log, pane closes itself 60 s after the command ends (the tab closes with
+its last pane). Codex runs add `-c model_reasoning_summary=detailed` so reasoning summaries are visible.
+
+```sh
+AGENT_STDIN=<clone>/.agent/brief.md bash tools/agent-pane.sh "astra-high · pr18" <clone> <clone>/.agent/run.log \
+  codex exec -m gpt-6-astra -c model_reasoning_effort=high -c model_reasoning_summary=detailed \
+  --sandbox workspace-write -C <clone> -
+```
+
+Wait for completion with the log's last line (Codex: `tokens used`) rather than polling the pane.
+
 ## Herdr mechanics learned (Windows / Git Bash)
 
 - Git Bash rewrites a leading `/word` argument into a Windows path: prefix Herdr calls that send slash
