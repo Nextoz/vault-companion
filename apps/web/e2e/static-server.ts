@@ -1,8 +1,8 @@
 // A minimal static server for a production build whose root can be swapped while it runs, so a test can
-// "deploy" a new build to the same origin (a service worker is bound to its origin). /api/* is never served
-// here: tests route it with MockApi on the browser context.
+// "deploy" a new build to the same origin (a service worker is bound to its origin). /api/* is served only by an
+// `api` handler (the real-stack gateway); otherwise tests route it with MockApi on the browser context.
 import { readFile } from 'node:fs/promises';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 
 const TYPES: Record<string, string> = {
@@ -22,12 +22,13 @@ export class StaticServer {
   readonly requests: { path: string; origin: string | null }[] = [];
   readonly #server: Server;
 
-  /** `headers` are added to every response (and override the defaults below). */
-  constructor(root: string, headers: Record<string, string> = {}) {
+  /** `headers` are added to every response (and override the defaults below); `api` answers every /api/* request. */
+  constructor(root: string, headers: Record<string, string> = {}, api?: (req: IncomingMessage, res: ServerResponse) => void) {
     this.root = root;
     this.#server = createServer((req, res) => {
       const path = new URL(req.url ?? '/', 'http://x').pathname;
       this.requests.push({ path, origin: req.headers.origin ?? null });
+      if (api && path.startsWith('/api/')) return api(req, res);
       const file = normalize(join(this.root, path === '/' ? 'index.html' : path));
       if (!file.startsWith(normalize(this.root))) return res.writeHead(403).end();
       readFile(file).then(
@@ -57,6 +58,8 @@ export class StaticServer {
   }
 
   close(): Promise<void> {
+    // Keep-alive connections of a still-open page would otherwise hold the close until they time out.
+    this.#server.closeAllConnections();
     return new Promise((resolve) => this.#server.close(() => resolve()));
   }
 }
