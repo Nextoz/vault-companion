@@ -8,7 +8,7 @@
 //   not to have applied (R4); an Undo of a completion no tab ever sent cancels both locally (F4);
 // - several tabs share one IndexedDB database: claim, cancellation, settlement and discard run under the
 //   `vc-pending` Web Lock after re-reading IndexedDB. In-memory state is a cache, never the basis of a decision (A3).
-//   Without Web Locks, local cancellation is disabled;
+//   Without Web Locks, local cancellation and base refresh are disabled;
 // - nothing is dropped except on receipt or explicit user discard. No retry limit. A receipt is kept in IndexedDB
 //   until a read reports its commit `included`; only such acknowledged receipts are ever evicted (A9);
 // - acknowledging a receipt records, in the same transaction, the revision of the read that reported it `included`
@@ -96,6 +96,11 @@ export interface QueueOptions {
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => () => void;
   onReceipt?: (receipt: Receipt, envelope: Command) => void;
+  /**
+   * The revision of the newest task read (ADR-0015). Just before a never-sent item's first send, its `baseRevision`
+   * moves here: no commit can carry an operation never sent, so the server's one-page dedupe window stays small.
+   */
+  latestRevision?: () => string | null;
 }
 
 const LOCK_NAME = 'vc-pending';
@@ -136,6 +141,7 @@ export class PendingQueue {
   readonly #now: () => number;
   readonly #setTimer: NonNullable<QueueOptions['setTimer']>;
   readonly #onReceipt: QueueOptions['onReceipt'];
+  readonly #latestRevision: () => string | null;
 
   // Caches of IndexedDB, refreshed inside every lock. Never trusted for a decision outside one.
   #records = new Map<string, PendingRecord>();
@@ -166,6 +172,7 @@ export class PendingQueue {
         return () => clearTimeout(id);
       });
     this.#onReceipt = options.onReceipt;
+    this.#latestRevision = options.latestRevision ?? (() => null);
   }
 
   static async open(options: QueueOptions): Promise<PendingQueue> {
@@ -237,6 +244,20 @@ export class PendingQueue {
         this.#emit();
         return 'cancelled' as const;
       }
+      // The toast/row may still hold the envelope minted before the first-send rebase. Resolve its ID from disk.
+      const receipt = this.#receipts.get(target.operationId);
+      const durable = receipt ?? predecessor;
+      const durableTarget = durable ? this.#envelopeOf(durable) : null;
+      if (undo.type === 'UndoCompleteTask') {
+        if (durableTarget?.type === 'CompleteTask') {
+          undo = { ...undo, payload: { ...undo.payload, target: durableTarget } };
+          if (receipt && !isUndoDraft(undo)) undo = withTargetCommit(undo, receipt.receipt.commitSha);
+        } else {
+          // No durable target: keep only a draft, which the claim will refuse rather than trusting UI bytes.
+          undo = { ...undo, payload: { target } } as Command;
+        }
+      }
+      // Enqueue is idempotent: an existing Undo (especially an already-sent one) keeps its exact stored body.
       await this.#enqueueLocked(undo, { ...options, dependsOn: predecessor ? predecessor.operationId : null });
       return 'queued' as const;
     });
@@ -322,8 +343,13 @@ export class PendingQueue {
    */
   async resetHistory(): Promise<void> {
     await this.#locked(async () => {
+      // A receipt a pending Undo draft still needs for its token is kept (same rule as eviction), but as
+      // unacknowledged: the neutral watermark no longer covers it, so reads ask about it again.
+      const needed = this.#neededByDrafts();
       const all = [...this.#receipts.values()];
-      await this.#writeReceipts([], all, this.#nextWatermark(RESET_WATERMARK, all.map((r) => r.operationId)));
+      const keep = all.filter((r) => needed.has(r.operationId)).map((r) => ({ ...r, acknowledged: false }));
+      const drop = all.filter((r) => !needed.has(r.operationId));
+      await this.#writeReceipts(keep, drop, this.#nextWatermark(RESET_WATERMARK, drop.map((r) => r.operationId)));
     });
   }
 
@@ -412,13 +438,18 @@ export class PendingQueue {
       }
       const draft = this.#envelopeOf(record);
       let body = record.body;
-      if (isUndoDraft(draft) && draft.type === 'UndoCompleteTask') {
+      if (!record.everSent && isUndoDraft(draft) && draft.type === 'UndoCompleteTask') {
         const targetId = draft.payload.target.operationId;
         const receipt = this.#receipts.get(targetId);
         const predecessor = this.#records.get(targetId);
         if (receipt) {
-          // The token, once: persisted with the claim below, before the request leaves (ADR-0013).
-          body = JSON.stringify(withTargetCommit(draft, receipt.receipt.commitSha));
+          // Both the exact completion envelope and its token, once, before the request leaves (ADR-0013).
+          const target = this.#envelopeOf(receipt);
+          if (target.type !== 'CompleteTask') {
+            await this.#persist({ ...record, state: 'attention', lastError: UNDO_TARGET_UNKNOWN });
+            continue;
+          }
+          body = JSON.stringify(withTargetCommit({ ...draft, payload: { ...draft.payload, target } }, receipt.receipt.commitSha));
         } else if (predecessor?.state === 'attention' && knownNotApplied(predecessor.lastError)) {
           // Nothing was completed, so there is nothing to undo (ADR-0013): dropped locally, never sent.
           await this.#store.delete(record.operationId);
@@ -432,6 +463,14 @@ export class PendingQueue {
           await this.#persist({ ...record, state: 'attention', lastError: UNDO_TARGET_UNKNOWN });
           continue;
         }
+      }
+      // ADR-0015: the first send of a never-sent item carries the newest read revision as its base. Rewritten here, once,
+      // and persisted with the claim before the request leaves: every later attempt sends exactly these bytes.
+      // Without Web Locks, everSent may be a stale cross-tab snapshot: rebasing could skip our own applied commit.
+      const latest = record.everSent || this.#locks === null ? null : this.#latestRevision();
+      if (latest && /^[0-9a-f]{40}$/.test(latest)) {
+        const envelope = JSON.parse(body) as Command;
+        if (envelope.baseRevision !== latest) body = JSON.stringify({ ...envelope, baseRevision: latest });
       }
       // Mark before the request leaves: from here on its effect may exist in Git, and other tabs keep off it.
       const claimed: PendingRecord = { ...record, body, everSent: true, leaseUntil: now + LEASE_MS, claimId: crypto.randomUUID() };
@@ -563,13 +602,18 @@ export class PendingQueue {
    */
   #evictable(candidates: ReceiptRecord[], read: ReadEvidence): ReceiptRecord[] {
     if (!satisfiesWatermark(read, this.#watermark)) return [];
-    // A draft Undo takes its token from its completion's receipt (ADR-0013): keep that receipt until it has.
+    const needed = this.#neededByDrafts();
+    return candidates.filter((r) => r.acknowledged && !needed.has(r.operationId));
+  }
+
+  /** Under the lock. Completions whose receipt a pending Undo draft still needs for its token (ADR-0013). */
+  #neededByDrafts(): Set<string> {
     const needed = new Set<string>();
     for (const r of this.#records.values()) {
       const e = this.#envelopeOf(r);
       if (isUndoDraft(e) && e.type === 'UndoCompleteTask') needed.add(e.payload.target.operationId);
     }
-    return candidates.filter((r) => r.acknowledged && !needed.has(r.operationId));
+    return needed;
   }
 
   #nextWatermark(commitSha: string, receiptOpIds: string[]): Watermark {

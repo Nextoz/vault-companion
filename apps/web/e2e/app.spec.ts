@@ -5,6 +5,9 @@ import { MockApi, taskView } from './mock-api.ts';
 let api: MockApi;
 
 test.beforeEach(async ({ page }) => {
+  // The mock serves reads dated 2026-09-24 (Copenhagen); actions must be made that day too, or Done today rightly
+  // leaves them out (review P2-A4). The clock still runs; tests may fast-forward it.
+  await page.clock.install({ time: new Date('2026-09-24T10:00:00Z') });
   api = new MockApi();
   api.open = [taskView(10, 'Water the plants'), taskView(11, 'Call the bike shop')];
   await api.install(page);
@@ -163,9 +166,18 @@ test('a second tab never re-sends a completion in flight in the first, and Undo 
   await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['CompleteTask', 'UndoCompleteTask']);
   expect(parsed(api.bodies).filter((c) => c.type === 'CompleteTask')).toHaveLength(1);
 
-  await second.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(region(second, 'Today').getByText('Water the plants')).toBeVisible();
-  await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+  for (const tab of [second, page]) {
+    // Applying Undo precedes storing its receipt. Refresh only once both receipts are visible to this tab,
+    // so the read can acknowledge Undo too (or the watermark already covers it).
+    await tab.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(region(tab, 'Actions on this device').getByText('Saved to GitHub', { exact: true })).toHaveCount(2);
+    const refreshed = tab.waitForResponse((response) => new URL(response.url()).pathname === '/api/tasks' && response.ok());
+    await tab.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await refreshed;
+    const row = region(tab, 'Today').getByTestId('task').filter({ hasText: 'Water the plants' });
+    await expect(row).toHaveCount(1);
+    await expect(row).toBeVisible();
+  }
 });
 
 // ---- P4-B: client correctness -----------------------------------------------------------------------------------
@@ -222,7 +234,6 @@ test('a stale read with shifted identical lines shows the pending completion on 
 });
 
 test('Undo from Done today after the toast expired sends exactly one valid UndoCompleteTask', async ({ page }) => {
-  await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
   await expect.poll(() => api.applied.length).toBe(1);
@@ -294,7 +305,6 @@ for (const [what, set] of [
 
 for (const which of ['session', 'tasks'] as const) {
   test(`a ${which} read that never answers is given up after 10 s`, async ({ page }) => {
-    await page.clock.install();
     if (which === 'session') api.sessionMode = 'hang';
     else api.tasksMode = 'hang';
     const hung = page.waitForRequest(which === 'session' ? '**/api/session' : '**/api/tasks**');
@@ -688,6 +698,9 @@ test('review O6: reads that stay stale offer "Reset saved-actions history", whic
     await page.waitForTimeout(150);
   }
   await expect(reset).toBeVisible();
+  await expect(page.getByRole('alert').filter({ has: reset })).toContainText(
+    'a recently saved action may briefly show as not yet reflected',
+  );
   await reset.click();
 
   await expect(reset).toHaveCount(0);

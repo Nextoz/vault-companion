@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { postCommand } from './api.ts';
+import { prefs } from './prefs.ts';
 import { openPendingStore } from './queue/db.ts';
 import { PendingQueue } from './queue/queue.ts';
 import { App } from './ui/App.tsx';
@@ -17,6 +18,7 @@ async function start() {
     store,
     send: postCommand,
     onReceipt: () => receipts.dispatchEvent(new Event('receipt')),
+    latestRevision: prefs.lastRevision,
   });
 
   root.render(

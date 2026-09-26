@@ -16,14 +16,17 @@ or per-version preview hostname exists to bypass Access.
 Limits per Worker invocation ([Workers limits](https://developers.cloudflare.com/workers/platform/limits/); re-check):
 **Free: 50 subrequests, 10 ms CPU. Paid: 10,000 subrequests, 30 s CPU (default).** Every GitHub call is a subrequest.
 
-Measured on current `main` (whole-system review 2026-09-26, `docs/reviews/phase-2-review-opus.md`, real adapter with a
-counting `fetch`):
+Every command is bounded (ADR-0013 Undo, review O1 reads, [ADR-0015](decisions/0015-bounded-write-budget.md) writes):
+one compare page per dedupe, at most 3 attempts. Measured worst cases (full 250-commit page, the head moved on every
+attempt, cold installation token, cold Access JWKS), real adapter with a counting `fetch`:
 
-| Request | GitHub calls | CPU (warm, fake network) |
+| Request | Subrequests, worst case | CPU (warm, fake network; review O2) |
 |---|---|---|
-| `UndoCompleteTask` (ADR-0013) | ≤ 10 per attempt, ≤ 3 attempts (+ token, + JWKS when cold) | — |
-| `CompleteTask` / `CaptureTask` / `CaptureNote` | 8 + p per attempt, ≤ 5 attempts (p = compare pages of `baseRevision..X`): 9 typical, 52 worst at p = 2 | Complete 8.5 ms on a 300-task list, 29.7 ms on 1,500 |
-| `GET /api/tasks` | 2 + one per `known` SHA until the read-budget fix lands (review O1), then ≤ 4 | 3.4–12.5 ms before network parsing |
+| `CompleteTask` / `CaptureTask` / `CaptureNote` | 8 per attempt, ≤ 3 attempts: **26** | Complete 8.5 ms on a 300-task list, 29.7 ms on 1,500 |
+| `UndoCompleteTask` (ADR-0013) | ≤ 10 per attempt, ≤ 3 attempts: **32** | — |
+| `GET /api/tasks` (review O1) | ≤ 4: **6** | 3.4–12.5 ms before network parsing |
+
+**The Free plan suffices for subrequests.**
 
 **Owner decision (2026-09-26): Free.** The owner's list is ~16 KB / 39 tasks (est. 4–5 ms). After the first deploy,
 measure real CPU per request with `wrangler tail` (read-only requests first) before the canary; if a request nears 10 ms,

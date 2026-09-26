@@ -3,8 +3,14 @@
 import type { ErrorCode } from '@vault-companion/contracts';
 import { StoreUnavailable, StoreUnknownOutcome, TRAILER_OP, TRAILER_PAYLOAD, type FindOperationResult, type VaultPath, type VaultStore } from './store.ts';
 
-/** Head-CAS (ADR-0011) fails on any concurrent commit, so allow a few more re-plans than blob CAS needed. */
-export const MAX_ATTEMPTS = 5;
+/**
+ * Head-moved re-plans per command (ADR-0015): three attempts keep every write command within Workers Free's 50
+ * subrequests per invocation, including a cold installation token and the Access JWKS fetch.
+ */
+export const MAX_ATTEMPTS = 3;
+
+/** Shown when one compare page cannot settle whether the operation already applied (ADR-0015). */
+export const MAY_BE_APPLIED = 'this may already be applied — check Obsidian';
 
 /** A computed change against the vault at one commit. */
 export type Planned<E> =
@@ -20,8 +26,8 @@ export interface WritePlan<E> {
    */
   deriveApplied?(store: VaultStore, commitSha: string, changedPaths: readonly string[]): Promise<Derived<E>>;
   /**
-   * Replace the default dedupe (a paged search of `baseRevision..X`) with the plan's own bounded check at X, which may
-   * also refuse (Undo, ADR-0013). Runs once per attempt, before `compute` at the same X.
+   * Replace the default dedupe (one listing of `baseRevision..X`, ADR-0015) with the plan's own bounded check at X,
+   * which may also refuse (Undo, ADR-0013). Runs once per attempt, before `compute` at the same X.
    */
   findApplied?(store: VaultStore, atCommit: string, operationId: string): Promise<FindOperationResult | Refused>;
   /** Attempts (head-moved re-plans) for this plan; default `MAX_ATTEMPTS`. */
@@ -48,6 +54,20 @@ export type ExecuteResult<E> =
 
 const fail = <E>(code: ErrorCode, message: string, retryable = false): ExecuteResult<E> => ({ ok: false, code, message, retryable });
 
+/**
+ * ADR-0015: dedupe over ONE single-page listing of `baseRevision..X` (≤ `COMPARE_PAGE` commits), never paged. A base
+ * that is not an ancestor of X, or more than one page, cannot settle whether this operation already applied: typed
+ * `dedupe-unknown`, never a guess. (The client keeps the window small by moving a never-sent item's base forward.)
+ */
+export async function findInOnePage(store: VaultStore, baseRevision: string, x: string, operationId: string): Promise<FindOperationResult | Refused> {
+  const since = await store.commitsSince(baseRevision, x);
+  if (since.kind !== 'ok') return { kind: 'refused', code: 'dedupe-unknown', message: MAY_BE_APPLIED };
+  const own = since.commits.find((c) => c.trailers[TRAILER_OP] === operationId);
+  if (!own) return { kind: 'not-found' };
+  const info = await store.readCommit(own.sha);
+  return { kind: 'found', op: { commitSha: own.sha, payloadHash: own.trailers[TRAILER_PAYLOAD] ?? '', paths: (info?.files ?? []).map((f) => f.path) } };
+}
+
 export async function replayOnParent<E>(plan: WritePlan<E>, store: VaultStore, commitSha: string, changedPaths: readonly string[]): Promise<Derived<E>> {
   const parent = await store.parentOf(commitSha);
   const replay = await plan.compute(store, parent);
@@ -73,7 +93,7 @@ export async function executeWrite<E>(store: VaultStore, input: ExecuteInput, pl
 
       const found = plan.findApplied
         ? await plan.findApplied(store, x, input.operationId)
-        : await store.findOperation(input.baseRevision, x, input.operationId);
+        : await findInOnePage(store, input.baseRevision, x, input.operationId);
       if (found.kind === 'refused') return fail(found.code, found.message);
       if (found.kind === 'unknown') return fail('dedupe-unknown', `cannot establish whether the operation was applied (${found.reason})`);
       if (found.kind === 'found') {
