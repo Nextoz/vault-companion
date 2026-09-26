@@ -4,6 +4,7 @@ import {
   Command,
   decodeLinkedNoteHeader,
   LINKED_NOTE_HEADER,
+  type ActiveWorkResponse,
   type ApiError,
   type ErrorCode,
   type LinkedNoteRequest,
@@ -21,6 +22,8 @@ export interface Services {
   execute(command: Command, raw: unknown): Promise<Receipt | ApiError>;
   /** Read-only linked note (P4-A). Optional: without it the route answers 404. */
   readLinkedNote?(req: LinkedNoteRequest): Promise<LinkedNoteResponse | ApiError>;
+  /** Active Work Now card. Optional: without it the route answers 404. */
+  readActiveWork?(): Promise<ActiveWorkResponse | ApiError>;
 }
 
 export interface AppDeps {
@@ -54,7 +57,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -113,6 +116,21 @@ export function createApp(deps: AppDeps) {
       return c.json(result, statusFor(result.code) as 400);
     }
     if (result.status === 'refused') meta.errorCode = `linked-note:${result.code}`;
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Active Work Now: a fixed read-only path, no request input. Logs carry neither its text nor its path.
+  app.get('/api/active-work', async (c) => {
+    const read = deps.services.readActiveWork;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const meta = c.get('logMeta');
+    const result = await read();
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    if (result.status === 'refused') meta.errorCode = `active-work:${result.code}`;
     meta.commitSha = result.revision;
     return c.json(result);
   });

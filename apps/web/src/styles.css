@@ -527,3 +527,28 @@ textarea:focus-visible {
   border: 1px solid var(--line);
   padding: 4px 8px;
 }
+
+/* Active Work card (read-only, above Today). The heading is the collapse toggle. */
+.active-work-toggle {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.active-work-toggle::after {
+  content: ' ▾';
+  color: var(--muted);
+}
+
+.active-work-toggle[aria-expanded='false']::after {
+  content: ' ▸';
+}
+
+.active-work-body {
+  padding: 0;
+}

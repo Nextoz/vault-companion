@@ -26,4 +26,7 @@ export const prefs = {
   /** Last confirmed accountKey: binds items created before the session can be re-confirmed. */
   lastAccountKey: () => read('vc.lastAccountKey'),
   setLastAccountKey: (key: string) => write('vc.lastAccountKey', key),
+  /** Active Work card folded away on this device (expanded by default). */
+  activeWorkCollapsed: () => read('vc.activeWorkCollapsed') === '1',
+  setActiveWorkCollapsed: (collapsed: boolean) => write('vc.activeWorkCollapsed', collapsed ? '1' : '0'),
 };

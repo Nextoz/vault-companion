@@ -7,7 +7,7 @@
 // - Receipts evicted in any tab are covered by the shared watermark instead: a read is rendered only if it shows the
 //   watermark commit `included`. One that does not is stale; the screen keeps the last good read, or says it is
 //   refreshing. Every read asks about the watermark first.
-import type { TasksResponse } from '@vault-companion/contracts';
+import type { ActiveWorkResponse, TasksResponse } from '@vault-companion/contracts';
 import type { Fetched } from './api.ts';
 import type { Watermark } from './queue/db.ts';
 import { satisfiesWatermark, type QueueItem } from './queue/queue.ts';
@@ -101,5 +101,28 @@ export class TaskReads {
       return { kind: 'stale', retry: current?.commitSha !== asked?.commitSha };
     }
     return { kind: 'apply', read: { data: res.data, watermarkVersion: current?.version ?? 0 } };
+  }
+}
+
+/**
+ * What the Active Work card shows for a read. Quiet by design: loading, absent and failures never block the task lists;
+ * an absent file hides the card, anything else shows one muted line.
+ */
+export type ActiveWorkState =
+  | { kind: 'hidden' }
+  | { kind: 'message'; text: string }
+  | { kind: 'content'; markdown: string };
+
+export function activeWorkState(res: Fetched<ActiveWorkResponse> | null): ActiveWorkState {
+  if (res === null) return { kind: 'message', text: 'Loading…' };
+  if (res.kind === 'offline') return { kind: 'message', text: 'Offline.' };
+  if (res.kind !== 'ok') return { kind: 'message', text: 'Not available right now.' };
+  switch (res.data.status) {
+    case 'absent':
+      return { kind: 'hidden' };
+    case 'refused':
+      return { kind: 'message', text: res.data.code === 'too-large' ? 'Too large to show here.' : 'Cannot be displayed.' };
+    case 'ok':
+      return { kind: 'content', markdown: res.data.markdown };
   }
 }
