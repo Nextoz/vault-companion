@@ -12,6 +12,20 @@ review PASS (#8) · client correctness: duplicate-task identity, read timeouts, 
 Overdue below Today (#9) · account-aware drafts, one submitter per draft, ADR-0014 (#11) · 30 s test timeout (#12) ·
 deploy scaffold: wrangler, `_headers`, secrets-only identifiers, `workers.dev` off, runbook `docs/deploy.md` (#10).
 
+## Milestone 3 — product improvement (started 2026-09-26, Lead session `2c2489c5`, Herdr agent `lead`)
+
+Owner's first-use feedback reconciled with the vault Ideas Backlog (private; candidates recorded there). Owner chose
+**A handover visibility** first; E (AI condensation of Active Work) marked interesting; AI capture triage parked in
+the backlog. Remaining candidates (owner ranks later): B task editing, C curated Active Work, D completion history,
+E, F preview-before-production.
+
+| Work | Worker | Where | Status |
+|---|---|---|---|
+| PR #18 review (+ ubuntu A3 e2e failure: duplicate row or flake) | Codex `gpt-6-astra` high, pane `w3:pV` | clone `C:\Dev\vault-companion-clones\pr18-review`; report `docs/reviews/pr18-review-astra.md` there | running |
+| A1 vault handover visibility (brief `docs/briefs/A1-vault-handover.md` in the clone) | Codex `gpt-6-astra` medium, pane `w3:pW` | clone `C:\Dev\vault-companion-clones\handover`, branch `agent/vault-handover` (= #18 + main), uncommitted | running |
+
+Next: disposition #18 review → merge #18 → Lead reviews/commits A1 → PR → merge → deploy → owner tests on the phone.
+
 ## Status (2026-09-26): the app is live on the owner's phone
 
 Deployed `main` `36aeb42` to `https://app.karpov.dk` (Workers Free, Access owner-only). Reads and live writes verified
