@@ -30,15 +30,17 @@ sets privacy rules.
 
 **Done in milestone 3 (all merged, CI green):** #18 write budget + review fixes · #19 A · #20 single-flight token ·
 #21 ancestry without patches (ADR-0016) · #22 one read per app switch · #23 CSP smoke + zod jitless · #24
-identity-safe duplicate-row fix · #25 e2e flakes. **Deployed: `467191a4` (B). PR #27 O3 real-stack e2e (Cloud) open, CI green, CodeRabbit next.**
+identity-safe duplicate-row fix · #25 e2e flakes. **Deployed: `467191a4` (B). #27 O3 real-stack e2e (Cloud) merged: 3 flows vs the real Worker app + LocalGitStore in Chromium; CodeRabbit real review, 1 finding fixed.**
 
 **Capacity (2026-09-26 ~23:00):** Codex Astra ~4 % left, resets 02:29 · Antigravity quota out until ~2026-10-03 ·
-Claude Cloud $10 credit, but session `session_015TkdrdhYa8Z9fuRvTTLqhX` (O3) never pushed — owner to check it before
-more Cloud work · CodeRabbit 1 review/hour · RAM 2–4 GB free: ≤ 1 Playwright job at a time.
+Claude Cloud ~$10 credit; owner ran /web-setup (GitHub connected as Nextoz), so new Cloud sessions clone with push —
+still probe a push at launch · CodeRabbit 1 review/hour · RAM 2–4 GB free: ≤ 1 Playwright job at a time.
 
-**Open technical follow-ups:** O3 real-queue e2e (Cloud, stuck) · R3 CPU re-measure after the latest deploys · O8
+**Open technical follow-ups:** R3 CPU re-measure after the latest deploys · O8
 completion queued before midnight disappears · O4 harness through production composition · R7 blank line in Done ·
-B follow-up: an edit applied but not yet receipted can briefly render twice.
+B follow-up: an edit applied but not yet receipted can briefly render twice · "New version — tap to reload" banner (owner
+ran an old build after deploy) · post-save wording "reaches Obsidian at your next desktop sync" (desktop sync is hourly at
+:06, vault task Sync-ObsidianVaultToGoogleDrive -RequireGitHubSync) — bundle both into C.
 
 **Owner decisions pending:** G3 (count the day's owner-initiated writes as the canary?) · phone feedback on A and B.
 
