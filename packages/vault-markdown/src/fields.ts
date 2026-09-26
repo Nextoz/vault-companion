@@ -57,6 +57,10 @@ const WIKILINK = /\[\[([^[\]]+?)\]\]/g;
 
 export interface TaskFields {
   readonly description: string;
+  /** Offsets in the original body, for byte-preserving edits. */
+  readonly descriptionStart: number;
+  readonly descriptionEnd: number;
+  readonly spans: readonly { kind: FieldKind; start: number; end: number; valueStart: number; valueEnd: number }[];
   readonly values: Readonly<Partial<Record<FieldKind, string>>>;
   /** A field kind occurred more than once among the trailing fields. */
   readonly duplicateField: boolean;
@@ -75,6 +79,7 @@ export function parseTaskBody(body: string): TaskFields {
     rest = rest.slice(0, b.index).trimEnd();
   }
   const values: Partial<Record<FieldKind, string>> = {};
+  const spans: { kind: FieldKind; start: number; end: number; valueStart: number; valueEnd: number }[] = [];
   let duplicateField = false;
   const trailingTags: string[] = [];
   for (;;) {
@@ -82,6 +87,8 @@ export function parseTaskBody(body: string): TaskFields {
     for (const [kind, re] of FIELD_PATTERNS) {
       const m = re.exec(rest);
       if (!m) continue;
+      const valueStart = m.index + m[0].lastIndexOf(m[1]!);
+      spans.push({ kind, start: m.index, end: rest.length, valueStart, valueEnd: valueStart + m[1]!.length });
       if (kind in values) duplicateField = true;
       else values[kind] = m[1]!;
       rest = rest.slice(0, m.index).trimEnd();
@@ -105,5 +112,6 @@ export function parseTaskBody(body: string): TaskFields {
     const target = m[1]!.split(/[|#]/)[0]!.trim();
     if (target !== '') links.push(target);
   }
-  return { description, values, duplicateField, blockId, tags, links };
+  return { description, descriptionStart: rest.length - rest.trimStart().length, descriptionEnd: rest.length,
+    spans, values, duplicateField, blockId, tags, links };
 }

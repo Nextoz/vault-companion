@@ -17,6 +17,7 @@ export type RefusalCode =
   | 'refused:unsupported-status'
   | 'refused:duplicate-field'
   | 'refused:already-completed'
+  | 'refused:invalid-edit'
   | 'conflict:task-changed'
   | 'conflict:ambiguous'
   /** Malformed command input (bad date/context, capture text empty after sanitisation, NUL in note text). */
@@ -83,6 +84,19 @@ export interface MutationOk<E> {
   readonly ok: true;
   readonly text: string;
   readonly effect: E;
+}
+
+export interface EditChanges {
+  readonly text?: string | undefined;
+  readonly due?: string | null | undefined;
+  readonly scheduled?: string | null | undefined;
+  readonly priority?: Priority | null | undefined;
+}
+
+export interface EditEffect {
+  readonly kind: 'edited';
+  readonly beforeLineText: string;
+  readonly afterLineText: string;
 }
 
 /** vault-contract.md §4.1. Everything the exact and the semantic inverse need. */

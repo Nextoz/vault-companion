@@ -153,6 +153,27 @@ describe.each([
   });
 });
 
+describe('phone edit → desktop pull', () => {
+  it('pulls the exact edited line once despite resending the same command', async () => {
+    const h = await setup();
+    const tasks = await h.phone.read();
+    const cmd = h.phone.envelope('EditTask', {
+      task: locatorOf(tasks, WATER),
+      changes: { text: 'Water the herbs', due: '2026-10-01', scheduled: '2026-09-30', priority: 'high' },
+    }, tasks.revision);
+    const after = '- [ ] Water the herbs #todo ➕ 2026-09-01 📅 2026-10-01 ⏳ 2026-09-30 ⏫';
+    const first = receiptOf(await h.phone.send(cmd));
+    expect(first.status).toBe('applied');
+    expect(first.effect).toEqual({ kind: 'edited', beforeLineText: WATER, afterLineText: after });
+    expect(receiptOf(await h.phone.send(cmd))).toEqual({ ...first, status: 'already-applied' });
+    expect(h.commitsFor(cmd.operationId)).toEqual([first.commitSha]);
+    expect(h.desktop.sync()).toMatchObject({ integrated: 'fast-forward', conflicts: [] });
+    expect(h.desktop.read(TODO)).toBe(todo([after, BIKE, RECEIPTS, GARDEN, PERMIT, DENTIST]));
+    expect(h.desktop.read(TODO).split('\n').filter((line) => line === after)).toHaveLength(1);
+    expect(locatorOf(await h.phone.read(), after).blobSha).toBe(first.blobSha);
+  });
+});
+
 describe('desktop → app', () => {
   it('a desktop edit pushed by sync is what the next read serves', async () => {
     const h = await setup();
