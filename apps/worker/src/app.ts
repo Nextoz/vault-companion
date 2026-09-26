@@ -15,7 +15,7 @@ import {
 } from '@vault-companion/contracts';
 import { Hono } from 'hono';
 import type { Identity } from './auth.ts';
-import { hashPath, sanitize, type LogSink } from './log.ts';
+import { diagnosticDetail, hashPath, sanitize, type LogSink } from './log.ts';
 
 export interface Services {
   readTasks(known: readonly string[]): Promise<TasksResponse | ApiError>;
@@ -177,6 +177,14 @@ export function createApp(deps: AppDeps) {
   });
 
   app.notFound((c) => c.json(err('invalid', 'not found'), 404));
-  app.onError((_e, c) => c.json(err('upstream-unavailable', 'internal error', true), 503)); // commands.md: 503 (R11)
+  app.onError((e, c) => {
+    const meta = c.get('logMeta');
+    if (meta) {
+      meta.errorClass = e instanceof Error ? e.name : 'unknown';
+      const detail = diagnosticDetail(e);
+      if (detail) meta.errorDetail = detail;
+    }
+    return c.json(err('upstream-unavailable', 'internal error', true), 503); // commands.md: 503 (R11)
+  });
   return app;
 }
