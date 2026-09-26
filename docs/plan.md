@@ -17,7 +17,7 @@ deploy scaffold: wrangler, `_headers`, secrets-only identifiers, `workers.dev` o
 | # | Blocker | Owner | Status |
 |---|---|---|---|
 | B1 | Token Undo, ADR-0013 (PR #14) | Cloud P4-B session | Astra high **BLOCK** (`docs/reviews/P4E-review-astra.md`: wrong-twin reopen, stale tab cache, dedupe byte check, adapter tests, budget wording) → fixing; then focused Astra re-review |
-| B2 | Active Work Now card (PR #13) | Lead | main merged, 721 tests; CI + CodeRabbit |
+| B2 | Active Work Now card | — | **merged** (#13) |
 | B3 | Whole-system review of the combined build (incl. delayed offline captures, per-command request budgets, phone experience) | Cloud Opus + Astra high | after B1 + B2 merge; `docs/reviews/phase-2-review-brief.md` |
 | B4 | Desktop sync worker broken since 2026-09-24 21:06 (canary prerequisite) | **Owner approval** → Lead applies | tested patch ready (suite 18/18; new case reproduces the live failure) |
 | B5 | Cloudflare setup G2: GitHub App on vault repo, Access, secrets, first deploy | **Owner** (`docs/deploy.md` §1–§7) → Lead §8–§9 | ready to start |
@@ -27,7 +27,7 @@ deploy scaffold: wrangler, `_headers`, secrets-only identifiers, `workers.dev` o
 
 ## Phone experience — verified vs. untested
 
-Verified in tests (WebKit iPhone viewport + unit/e2e): Today/Overdue grouping, Active Work Now card (pending merge),
+Verified in tests (WebKit iPhone viewport + unit/e2e): Today/Overdue grouping, Active Work Now card,
 complete + Undo (toast and Done today), task/note capture offline with exact-once send, draft recovery across reload
 and two windows, conflict banner and next steps, linked note view with sanitised rendering, session/read errors.
 **Untested until the installed iPhone app:** real network latency and the phone targets below, keyboard visibility,

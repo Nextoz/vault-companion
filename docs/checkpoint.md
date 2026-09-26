@@ -5,7 +5,7 @@
 ## In flight
 - PR #14 token Undo — Cloud P4-B session (`session_01TLT6gLxkoKtDHSy8CcCpmb`) fixing Astra's BLOCK; then a focused Astra
   high re-review of the changed code.
-- PR #13 Active Work Now — CI + CodeRabbit; merge when green (P4-A session `session_012WDdnkDZjTWRF4956Mjaoz` can fix).
+- PR #13 Active Work Now — **merged**.
 - Watcher off (memory); Lead checks PRs directly.
 
 ## Exact next actions
