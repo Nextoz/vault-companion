@@ -16,7 +16,7 @@
     "ci:local": "pnpm lint && pnpm typecheck && pnpm test && pnpm --filter @vault-companion/web exec playwright install webkit chromium && pnpm --filter @vault-companion/web e2e && pnpm audit --prod --audit-level high"
   },
   "devDependencies": {
-    "@types/node": "^24.13.6",
+    "@types/node": "^26.6.2",
     "eslint": "^10.11.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.1",
