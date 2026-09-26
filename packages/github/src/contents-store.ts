@@ -279,7 +279,9 @@ export class GitHubContentsStore implements VaultStore {
   }
 
   async isAncestor(commit: string, head: string): Promise<boolean> {
-    const cmp = await this.getJson<{ status: string }>(`/compare/${commit}...${head}?per_page=1`);
+    // Status describes the whole comparison on every page; changed files (and patches) occur only on page 1.
+    // Page 2 also returns status when its commits are empty (identical/behind/one ahead). ADR-0016 / O7 probe.
+    const cmp = await this.getJson<{ status: string }>(`/compare/${commit}...${head}?per_page=1&page=2`);
     return cmp !== null && (cmp.status === 'ahead' || cmp.status === 'identical');
   }
 
