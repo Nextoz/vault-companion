@@ -11,18 +11,27 @@ That origin is the owner's **custom domain behind Cloudflare Access, and nothing
 `workers_dev: false` and `preview_urls: false` (asserted by `apps/worker/src/config.test.ts`), so no `*.workers.dev`
 or per-version preview hostname exists to bypass Access.
 
-## 0. Choose the plan (subrequest limit)
+## 0. Choose the plan (subrequests and CPU)
 
-Each Worker invocation may make a limited number of subrequests (outbound `fetch`): **Free 50, Paid 10,000** per
-invocation ([Workers limits](https://developers.cloudflare.com/workers/platform/limits/); re-check when you do this
-step). Every GitHub API call is one subrequest.
+Limits per Worker invocation ([Workers limits](https://developers.cloudflare.com/workers/platform/limits/); re-check):
+**Free: 50 subrequests, 10 ms CPU. Paid: 10,000 subrequests, 30 s CPU (default).** Every GitHub call is a subrequest.
 
 Every command is bounded (ADR-0013 Undo, review O1 reads, [ADR-0015](decisions/0015-bounded-write-budget.md) writes):
 one compare page per dedupe, at most 3 attempts. Measured worst cases (full 250-commit page, the head moved on every
-attempt, cold installation token, cold Access JWKS): **CompleteTask / CaptureTask / CaptureNote 26, UndoCompleteTask 32,
-task read 6** subrequests. **The Free plan suffices for subrequests.** CPU time (Free: 10 ms per invocation) is a
-separate limit: measure the owner's real task list (`wrangler dev --remote`, `wrangler tail`) before relying on Free
-(review O2).
+attempt, cold installation token, cold Access JWKS), real adapter with a counting `fetch`:
+
+| Request | Subrequests, worst case | CPU (warm, fake network; review O2) |
+|---|---|---|
+| `CompleteTask` / `CaptureTask` / `CaptureNote` | 8 per attempt, ≤ 3 attempts: **26** | Complete 8.5 ms on a 300-task list, 29.7 ms on 1,500 |
+| `UndoCompleteTask` (ADR-0013) | ≤ 10 per attempt, ≤ 3 attempts: **32** | — |
+| `GET /api/tasks` (review O1) | ≤ 4: **6** | 3.4–12.5 ms before network parsing |
+
+**The Free plan suffices for subrequests.**
+
+**Owner decision (2026-09-26): Free.** The owner's list is ~16 KB / 39 tasks (est. 4–5 ms). After the first deploy,
+measure real CPU per request with `wrangler tail` (read-only requests first) before the canary; if a request nears 10 ms,
+optimise it rather than change plan. Failures are safe either way
+(head-CAS; a killed request is an unknown outcome, deduplicated on retry) but the phone would see repeated 503s.
 
 ## 1. Create the GitHub App
 
@@ -43,6 +52,15 @@ GitHub → Settings → Developer settings → GitHub Apps → New GitHub App.
 
 App page → Install App → your account → **Only select repositories** → the vault repository. After installing, the
 URL is `https://github.com/settings/installations/<id>`: `<id>` is the **installation ID**.
+
+## 2b. History protection for the vault `main`
+
+Rulesets and branch protection on a **private** repository need GitHub Pro (verified 2026-09-26: API 403). With the
+free plan the guarantee comes from the writers instead: the Worker's ref update is `force: false`
+(`packages/github/src/contents-store.ts`), and the desktop sync never force-pushes. Rule for humans: repair mistakes with
+`git revert`, never a reset or force-push. If history is ever rewritten anyway, the app offers "Reset saved-actions
+history on this device" after repeated stale reads (review O6), which clears receipts and the watermark, never pending
+actions. With GitHub Pro, add a `main` ruleset blocking force pushes and deletion.
 
 ## 3. Cloudflare Access application and policy
 

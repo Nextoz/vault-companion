@@ -16,14 +16,16 @@ deploy scaffold: wrangler, `_headers`, secrets-only identifiers, `workers.dev` o
 
 | # | Blocker | Owner | Status |
 |---|---|---|---|
-| B1 | Token Undo, ADR-0013 (PR #14) | Cloud P4-B session → Lead | all 5 Astra findings fixed (83fed8f, 6959255, e61eb45), CI green; focused re-review running (local reviewer; Codex quota low until 07:36) |
-| B2 | Active Work Now card | — | **merged** (#13) |
-| B3 | Whole-system review of the combined build (incl. delayed offline captures, per-command request budgets, phone experience) | Cloud Opus + Astra high | after B1 + B2 merge; `docs/reviews/phase-2-review-brief.md` |
-| B4 | Desktop sync worker | Owner (applied) → Lead verified | **done**: patch installed 2026-09-26 02:56; first real run 03:06 `state: current`, local = remote `67c90fc`, nothing staged, 0 runtime files published. Cleanup-on-failure fix v2 (19/19; old cleanup fails the new case) ready for the owner to install |
-| B5 | Cloudflare setup G2: GitHub App on vault repo, Access, secrets, first deploy | **Owner** (`docs/deploy.md` §1–§7) → Lead §8–§9 | ready to start |
-| B6 | Canary G3: one approved phone → GitHub → desktop → Obsidian write | **Owner approval** | after B3, B4, B5 |
+| B3a | Read budget + Undo unknown outcome + stale-history reset (Opus O1/O5/O6 = Astra A2), PR #15 | Cloud → Lead | verified locally (775 tests, 42 e2e); focused review running |
+| B3b | Every write command within Workers Free (Astra A1) + midnight Done-today overlay (A4 = O8), ADR-0015 | Cloud (`agent/free-budget`) | in progress |
+| B5 | Cloudflare G2 | Owner → Lead | GitHub App verified (installed only on the vault repo, Contents write / Metadata read); Access app `app.karpov.dk` created (owner-only, Cloudflare IdP, `evgeny@karpov.dk`); secrets file complete (9/9 valid). Remaining: `wrangler login` + first deploy |
+| B6 | Canary G3 | Owner approval | after B3a/B3b merged and the read-only deploy is verified (Access, `/api/session`, live reads, headers, Worker CPU) |
 
-**Next demonstrable result:** the app installed on the iPhone, reading the live vault (after B5); then the canary (B6).
+Done since the last snapshot: B1 token Undo (#14), B2 Active Work Now (#13), B4 desktop sync fixed and verified live
+(plus cleanup v2 and the daily snapshot fix; last good snapshot 2026-09-26 08:47). Vault `main` ruleset needs GitHub Pro
+on a private repo — replaced by free-plan safeguards (`docs/deploy.md` §2b).
+
+**Next demonstrable result:** the app at `https://app.karpov.dk` on the iPhone, reading the live vault.
 
 ## Phone experience — verified vs. untested
 
@@ -45,8 +47,9 @@ Observations: none yet; recorded privately (`.private/`, git-ignored) during mil
 
 ## Owner decisions
 
-T1 Today — decided, provisional (ADR-0012) · P1 Workers plan — on hold; token Undo fits Free (≤ 10 store calls ×
-≤ 3 attempts + auth); Paid (10,000) only if B1 fails · D2 linked-note roots `Projects/`, `Tasks/`, `Inbox/` ·
+T1 Today — decided, provisional (ADR-0012) · P1 Workers plan — **decided: Free** (owner, 2026-09-26). Real list 16 KB / 39 tasks ⇒ est. 4–5 ms CPU (10 ms cap);
+read budget fixed by O1; measure real CPU with `wrangler tail` after the read-only deploy; optimise (O7: commits listing
+instead of patch-carrying compare) only if a request nears the cap · D2 linked-note roots `Projects/`, `Tasks/`, `Inbox/` ·
 D3 no `🆔` writes · D4 capture at top of Open (ADR-0010).
 
 ## Known limitations (accepted for the first release)
