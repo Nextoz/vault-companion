@@ -28,7 +28,7 @@ Merged + **deployed version 0d20189f** (2026-09-26): #20 O10 single-flight token
 (ADR-0016) · #22 one read per app switch. CodeRabbit rate-limited on all three (recorded; not a pass).
 Held, not merged: dup-row (Antigravity; clone dup-row) removes an identity guard — redo with Astra high after 21:26:
 attach a live Undo to an open row only when the completed line is absent from the read; keep its test as the spec.
-PR #23 O11 CSP smoke + zod jitless: CodeRabbit **real review, 3 findings, all fixed** (mutation-checked); merge on CI green.
+#23 O11 CSP smoke + zod jitless merged; CodeRabbit real review (3 findings fixed). **Deployed version fdad423f.**
 **Antigravity free quota exhausted until ~2026-10-03** (429, resets in 166 h): e2e-flakes run died, no changes; clone
 e2e-flakes keeps its brief for Codex low. Claude Cloud O3 session_015TkdrdhYa8Z9fuRvTTLqhX (no
 branch after 25 min — ask it: claude -p "status? push your branch" --cloud <id>, when RAM allows).
