@@ -1,4 +1,5 @@
 import { exportPKCS8, generateKeyPair, jwtVerify } from 'jose';
+import { StoreUnavailable } from '@vault-companion/domain';
 import { describe, expect, it } from 'vitest';
 import { createInstallationTokenSource } from './app-token.ts';
 
@@ -29,14 +30,49 @@ describe('createInstallationTokenSource', () => {
     expect(await source()).toBe('ghs_2'); // within 5 min of expiry
   });
 
-  it('fails without leaking the token endpoint body', async () => {
+  it('shares one token POST between two concurrent cold callers', async () => {
     const { privateKey } = await generateKeyPair('RS256', { extractable: true });
+    let posts = 0;
     const source = createInstallationTokenSource({
       appId: '1',
       installationId: '2',
       privateKeyPem: await exportPKCS8(privateKey),
-      fetch: (async () => new Response('{"message":"Bad credentials secret-ish"}', { status: 401 })) as unknown as typeof fetch,
+      fetch: (async (_url: unknown, init: RequestInit) => {
+        expect(init.method).toBe('POST');
+        posts++;
+        return new Response(JSON.stringify({ token: `ghs_${posts}`, expires_at: new Date(Date.now() + 60 * 60_000).toISOString() }), { status: 201 });
+      }) as typeof fetch,
     });
-    await expect(source()).rejects.toThrow('installation token request failed with status 401');
+    expect(await Promise.all([source(), source()])).toEqual(['ghs_1', 'ghs_1']);
+    expect(posts).toBe(1);
+  });
+
+  it.each(['http', 'network', 'json'] as const)('maps %s failure to StoreUnavailable without leaking details and retries', async (failure) => {
+    const { privateKey } = await generateKeyPair('RS256', { extractable: true });
+    let posts = 0;
+    const source = createInstallationTokenSource({
+      appId: '1',
+      installationId: '2',
+      privateKeyPem: await exportPKCS8(privateKey),
+      fetch: (async () => {
+        posts++;
+        if (posts === 1) {
+          if (failure === 'network') throw new Error('secret-ish network details');
+          return new Response('secret-ish response body', { status: failure === 'http' ? 401 : 201 });
+        }
+        return new Response(JSON.stringify({ token: 'ghs_retry', expires_at: new Date(Date.now() + 60 * 60_000).toISOString() }), { status: 201 });
+      }) as typeof fetch,
+    });
+    const results = await Promise.allSettled([source(), source()]);
+    for (const result of results) {
+      expect(result.status).toBe('rejected');
+      if (result.status !== 'rejected') throw new Error('expected token failure');
+      expect(result.reason).toBeInstanceOf(StoreUnavailable);
+      expect(result.reason.message).not.toContain('secret-ish');
+      expect(result.reason.cause).toBeUndefined();
+    }
+    expect(posts).toBe(1);
+    expect(await source()).toBe('ghs_retry');
+    expect(posts).toBe(2);
   });
 });

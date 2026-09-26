@@ -1,6 +1,7 @@
 // GitHub App installation tokens (docs/security.md#secrets): the private key stays server-side;
 // installation tokens are short-lived, cached in memory until 5 minutes before expiry, never logged.
 import { importPKCS8, SignJWT } from 'jose';
+import { StoreUnavailable } from '@vault-companion/domain';
 
 export interface AppTokenOptions {
   readonly appId: string;
@@ -17,9 +18,21 @@ export function createInstallationTokenSource(opts: AppTokenOptions): () => Prom
   const now = opts.now ?? Date.now;
   let cached: { token: string; expiresAt: number } | null = null;
   let keyPromise: Promise<CryptoKey> | null = null;
+  let inFlight: Promise<string> | null = null;
 
   return async function token(): Promise<string> {
     if (cached && cached.expiresAt - 5 * 60_000 > now()) return cached.token;
+    inFlight ??= acquire().catch(() => {
+      // Upstream errors can contain response bodies or credentials; expose no raw cause.
+      keyPromise = null;
+      throw new StoreUnavailable('installation token acquisition failed');
+    }).finally(() => {
+      inFlight = null;
+    });
+    return inFlight;
+  };
+
+  async function acquire(): Promise<string> {
     keyPromise ??= importPKCS8(opts.privateKeyPem, 'RS256');
     const iat = Math.floor(now() / 1000) - 60; // GitHub recommends back-dating for clock drift
     const jwt = await new SignJWT({})
@@ -32,9 +45,9 @@ export function createInstallationTokenSource(opts: AppTokenOptions): () => Prom
       method: 'POST',
       headers: { Authorization: `Bearer ${jwt}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'vault-companion' },
     });
-    if (res.status !== 201) throw new Error(`installation token request failed with status ${res.status}`);
+    if (res.status !== 201) throw new StoreUnavailable('installation token request failed');
     const body = (await res.json()) as { token: string; expires_at: string };
     cached = { token: body.token, expiresAt: Date.parse(body.expires_at) };
     return body.token;
-  };
+  }
 }
