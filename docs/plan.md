@@ -24,11 +24,13 @@ E, F preview-before-production.
 | PR #18 (ADR-0015 + review P18-1/P18-2 fixes) | merged 57aeaa6; Astra high review; CodeRabbit: 1 finding rejected with reason, fix commit rate-limited |
 | A1 vault handover visibility, PR #19 | merged 1292f48; **deployed version 79ac4949** (app.karpov.dk); CodeRabbit rate-limited (not a pass) |
 
-Running (Agents tab, clones under `C:\Dev\vault-companion-clones\`, uncommitted until Lead review):
-`agy-gemini-flash · dup-row` (w3:p11, transient duplicate Today row) · `astra-low · triple-read` (w3:p12, 3 reads per
-app switch seen in the live log) · `astra-medium · o7-compare` (w3:p13, patch-free history for CPU) ·
-`astra-low · o10-token` (w3:p14, single-flight token + StoreUnavailable). Live log 2026-09-26: all reads 200; cold
-reads 11-13 ms CPU (outcome ok) — R3 stays open.
+Open PRs (Lead-reviewed, awaiting CI + one CodeRabbit request each): #20 O10 single-flight token · #21 O7 ancestry
+without patches (ADR-0016, re-probed) · #22 one read per app switch (coalescedRead).
+Held, not merged: dup-row (Antigravity; clone dup-row) removes an identity guard — redo with Astra high after 21:26:
+attach a live Undo to an open row only when the completed line is absent from the read; keep its test as the spec.
+Running: agy · o11-csp (w3:p15) · Claude Cloud · O3 real-queue e2e (w3:p16, brief docs/briefs/O3-real-queue-e2e.md).
+**Codex limit resets 21:26** (owner): session cron at 21:28 resumes Codex work (dup-row high, then next backlog).
+Token economy: AGENTS.md worker rules + docs/orchestration.md.
 
 Next: owner tests A on the phone (first resume may need one app reopen: the old client predates the forward-compat strip), collect feedback; then owner ranks B/C/D/E/F. Follow-up: transient duplicate Today row on read/receipt ordering (Antigravity task prepared in clone dup-row, launch blocked pending permission rule match). R3 CPU re-measure from the live log.
 
