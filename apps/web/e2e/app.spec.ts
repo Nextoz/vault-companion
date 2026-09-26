@@ -17,6 +17,27 @@ const region = (page: Page, name: string) => page.getByRole('region', { name, ex
 const parsed = (bodies: string[]) => bodies.map((b) => Command.parse(JSON.parse(b)));
 const toast = (page: Page) => page.locator('.toast');
 
+// Request interception happens before the client stores the failure and releases its send lease.
+// Observe the durable state before reconnecting or destroying a page with a pending command.
+const waitForSettledRetry = (page: Page) => expect.poll(() => page.evaluate(() =>
+  new Promise<boolean>((resolve, reject) => {
+    const open = indexedDB.open('vault-companion');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result;
+      const tx = db.transaction('pending', 'readonly');
+      const read = tx.objectStore('pending').getAll();
+      tx.onabort = () => { db.close(); reject(tx.error); };
+      tx.oncomplete = () => {
+        db.close();
+        const records = read.result as { attempts: number; leaseUntil?: number; state: string }[];
+        resolve(records.length === 1 && records.every((r) =>
+          r.state === 'pending' && r.attempts > 0 && !r.leaseUntil));
+      };
+    };
+  }),
+)).toBe(true);
+
 test('complete a task, then Undo it from the toast', async ({ page }) => {
   await page.goto('/');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
@@ -55,6 +76,9 @@ test('capture offline, then send the identical envelope once back online', async
 
   const action = region(page, 'Actions on this device').getByTestId('action');
   await expect(action).toContainText('A thought about the garden');
+  // The initial pending render precedes the first send. Wait for that attempt to settle before
+  // reconnecting, otherwise the online kick can race the failed send writing its retry backoff.
+  await waitForSettledRetry(page);
   await expect(action).toContainText('On this device');
   expect(api.applied).toHaveLength(0);
 
@@ -106,6 +130,9 @@ test('a pending action survives a reload and is sent afterwards, byte-for-byte',
   await page.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => api.bodies.length).toBeGreaterThan(0);
 
+  // A received request is not a settled queue record; reloading sooner strands its send lease.
+  await waitForSettledRetry(page);
+  await expect(region(page, 'Actions on this device').getByTestId('action')).toContainText('On this device');
   await page.reload();
   await expect(region(page, 'Actions on this device').getByTestId('action')).toContainText('Buy seed potatoes');
 
@@ -142,6 +169,9 @@ test('signed out: banner, and nothing is sent', async ({ page }) => {
 });
 
 test('a second tab never re-sends a completion in flight in the first, and Undo is a real command (A3)', async ({ page, context }) => {
+  // Hold application time across both tabs: opening WebKit's second page must not consume the
+  // toast's 8-second Undo window or expire the deliberately held request/lease under CPU load.
+  await page.clock.pauseAt(new Date('2026-09-24T10:01:00Z'));
   await page.goto('/');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
 
@@ -195,6 +225,9 @@ test('two identical open tasks: completing one leaves the other, which can then 
   await expect(twins).toHaveCount(1);
   await expect(region(page, 'Done today').getByText('Water the plants')).toHaveCount(1);
   await expect.poll(() => api.bodies.length).toBeGreaterThan(0);
+  // Wait for the aborted send to release its persisted lease before destroying the page.
+  await waitForSettledRetry(page);
+  await expect(region(page, 'Actions on this device').getByTestId('action')).toContainText('On this device');
   await page.reload();
   await expect(region(page, 'Done today').getByText('Water the plants')).toHaveCount(1);
   await expect(twins).toHaveCount(1);
@@ -310,7 +343,8 @@ for (const which of ['session', 'tasks'] as const) {
     const hung = page.waitForRequest(which === 'session' ? '**/api/session' : '**/api/tasks**');
     await page.goto('/');
     await hung;
-    await expect(page.getByText('Loading…')).toBeVisible();
+    // Active work can still be loading too; this assertion is about the main task/session read.
+    await expect(page.locator('main > p').filter({ hasText: /^Loading…$/ })).toBeVisible();
     await page.clock.fastForward(10_000);
     const banner = page.getByRole('status').filter({ hasText: "Couldn't reach your vault" });
     await expect(banner).toBeVisible();

@@ -14,6 +14,8 @@ export default defineConfig({
   outputDir: './test-results',
   reporter: 'list',
   fullyParallel: true,
+  // Keep parallel coverage without exhausting RAM on the development machine; CLI can override.
+  workers: 2,
   forbidOnly: !!process.env['CI'],
   use: {
     baseURL: 'http://localhost:4173',
