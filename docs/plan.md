@@ -24,8 +24,8 @@ E, F preview-before-production.
 | PR #18 (ADR-0015 + review P18-1/P18-2 fixes) | merged 57aeaa6; Astra high review; CodeRabbit: 1 finding rejected with reason, fix commit rate-limited |
 | A1 vault handover visibility, PR #19 | merged 1292f48; **deployed version 79ac4949** (app.karpov.dk); CodeRabbit rate-limited (not a pass) |
 
-Open PRs (Lead-reviewed, awaiting CI + one CodeRabbit request each): #20 O10 single-flight token · #21 O7 ancestry
-without patches (ADR-0016, re-probed) · #22 one read per app switch (coalescedRead).
+Merged + **deployed version 0d20189f** (2026-09-26): #20 O10 single-flight token · #21 O7 ancestry without patches
+(ADR-0016) · #22 one read per app switch. CodeRabbit rate-limited on all three (recorded; not a pass).
 Held, not merged: dup-row (Antigravity; clone dup-row) removes an identity guard — redo with Astra high after 21:26:
 attach a live Undo to an open row only when the completed line is absent from the read; keep its test as the spec.
 Running: agy · o11-csp (w3:p15) · Claude Cloud · O3 real-queue e2e (w3:p16, brief docs/briefs/O3-real-queue-e2e.md).
