@@ -59,7 +59,8 @@ export class GitHubContentsStore implements VaultStore {
 
   constructor(private readonly opts: GitHubStoreOptions) {
     this.branch = opts.branch ?? 'main';
-    this.f = opts.fetch ?? fetch;
+    // Bound: Workers throw "Illegal invocation" when the global fetch is called as a method of another object.
+    this.f = opts.fetch ?? globalThis.fetch.bind(globalThis);
     this.base = `${opts.apiBase ?? 'https://api.github.com'}/repos/${opts.owner}/${opts.repo}`;
     this.maxPages = opts.maxComparePages ?? 20;
   }

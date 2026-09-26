@@ -13,7 +13,7 @@ export interface AppTokenOptions {
 }
 
 export function createInstallationTokenSource(opts: AppTokenOptions): () => Promise<string> {
-  const f = opts.fetch ?? fetch;
+  const f = opts.fetch ?? globalThis.fetch.bind(globalThis);
   const now = opts.now ?? Date.now;
   let cached: { token: string; expiresAt: number } | null = null;
   let keyPromise: Promise<CryptoKey> | null = null;

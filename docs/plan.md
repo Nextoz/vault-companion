@@ -12,20 +12,19 @@ review PASS (#8) · client correctness: duplicate-task identity, read timeouts, 
 Overdue below Today (#9) · account-aware drafts, one submitter per draft, ADR-0014 (#11) · 30 s test timeout (#12) ·
 deploy scaffold: wrangler, `_headers`, secrets-only identifiers, `workers.dev` off, runbook `docs/deploy.md` (#10).
 
-## Remaining blockers to the phone
+## Status (2026-09-26): the app is live on the owner's phone
 
-| # | Blocker | Owner | Status |
+Deployed `main` `36aeb42` to `https://app.karpov.dk` (Workers Free, Access owner-only). Reads and live writes verified
+end to end (phone → GitHub → desktop); details and evidence: `docs/checkpoint.md`.
+
+| # | Remaining | Owner | Status |
 |---|---|---|---|
-| B3a | Read budget + Undo unknown outcome + stale-history reset (Opus O1/O5/O6 = Astra A2), PR #15 | Cloud → Lead | verified locally (775 tests, 42 e2e); focused review running |
-| B3b | Every write command within Workers Free (Astra A1) + midnight Done-today overlay (A4 = O8), ADR-0015 | Cloud (`agent/free-budget`) | in progress |
-| B5 | Cloudflare G2 | Owner → Lead | GitHub App verified (installed only on the vault repo, Contents write / Metadata read); Access app `app.karpov.dk` created (owner-only, Cloudflare IdP, `evgeny@karpov.dk`); secrets file complete (9/9 valid). Remaining: `wrangler login` + first deploy |
-| B6 | Canary G3 | Owner approval | after B3a/B3b merged and the read-only deploy is verified (Access, `/api/session`, live reads, headers, Worker CPU) |
+| R1 | PR #18: every write within Free (ADR-0015) + A4 + F1–F3 | next Lead | open, unreviewed |
+| R2 | G3: count today's owner-initiated writes as the canary, or run a formal one | Owner | decision |
+| R3 | Write CPU up to 15 ms vs 10 ms Free cap | next Lead | re-measure after R1; optimise (O7) if needed |
+| R4 | Review follow-ups O3/O4/O7/O9–O11 | next Lead | not blocking daily use |
 
-Done since the last snapshot: B1 token Undo (#14), B2 Active Work Now (#13), B4 desktop sync fixed and verified live
-(plus cleanup v2 and the daily snapshot fix; last good snapshot 2026-09-26 08:47). Vault `main` ruleset needs GitHub Pro
-on a private repo — replaced by free-plan safeguards (`docs/deploy.md` §2b).
-
-**Next demonstrable result:** the app at `https://app.karpov.dk` on the iPhone, reading the live vault.
+**Next demonstrable result:** milestone 3 — several days of owner use, improvements chosen from observed friction.
 
 ## Phone experience — verified vs. untested
 
