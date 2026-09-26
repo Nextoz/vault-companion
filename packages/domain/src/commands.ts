@@ -327,8 +327,11 @@ export function createCommandService(deps: CommandServiceDeps) {
       const overdue = open.filter((v) => classifyOpenTask(v, today) === 'overdue');
       const isToday = (v: TaskView) => classifyOpenTask(v, today) === 'today';
       const knownMap = await answerKnown(deps.store, known, x);
+      let vault: TasksResponse['vault'] = null;
+      try { vault = await deps.store.commitMeta(x); } catch { /* Display metadata must never block task reads. */ }
       return {
         revision: x,
+        vault,
         blobSha: f.blobSha,
         today,
         timeZone: deps.timeZone,
@@ -344,7 +347,7 @@ export function createCommandService(deps: CommandServiceDeps) {
   };
 }
 
-/** Single-page listings a task read may make to answer `known` (review O1): ≤ 4 store calls per read with head + file. */
+/** Single-page listings a task read may make to answer `known` (review O1): ≤ 5 store calls per read with head + file + metadata. */
 export const KNOWN_LISTINGS = 2;
 
 /**

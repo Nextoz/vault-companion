@@ -2,7 +2,7 @@
 // Whole-file assertions compare against the kernel's independently hand-specified goldens.
 import { Command, type Receipt, type TaskView } from '@vault-companion/contracts';
 import { loadFixture } from '@vault-companion/test-vault';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCommandService } from './commands.ts';
 import { payloadHash } from './payload-hash.ts';
 import { TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type VaultPath } from './store.ts';
@@ -51,6 +51,22 @@ const ok = (r: Receipt | { code: string }): Receipt => {
 };
 
 describe('read model', () => {
+  it('gets metadata for the pinned revision even when the desktop advances HEAD', async () => {
+    store.afterHead = async () => { await store.commitFiles({ 'Inbox/next.md': 'synthetic' }); };
+    const meta = vi.spyOn(store, 'commitMeta').mockResolvedValue({ committedAt: '2026-09-26T12:07:00Z', fromApp: true });
+    const read = await svc.readTasks([]);
+    expect(meta).toHaveBeenCalledExactlyOnceWith(base);
+    expect(read).toMatchObject({ revision: base, vault: { committedAt: '2026-09-26T12:07:00Z', fromApp: true } });
+  });
+  it.each(['throws', 'absent'])('still reads tasks when metadata %s', async (mode) => {
+    const meta = vi.spyOn(store, 'commitMeta');
+    if (mode === 'throws') meta.mockRejectedValue(new Error('unavailable'));
+    else meta.mockResolvedValue(null);
+    const read = await svc.readTasks([]);
+    expect(read).toMatchObject({ revision: base, vault: null });
+    if ('code' in read) throw new Error(read.code);
+    expect(read.allOpen.length).toBeGreaterThan(0);
+  });
   it('derives open tasks, read-only reasons and revision from Markdown', async () => {
     const r = await svc.readTasks([]);
     if ('code' in r) throw new Error(r.code);
@@ -505,7 +521,7 @@ describe('task read: bounded `known` answers (review O1)', () => {
       store.calls.length = 0;
       const answer = await known(commits.slice(0, n).reverse()); // worst order: newest first
       expect(Object.keys(answer).length).toBe(Math.min(n, 8));
-      expect(store.calls.length).toBeLessThanOrEqual(4);
+      expect(store.calls.length).toBeLessThanOrEqual(5);
     }
   });
 });

@@ -53,8 +53,10 @@ export async function getJson<S extends z.ZodType>(url: string, schema: S, heade
 
 export const getSession = () => getJson('/api/session', SessionResponse);
 
+// .strip(): a new top-level field from a newer server is ignored, not an error. A PWA resumed from the background keeps
+// running the previous build while the Worker already serves the next one.
 export const getTasks = (known: readonly string[]) =>
-  getJson(known.length ? `/api/tasks?known=${known.join(',')}` : '/api/tasks', TasksResponse);
+  getJson(known.length ? `/api/tasks?known=${known.join(',')}` : '/api/tasks', TasksResponse.strip());
 
 /**
  * Linked note: the server resolves the note from the task locator; the request rides in a header so task text is never part

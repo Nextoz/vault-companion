@@ -96,6 +96,13 @@ export class LocalGitStore implements VaultStore {
     return r.code === 0 ? r.stdout.toString('utf8').trim() : null;
   }
 
+  async commitMeta(commitSha: string) {
+    const result = await this.run(['show', '-s', '--format=%cI%x00%B', commitSha, '--']);
+    if (result.code !== 0) return null;
+    const [committedAt, message = ''] = result.stdout.toString('utf8').split('\0');
+    return { committedAt: committedAt!, fromApp: TRAILER_OP in parseTrailers(message) };
+  }
+
   async head(): Promise<{ commitSha: string }> {
     return { commitSha: await this.line(['rev-parse', '--verify', this.ref]) };
   }

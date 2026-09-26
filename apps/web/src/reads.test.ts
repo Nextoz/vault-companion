@@ -45,6 +45,7 @@ describe('TaskReads — the read ordering App.refreshTasks uses (F3)', () => {
     blobSha: '2'.repeat(40),
     today: '2026-09-24',
     timeZone: 'Europe/Copenhagen',
+    vault: null,
     writeBlock: null,
     known: {},
     todayTasks: [],

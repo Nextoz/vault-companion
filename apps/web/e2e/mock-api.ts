@@ -60,6 +60,8 @@ export class MockApi {
   network: 'up' | 'down' = 'up';
   sessionMode: ReadMode = 'ok';
   tasksMode: ReadMode = 'ok';
+  taskReads = 0;
+  vault: TasksResponse['vault'] = { committedAt: '2026-09-26T12:07:00Z', fromApp: false };
   /** The read's writeBlock, e.g. a committed Git conflict in the task list. */
   writeBlock: ApiError | null = null;
   /** Largest `known=` list any task read asked about (review O1). */
@@ -140,6 +142,7 @@ export class MockApi {
   }
 
   async #tasks(route: Route) {
+    this.taskReads += 1;
     if (await this.#readFailure(route, this.tasksMode)) return;
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     const asked = new URL(route.request().url()).searchParams.get('known')?.split(',').filter(Boolean) ?? [];
@@ -162,6 +165,7 @@ export class MockApi {
       blobSha: this.blobSha,
       today: TODAY,
       timeZone: 'Europe/Copenhagen',
+      vault: this.vault,
       writeBlock: this.writeBlock,
       known,
       todayTasks: open.filter((t) => t.due === TODAY),

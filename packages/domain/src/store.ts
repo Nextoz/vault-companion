@@ -86,6 +86,8 @@ export const COMPARE_PAGE = 250;
 export interface VaultStore {
   /** Resolve the vault branch to one immutable commit X. Every read of an attempt uses X (review F1). */
   head(): Promise<{ commitSha: string }>;
+  /** Display-only metadata; commit message text never leaves the adapter. */
+  commitMeta(commitSha: string): Promise<{ committedAt: string; fromApp: boolean } | null>;
   /** Read `path` at commit `atCommit`. `null` when absent. */
   readFile(path: VaultPath, atCommit: string): Promise<StoredFile | null>;
   /**

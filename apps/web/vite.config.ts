@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
@@ -54,7 +55,13 @@ function contentSecurityPolicy(): Plugin {
   };
 }
 
+let commit = 'dev';
+try {
+  commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: fileURLToPath(new URL('.', import.meta.url)), encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || 'dev';
+} catch { /* Source archives and tests may have no Git executable or repository. */ }
+
 export default defineConfig({
+  define: { __APP_BUILD__: JSON.stringify({ commit, builtAt: new Date().toISOString() }) },
   plugins: [react(), serviceWorker(), contentSecurityPolicy()],
   build: { target: 'es2022', sourcemap: false },
   server: { port: 5173, strictPort: true },

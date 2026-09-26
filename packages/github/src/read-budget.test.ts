@@ -1,5 +1,5 @@
-// Review O1: one task read costs ≤ 4 GitHub store requests whatever the number of `known` commits (ref, the task list,
-// ≤ 2 single-page compares), where it used to cost one compare per commit. Recorded response shapes, fake network.
+// Review O1: one task read costs ≤ 5 GitHub store requests whatever the number of `known` commits (ref, the task list,
+// ≤ 2 single-page compares, one metadata read), where it used to cost one compare per commit. Recorded response shapes, fake network.
 import { createCommandService } from '@vault-companion/domain';
 import { describe, expect, it } from 'vitest';
 import { GitHubContentsStore } from './contents-store.ts';
@@ -18,6 +18,7 @@ function fakeGitHub() {
     const u = url.replace('https://api.github.com/repos/o/r', '');
     calls.push(`${init.method ?? 'GET'} ${u}`);
     if (u === '/git/ref/heads/main') return json(200, { object: { sha: x } });
+    if (u === `/git/commits/${x}`) return json(200, { committer: { date: NOW.toISOString() }, message: 'desktop sync' });
     if (u.startsWith('/contents/')) {
       return json(200, { type: 'file', sha: '2'.repeat(40), size: TODO.length, encoding: 'base64', content: btoa(TODO) });
     }
@@ -39,12 +40,14 @@ function fakeGitHub() {
 }
 
 describe('task read request budget (review O1)', () => {
-  it.each([0, 1, 8, 50])('%i known commits: ≤ 4 GitHub store requests, at most 2 compares', async (n) => {
+  it.each([0, 1, 8, 50])('%i known commits: ≤ 5 GitHub store requests, at most 2 compares', async (n) => {
     const { svc, history, calls } = fakeGitHub();
     const asked = [history[10]!, ...history.slice(40, 40 + Math.max(0, n - 1))].slice(0, n);
     const r = await svc.readTasks(asked);
     if ('code' in r) throw new Error(r.code);
-    expect(calls.length).toBeLessThanOrEqual(4);
+    expect(calls.length).toBeLessThanOrEqual(5);
+    expect(calls.filter((c) => c.startsWith('GET /git/commits/'))).toEqual([`GET /git/commits/${r.revision}`]);
+    expect(calls.length).toBe(3 + calls.filter((c) => c.startsWith('GET /compare/')).length);
     expect(calls.filter((c) => c.startsWith('GET /compare/')).length).toBeLessThanOrEqual(2);
     expect(Object.keys(r.known).length).toBe(Math.min(n, 8));
     expect(Object.values(r.known).every((v) => v === 'included')).toBe(true);
@@ -56,6 +59,8 @@ describe('task read request budget (review O1)', () => {
     const r = await svc.readTasks([history[30]!, history[35]!, history[5]!, off]);
     if ('code' in r) throw new Error(r.code);
     expect(r.known).toEqual({ [history[30]!]: 'included', [history[35]!]: 'included', [history[5]!]: 'included', [off]: 'not-included' });
-    expect(calls.length).toBeLessThanOrEqual(4);
+    expect(calls.length).toBeLessThanOrEqual(5);
+    expect(calls.filter((c) => c.startsWith('GET /git/commits/'))).toEqual([`GET /git/commits/${r.revision}`]);
+    expect(calls.length).toBe(3 + calls.filter((c) => c.startsWith('GET /compare/')).length);
   });
 });

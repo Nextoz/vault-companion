@@ -117,6 +117,12 @@ export class InMemoryStore implements VaultStore {
   }
 
   // ---- VaultStore ----
+  async commitMeta(commitSha: string) {
+    this.calls.push('commitMeta');
+    const commit = this.commits.get(commitSha);
+    return commit ? { committedAt: '2026-09-26T12:07:00Z', fromApp: TRAILER_OP in commit.trailers } : null;
+  }
+
   async head(): Promise<{ commitSha: string }> {
     this.calls.push('head');
     const commitSha = this.headSha;

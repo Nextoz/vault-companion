@@ -504,7 +504,7 @@ describe('review O1 — a burst of 30 actions queued offline', () => {
       getTasks: async (known) => {
         asked.push(known.length);
         const data = TasksResponse.parse({
-          revision: X, blobSha: BLOB, today: '2026-09-24', timeZone: 'Europe/Copenhagen', writeBlock: null,
+          revision: X, blobSha: BLOB, today: '2026-09-24', timeZone: 'Europe/Copenhagen', vault: null, writeBlock: null,
           known: Object.fromEntries(known.map((k) => [k, onMain.has(k) ? 'included' : 'not-included'])),
           todayTasks: [], overdue: [], allOpen: [], doneToday: [],
         });
