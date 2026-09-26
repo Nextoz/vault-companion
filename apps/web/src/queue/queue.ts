@@ -8,7 +8,7 @@
 //   not to have applied (R4); an Undo of a completion no tab ever sent cancels both locally (F4);
 // - several tabs share one IndexedDB database: claim, cancellation, settlement and discard run under the
 //   `vc-pending` Web Lock after re-reading IndexedDB. In-memory state is a cache, never the basis of a decision (A3).
-//   Without Web Locks, local cancellation is disabled;
+//   Without Web Locks, local cancellation and base refresh are disabled;
 // - nothing is dropped except on receipt or explicit user discard. No retry limit. A receipt is kept in IndexedDB
 //   until a read reports its commit `included`; only such acknowledged receipts are ever evicted (A9);
 // - acknowledging a receipt records, in the same transaction, the revision of the read that reported it `included`
@@ -244,6 +244,20 @@ export class PendingQueue {
         this.#emit();
         return 'cancelled' as const;
       }
+      // The toast/row may still hold the envelope minted before the first-send rebase. Resolve its ID from disk.
+      const receipt = this.#receipts.get(target.operationId);
+      const durable = receipt ?? predecessor;
+      const durableTarget = durable ? this.#envelopeOf(durable) : null;
+      if (undo.type === 'UndoCompleteTask') {
+        if (durableTarget?.type === 'CompleteTask') {
+          undo = { ...undo, payload: { ...undo.payload, target: durableTarget } };
+          if (receipt && !isUndoDraft(undo)) undo = withTargetCommit(undo, receipt.receipt.commitSha);
+        } else {
+          // No durable target: keep only a draft, which the claim will refuse rather than trusting UI bytes.
+          undo = { ...undo, payload: { target } } as Command;
+        }
+      }
+      // Enqueue is idempotent: an existing Undo (especially an already-sent one) keeps its exact stored body.
       await this.#enqueueLocked(undo, { ...options, dependsOn: predecessor ? predecessor.operationId : null });
       return 'queued' as const;
     });
@@ -424,13 +438,18 @@ export class PendingQueue {
       }
       const draft = this.#envelopeOf(record);
       let body = record.body;
-      if (isUndoDraft(draft) && draft.type === 'UndoCompleteTask') {
+      if (!record.everSent && isUndoDraft(draft) && draft.type === 'UndoCompleteTask') {
         const targetId = draft.payload.target.operationId;
         const receipt = this.#receipts.get(targetId);
         const predecessor = this.#records.get(targetId);
         if (receipt) {
-          // The token, once: persisted with the claim below, before the request leaves (ADR-0013).
-          body = JSON.stringify(withTargetCommit(draft, receipt.receipt.commitSha));
+          // Both the exact completion envelope and its token, once, before the request leaves (ADR-0013).
+          const target = this.#envelopeOf(receipt);
+          if (target.type !== 'CompleteTask') {
+            await this.#persist({ ...record, state: 'attention', lastError: UNDO_TARGET_UNKNOWN });
+            continue;
+          }
+          body = JSON.stringify(withTargetCommit({ ...draft, payload: { ...draft.payload, target } }, receipt.receipt.commitSha));
         } else if (predecessor?.state === 'attention' && knownNotApplied(predecessor.lastError)) {
           // Nothing was completed, so there is nothing to undo (ADR-0013): dropped locally, never sent.
           await this.#store.delete(record.operationId);
@@ -447,7 +466,8 @@ export class PendingQueue {
       }
       // ADR-0015: the first send of a never-sent item carries the newest read revision as its base. Rewritten here, once,
       // and persisted with the claim before the request leaves: every later attempt sends exactly these bytes.
-      const latest = record.everSent ? null : this.#latestRevision();
+      // Without Web Locks, everSent may be a stale cross-tab snapshot: rebasing could skip our own applied commit.
+      const latest = record.everSent || this.#locks === null ? null : this.#latestRevision();
       if (latest && /^[0-9a-f]{40}$/.test(latest)) {
         const envelope = JSON.parse(body) as Command;
         if (envelope.baseRevision !== latest) body = JSON.stringify({ ...envelope, baseRevision: latest });

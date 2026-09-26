@@ -166,9 +166,18 @@ test('a second tab never re-sends a completion in flight in the first, and Undo 
   await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['CompleteTask', 'UndoCompleteTask']);
   expect(parsed(api.bodies).filter((c) => c.type === 'CompleteTask')).toHaveLength(1);
 
-  await second.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(region(second, 'Today').getByText('Water the plants')).toBeVisible();
-  await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
+  for (const tab of [second, page]) {
+    // Applying Undo precedes storing its receipt. Refresh only once both receipts are visible to this tab,
+    // so the read can acknowledge Undo too (or the watermark already covers it).
+    await tab.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(region(tab, 'Actions on this device').getByText('Saved to GitHub', { exact: true })).toHaveCount(2);
+    const refreshed = tab.waitForResponse((response) => new URL(response.url()).pathname === '/api/tasks' && response.ok());
+    await tab.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await refreshed;
+    const row = region(tab, 'Today').getByTestId('task').filter({ hasText: 'Water the plants' });
+    await expect(row).toHaveCount(1);
+    await expect(row).toBeVisible();
+  }
 });
 
 // ---- P4-B: client correctness -----------------------------------------------------------------------------------
