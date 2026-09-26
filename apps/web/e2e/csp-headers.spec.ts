@@ -30,6 +30,9 @@ test.describe('production CSP headers', () => {
     const raw = await readFile(HEADERS_FILE, 'utf8');
     expectedHeaders = parseHeaders(raw);
     expect(expectedHeaders['Content-Security-Policy']).toBeTruthy();
+    // The guard itself: scripts only from our origin (no 'unsafe-eval', 'unsafe-inline' or extra hosts).
+    const scriptSrc = expectedHeaders['Content-Security-Policy']!.split(';').map((d) => d.trim()).find((d) => d.startsWith('script-src'));
+    expect(scriptSrc).toBe("script-src 'self'");
     server = new StaticServer(DIST, expectedHeaders);
     await server.listen(0);
     origin = `http://localhost:${(server.address() as AddressInfo).port}`;
@@ -78,6 +81,7 @@ test.describe('production CSP headers', () => {
     page.on('console', (msg) => {
       const text = msg.text();
       if (
+        msg.type() === 'error' ||
         /content[- ]security[- ]policy/i.test(text) ||
         /violat(es|ed).*directive/i.test(text) ||
         /refused to (load|apply|execute|send|connect)/i.test(text)
@@ -92,6 +96,9 @@ test.describe('production CSP headers', () => {
         if (seen.has(e)) return;
         seen.add(e);
         const ev = e as SecurityPolicyViolationEvent;
+        // Recorded synchronously in the page, so the final check never races the exposed-function round trip.
+        const w = window as unknown as { __cspViolations?: string[] };
+        (w.__cspViolations ??= []).push(`${ev.effectiveDirective} ${ev.blockedURI}`);
         void (window as unknown as { __reportCspViolation?: (r: unknown) => void }).__reportCspViolation?.({
           blockedURI: ev.blockedURI,
           violatedDirective: ev.violatedDirective,
@@ -127,6 +134,7 @@ test.describe('production CSP headers', () => {
 
     // Assert no CSP violations were reported via events or console errors
     expect(cspViolations).toEqual([]);
+    expect(await page.evaluate(() => (window as unknown as { __cspViolations?: string[] }).__cspViolations ?? [])).toEqual([]);
     expect(cspConsoleErrors).toEqual([]);
   });
 });
