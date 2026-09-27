@@ -85,3 +85,20 @@ describe('completion history', () => {
     expect(r).toEqual({ code: 'upstream-unavailable', message: expect.any(String), retryable: true });
   });
 });
+
+it('reads Active Work only when it is listed as a regular file (a symlink under that name contributes nothing)', async () => {
+  const store = await InMemoryStore.create({ [TODO]: TODO_TEXT, [ACTIVE_WORK_PATH]: AW_TEXT });
+  // A symlink is readable through the Contents API but never appears in the regular-file listing.
+  const hidden = new Proxy(store, {
+    get(target, prop, receiver) {
+      if (prop === 'listFiles') {
+        return async (dir: string, at: string) => (await target.listFiles(dir, at)).filter((f) => f.path !== ACTIVE_WORK_PATH);
+      }
+      const v = Reflect.get(target, prop, receiver);
+      return typeof v === 'function' ? v.bind(target) : v;
+    },
+  });
+  const r = HistoryResponse.parse(await createHistoryService({ store: hidden, timeZone: 'Europe/Copenhagen', now: () => new Date('2026-09-27T12:00:00Z') }).readHistory());
+  expect(r.items.some((i) => i.source === 'active-work')).toBe(false);
+  expect(r.items.some((i) => i.source === 'todo')).toBe(true);
+});

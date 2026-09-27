@@ -33,8 +33,11 @@ async function read(store: VaultStore, today: string): Promise<HistoryResponse |
   }
 
   // Absent Active Work contributes nothing; an unreadable one is refused like the To-Do List.
-  const aw = await readTodo(store, x, ACTIVE);
-  if (aw.ok) {
+  // Only a regular file is read (as /api/active-work): the Contents API follows a symlink, which could serve a note
+  // outside the allowlist under this name. One listing call; the read's blob must match the listed one.
+  const listed = (await store.listFiles(ACTIVE_WORK_PATH.slice(0, ACTIVE_WORK_PATH.lastIndexOf('/')), x)).find((f) => f.path === ACTIVE_WORK_PATH);
+  const aw = listed ? await readTodo(store, x, ACTIVE) : null;
+  if (aw?.ok && aw.blobSha === listed!.blobSha) {
     const a = md.parseActiveWork(aw.text, today);
     if (!a.ok) return apiError(a.code, a.message);
     for (const t of a.doneItems) {
@@ -48,7 +51,8 @@ async function read(store: VaultStore, today: string): Promise<HistoryResponse |
         links: target ? [target] : [],
       });
     }
-  } else {
+  } else if (aw && !aw.ok) {
+    // Not listed as a regular file (absent or symlink) or blob mismatch contributes nothing; a read failure refuses.
     const p = aw.planned as Extract<typeof aw.planned, { ok: false }>;
     if (p.code !== 'refused:structure') return apiError(p.code, p.message);
   }
