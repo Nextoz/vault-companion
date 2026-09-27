@@ -142,7 +142,14 @@ export function buildView(
     if (!locator) continue;
     if (a.type === 'EditTask') {
       if (!live(a)) continue;
-      const match = resolve(locator, allOpen);
+      let match = resolve(locator, allOpen);
+      const effect = a.receipt?.effect;
+      if (match.kind !== 'row' && a.state === 'saved' && effect?.kind === 'edited') {
+        // Markdown can contain the edit before the read acknowledges its commit.
+        const matches = allOpen.filter((t) => t.locator.lineText === effect.afterLineText);
+        const [only] = matches;
+        if (matches.length === 1 && only) match = { kind: 'row', task: only };
+      }
       if (match.kind === 'row') onRow.set(rowKey(match.task), a);
       else ownOpen.push(overlay(a, false));
       continue;

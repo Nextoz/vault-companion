@@ -1,5 +1,5 @@
 import type { HistoryItem, Receipt } from '@vault-companion/contracts';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { completeTask, undoCompleteTask } from './commands.ts';
 import { dayHeading, groupByDay, reopenFor } from './history.ts';
 import type { QueueItem } from './queue/queue.ts';
@@ -29,6 +29,23 @@ function queued(envelope: QueueItem['envelope'], extra: Partial<QueueItem> = {})
 const saved = queued(complete, { receipt });
 
 describe('history grouping', () => {
+  it('keeps a completion queued before Copenhagen midnight under that day with Reopen after sending', () => {
+    const beforeMidnight = completeTask({ baseRevision: REV, now: new Date('2026-09-26T23:59:00+02:00') }, complete.payload.task);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-27T00:01:00+02:00'));
+      const sent = queued(beforeMidnight, { receipt: { ...receipt, operationId: beforeMidnight.operationId } });
+      const item = todo(DONE, 5);
+      const nextDay = todo('- [x] Buy seeds #todo ✅ 2026-09-27', 6, '2026-09-27');
+      const history = [nextDay, item];
+      const days = groupByDay(history);
+      expect(days.map((day) => day.date)).toEqual(['2026-09-27', '2026-09-26']);
+      expect(days[1]).toEqual({ date: '2026-09-26', heading: 'Sat 26 Sep', items: [item] });
+      expect(reopenFor(item, history, [sent], ACCOUNT)).toEqual({ kind: 'undo', target: beforeMidnight });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('headings are the Markdown date as written, independent of the device time zone', () => {
     expect(dayHeading('2026-09-26')).toBe('Sat 26 Sep');
     expect(dayHeading('2026-01-01')).toBe('Thu 1 Jan');
