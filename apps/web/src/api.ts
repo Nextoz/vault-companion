@@ -6,6 +6,7 @@ import {
   LINKED_NOTE_HEADER,
   LinkedNoteResponse,
   SessionResponse,
+  ScoutsResponse,
   TasksResponse,
   type LinkedNoteRequest,
 } from '@vault-companion/contracts';
@@ -52,6 +53,8 @@ export async function getJson<S extends z.ZodType>(url: string, schema: S, heade
 }
 
 export const getSession = () => getJson('/api/session', SessionResponse);
+export const getScouts = () => getJson('/api/scouts', ScoutsResponse.strip());
+export const getScoutOutput = (id: string) => getJson('/api/scouts/output', LinkedNoteResponse, { 'X-VC-Scout': id });
 
 // .strip(): a new top-level field from a newer server is ignored, not an error. A PWA resumed from the background keeps
 // running the previous build while the Worker already serves the next one.
