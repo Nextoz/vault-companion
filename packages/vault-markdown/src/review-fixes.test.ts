@@ -139,12 +139,13 @@ describe('R7: blankInserted and the blank residue after semantic Undo', () => {
     expect(ok(semanticUndo(edited, done)).text).toBe(input);
   });
 
-  it('Done has other non-blank content: the blank stays (§4.2 limits removal to an otherwise empty Done)', () => {
+  it('Done has other non-blank content: semantic Undo removes the inserted blank', () => {
     const input = `# List\n## Open\n${A}\n${B}\n## Done\nArchive notes.\n`;
     const done = complete(input, B);
     expect(done.effect.blankInserted).toBe(true);
     const edited = done.text.replace('# List', '# My list');
-    expect(ok(semanticUndo(edited, done)).text).toBe(`# My list\n## Open\n${A}\n${B}\n## Done\nArchive notes.\n\n`);
+    expect(edited).not.toBe(done.text);
+    expect(ok(semanticUndo(edited, done)).text).toBe(input.replace('# List', '# My list'));
   });
 
   it('no blank inserted (Done already had a task) ⇒ blankInserted false and nothing extra removed', () => {
@@ -154,6 +155,36 @@ describe('R7: blankInserted and the blank residue after semantic Undo', () => {
     const edited = done.text.replace('# List', '# My list');
     expect(ok(semanticUndo(edited, done)).text).toBe(input.replace('# List', '# My list'));
   });
+
+  for (const eol of ['\n', '\r\n']) {
+    for (const finalNewline of [true, false]) {
+      for (const doneFirst of [true, false]) {
+        it(`preserves content above/below and existing blanks [${JSON.stringify(eol)}, final=${finalNewline}, Done first=${doneFirst}]`, () => {
+          const open = ['## Open', A, B];
+          const archive = ['## Done', '', 'Archive notes.', '', ''];
+          const input = ['# List', ...(doneFirst ? [...archive, ...open] : [...open, ...archive]), '## Other', 'Footer.']
+            .join(eol) + (finalNewline ? eol : '');
+          const done = complete(input, B);
+          expect(done.effect.blankInserted).toBe(true);
+          const edited = done.text.replace(done.effect.completedLineText, `${done.effect.completedLineText}${eol}Desktop archive.`);
+          expect(edited).not.toBe(done.text);
+          expect(ok(semanticUndo(edited, done)).text).toBe(input.replace('Archive notes.', `Archive notes.${eol}Desktop archive.`));
+        });
+      }
+    }
+  }
+
+  for (const replacement of ['', 'Desktop note.\n', ' \t\n']) {
+    it(`removes only a still-blank separator after desktop replacement ${JSON.stringify(replacement)}`, () => {
+      const input = `# List\n## Open\n${A}\n${B}\n## Done\n\nArchive notes.`;
+      const done = complete(input, B);
+      expect(done.effect.blankInserted).toBe(true);
+      const edited = done.text.replace(`Archive notes.\n\n`, `Archive notes.\n${replacement}`);
+      expect(edited).not.toBe(done.text);
+      const expected = replacement.trim() === '' ? input : `${input}\nDesktop note.`;
+      expect(ok(semanticUndo(edited, done)).text).toBe(expected);
+    });
+  }
 });
 
 describe('R6: reachable structure problems are typed refusals, never throws', () => {

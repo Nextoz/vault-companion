@@ -297,11 +297,9 @@ function semanticInverse(a: Analysis, c: CompleteEffect): MutationOk<{ openLineT
 
   if (a.scan.cleanAfter[t.blockEnd - 1] !== true) return refuse('refused:structure', 'The task block cannot be moved safely.');
   const block = [c.openLineText, ...lines.slice(t.lineIndex + 1, t.blockEnd)];
-  // R7: drop the blank completion inserted into an empty Done, if it is still blank and Done has nothing else.
-  const done = a.done!;
-  const doneOtherwiseEmpty = lines.every((line, j) => j <= done.heading || j >= done.end || (j >= t.lineIndex && j < t.blockEnd) || isBlank(line));
-  // Line above the block is the heading (not blank) when the desktop already deleted the blank.
-  const residue = c.blankInserted && isBlank(lines[t.lineIndex - 1]!) && doneOtherwiseEmpty ? 1 : 0;
+  // R7: remove only the recorded blank directly before the block, if it is still blank.
+  // Other Done content must survive, including the line above when the desktop deleted the blank.
+  const residue = c.blankInserted && isBlank(lines[t.lineIndex - 1]!) ? 1 : 0;
   const rest = [...lines.slice(0, t.lineIndex - residue), ...lines.slice(t.blockEnd)];
   const mid = analyseDoc({ ...a.doc, lines: rest });
   if (mid.writeBlock) return mid.writeBlock;
