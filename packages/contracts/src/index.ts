@@ -401,3 +401,19 @@ export const ScoutsResponse = z.strictObject({
   ),
 });
 export type ScoutsResponse = z.infer<typeof ScoutsResponse>;
+
+// ---- Completion history (ADR-0021): completed tasks by day, read-only ----
+
+export const MAX_HISTORY_ITEMS = 1000;
+export const HistoryItem = z.discriminatedUnion('source', [
+  z.strictObject({ source: z.literal('todo'), description: z.string(), doneDate: z.iso.date(), locator: TaskLocator, links: z.array(z.string()) }),
+  z.strictObject({ source: z.literal('active-work'), description: z.string(), doneDate: z.iso.date(), locator: ActiveWorkLocator, links: z.array(z.string()) }),
+]);
+export type HistoryItem = z.infer<typeof HistoryItem>;
+export const HistoryResponse = z.strictObject({
+  revision: commitSha,
+  today: z.iso.date(),
+  /** Newest done date first; stable file order within a day; at most MAX_HISTORY_ITEMS. */
+  items: z.array(HistoryItem).max(MAX_HISTORY_ITEMS),
+});
+export type HistoryResponse = z.infer<typeof HistoryResponse>;
