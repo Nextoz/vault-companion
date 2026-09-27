@@ -126,6 +126,12 @@ async function read(store: VaultStore, req: LinkedNoteRequest): Promise<LinkedNo
   const resolved = await resolveWikilink(store, x, target);
   if (!resolved.ok) return refused(resolved.code, resolved.message);
 
+  return readResolvedNote(store, x, resolved);
+}
+
+/** Read a server-resolved regular file, retaining the listing's blob proof and byte guards. */
+export async function readResolvedNote(store: VaultStore, x: string, resolved: { readonly path: string; readonly blobSha: string }): Promise<LinkedNoteResponse> {
+  const refused = (code: LinkedNoteRefusalCode, message: string): LinkedNoteResponse => ({ status: 'refused', revision: x, code, message });
   let file;
   try {
     file = await store.readFile(resolved.path as VaultPath, x);

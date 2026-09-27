@@ -133,7 +133,7 @@ export class LocalGitStore implements VaultStore {
   }
 
   async listFiles(dir: string, atCommit: string): Promise<readonly ListedFile[]> {
-    guardPath(dir);
+    if (dir !== '') guardPath(dir);
     const r = await this.run(['ls-tree', '-r', '-z', `${atCommit}:${dir}`]);
     if (r.code !== 0) {
       if ((await this.run(['cat-file', '-e', `${atCommit}^{commit}`])).code !== 0) throw new StoreUnavailable('unknown commit');
@@ -151,7 +151,7 @@ export class LocalGitStore implements VaultStore {
         return { mode, type, sha, path };
       })
       .filter((e) => e.type === 'blob' && (e.mode === '100644' || e.mode === '100755'))
-      .map((e) => ({ path: `${dir}/${e.path}`, blobSha: e.sha }));
+      .map((e) => ({ path: dir === '' ? e.path : `${dir}/${e.path}`, blobSha: e.sha }));
   }
 
   /** Mode and type of the exact `path` entry in `commit`'s tree, or null when nothing is there. */

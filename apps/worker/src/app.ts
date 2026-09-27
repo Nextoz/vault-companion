@@ -5,6 +5,8 @@ import {
   decodeLinkedNoteHeader,
   LINKED_NOTE_HEADER,
   MAX_KNOWN,
+  ScoutStatus,
+  type ScoutsResponse,
   type ActiveWorkResponse,
   type ApiError,
   type ErrorCode,
@@ -25,6 +27,8 @@ export interface Services {
   readLinkedNote?(req: LinkedNoteRequest): Promise<LinkedNoteResponse | ApiError>;
   /** Active Work Now card. Optional: without it the route answers 404. */
   readActiveWork?(): Promise<ActiveWorkResponse | ApiError>;
+  readScouts?(): Promise<ScoutsResponse | ApiError>;
+  readScoutOutput?(scoutId: string): Promise<LinkedNoteResponse | ApiError>;
 }
 
 export interface AppDeps {
@@ -58,7 +62,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | ScoutsResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -133,6 +137,35 @@ export function createApp(deps: AppDeps) {
       return c.json(result, statusFor(result.code) as 400);
     }
     if (result.status === 'refused') meta.errorCode = `active-work:${result.code}`;
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  app.get('/api/scouts', async (c) => {
+    const read = deps.services.readScouts;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  app.get('/api/scouts/output', async (c) => {
+    const read = deps.services.readScoutOutput;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const id = ScoutStatus.shape.scoutId.safeParse(c.req.header('X-VC-Scout'));
+    if (!id.success) return c.json(err('invalid', 'invalid scout ID'), 400);
+    const result = await read(id.data);
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    if (result.status === 'refused') meta.errorCode = `scout-output:${result.code}`;
     meta.commitSha = result.revision;
     return c.json(result);
   });

@@ -127,12 +127,12 @@ export class GitHubContentsStore implements VaultStore {
   }
 
   async listFiles(dir: string, atCommit: string): Promise<readonly ListedFile[]> {
-    guardPath(dir);
+    if (dir !== '') guardPath(dir);
     // Recursive tree of `<commit>:<dir>`; a truncated tree throws FileTooLarge (fail closed). Regular files only: the
     // Contents API follows a symlink to its target, so a symlink here could read a note outside the allowlist.
     return ((await this.treeEntries(atCommit, dir, true)) ?? [])
       .filter((e) => e.type === 'blob' && (e.mode === '100644' || e.mode === '100755'))
-      .map((e) => ({ path: `${dir}/${e.path}`, blobSha: e.sha }));
+      .map((e) => ({ path: dir === '' ? e.path : `${dir}/${e.path}`, blobSha: e.sha }));
   }
 
   /**
