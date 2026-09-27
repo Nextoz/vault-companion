@@ -24,7 +24,7 @@ sets privacy rules.
 |---|---|---|
 | A handover visibility | — | done: PR #19, deployed |
 | B task editing | ADR-0017 | **done:** PR #26 merged (d422b01), CodeRabbit real review (2 findings fixed); **deployed 467191a4**; owner phone test pending |
-| C Active Work in the app | `docs/briefs/C-active-work.md` | next; needs its ADR (writes to Active Work Now) + adversarial review |
+| C Active Work in the app | `docs/briefs/C-active-work.md`, ADR-0019 | **building** (2026-09-27 02:3x): contract on `agent/active-work-base` (54d9559); astra-high · aw-server (w3:p1E) + astra-medium · aw-web (w3:p1F, incl. update banner + sync wording); then integrate, full check, one PR, CodeRabbit, deploy, owner phone test |
 | S Part 2 scout status page | `docs/briefs/S2-scout-status-page.md` | **blocked** until S Part 1 status files exist (vault side); Lead derives fixture shapes from the real files |
 | D completion history | `docs/briefs/D-completion-history.md` | after S Part 2 |
 
