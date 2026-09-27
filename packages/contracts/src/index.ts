@@ -112,6 +112,28 @@ export const EditNotePayload = z.strictObject({
   body: z.string().max(50_000),
 });
 
+/** ADR-0024: one swipe decision, appended as one line to Events/Triage/Decisions/YYYY-MM.jsonl. */
+export const TriageDecision = z.enum(['go', 'maybe', 'skip', 'undo']);
+export const TriageSkipReason = z.enum(['topic', 'too-far', 'bad-time', 'too-basic', 'busy']);
+export const TriageEventId = z.string().regex(/^[0-9a-f]{20}$/);
+export const TriageDecidePayload = z
+  .strictObject({
+    eventId: TriageEventId,
+    decision: TriageDecision,
+    reason: TriageSkipReason.nullable(),
+    undoes: z.uuid().nullable(),
+    explore: z.boolean(),
+    card: z.strictObject({
+      title: z.string().max(500),
+      category: z.string().max(100),
+      sourceName: z.string().max(200),
+      aiScore: z.number().min(0).max(100),
+      start: isoInstant,
+    }),
+  })
+  .refine((d) => d.reason === null || d.decision === 'skip', 'reason only on skip')
+  .refine((d) => (d.decision === 'undo') === (d.undoes !== null), 'undoes exactly on undo');
+
 export const CaptureNotePayload = z.strictObject({
   text: z.string().min(1).max(50_000),
   context: Context.optional(),
@@ -146,6 +168,7 @@ export const Command = z.discriminatedUnion('type', [
   envelope('UndoCompleteTask', UndoCompleteTaskPayload),
   envelope('CaptureTask', CaptureTaskPayload),
   envelope('CaptureNote', CaptureNotePayload),
+  envelope('TriageDecide', TriageDecidePayload),
   envelope('EditNote', EditNotePayload),
   envelope('EditTask', EditTaskPayload),
   envelope('CaptureActiveWork', CaptureActiveWorkPayload),
@@ -168,13 +191,14 @@ export const CaptureTaskEffect = z.strictObject({ kind: z.literal('task-captured
 export const CaptureNoteEffect = z.strictObject({ kind: z.literal('note-captured'), path: z.string() });
 export const EditEffect = z.strictObject({ kind: z.literal('edited'), beforeLineText: singleLine, afterLineText: singleLine });
 export const NoteEditedEffect = z.strictObject({ kind: z.literal('note-edited'), path: InboxNotePath });
+export const TriageDecidedEffect = z.strictObject({ kind: z.literal('triage-decided'), path: z.string().regex(/^Events\/Triage\/Decisions\/\d{4}-\d{2}\.jsonl$/), decisionId: z.uuid() });
 export const ActiveWorkEffect = z.strictObject({
   kind: z.literal('active-work'),
   op: z.enum(['captured', 'edited', 'keep', 'done', 'park', 'drop', 'undone']),
   beforeLineText: singleLine.nullable(),
   afterLineText: singleLine.nullable(),
 });
-export const Effect = z.discriminatedUnion('kind', [CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect]);
+export const Effect = z.discriminatedUnion('kind', [CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect]);
 export type Effect = z.infer<typeof Effect>;
 
 export const Receipt = z.strictObject({
@@ -483,3 +507,49 @@ export function decodeNoteHeader(value: string | undefined): string | null {
     return null;
   }
 }
+
+// ---- Event triage (ADR-0024): feed, decisions and applier status, read-only except TriageDecide ----
+
+/** A feed card; unknown fields are ignored (`z.object` strips). Invalid cards are dropped by the server, not fatal. */
+export const TriageCard = z.object({
+  eventId: TriageEventId,
+  rank: z.number().int(),
+  explore: z.boolean(),
+  resurfaced: z.boolean(),
+  title: z.string().max(500),
+  start: isoInstant,
+  end: isoInstant.nullable(),
+  location: z.string().max(500),
+  online: z.boolean(),
+  cost: z.string().max(200),
+  registration: z.object({ state: z.string().max(40), deadline: isoInstant.nullable() }),
+  aiScore: z.number().min(0).max(100),
+  why: z.string().max(1000),
+  category: z.string().max(100),
+  scouts: z.array(z.string().max(64)).max(10),
+  sourceName: z.string().max(200),
+  sourceUrl: z.url().max(2000),
+  calendar: z.object({
+    inCalendar: z.enum(['auto', 'own', 'go']).nullable(),
+    clash: z.object({ title: z.string().max(300), start: isoInstant, end: isoInstant }).nullable(),
+    freeThatEvening: z.boolean(),
+  }),
+});
+export type TriageCard = z.infer<typeof TriageCard>;
+
+export const TriageResponse = z.strictObject({
+  revision: commitSha,
+  now: isoInstant,
+  feedState: z.enum(['ok', 'absent', 'unreadable']),
+  generatedAt: isoInstant.nullable(),
+  cards: z.array(TriageCard).max(500),
+  /** Cards dropped because they failed validation (shown as a small note, never fatal). */
+  droppedCards: z.number().int().nonnegative(),
+  /** Decision lines of the current and previous month, file order. */
+  decisions: z
+    .array(z.strictObject({ decisionId: z.uuid(), eventId: TriageEventId, decision: TriageDecision, undoes: z.uuid().nullable(), at: isoInstant }))
+    .max(5000),
+  applied: z.record(z.string(), z.strictObject({ status: z.enum(['applied', 'failed', 'skipped']), at: isoInstant, message: z.string().max(300) })),
+  appliedUpdatedAt: isoInstant.nullable(),
+});
+export type TriageResponse = z.infer<typeof TriageResponse>;
