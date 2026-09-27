@@ -25,7 +25,7 @@ sets privacy rules.
 | A handover visibility | — | done: PR #19, deployed |
 | B task editing | ADR-0017 | **done:** PR #26 merged (d422b01), CodeRabbit real review (2 findings fixed); **deployed 467191a4**; owner phone test pending |
 | C Active Work in the app | `docs/briefs/C-active-work.md`, ADR-0019 | **done:** PR #30 merged (9330478); CodeRabbit real review, 7 findings fixed (indented children refused, hidden-block openers refused, update banner, wording, tests); **deployed b5e69f1c**; owner phone test + 2-week review-date trial pending |
-| S Part 2 scout status page | `docs/briefs/S2-scout-status-page.md` | **blocked** until S Part 1 status files exist (vault side); Lead derives fixture shapes from the real files |
+| S Part 2 scout status page | `docs/briefs/S2-scout-status-page.md`, ADR-0020 | **building** (2026-09-27): Part 1 file exists (1 scout); contract validated against it on `agent/scouts-base`; owner: findings notes from any folder a status file names (structural guards); astra-high · scouts-server (w3:p1H) + astra-medium · scouts-web (w3:p1J) |
 | D completion history | `docs/briefs/D-completion-history.md` | after S Part 2 |
 
 **Done in milestone 3 (all merged, CI green):** #18 write budget + review fixes · #19 A · #20 single-flight token ·
