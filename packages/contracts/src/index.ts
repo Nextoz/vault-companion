@@ -94,7 +94,19 @@ export const ReviewActiveWorkPayload = z.discriminatedUnion('action', [
 ]);
 
 /** ADR-0022: an Inbox note as read (path + blob), and its new body; frontmatter/BOM/EOL are kept by the server. */
-export const InboxNotePath = z.string().regex(/^Inbox\/[^/]+\.md$/, 'must be a note directly in Inbox/');
+/**
+ * A note directly in Inbox/, accepted only in the exact form the server's path policy accepts (paths.ts
+ * isStructurallySafePath + NFC): no backslash, %, control or separator characters, no dot-leading or padded name, NFC
+ * only — so contract validation and server resolution can never disagree about which file a path names.
+ */
+const isInboxNoteName = (name: string): boolean =>
+  name.length > 3 && name.endsWith('.md') && !name.startsWith('.') && name === name.trim() &&
+  ![...name].some((ch) => { const c = ch.codePointAt(0)!; return c < 0x20 || (c >= 0x7f && c <= 0x9f) || c === 0x2028 || c === 0x2029; });
+export const InboxNotePath = z
+  .string()
+  .max(512)
+  .regex(/^Inbox\/[^/\\%]+$/, 'must be a note directly in Inbox/')
+  .refine((p) => p === p.normalize('NFC') && isInboxNoteName(p.slice('Inbox/'.length)), 'must be a safe, NFC note name');
 export const EditNotePayload = z.strictObject({
   note: z.strictObject({ path: InboxNotePath, blobSha }),
   body: z.string().max(50_000),
