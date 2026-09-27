@@ -24,5 +24,6 @@ for gets **Reopen** (the existing `UndoCompleteTask`, ADR-0013). Everything else
 
 ## Budget
 
-Two file reads + one head per request; parsing reuses the existing kernel parsers. Measure CPU on the live log after
+One head, one listing of `Tasks/` (the regular-file check for Active Work: a symlink under that name is never read)
+and up to two file reads per request; parsing reuses the existing kernel parsers. Measure CPU on the live log after
 deploy (Workers Free).
