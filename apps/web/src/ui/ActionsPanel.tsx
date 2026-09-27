@@ -94,7 +94,7 @@ export function ActionsPanel({
             {item.state === 'saved' && <p className="muted small">{item.type === 'CaptureNote' && 'Saved to the vault; '}reaches Obsidian at your next desktop sync</p>}
             {item.state === 'attention' && (
               <>
-                {item.error && <p className="error">{item.error.code}: {attentionText(item)}</p>}
+                {item.error && <p className="error">{attentionText(item)}</p>}
                 {isTaskAction(item) && (
                   <p className="muted small">Discarding removes only this action; the task will still need attention.</p>
                 )}
@@ -126,7 +126,7 @@ export function ActionsPanel({
         ))}
       </ul>
       <p className="muted small">Pending actions are kept on this device while possible.</p>
-      {exporting && <ExportDialog text={(exporting.error ? exporting.error.code + ': ' + attentionText(exporting) + '\n\n' : '') + exportText(exporting.envelope)} onClose={() => setExporting(null)} />}
+      {exporting && <ExportDialog text={exportText(exporting.envelope)} onClose={() => setExporting(null)} />}
       {discarding && (
         <ExportDialog
           text={exportText(discarding.envelope)}

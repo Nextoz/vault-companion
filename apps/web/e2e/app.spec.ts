@@ -581,21 +581,21 @@ test('open a linked note from a task: read-only, sanitised, and nothing about it
 });
 
 test('Active work card: above Today, sanitised, collapse remembered, nothing stored', async ({ page }) => {
-  api.activeWork = [
-    '# This week',
-    '',
-    '- Finish the **garden** plan with [[Projects/Garden|the garden]]',
-    '',
-    '<img src=x onerror="window.pwned=1"> [bad](javascript:window.pwned=2)',
-  ].join('\n');
+  // ADR-0019: the card shows parsed Now items and unknown lines as text; raw note text must never become markup.
+  const name = 'Garden <b>plan</b> <img src=x onerror="window.pwned=1">';
+  api.activeWorkItems = [{
+    locator: { path: 'Tasks/Active Work Now.md', blobSha: '5'.repeat(40), lineIndex: 2, lineText: '- [ ] **' + name + ':** x', occurrencesAtRead: 1 },
+    name, outcome: null, next: 'order seeds', review: null, link: null, needsReview: false,
+  }];
+  api.activeWork = '## Now';
+  api.unknownNowLines = ['<img src=x onerror="window.pwned=2"> [bad](javascript:window.pwned=3)'];
   await page.goto('/');
 
   const card = region(page, 'Active work');
   const body = card.getByTestId('active-work-body');
-  await expect(body.locator('strong')).toHaveText('garden');
-  await expect(body.locator('.wikilink')).toHaveText('the garden');
-  await expect(body.locator('a, img')).toHaveCount(0);
-  await expect(body).toContainText('<img src=x onerror="window.pwned=1">');
+  await expect(body).toContainText(name);
+  await expect(body).toContainText('<img src=x onerror="window.pwned=2">');
+  await expect(body.locator('a, img, b')).toHaveCount(0);
   expect(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned)).toBeUndefined();
 
   // Above Today in document order.
@@ -613,7 +613,7 @@ test('Active work card: above Today, sanitised, collapse remembered, nothing sto
   await expect(card.getByRole('button', { name: 'Active work' })).toHaveAttribute('aria-expanded', 'false');
   await expect(card.getByTestId('active-work-body')).toHaveCount(0);
   await card.getByRole('button', { name: 'Active work' }).click();
-  await expect(card.getByTestId('active-work-body')).toContainText('This week');
+  await expect(card.getByTestId('active-work-body')).toContainText('order seeds');
 
   const stored = await page.evaluate(async () => {
     const dump: string[] = [];
