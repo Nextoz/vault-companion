@@ -28,7 +28,7 @@ sets privacy rules.
 | S Part 2 scout status page | `docs/briefs/S2-scout-status-page.md`, ADR-0020 | **done:** PR #31 merged (2dbc3ed); CodeRabbit real review, 2 findings fixed (NFC output paths, ADR policy wording); **deployed cd0fc522**; owner phone test pending |
 | D completion history | `docs/briefs/D-completion-history.md`, ADR-0021 | **done:** PR #32 merged (a0a616f; Claude Cloud worker + Lead symlink guard); CodeRabbit real review, 1 finding fixed; **deployed 73af3631**; owner phone test pending |
 | N notes in the app | `docs/briefs/N-notes-worker.md`, ADR-0022 | **done:** PR #33 merged (6d000f6; Claude Cloud worker); security-review fix (InboxNotePath parser differential); CI caught a real 5-tab overflow at 390 px, fixed; CodeRabbit clean; **deployed 3feaf6b6** |
-| T swipe triage for events, Part 2 (owner, 2026-09-27) | Ready Backlog section T | **started:** read scope extended to Events/Triage/** (ADR-0018); next: mockups for the owner, then ADR + contract from the real Part 1 files |
+| T swipe triage for events, Part 2 (owner, 2026-09-27) | Ready Backlog section T | **mockups** for the owner: https://claude.ai/artifact/MdVHxxqLKfVaWdByFNi57h (variants A Stack / B Calm / C Date-first); **blocked** on Part 1 files (Events/Triage/feed.json, applied.json not in the vault or on GitHub yet); read scope extended (ADR-0018). Then ADR + contract from the real shapes, build |
 
 **Done in milestone 3 (all merged, CI green):** #18 write budget + review fixes · #19 A · #20 single-flight token ·
 #21 ancestry without patches (ADR-0016) · #22 one read per app switch · #23 CSP smoke + zod jitless · #24
