@@ -2,7 +2,10 @@
 // Pure orchestration over the VaultStore port and the Markdown kernel; no HTTP, no GitHub.
 import { ACTIVE_WORK_PATH, MAX_KNOWN, MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type TasksResponse, type TaskView } from '@vault-companion/contracts';
 import * as md from '@vault-companion/vault-markdown';
-import { executeWrite, type Planned, type Refused, type WritePlan } from './execute.ts';
+import { executeWrite, findInOnePage, replayOnParent, type Planned, type Refused, type WritePlan } from './execute.ts';
+import { MAX_NOTE_BYTES } from '@vault-companion/contracts';
+import { appendDecisionLine, hasDecisionId, parseDecisionLines, type DecisionLine } from './triage-format.ts';
+import { readTriageText, TRIAGE_DIR, triageDecisionPath } from './triage.ts';
 import { canWrite, INBOX_DIR, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 import { payloadHash } from './payload-hash.ts';
 import { FileTooLarge, gitBlobSha, TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type CommitInfo, type VaultPath, type VaultStore } from './store.ts';
@@ -356,8 +359,68 @@ function undoActiveWorkPlan(cmd: Extract<Command, { type: 'UndoActiveWork' }>, r
   };
 }
 
+export function triageDecidePlan(cmd: Extract<Command, { type: 'TriageDecide' }>, raw: unknown = cmd): WritePlan<Receipt['effect']> {
+  const path = triageDecisionPath(cmd.occurredAt);
+  const line: DecisionLine = { schemaVersion: 1, decisionId: cmd.operationId, at: cmd.occurredAt, ...cmd.payload };
+  const effect = { kind: 'triage-decided' as const, path, decisionId: cmd.operationId };
+  let lineEvidence: string | null = null;
+  let cached: { at: string; text: string | null } | null = null;
+  const read = async (store: VaultStore, at: string) => {
+    if (cached?.at === at) return cached.text;
+    const files = await store.listFiles(TRIAGE_DIR, at);
+    const text = await readTriageText(store, at, files, path);
+    cached = { at, text };
+    return text;
+  };
+  const sameLine = (text: string | null) => {
+    const matches = parseDecisionLines(text).filter((d) => d.decisionId === cmd.operationId);
+    return matches.length === 1 && new TextDecoder().decode(appendDecisionLine(null, matches[0]!)) === new TextDecoder().decode(appendDecisionLine(null, line));
+  };
+  const plan: WritePlan<Receipt['effect']> = {
+    message: 'Vault Companion: triage decision',
+    async findApplied(store, at, operationId) {
+      lineEvidence = null;
+      const found = await findInOnePage(store, cmd.baseRevision, at, operationId);
+      if (found.kind !== 'not-found') return found;
+      try {
+        const text = await read(store, at);
+        if (!hasDecisionId(text, operationId)) return found;
+        if (!sameLine(text)) return refused('operation-id-reused', 'decision ID already exists with different or unreadable contents');
+        // A desktop commit can retain a decision but lose its app trailer. The line itself proves the effect.
+        lineEvidence = at;
+        return { kind: 'found', op: { commitSha: at, paths: [path], payloadHash: await payloadHash(raw) } };
+      } catch (e) {
+        if (e instanceof FileTooLarge) return refused('refused:too-large', 'decision file is larger than 1 MB');
+        if (e instanceof TypeError) return refused('refused:encoding', 'decision file is not valid UTF-8');
+        throw e;
+      }
+    },
+    async deriveApplied(store, at, paths) {
+      if (lineEvidence === at && sameLine(await read(store, at))) return { ok: true, path, effect };
+      return replayOnParent(plan, store, at, paths);
+    },
+    async compute(store, at) {
+      if (!canWrite(path, 'create') || !canWrite(path, 'update')) return refuse('refused:path', 'decision path is not writable');
+      try {
+        const text = await read(store, at);
+        if (hasDecisionId(text, cmd.operationId)) return refuse('dedupe-unknown', 'decision ID already exists');
+        const bytes = appendDecisionLine(text, line);
+        if (bytes.length > MAX_NOTE_BYTES) return refuse('refused:too-large', 'decision file would exceed 1 MB');
+        return { ok: true, path, expect: text === null ? 'absent' : 'regular-file', bytes, effect };
+      } catch (e) {
+        if (e instanceof FileTooLarge) return refuse('refused:too-large', 'decision file is larger than 1 MB');
+        if (e instanceof TypeError) return refuse('refused:encoding', 'decision file is not valid UTF-8');
+        throw e;
+      }
+    },
+  };
+  return plan;
+}
+
 function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePlan<Receipt['effect']> {
   switch (cmd.type) {
+    case 'TriageDecide':
+      return triageDecidePlan(cmd, raw);
     case 'CaptureActiveWork':
     case 'EditActiveWork':
     case 'ReviewActiveWork':

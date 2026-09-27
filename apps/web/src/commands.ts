@@ -83,6 +83,10 @@ export function captureNote(ctx: MintContext, input: { text: string; context?: s
   return checked({ ...base(ctx), type: 'CaptureNote', payload: input });
 }
 
+export function triageDecide(ctx: MintContext, payload: Extract<Command, { type: 'TriageDecide' }>['payload']) {
+  return checked({ ...base(ctx), type: 'TriageDecide', payload });
+}
+
 /** ADR-0022: the note as read (path + blob) and the whole new body; the server keeps frontmatter/BOM/EOL. */
 export function editNote(ctx: MintContext, note: { path: string; blobSha: string }, body: string): Command {
   return checked({ ...base(ctx), type: 'EditNote', payload: { note, body } });
@@ -91,6 +95,8 @@ export function editNote(ctx: MintContext, note: { path: string; blobSha: string
 /** Human-readable text of a pending action, for "Export text" when it needs attention. */
 export function exportText(envelope: Command): string {
   switch (envelope.type) {
+    case 'TriageDecide':
+      return JSON.stringify(envelope.payload, null, 2);
     case 'CaptureActiveWork':
       return JSON.stringify(envelope.payload, null, 2);
     case 'EditActiveWork':

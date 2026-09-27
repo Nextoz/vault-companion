@@ -198,6 +198,9 @@ describe('production composition (review R10)', () => {
     const work = await app.fetch(new Request(`${ORIGIN}/api/active-work`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
     expect(work.status).toBe(503);
     expect(work.headers.get('Cache-Control')).toBe('no-store');
+    const triage = await app.fetch(new Request(`${ORIGIN}/api/triage`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
+    expect(triage.status).toBe(503); // Reaches the real store, never the unwired 404.
+    expect(triage.headers.get('Cache-Control')).toBe('no-store');
     const scouts = await app.fetch(new Request(`${ORIGIN}/api/scouts`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
     expect(scouts.status).toBe(503); // Reaches the real store, never an unwired 404.
     const history = await app.fetch(new Request(`${ORIGIN}/api/history`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));

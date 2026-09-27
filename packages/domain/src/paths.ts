@@ -9,6 +9,7 @@ const DENIED_ROOTS = new Set(['.git', '.obsidian', '.trash', 'Tools', 'tmp', 'ou
 // Case-folded: the owner's desktop (Windows) treats `TMP/` and `tmp/` as the same folder.
 const DENIED_FOLDED = new Set([...DENIED_ROOTS].map((r) => r.toLowerCase()));
 const isDenied = (segment: string): boolean => DENIED_FOLDED.has(segment.toLowerCase());
+export const isTriageDecisionPath = (path: string): boolean => /^Events\/Triage\/Decisions\/\d{4}-(0[1-9]|1[0-2])\.jsonl$/.test(path);
 /** Owner decision D2 default: linked notes are readable only under these roots (vault-contract §1, review A8). */
 const LINKED_NOTE_ALLOWED_ROOTS = new Set(['Projects', 'Tasks', 'Inbox']);
 
@@ -39,7 +40,8 @@ export function parseVaultPath(raw: string): VaultPath | null {
   if (!isStructurallySafePath(path)) return null;
   if (isDenied(path.split('/')[0]!)) return null;
   const scoutStatus = path.startsWith(`${SCOUT_STATUS_DIR}/`) && path.split('/').length === 3 && path.endsWith('.json');
-  if (!path.endsWith('.md') && !scoutStatus) return null;
+  const triage = path === 'Events/Triage/feed.json' || path === 'Events/Triage/applied.json' || isTriageDecisionPath(path);
+  if (!path.endsWith('.md') && !scoutStatus && !triage) return null;
   return path as VaultPath;
 }
 
@@ -54,6 +56,7 @@ export function isInboxNotePath(raw: string): raw is VaultPath {
 }
 
 export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
+  if (isTriageDecisionPath(path)) return true;
   if (path === TODO_LIST_PATH || path === 'Tasks/Active Work Now.md') return kind === 'update';
   if (kind === 'update') return isInboxNotePath(path);
   const segments = path.split('/');

@@ -81,3 +81,17 @@ describe('linked-note read policy', () => {
     expect(parseVaultPath(`Inbox/x${String.fromCharCode(0x2028)}.md`)).toBeNull();
   });
 });
+
+describe('ADR-0024 triage write scope', () => {
+  it('allows only the monthly decisions file; feed, applier status and other Events paths stay unwritable', () => {
+    expect(canWrite(parseVaultPath('Events/Triage/Decisions/2026-09.jsonl')!, 'create')).toBe(true);
+    expect(canWrite(parseVaultPath('Events/Triage/Decisions/2026-09.jsonl')!, 'update')).toBe(true);
+    for (const p of ['Events/Triage/feed.json', 'Events/Triage/applied.json']) {
+      expect(canWrite(parseVaultPath(p)!, 'create')).toBe(false);
+      expect(canWrite(parseVaultPath(p)!, 'update')).toBe(false);
+    }
+    expect(parseVaultPath('Events/Triage/Decisions/2026-13.jsonl')).toBeNull();
+    expect(parseVaultPath('Events/Triage/Decisions/sub/2026-09.jsonl')).toBeNull();
+    expect(parseVaultPath('Events/Triage/other.json')).toBeNull();
+  });
+});
