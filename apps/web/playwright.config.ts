@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// The isolated triage spec uses a dev-only HTML fixture, never the production entry.
+const triageFixture = process.argv.some((arg) => arg.endsWith('triage.spec.ts'));
 const SW_SPEC = /offline-shell\.spec\.ts$/;
 const REAL_SPEC = /real-stack\.spec\.ts$/;
 // Optional: a preinstalled Chromium when Playwright's own download is unavailable (e.g. cloud sandboxes).
@@ -53,10 +55,11 @@ export default defineConfig({
   webServer: {
     // Built by the `e2e` script first: one long-lived process that Playwright can stop (a shell chain left
     // `vite preview` orphaned and hung CI after the tests passed).
-    command: 'vite preview --port 4173 --strictPort',
-    url: 'http://localhost:4173',
+    command: triageFixture ? 'vite --port 5174 --strictPort' : 'vite preview --port 4173 --strictPort',
+    url: triageFixture ? 'http://localhost:5174' : 'http://localhost:4173',
     reuseExistingServer: !process.env['CI'],
     timeout: 120_000,
     gracefulShutdown: { signal: 'SIGINT', timeout: 5_000 },
   },
 });
+
