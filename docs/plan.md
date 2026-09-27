@@ -24,13 +24,13 @@ sets privacy rules.
 |---|---|---|
 | A handover visibility | — | done: PR #19, deployed |
 | B task editing | ADR-0017 | **done:** PR #26 merged (d422b01), CodeRabbit real review (2 findings fixed); **deployed 467191a4**; owner phone test pending |
-| C Active Work in the app | `docs/briefs/C-active-work.md`, ADR-0019 | **building** (2026-09-27 02:3x): contract on `agent/active-work-base` (54d9559); astra-high · aw-server (w3:p1E) + astra-medium · aw-web (w3:p1F, incl. update banner + sync wording); then integrate, full check, one PR, CodeRabbit, deploy, owner phone test |
+| C Active Work in the app | `docs/briefs/C-active-work.md`, ADR-0019 | **done:** PR #30 merged (9330478); CodeRabbit real review, 7 findings fixed (indented children refused, hidden-block openers refused, update banner, wording, tests); **deployed b5e69f1c**; owner phone test + 2-week review-date trial pending |
 | S Part 2 scout status page | `docs/briefs/S2-scout-status-page.md` | **blocked** until S Part 1 status files exist (vault side); Lead derives fixture shapes from the real files |
 | D completion history | `docs/briefs/D-completion-history.md` | after S Part 2 |
 
 **Done in milestone 3 (all merged, CI green):** #18 write budget + review fixes · #19 A · #20 single-flight token ·
 #21 ancestry without patches (ADR-0016) · #22 one read per app switch · #23 CSP smoke + zod jitless · #24
-identity-safe duplicate-row fix · #25 e2e flakes. **Deployed: `467191a4` (B). #27 O3 real-stack e2e (Cloud) merged: 3 flows vs the real Worker app + LocalGitStore in Chromium; CodeRabbit real review, 1 finding fixed.**
+identity-safe duplicate-row fix · #25 e2e flakes. **Deployed: `b5e69f1c` (C). #27 O3 real-stack e2e (Cloud) merged: 3 flows vs the real Worker app + LocalGitStore in Chromium; CodeRabbit real review, 1 finding fixed.**
 
 **Capacity (2026-09-26 ~23:00):** Codex Astra ~4 % left, resets 02:29 · Antigravity quota out until ~2026-10-03 ·
 Claude Cloud ~$10 credit; owner ran /web-setup (GitHub connected as Nextoz), so new Cloud sessions clone with push —
