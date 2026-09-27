@@ -28,7 +28,7 @@ sets privacy rules.
 | S Part 2 scout status page | `docs/briefs/S2-scout-status-page.md`, ADR-0020 | **done:** PR #31 merged (2dbc3ed); CodeRabbit real review, 2 findings fixed (NFC output paths, ADR policy wording); **deployed cd0fc522**; owner phone test pending |
 | D completion history | `docs/briefs/D-completion-history.md`, ADR-0021 | **done:** PR #32 merged (a0a616f; Claude Cloud worker + Lead symlink guard); CodeRabbit real review, 1 finding fixed; **deployed 73af3631**; owner phone test pending |
 | N notes in the app | `docs/briefs/N-notes-worker.md`, ADR-0022 | **done:** PR #33 merged (6d000f6; Claude Cloud worker); security-review fix (InboxNotePath parser differential); CI caught a real 5-tab overflow at 390 px, fixed; CodeRabbit clean; **deployed 3feaf6b6** |
-| T swipe triage for events, Part 2 (owner, 2026-09-27) | Ready Backlog section T | **mockups** for the owner: https://claude.ai/artifact/MdVHxxqLKfVaWdByFNi57h (variants A Stack / B Calm / C Date-first) — **owner chose C Date-first** (2026-09-27), keep the bottom chips (price, registration, calendar status incl. clash); card-stack UI building ahead of the data (astra-medium · triage-ui, w3:p1P, hidden until the feed exists); **blocked** on Part 1 files (Events/Triage/feed.json, applied.json not in the vault or on GitHub yet); read scope extended (ADR-0018). Then ADR + contract from the real shapes, build |
+| T swipe triage for events, Part 2 | Ready Backlog T, ADR-0024 | **building** (2026-09-27 17:4x): Part 1 files arrived (feed.json 93 cards, applied.json; Decisions/ not yet); contract on `agent/triage-base` validated against all 93 real cards; card design C; one astra-high worker (w3:p1S) builds server + wires the parked stack on `agent/triage` |
 
 **Done in milestone 3 (all merged, CI green):** #18 write budget + review fixes · #19 A · #20 single-flight token ·
 #21 ancestry without patches (ADR-0016) · #22 one read per app switch · #23 CSP smoke + zod jitless · #24
@@ -40,7 +40,7 @@ still probe a push at launch · CodeRabbit 1 review/hour · RAM 2–4 GB free: �
 
 **Autonomous mode (owner away, 2026-09-27 afternoon):** session cron every :17/:47 — merge/deploy PR #34 when green; wire T as soon as Part 1 files exist (ADR-0024 + contract + one astra-high worker on the parked agent/triage-ui); O4 when RAM allows; summary for the owner at the top of docs/checkpoint.md.
 
-**Batched fixes PR #34** (branch agent/fixes-r7-view): R7 blank-line residue fixed (reproduced first), B edit double row fixed, O8 verified resolved by History; full check 1153/1153; CodeRabbit real review: 2 findings fixed (saved-edit resolution order with regression test; ADR-0023 for the R7 rule). **T card stack** committed on agent/triage-ui (not merged until the feed contract exists; review its playwright.config change at integration). O4 later (RAM); R3 needs a live-log session.
+**PR #34 merged + deployed `341041d1`** (R7, edit double row, O8 verified; CodeRabbit resolved both findings).
 
 **Open technical follow-ups:** R3 CPU re-measure after the latest deploys · O4 harness through production composition ·
 B follow-up: an edit applied but not yet receipted can briefly render twice · "New version — tap to reload" banner (owner
