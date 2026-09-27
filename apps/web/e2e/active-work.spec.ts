@@ -1,6 +1,37 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
 
+for (const state of ['waiting', 'installed', 'installing', 'first-install'] as const) {
+  test(`update banner retains ${state} registration readiness`, async ({ page }) => {
+    const api = new MockApi();
+    await api.install(page);
+    await page.addInitScript((state) => {
+      const worker = Object.assign(new EventTarget(), { state: state === 'installing' ? 'installing' : 'installed' });
+      const registration = Object.assign(new EventTarget(), {
+        waiting: state === 'waiting' ? worker : null,
+        installing: state === 'waiting' ? null : worker,
+      });
+      Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: {
+        controller: state === 'first-install' ? null : {},
+        register: () => Promise.resolve(registration),
+      } });
+      Object.assign(window, { finishUpdate: () => { worker.state = 'installed'; worker.dispatchEvent(new Event('statechange')); } });
+    }, state);
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeVisible();
+    const banner = page.getByRole('button', { name: 'New version — tap to reload' });
+    if (state === 'first-install') {
+      await expect(banner).toHaveCount(0);
+    } else {
+      if (state === 'installing') {
+        await expect(banner).toHaveCount(0);
+        await page.evaluate(() => (window as unknown as { finishUpdate: () => void }).finishUpdate());
+      }
+      await expect(banner).toBeVisible();
+    }
+  });
+}
+
 test('needs-review Done → queued Undo, then capture Active Work request body', async ({ page }) => {
   const api = new MockApi();
   api.activeWork = '## Now';

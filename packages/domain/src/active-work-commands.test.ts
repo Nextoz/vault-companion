@@ -1,11 +1,11 @@
 /// <reference types="node" />
 import { readFileSync } from 'node:fs';
 import { ActiveWorkResponse, Command, type Receipt } from '@vault-companion/contracts';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createActiveWorkService } from './active-work.ts';
 import { createCommandService } from './commands.ts';
 import { payloadHash } from './payload-hash.ts';
-import { TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type VaultPath } from './store.ts';
+import { FileTooLarge, TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type VaultPath } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 const PATH = 'Tasks/Active Work Now.md';
@@ -33,6 +33,33 @@ async function setup(text = fixture) {
 }
 
 describe('Active Work service and write plans', () => {
+  it.each([
+    [null, 'refused:structure', 'was not found'],
+    [new Uint8Array([0xff]), 'refused:encoding', 'is not valid UTF-8'],
+    [null, 'refused:too-large', 'is too large to edit safely'],
+  ] as const)('names Active Work in file refusal case %#', async (bytes, code, suffix) => {
+    const h = await setup();
+    const r = await h.read();
+    const item = r.items[0]!.locator;
+    await h.store.commitFiles({ [PATH]: bytes });
+    if (code === 'refused:too-large') vi.spyOn(h.store, 'readFile').mockRejectedValue(new FileTooLarge('synthetic size limit'));
+    for (const cmd of [h.command('CaptureActiveWork', { name: 'New' }),
+      h.command('EditActiveWork', { item, changes: { name: 'New' } }),
+      h.command('ReviewActiveWork', { item, action: 'park' })]) {
+      expect(await h.run(cmd)).toMatchObject({ code, message: `Active Work ${suffix}` });
+    }
+    expect(h.store.writeCalls).toBe(0);
+  });
+
+  it('names the review for absent and mismatched Undo tokens', async () => {
+    const h = await setup();
+    const r = await h.read();
+    const target = h.command('ReviewActiveWork', { item: r.items[0]!.locator, action: 'park' });
+    expect(await h.run(h.command('UndoActiveWork', { target, targetCommit: 'f'.repeat(40) })))
+      .toMatchObject({ message: 'that review is not in the vault' });
+    expect(await h.run(h.command('UndoActiveWork', { target, targetCommit: h.store.headCommit })))
+      .toMatchObject({ message: 'undo target does not match the recorded review' });
+  });
   it('read model uses Copenhagen date, locators and unknown lines', async () => {
     const h = await setup();
     const r = await h.read();
@@ -81,7 +108,7 @@ describe('Active Work service and write plans', () => {
     expect(await h.run(undo)).toEqual(undone);
     expect(h.store.writeCalls).toBe(2);
     expect((await h.store.readCommit(undone.commitSha))?.trailers[TRAILER_UNDOES]).toBe(target.operationId);
-    expect(await h.run(h.command('UndoActiveWork', { target, targetCommit: reviewed.commitSha }))).toMatchObject({ code: 'conflict:task-changed' });
+    expect(await h.run(h.command('UndoActiveWork', { target, targetCommit: reviewed.commitSha }))).toMatchObject({ code: 'conflict:task-changed', message: 'that review was already undone' });
   });
 
   it('CAS replan preserves a concurrent prose edit; a changed target refuses', async () => {

@@ -37,16 +37,17 @@ function decodeUtf8(bytes: Uint8Array): string | null {
 type TodoFile = { ok: true; text: string; blobSha: string; bytes: Uint8Array };
 
 async function readTodo(store: VaultStore, at: string, path: VaultPath = TODO): Promise<TodoFile | { ok: false; planned: Planned<never> }> {
+  const label = path === ACTIVE ? 'Active Work' : 'the task list';
   let file;
   try {
     file = await store.readFile(path, at);
   } catch (e) {
-    if (e instanceof FileTooLarge) return { ok: false, planned: refuse('refused:too-large', 'the task list is too large to edit safely') };
+    if (e instanceof FileTooLarge) return { ok: false, planned: refuse('refused:too-large', `${label} is too large to edit safely`) };
     throw e;
   }
-  if (!file) return { ok: false, planned: refuse('refused:structure', 'the task list was not found') };
+  if (!file) return { ok: false, planned: refuse('refused:structure', `${label} was not found`) };
   const text = decodeUtf8(file.bytes);
-  if (text === null) return { ok: false, planned: refuse('refused:encoding', 'the task list is not valid UTF-8') };
+  if (text === null) return { ok: false, planned: refuse('refused:encoding', `${label} is not valid UTF-8`) };
   return { ok: true, text, blobSha: file.blobSha, bytes: file.bytes };
 }
 
@@ -257,11 +258,11 @@ function undoActiveWorkPlan(cmd: Extract<Command, { type: 'UndoActiveWork' }>, r
   const token = cmd.payload.targetCommit;
   const rawTarget = (raw as { payload: { target: unknown } }).payload.target;
   // Filled by `findApplied` for the X that `compute` then runs at.
-  let checked: { x: string; completion: CommitInfo } | null = null;
+  let checked: { x: string; review: CommitInfo } | null = null;
   // Filled by `findApplied` when this Undo's own commit U is found: `deriveApplied` reuses both (call budget).
-  let applied: { completion: CommitInfo; undo: CommitInfo } | null = null;
+  let applied: { review: CommitInfo; undo: CommitInfo } | null = null;
 
-  /** The inverse of the verified completion `v` on the task list at `at` (X for a write, U^ to verify U). */
+  /** The inverse of the verified review `v` on Active Work at `at` (X for a write, U^ to verify U). */
   const inverseAt = async (store: VaultStore, v: Extract<Awaited<ReturnType<typeof verifiedActiveWork>>, { ok: true }>, at: string): Promise<Planned<Receipt['effect']>> => {
     const f = await readTodo(store, at, ACTIVE);
     if (!f.ok) return f.planned;
@@ -270,10 +271,10 @@ function undoActiveWorkPlan(cmd: Extract<Command, { type: 'UndoActiveWork' }>, r
 
   const readToken = async (store: VaultStore): Promise<CommitInfo | Refused> => {
     const c = await store.readCommit(token);
-    if (!c) return refused('conflict:task-changed', 'that completion is not in the vault');
+    if (!c) return refused('conflict:task-changed', 'that review is not in the vault');
     // Never trust the token: it must name the target's own commit, by operation ID and payload hash.
     if (c.trailers[TRAILER_OP] !== target.operationId || c.trailers[TRAILER_PAYLOAD] !== (await payloadHash(rawTarget))) {
-      return refused('invalid', 'undo target does not match the recorded completion');
+      return refused('invalid', 'undo target does not match the recorded review');
     }
     return c;
   };
@@ -291,39 +292,39 @@ function undoActiveWorkPlan(cmd: Extract<Command, { type: 'UndoActiveWork' }>, r
       // Review O5: neither answer can tell whether an earlier attempt of THIS Undo already applied (its own commit would be
       // in the unlisted range), so neither may claim "not applied".
       if (since.kind === 'not-ancestor' || since.kind === 'too-many') {
-        return refused('dedupe-unknown', 'this Undo may already have been applied; check the task in Obsidian');
+        return refused('dedupe-unknown', 'this Undo may already have been applied; check the Active Work item in Obsidian');
       }
       const own = since.commits.find((k) => k.trailers[TRAILER_OP] === operationId);
       if (own) {
         const info = await store.readCommit(own.sha);
-        if (info) applied = { completion: c, undo: info };
+        if (info) applied = { review: c, undo: info };
         return { kind: 'found', op: { commitSha: own.sha, payloadHash: own.trailers[TRAILER_PAYLOAD] ?? '', paths: (info?.files ?? []).map((f) => f.path) } };
       }
-      // Rerun review Opus N6: a completion can be undone once; a stale second Undo would reopen a LATER completion.
+      // Rerun review Opus N6: a review can be undone once; a stale second Undo would reopen a LATER review.
       if (since.commits.some((k) => k.trailers[TRAILER_UNDOES] === target.operationId)) {
-        return refused('conflict:task-changed', 'that completion was already undone');
+        return refused('conflict:task-changed', 'that review was already undone');
       }
-      checked = { x, completion: c };
+      checked = { x, review: c };
       return { kind: 'not-found' };
     },
     async compute(store, at) {
-      if (checked?.x !== at) return refuse('dedupe-unknown', 'the completion was not checked at this revision');
-      const v = await verifiedActiveWork(store, checked.completion, target, timeZone);
+      if (checked?.x !== at) return refuse('dedupe-unknown', 'the review was not checked at this revision');
+      const v = await verifiedActiveWork(store, checked.review, target, timeZone);
       if (!v.ok) return v.planned;
       return inverseAt(store, v, at);
     },
     // This Undo's own commit U (found by operation ID, payload hash checked by the executor). Review P4E-Astra #3: U
-    // must actually be the inverse — rebuilt against U's first-parent task list, it must equal U's blob — before a
+    // must actually be the inverse — rebuilt against U's first-parent Active Work, it must equal U's blob — before a
     // receipt certifies it. Reuses the C and U already read in this attempt.
     async deriveApplied(store, commitSha) {
       const u = applied?.undo.sha === commitSha ? applied.undo : await store.readCommit(commitSha);
-      if (!u || u.trailers[TRAILER_UNDOES] !== target.operationId || u.parent === null) return { ok: false, reason: 'not an undo of this completion' };
+      if (!u || u.trailers[TRAILER_UNDOES] !== target.operationId || u.parent === null) return { ok: false, reason: 'not an undo of this review' };
       const changed = u.files.length === 1 ? u.files[0] : undefined;
-      if (changed?.path !== ACTIVE || changed.blobSha === null) return { ok: false, reason: 'the undo commit does not update the task list' };
-      const c = applied?.completion ?? (await readToken(store));
+      if (changed?.path !== ACTIVE || changed.blobSha === null) return { ok: false, reason: 'the undo commit does not update Active Work' };
+      const c = applied?.review ?? (await readToken(store));
       if ('kind' in c) return { ok: false, reason: c.message };
       const v = await verifiedActiveWork(store, c, target, timeZone);
-      if (!v.ok) return { ok: false, reason: 'the completion cannot be verified' };
+      if (!v.ok) return { ok: false, reason: 'the review cannot be verified' };
       const rebuilt = await inverseAt(store, v, u.parent);
       if (!rebuilt.ok || (await gitBlobSha(rebuilt.bytes)) !== changed.blobSha) return { ok: false, reason: 'the undo commit is not the inverse' };
       return { ok: true, path: ACTIVE, effect: rebuilt.effect };

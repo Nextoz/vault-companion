@@ -25,6 +25,22 @@ function ok<E>(r: MutationOk<E> | Refusal): MutationOk<E> {
 describe('ADR-0019 exact goldens', () => {
   for (const eol of ['\n', '\r\n']) for (const bom of ['', '\uFEFF']) for (const final of [false, true]) {
     const encode = (text: string) => bom + text.replace(/\n$/, '').replaceAll('\n', eol) + (final ? eol : '');
+    it(`refuses child-block splits, BOM=${!!bom}, EOL=${JSON.stringify(eol)}, final=${final}`, () => {
+      const refused = (r: ReturnType<typeof kernel.captureActiveWork>) => {
+        expect(r).toMatchObject({ ok: false, code: 'refused:structure' });
+        expect('text' in r).toBe(false);
+      };
+      for (const child of ['  continuation', '  - child bullet', '\tcontinuation', '\n  - separated child']) {
+        const source = encode(fixture.replace(bike, `${bike}\n${child}`));
+        refused(kernel.captureActiveWork(source, { name: 'New' }));
+        for (const action of ['park', 'done', 'drop'] as const) {
+          refused(kernel.reviewActiveWork(source, loc(source), action, today, 'stopped'));
+          const anchor = action === 'park' ? parked : dropped;
+          const destination = encode(fixture.replace(anchor, `${anchor}\n${child}`));
+          refused(kernel.reviewActiveWork(destination, loc(destination), action, today, 'stopped'));
+        }
+      }
+    });
     it(`all writes preserve the fixture, unknown lines, BOM=${!!bom}, EOL=${JSON.stringify(eol)}, final=${final}`, () => {
       const base = fixture.replace(`${bike}\n`, `${bike}\n${odd}\n`);
       const text = encode(base);
@@ -69,6 +85,23 @@ describe('ADR-0019 exact goldens', () => {
     const input = fixture.replace(bike, minimal);
     expect(ok(kernel.editActiveWork(input, loc(input, minimal), { next: 'call', review: '2026-10-04' })).text)
       .toBe(fixture.replace(bike, '- [ ] **Bike repair:** Next: call ⏳ 2026-10-04 [[Bike]]  '));
+  });
+
+  it.each(['<!--', '%%'])('refuses hidden-block opener %s in capture, edit and drop', (opener) => {
+    for (const field of ['name', 'next'] as const) {
+      expect(kernel.captureActiveWork(fixture, { name: 'New', [field]: `stopped ${opener} later` }))
+        .toMatchObject({ ok: false, code: 'refused:invalid-edit' });
+      expect(kernel.editActiveWork(fixture, loc(), { [field]: `stopped ${opener} later` }))
+        .toMatchObject({ ok: false, code: 'refused:invalid-edit' });
+    }
+    expect(kernel.captureActiveWork(fixture, { name: 'New', link: `[[${opener}]]` }))
+      .toMatchObject({ ok: false, code: 'refused:invalid-edit' });
+    expect(kernel.reviewActiveWork(fixture, loc(), 'drop', today, `stopped ${opener} later`))
+      .toMatchObject({ ok: false, code: 'refused:invalid-edit' });
+    const line = `- [ ] **\`Name:** [[${opener}\`]]`;
+    const text = `## Now\n${line}\n\n## Rules\nKeep this visible\n`;
+    expect(kernel.editActiveWork(text, loc(text, line), { name: 'Name' }))
+      .toMatchObject({ ok: false, code: 'refused:invalid-edit' });
   });
 
   it.each(['park', 'done', 'drop'] as const)('creates a missing section before Rules: %s', (action) => {
@@ -119,11 +152,21 @@ function mutant(from: string, to: string): typeof kernel {
   return exports as typeof kernel;
 }
 const cases: { name: string; from: string; to: string; run: (k: typeof kernel) => unknown; expected: Record<string, unknown> }[] = [
+  { name: 'capture child insertion', from: 'hasChildren(lines, last)', to: 'false', run: (k) => k.captureActiveWork(fixture.replace(bike, `${bike}\n  child`), { name: 'New' }), expected: { code: 'refused:structure' } },
+  { name: 'move source children', from: 'hasChildren(a.doc.lines, t.lineIndex)', to: 'false', run: (k) => k.reviewActiveWork(fixture.replace(bike, `${bike}\n  child`), loc(), 'park', today), expected: { code: 'refused:structure' } },
+  { name: 'move destination children', from: 'hasChildren(lines, last)', to: 'false', run: (k) => k.reviewActiveWork(fixture.replace(parked, `${parked}\n  child`), loc(), 'park', today), expected: { code: 'refused:structure' } },
+  { name: 'nested bullet is not an insertion anchor', from: '!/^[ \\t]/.test(lines[i]!) && ', to: '', run: (k) => k.reviewActiveWork(fixture.replace(parked, `${parked}\n  - child`), loc(), 'park', today), expected: { code: 'refused:structure' } },
+  { name: 'drop hidden Markdown', from: "return refuse('refused:invalid-edit', 'The reviewed item cannot open hidden Markdown.');", to: '{}', run: (k) => k.reviewActiveWork(fixture, loc(), 'drop', today, 'stopped <!-- later'), expected: { code: 'refused:invalid-edit' } },
+  { name: 'edit exposes hidden Markdown', from: 'if (!visible.visible[0] || !visible.cleanAfter[0]) return invalid();', to: '', run: (k) => {
+    const line = '- [ ] **`Name:** [[<!--`]]';
+    const text = `## Now\n${line}\n`;
+    return k.editActiveWork(text, loc(text, line), { name: 'Name' });
+  }, expected: { code: 'refused:invalid-edit' } },
   { name: 'twins at read', from: 'loc.occurrencesAtRead !== 1', to: 'false', run: (k) => k.editActiveWork(fixture, { ...loc(), sameRevision: false, occurrencesAtRead: 2 }, { name: 'New' }), expected: { code: 'conflict:ambiguous' } },
   { name: 'twins now', from: 'matches.length > 1', to: 'false', run: (k) => k.editActiveWork(fixture.replace(bike, `${bike}\n${bike}`), { ...loc(), sameRevision: false }, { name: 'New' }), expected: { code: 'conflict:ambiguous' } },
   { name: 'changed line', from: 't.lineText === loc.lineText &&', to: '', run: (k) => k.editActiveWork(fixture.replace('call the shop', 'call another shop'), loc(), { name: 'New' }), expected: { code: 'conflict:task-changed' } },
   { name: 'moved to Parked', from: "matches[0]!.section !== 'Now'", to: 'false', run: (k) => k.editActiveWork(`## Now\n\n## Parked\n${bike}\n`, { ...loc(), sameRevision: false }, { name: 'New' }), expected: { code: 'conflict:task-changed' } },
-  { name: 'round-trip injection', from: 'return invalid();\n  const lines', to: '{}\n  const lines', run: (k) => k.editActiveWork(fixture, loc(), { next: 'step ⏳ 2026-10-03' }), expected: { code: 'refused:invalid-edit' } },
+  { name: 'round-trip injection', from: 'return invalid();\n  const visible', to: '{}\n  const visible', run: (k) => k.editActiveWork(fixture, loc(), { next: 'step ⏳ 2026-10-03' }), expected: { code: 'refused:invalid-edit' } },
   { name: 'no-op', from: ' || line === t.lineText', to: '', run: (k) => k.editActiveWork(fixture, loc(), {}), expected: { code: 'refused:invalid-edit' } },
   { name: 'invalid date', from: 'new Date(s).toISOString().slice(0, 10) === s', to: 'true', run: (k) => k.editActiveWork(fixture, loc(), { review: '2026-02-30' }), expected: { code: 'refused:invalid-edit' } },
   { name: 'conflict markers', from: "writeBlock = refuse('refused:vault-conflict', 'File contains Git conflict markers.');", to: 'writeBlock = null;', run: (k) => k.reviewActiveWork(fixture + '<<<<<<< HEAD\n', loc(), 'done', today), expected: { code: 'refused:vault-conflict' } },

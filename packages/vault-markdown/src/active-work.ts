@@ -108,8 +108,16 @@ function result(a: Parsed, lines: string[], op: ActiveWorkEffect['op'], before: 
   return { ok: true, text: joinDoc(a.doc, lines), effect: { kind: 'active-work', op, beforeLineText: before, afterLineText: after } };
 }
 
+// Blank-separated continuations also belong to the preceding item. Unknown children cannot be moved safely.
+function hasChildren(lines: readonly string[], at: number): boolean {
+  let next = at + 1;
+  while (next < lines.length && isBlank(lines[next]!)) next++;
+  return /^[ \t]/.test(lines[next] ?? '');
+}
+
 /** Insert after an anchor with capture's single blank after a heading, reusing an existing blank. */
 function insert(a: Parsed, lines: string[], heading: number, last: number, line: string): Refusal | null {
+  if (hasChildren(lines, last)) return refuse('refused:structure', 'The insertion point has indented child lines.');
   if (!a.scan.cleanAfter[last]) return refuse('refused:structure', 'The insertion point is inside hidden Markdown.');
   if (last === heading) {
     const blank = isBlank(lines[last + 1] ?? 'not blank');
@@ -168,6 +176,8 @@ export function editActiveWork(text: string, locator: LocatorInput, changes: Act
   for (const e of edits.reverse().sort((x, y) => y.start - x.start || y.end - x.end)) line = line.slice(0, e.start) + e.text + line.slice(e.end);
   const after = itemLine(line);
   if (!after || JSON.stringify(after.values) !== JSON.stringify(expected) || line === t.lineText) return invalid();
+  const visible = scanLines([line]);
+  if (!visible.visible[0] || !visible.cleanAfter[0]) return invalid();
   const lines = [...a.doc.lines];
   lines[t.lineIndex] = line;
   return result(a, lines, 'edited', t.lineText, line);
@@ -189,6 +199,9 @@ export function reviewActiveWork(text: string, locator: LocatorInput, action: 'k
   if ('ok' in t) return t;
   const line = action === 'park' ? t.lineText : action === 'done' ?
     `${t.lineText.replace('[ ]', '[x]')} ✅ ${today}` : `${t.lineText} ❌ ${today} ${reason!}`;
+  if (hasChildren(a.doc.lines, t.lineIndex)) return refuse('refused:structure', 'The item has indented child lines.');
+  const visible = scanLines([line]);
+  if (!visible.visible[0] || !visible.cleanAfter[0]) return refuse('refused:invalid-edit', 'The reviewed item cannot open hidden Markdown.');
   const targetName = action === 'park' ? 'Parked' : 'Dropped or done';
   const section = a.sections.find((s) => s.name === targetName);
   const lines = [...a.doc.lines];
@@ -197,7 +210,7 @@ export function reviewActiveWork(text: string, locator: LocatorInput, action: 'k
   const oldLength = lines.length;
   if (section) {
     let last = section.heading;
-    for (let i = section.heading + 1; i < section.end; i++) if (a.scan.visible[i] && isListItem(lines[i]!)) last = i;
+    for (let i = section.heading + 1; i < section.end; i++) if (a.scan.visible[i] && !/^[ \t]/.test(lines[i]!) && isListItem(lines[i]!)) last = i;
     at = last + 1;
     const invalid = insert(a, lines, section.heading, last, line);
     if (invalid) return invalid;

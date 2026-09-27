@@ -6,6 +6,7 @@ import { notRedoneBy, stillUnresolved, UNRESOLVED_TEXT, unresolvedFrom, type Unr
 import { completeTask, undoCompleteTask, undoDraft } from '../commands.ts';
 import { unreachableText, wake as wakeUp, type Connection } from '../connection.ts';
 import { prefs } from '../prefs.ts';
+import { getUpdateReady, subscribeUpdateReady } from '../update-ready.ts';
 import type { DraftStore } from '../draft.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { knownCommits, renderable, TaskReads, type RenderedRead } from '../reads.ts';
@@ -51,12 +52,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   // ADR-0012: Overdue is its own group below Today, collapsed until the user opens it.
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
-  const [updateReady, setUpdateReady] = useState(false);
-  useEffect(() => {
-    const update = () => setUpdateReady(true);
-    window.addEventListener('vc-update-ready', update);
-    return () => window.removeEventListener('vc-update-ready', update);
-  }, []);
+  const updateReady = useSyncExternalStore(subscribeUpdateReady, getUpdateReady);
   const [notice, setNotice] = useState<string | null>(null);
   // Discarded refusals whose tasks still need attention (attention.ts).
   const [unresolved, setUnresolved] = useState<readonly Unresolved[]>([]);

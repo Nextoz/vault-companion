@@ -5,6 +5,7 @@ import { prefs } from './prefs.ts';
 import { openPendingStore } from './queue/db.ts';
 import { PendingQueue } from './queue/queue.ts';
 import { App } from './ui/App.tsx';
+import { announceUpdateReady } from './update-ready.ts';
 import './styles.css';
 
 async function start() {
@@ -29,7 +30,7 @@ async function start() {
 
   if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     void navigator.serviceWorker.register('/sw.js').then((registration) => {
-      const announce = () => window.dispatchEvent(new Event('vc-update-ready'));
+      const announce = announceUpdateReady;
       if (registration.waiting && navigator.serviceWorker.controller) announce();
       const watch = () => {
         const worker = registration.installing;

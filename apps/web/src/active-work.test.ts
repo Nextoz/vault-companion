@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Command } from '@vault-companion/contracts';
+import { Command, encodeLinkedNoteHeader, LINKED_NOTE_HEADER } from '@vault-companion/contracts';
 import { activeWorkChanges, activeWorkRows, reviewInSevenDays, type ActiveWorkRead } from './active-work.ts';
 import { captureActiveWork, editActiveWork, reviewActiveWork, undoActiveWork, undoActiveWorkDraft, isUndoDraft, withTargetCommit, exportText, bindUndoTarget } from './commands.ts';
-import { getActiveWork, linkedNoteHeader } from './api.ts';
+import { getActiveWork, getLinkedNote } from './api.ts';
 import { attentionText, canRetry } from './ui/ActionsPanel.tsx';
 import type { QueueItem } from './queue/queue.ts';
 
 const ctx = { baseRevision: '1'.repeat(40), now: new Date('2026-09-27T12:00:00Z'), newId: () => '11111111-1111-4111-8111-111111111111' };
+vi.mock('@vault-companion/contracts', { spy: true });
 const locator = { path: 'Tasks/Active Work Now.md' as const, blobSha: '2'.repeat(40), lineIndex: 3, lineText: '- [ ] **Garden:** Next: order seeds ⏳ 2026-09-01', occurrencesAtRead: 1 };
 const item = { locator, name: 'Garden', next: 'order seeds', outcome: null, review: '2026-09-01', link: null, needsReview: true };
 const read: ActiveWorkRead = { status: 'ok', revision: ctx.baseRevision, blobSha: locator.blobSha, markdown: '## Now', items: [item], unknownNowLines: ['hand-edited line'], today: '2026-09-27' };
@@ -72,9 +73,16 @@ describe('Active Work builders and view', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ...read, items: 'bad' }))));
     expect((await getActiveWork()).kind).toBe('error');
   });
-  it('sends Active Work linked-note locators in the existing private header shape', () => {
-    const req = { taskLocator: locator, linkIndex: 0 };
-    const decoded = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(linkedNoteHeader(req).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))));
+  it.each(['Tasks/Active Work Now.md', 'Tasks/To-Do List.md'] as const)('uses the shared private header encoder for %s', async (path) => {
+    vi.mocked(encodeLinkedNoteHeader).mockClear();
+    const req = { taskLocator: { ...locator, path, lineText: 'Æble 🌱 [[Garden]]' }, linkIndex: 0 };
+    const fetcher = vi.fn(async () => new Response('{}'));
+    vi.stubGlobal('fetch', fetcher);
+    await getLinkedNote(req);
+    expect(encodeLinkedNoteHeader).toHaveBeenCalledExactlyOnceWith(req);
+    const init = (fetcher.mock.calls[0] as unknown as [string, RequestInit])[1];
+    const header = (init.headers as Record<string, string>)[LINKED_NOTE_HEADER]!;
+    const decoded = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(header.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))));
     expect(decoded).toEqual(req);
   });
 });
