@@ -29,6 +29,9 @@ sets privacy rules.
 | D completion history | `docs/briefs/D-completion-history.md`, ADR-0021 | **done:** PR #32 merged (a0a616f; Claude Cloud worker + Lead symlink guard); CodeRabbit real review, 1 finding fixed; **deployed 73af3631**; owner phone test pending |
 | N notes in the app | `docs/briefs/N-notes-worker.md`, ADR-0022 | **done:** PR #33 merged (6d000f6; Claude Cloud worker); security-review fix (InboxNotePath parser differential); CI caught a real 5-tab overflow at 390 px, fixed; CodeRabbit clean; **deployed 3feaf6b6** |
 | T swipe triage for events, Part 2 | Ready Backlog T, ADR-0024 | **building** (2026-09-27 17:4x): Part 1 files arrived (feed.json 93 cards, applied.json; Decisions/ not yet); contract on `agent/triage-base` validated against all 93 real cards; card design C; astra-high worker built server + wiring on `agent/triage` until its Codex limit (resets 20:21); WIP pushed; Lead fixed the last type error; unit 1198/1198; full check + WebKit e2e running |
+| C2 finish Active Work any time (owner bug, 2026-09-27) | Ready Backlog C2 | **PR #36** (UI only; new e2e fails on old UI) |
+| S2a scout readability + human freshness (owner bug) | Ready Backlog S2a | **building:** astra-medium · s2a (w3:p1T) |
+| C3 context-aware Add defaults (owner bug) | Ready Backlog C3 | **building:** astra-medium · c3 (w3:p1V) |
 
 **Done in milestone 3 (all merged, CI green):** #18 write budget + review fixes · #19 A · #20 single-flight token ·
 #21 ancestry without patches (ADR-0016) · #22 one read per app switch · #23 CSP smoke + zod jitless · #24
@@ -37,8 +40,6 @@ identity-safe duplicate-row fix · #25 e2e flakes. **Deployed: `3feaf6b6` (N). *
 **Capacity (2026-09-26 ~23:00):** Codex Astra ~4 % left, resets 02:29 · Antigravity quota out until ~2026-10-03 ·
 Claude Cloud ~$10 credit; owner ran /web-setup (GitHub connected as Nextoz), so new Cloud sessions clone with push —
 still probe a push at launch · CodeRabbit 1 review/hour · RAM 2–4 GB free: ≤ 1 Playwright job at a time.
-
-**Autonomous mode (owner away, 2026-09-27 afternoon):** session cron every :17/:47 — merge/deploy PR #34 when green; wire T as soon as Part 1 files exist (ADR-0024 + contract + one astra-high worker on the parked agent/triage-ui); O4 when RAM allows; summary for the owner at the top of docs/checkpoint.md.
 
 **PR #34 merged + deployed `341041d1`** (R7, edit double row, O8 verified; CodeRabbit resolved both findings).
 
