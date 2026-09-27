@@ -9,6 +9,8 @@ type Span = { start: number; end: number; valueStart: number; valueEnd: number }
 export type ActiveWorkItem = Values & {
   lineIndex: number; lineText: string; section: Section; occurrences: number; needsReview: boolean;
 };
+/** ADR-0021: a `- [x] … ✅ YYYY-MM-DD` line in `## Dropped or done` (written by review `done`). */
+export type ActiveWorkDoneItem = Values & { lineIndex: number; lineText: string; done: string; occurrences: number };
 export type ActiveWorkChanges = { name?: string | undefined; next?: string | null | undefined; review?: string | null | undefined };
 export type ActiveWorkCapture = { name: string; next?: string | undefined; review?: string | undefined; link?: string | undefined };
 export type ActiveWorkEffect = {
@@ -54,6 +56,14 @@ function itemLine(line: string) {
   return { values, spans, contentEnd: line.trimEnd().length };
 }
 
+/** The inverse of review `done`: strip ` ✅ date`, reopen the checkbox, and require the item grammar. */
+function doneLine(line: string): (Values & { done: string }) | null {
+  const m = /^([-*+]) \[x\] (.*?) +✅ (\d{4}-\d{2}-\d{2})[ \t]*$/u.exec(line);
+  if (!m || !dateOK(m[3]!)) return null;
+  const parsed = itemLine(`${m[1]!} [ ] ${m[2]!}`);
+  return parsed ? { ...parsed.values, done: m[3]! } : null;
+}
+
 export function parseActiveWork(text: string, today: string) {
   const doc = splitDoc(text);
   if ('ok' in doc) return doc;
@@ -76,6 +86,7 @@ export function parseActiveWork(text: string, today: string) {
   }
   const items: ActiveWorkItem[] = [];
   const unknownNowLines: string[] = [];
+  const doneItems: ActiveWorkDoneItem[] = [];
   for (const section of sections) {
     if (!['Now', 'Parked', 'Dropped or done'].includes(section.name)) continue;
     for (let i = section.heading + 1; i < section.end; i++) {
@@ -84,12 +95,19 @@ export function parseActiveWork(text: string, today: string) {
       if (parsed) items.push({ ...parsed.values, lineIndex: i, lineText: line, section: section.name as Section,
         occurrences: 0, needsReview: parsed.values.review !== null && parsed.values.review < today });
       else if (section.name === 'Now') unknownNowLines.push(line);
+      else if (section.name === 'Dropped or done' && scan.visible[i]) {
+        const done = doneLine(line);
+        if (done) doneItems.push({ ...done, lineIndex: i, lineText: line, occurrences: 0 });
+      }
     }
   }
   const counts = new Map<string, number>();
   for (const item of items) counts.set(item.lineText, (counts.get(item.lineText) ?? 0) + 1);
   for (const item of items) item.occurrences = counts.get(item.lineText)!;
-  return { ok: true as const, doc, scan, sections, items, unknownNowLines, writeBlock };
+  const doneCounts = new Map<string, number>();
+  for (const item of doneItems) doneCounts.set(item.lineText, (doneCounts.get(item.lineText) ?? 0) + 1);
+  for (const item of doneItems) item.occurrences = doneCounts.get(item.lineText)!;
+  return { ok: true as const, doc, scan, sections, items, doneItems, unknownNowLines, writeBlock };
 }
 type Parsed = Extract<ReturnType<typeof parseActiveWork>, { ok: true }>;
 

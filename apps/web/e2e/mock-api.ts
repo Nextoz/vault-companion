@@ -5,6 +5,8 @@ import {
   ApiError,
   Command,
   decodeLinkedNoteHeader,
+  HistoryResponse,
+  type HistoryItem,
   LINKED_NOTE_HEADER,
   LinkedNoteResponse,
   type LinkedNoteRequest,
@@ -111,6 +113,11 @@ export class MockApi {
     ],
   });
   readonly scoutOutputRequests: string[] = [];
+  /** Completion history (ADR-0021): done-today tasks plus these earlier items, served newest first. */
+  olderHistory: HistoryItem[] = [
+    { source: 'active-work', description: 'Garden plan: beds ready [[Garden Plan]]', doneDate: '2026-09-23', links: ['Garden Plan'],
+      locator: { path: 'Tasks/Active Work Now.md', blobSha: '3'.repeat(40), lineIndex: 12, lineText: '- [x] **Garden plan:** beds ready [[Garden Plan]] ✅ 2026-09-23', occurrencesAtRead: 1 } },
+  ];
   /** Route a page, or a whole context: only a context route also sees requests made by a service worker. */
   async install(target: Page | BrowserContext): Promise<void> {
     const on = (glob: string, handle: (route: Route) => Promise<void>) =>
@@ -131,6 +138,15 @@ export class MockApi {
     await on('**/api/commands', (route) => this.#command(route));
     await on('**/api/linked-note**', (route) => this.#linkedNote(route));
     await on('**/api/active-work', (route) => this.#activeWork(route));
+    await on('**/api/history', (route) => this.#history(route));
+  }
+
+  #history(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    const today: HistoryItem[] = this.doneToday.map((t) => ({ source: 'todo', description: t.description, doneDate: t.done ?? TODAY,
+      locator: { ...t.locator, blobSha: this.blobSha }, links: t.links }));
+    const items = [...today, ...this.olderHistory].sort((a, b) => b.doneDate.localeCompare(a.doneDate));
+    return this.#json(route, 200, HistoryResponse.parse({ revision: this.#revision, today: TODAY, items }));
   }
 
   #json(route: Route, status: number, body: unknown) {

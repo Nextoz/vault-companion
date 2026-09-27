@@ -36,7 +36,7 @@ function decodeUtf8(bytes: Uint8Array): string | null {
 /** Read the To-Do List at X as text, or a refusal. */
 type TodoFile = { ok: true; text: string; blobSha: string; bytes: Uint8Array };
 
-async function readTodo(store: VaultStore, at: string, path: VaultPath = TODO): Promise<TodoFile | { ok: false; planned: Planned<never> }> {
+export async function readTodo(store: VaultStore, at: string, path: VaultPath = TODO): Promise<TodoFile | { ok: false; planned: Planned<never> }> {
   const label = path === ACTIVE ? 'Active Work' : 'the task list';
   let file;
   try {
@@ -511,7 +511,7 @@ async function answerKnown(store: VaultStore, known: readonly string[], x: strin
   return answer;
 }
 
-function toView(t: md.ParsedTask, blobSha: string): TaskView {
+export function toView(t: md.ParsedTask, blobSha: string): TaskView {
   return {
     locator: { path: TODO_LIST_PATH, blobSha, lineIndex: t.lineIndex, lineText: t.lineText, occurrencesAtRead: t.occurrences },
     description: t.description,

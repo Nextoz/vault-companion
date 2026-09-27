@@ -183,3 +183,18 @@ it.each(cases)('guard mutation: $name', ({ from, to, run, expected }) => {
   const broken = mutant(from, to);
   expect(() => expect(run(broken)).toMatchObject(expected)).toThrow();
 });
+
+describe('ADR-0021 done items', () => {
+  it('reads review-done lines back; drops, prose, hidden and malformed lines are not completions', () => {
+    const done = ok(kernel.reviewActiveWork(fixture, loc(), 'done', today)).text;
+    const dropped2 = ok(kernel.reviewActiveWork(done, loc(done, garden), 'drop', today, 'stopped')).text;
+    const text = dropped2.replace(dropped, `${dropped}\n<!--\n- [x] **Hidden:** x ✅ 2026-09-01\n-->\n- [x] **Bad date:** x ✅ 2026-02-30\n- [x] no grammar ✅ 2026-09-02`);
+    const parsed = kernel.parseActiveWork(text, today);
+    if (!parsed.ok) throw new Error('parse');
+    expect(parsed.doneItems).toEqual([expect.objectContaining({
+      name: 'Bike repair', outcome: 'commuting again.', link: '[[Bike]]', done: today, occurrences: 1,
+      lineText: `${bike.replace('[ ]', '[x]')} ✅ ${today}`,
+    })]);
+    expect(parsed.items.some((t) => t.section === 'Dropped or done')).toBe(false);
+  });
+});
