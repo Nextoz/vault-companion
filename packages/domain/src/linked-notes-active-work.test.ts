@@ -11,6 +11,7 @@ const LINES = [
   '- [ ] **Garden plan:** beds ready. Next: order seeds ⏳ 2026-10-03 [[Projects/Garden/Plan]]',
   '- [ ] **Budget:** review. Next: sort receipts ⏳ 2026-10-03 [[Finance/Budget]]',
   '- [ ] **No link:** just text. Next: think',
+  '- [x] **Old plan:** done. [[Projects/Garden/Plan]] ✅ 2026-09-26',
   '',
 ];
 let store: InMemoryStore;
@@ -50,4 +51,8 @@ it('refuses when the file or the line changed since the read (no fuzzy re-locati
 it('an item without a link, or any link index but 0, is not-found', async () => {
   expect(await notes.readLinkedNote({ taskLocator: at(4), linkIndex: 0 })).toMatchObject({ status: 'refused', code: 'not-found' });
   expect(await notes.readLinkedNote({ taskLocator: at(2), linkIndex: 1 })).toMatchObject({ status: 'refused', code: 'not-found' });
+});
+
+it('ADR-0021: a done item (history) opens its link before the appended done date', async () => {
+  expect(await notes.readLinkedNote({ taskLocator: at(5), linkIndex: 0 })).toMatchObject({ status: 'ok', path: 'Projects/Garden/Plan.md' });
 });

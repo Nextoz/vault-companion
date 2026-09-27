@@ -10,6 +10,7 @@ import {
   type ActiveWorkResponse,
   type ApiError,
   type ErrorCode,
+  type HistoryResponse,
   type LinkedNoteRequest,
   type LinkedNoteResponse,
   type Receipt,
@@ -28,6 +29,8 @@ export interface Services {
   /** Active Work Now card. Optional: without it the route answers 404. */
   readActiveWork?(): Promise<ActiveWorkResponse | ApiError>;
   readScouts?(): Promise<ScoutsResponse | ApiError>;
+  /** Completion history (ADR-0021). Optional: without it the route answers 404. */
+  readHistory?(): Promise<HistoryResponse | ApiError>;
   readScoutOutput?(scoutId: string): Promise<LinkedNoteResponse | ApiError>;
 }
 
@@ -62,7 +65,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | ScoutsResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | ScoutsResponse | HistoryResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -137,6 +140,20 @@ export function createApp(deps: AppDeps) {
       return c.json(result, statusFor(result.code) as 400);
     }
     if (result.status === 'refused') meta.errorCode = `active-work:${result.code}`;
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Completion history (ADR-0021): read-only, no request input. Logs carry no task text.
+  app.get('/api/history', async (c) => {
+    const read = deps.services.readHistory;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
     meta.commitSha = result.revision;
     return c.json(result);
   });

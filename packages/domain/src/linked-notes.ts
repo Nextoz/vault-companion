@@ -103,7 +103,8 @@ async function read(store: VaultStore, req: LinkedNoteRequest): Promise<LinkedNo
     const text = aw ? decodeUtf8(aw.bytes) : null;
     const line = text?.split('\n')[loc.lineIndex]?.replace(/\r$/, '');
     if (!aw || aw.blobSha !== loc.blobSha || line !== loc.lineText) return refused('task-changed', 'Active Work changed since it was loaded; reload it');
-    const link = /\[\[([^[\]]+)\]\]$/.exec(line)?.[1];
+    // ADR-0021: a done item keeps its link before the appended ` ✅ YYYY-MM-DD`.
+    const link = /\[\[([^[\]]+)\]\](?: +✅ \d{4}-\d{2}-\d{2})?[ \t]*$/u.exec(line)?.[1];
     target = req.linkIndex === 0 && link ? link.split(/[|#]/)[0]!.trim() : undefined;
     if (!target) return refused('not-found', 'the item has no link at that position');
   } else {
