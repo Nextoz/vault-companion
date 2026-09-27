@@ -465,3 +465,21 @@ export const NoteReadResponse = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('refused'), revision: commitSha, code: LinkedNoteRefusalCode, message: z.string() }),
 ]);
 export type NoteReadResponse = z.infer<typeof NoteReadResponse>;
+
+/**
+ * `GET /api/notes/read` names the note in this header, never in the URL (no note names in access logs). The value is
+ * `encodeURIComponent(path)`: header values must be ASCII, note names often are not; `InboxNotePath` rejects `%`, so
+ * decoding is unambiguous.
+ */
+export const NOTE_HEADER = 'X-VC-Note';
+export const encodeNoteHeader = (path: string): string => encodeURIComponent(path);
+/** `null` unless the header decodes to exactly a valid `InboxNotePath`. */
+export function decodeNoteHeader(value: string | undefined): string | null {
+  if (!value || value.length > 4096) return null;
+  try {
+    const parsed = InboxNotePath.safeParse(decodeURIComponent(value));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}

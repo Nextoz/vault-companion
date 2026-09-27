@@ -3,7 +3,9 @@
 import {
   Command,
   decodeLinkedNoteHeader,
+  decodeNoteHeader,
   LINKED_NOTE_HEADER,
+  NOTE_HEADER,
   MAX_KNOWN,
   ScoutStatus,
   type ScoutsResponse,
@@ -13,6 +15,8 @@ import {
   type HistoryResponse,
   type LinkedNoteRequest,
   type LinkedNoteResponse,
+  type NoteReadResponse,
+  type NotesResponse,
   type Receipt,
   type TasksResponse,
 } from '@vault-companion/contracts';
@@ -32,6 +36,9 @@ export interface Services {
   /** Completion history (ADR-0021). Optional: without it the route answers 404. */
   readHistory?(): Promise<HistoryResponse | ApiError>;
   readScoutOutput?(scoutId: string): Promise<LinkedNoteResponse | ApiError>;
+  /** Inbox notes (ADR-0022). Optional: without them the routes answer 404. */
+  listNotes?(): Promise<NotesResponse | ApiError>;
+  readNote?(path: string): Promise<NoteReadResponse | ApiError>;
 }
 
 export interface AppDeps {
@@ -65,7 +72,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | ScoutsResponse | HistoryResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -167,6 +174,37 @@ export function createApp(deps: AppDeps) {
       meta.errorCode = result.code;
       return c.json(result, statusFor(result.code) as 400);
     }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Inbox notes (ADR-0022). Logs carry neither note text, titles nor paths.
+  app.get('/api/notes', async (c) => {
+    const read = deps.services.listNotes;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // The note path travels in a header (percent-encoded), never in the URL; the service accepts it only if listed.
+  app.get('/api/notes/read', async (c) => {
+    const read = deps.services.readNote;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const path = decodeNoteHeader(c.req.header(NOTE_HEADER));
+    if (path === null) return c.json(err('invalid', 'invalid note path'), 400);
+    const result = await read(path);
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    if (result.status === 'refused') meta.errorCode = `note:${result.code}`;
     meta.commitSha = result.revision;
     return c.json(result);
   });
