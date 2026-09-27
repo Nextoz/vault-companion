@@ -5,11 +5,15 @@ import {
   ApiError,
   Command,
   decodeLinkedNoteHeader,
+  decodeNoteHeader,
   HistoryResponse,
   type HistoryItem,
   LINKED_NOTE_HEADER,
   LinkedNoteResponse,
   type LinkedNoteRequest,
+  NOTE_HEADER,
+  NoteReadResponse,
+  NotesResponse,
   Receipt,
   SessionResponse,
   ScoutsResponse,
@@ -118,6 +122,14 @@ export class MockApi {
     { source: 'active-work', description: 'Garden plan: beds ready [[Garden Plan]]', doneDate: '2026-09-23', links: ['Garden Plan'],
       locator: { path: 'Tasks/Active Work Now.md', blobSha: '3'.repeat(40), lineIndex: 12, lineText: '- [x] **Garden plan:** beds ready [[Garden Plan]] ✅ 2026-09-23', occurrencesAtRead: 1 } },
   ];
+  /** Inbox notes (ADR-0022), by path: frontmatter is kept on edit, only the body changes. */
+  inboxNotes = new Map<string, { title: string; date: string | null; blobSha: string; frontmatter: string; body: string }>([
+    ['Inbox/Seed order - 2026-09-23.md', { title: 'Seed order', date: '2026-09-23', blobSha: 'd'.repeat(40),
+      frontmatter: '---\ntype: inbox-note\n---\n', body: 'Tomatoes and **basil**.\n' }],
+  ]);
+  /** Every EditNote the mock applied (path, blob it was based on, body). */
+  readonly noteEdits: { path: string; blobSha: string; body: string }[] = [];
+
   /** Route a page, or a whole context: only a context route also sees requests made by a service worker. */
   async install(target: Page | BrowserContext): Promise<void> {
     const on = (glob: string, handle: (route: Route) => Promise<void>) =>
@@ -139,6 +151,8 @@ export class MockApi {
     await on('**/api/linked-note**', (route) => this.#linkedNote(route));
     await on('**/api/active-work', (route) => this.#activeWork(route));
     await on('**/api/history', (route) => this.#history(route));
+    await on('**/api/notes', (route) => this.#notes(route));
+    await on('**/api/notes/read', (route) => this.#noteRead(route));
   }
 
   #history(route: Route) {
@@ -147,6 +161,25 @@ export class MockApi {
       locator: { ...t.locator, blobSha: this.blobSha }, links: t.links }));
     const items = [...today, ...this.olderHistory].sort((a, b) => b.doneDate.localeCompare(a.doneDate));
     return this.#json(route, 200, HistoryResponse.parse({ revision: this.#revision, today: TODAY, items }));
+  }
+
+  #notes(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    const notes = [...this.inboxNotes].map(([path, n]) => ({ path, title: n.title, date: n.date, blobSha: n.blobSha }))
+      .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || a.title.localeCompare(b.title));
+    return this.#json(route, 200, NotesResponse.parse({ revision: this.#revision, notes }));
+  }
+
+  #noteRead(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    // The path must arrive in the header only, never in the URL.
+    if (new URL(route.request().url()).search !== '') throw new Error('mock: note read carried a query');
+    const path = decodeNoteHeader(route.request().headers()[NOTE_HEADER.toLowerCase()]);
+    if (path === null) return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'invalid note path', retryable: false }));
+    const n = this.inboxNotes.get(path);
+    return this.#json(route, 200, NoteReadResponse.parse(n
+      ? { status: 'ok', revision: this.#revision, path, blobSha: n.blobSha, markdown: n.frontmatter + n.body, frontmatter: n.frontmatter, body: n.body }
+      : { status: 'refused', revision: this.#revision, code: 'not-found', message: 'the note does not exist any more; reload the list' }));
   }
 
   #json(route: Route, status: number, body: unknown) {
@@ -286,7 +319,7 @@ export class MockApi {
   #apply(command: Command): Receipt {
     this.#revision = sha();
     const base = { operationId: command.operationId, status: 'applied' as const, commitSha: this.#revision, blobSha: sha() };
-    if (command.type !== 'CaptureNote') this.blobSha = base.blobSha;
+    if (command.type !== 'CaptureNote' && command.type !== 'EditNote') this.blobSha = base.blobSha;
     switch (command.type) {
       case 'CaptureActiveWork': {
         const p = command.payload;
@@ -375,8 +408,19 @@ export class MockApi {
         this.open.push(taskView(90 + this.open.length, command.payload.text, { due: null }));
         return { ...base, path: 'Tasks/To-Do List.md', effect: { kind: 'task-captured', lineText } };
       }
-      case 'CaptureNote':
-        return { ...base, path: 'Inbox/Synthetic note.md', effect: { kind: 'note-captured', path: 'Inbox/Synthetic note.md' } };
+      case 'CaptureNote': {
+        const path = 'Inbox/Synthetic note - 2026-09-24.md';
+        this.inboxNotes.set(path, { title: 'Synthetic note', date: TODAY, blobSha: base.blobSha, frontmatter: '---\ntype: inbox-note\n---\n', body: command.payload.text + '\n' });
+        return { ...base, path, effect: { kind: 'note-captured', path } };
+      }
+      case 'EditNote': {
+        const { note, body } = command.payload;
+        const n = this.inboxNotes.get(note.path);
+        if (!n) throw new Error('mock: editing an unknown note');
+        this.noteEdits.push({ path: note.path, blobSha: note.blobSha, body });
+        this.inboxNotes.set(note.path, { ...n, blobSha: base.blobSha, body: body.endsWith('\n') ? body : body + '\n' });
+        return { ...base, path: note.path, effect: { kind: 'note-edited', path: note.path } };
+      }
     }
   }
 }

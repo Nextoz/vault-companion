@@ -70,7 +70,7 @@ test('capture offline, then send the identical envelope once back online', async
   api.commandMode = 'offline';
   await context.setOffline(true);
   await page.getByRole('button', { name: 'Capture' }).click();
-  await page.getByRole('button', { name: 'Note' }).click();
+  await page.getByRole('button', { name: 'Note', exact: true }).click();
   await page.getByLabel('Note text').fill('A thought about the garden');
   await page.getByRole('button', { name: 'Save' }).click();
 
@@ -91,7 +91,7 @@ test('capture offline, then send the identical envelope once back online', async
 
   // The Task | Note choice is remembered.
   await page.getByRole('button', { name: 'Capture' }).click();
-  await expect(page.getByRole('button', { name: 'Note' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Note', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('a changed-task refusal moves back with the error and offers Refresh / Copy / Discard, never Retry', async ({ page }) => {

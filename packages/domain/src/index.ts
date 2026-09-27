@@ -8,3 +8,4 @@ export * from './linked-notes.ts';
 export * from './active-work.ts';
 export * from './scouts.ts';
 export * from './history.ts';
+export * from './notes.ts';

@@ -43,10 +43,21 @@ export function parseVaultPath(raw: string): VaultPath | null {
   return path as VaultPath;
 }
 
+/**
+ * ADR-0022: a Markdown note directly in `Inbox/` (no subfolder), exactly as the path policy accepts it: structurally
+ * safe, already NFC, not hidden. The only client-named path the app reads or updates, and only after it is listed.
+ */
+export function isInboxNotePath(raw: string): raw is VaultPath {
+  const segments = raw.split('/');
+  return segments.length === 2 && segments[0] === INBOX_DIR && parseVaultPath(raw) === raw && raw.endsWith('.md') &&
+    !segments[1]!.startsWith('.');
+}
+
 export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
   if (path === TODO_LIST_PATH || path === 'Tasks/Active Work Now.md') return kind === 'update';
+  if (kind === 'update') return isInboxNotePath(path);
   const segments = path.split('/');
-  return kind === 'create' && segments.length === 2 && segments[0] === INBOX_DIR;
+  return segments.length === 2 && segments[0] === INBOX_DIR;
 }
 
 /**

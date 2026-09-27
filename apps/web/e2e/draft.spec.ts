@@ -35,7 +35,7 @@ test('an unsaved capture survives a reload, is restored with its type, and is se
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
 
   await page.getByRole('button', { name: 'Capture' }).click();
-  await page.getByRole('button', { name: 'Note' }).click();
+  await page.getByRole('button', { name: 'Note', exact: true }).click();
   await page.getByLabel('Note text').fill('A synthetic half-finished thought');
   // The debounced write; then leave without saving.
   await expect.poll(() => storedDrafts(page)).toHaveLength(1);
@@ -46,7 +46,7 @@ test('an unsaved capture survives a reload, is restored with its type, and is se
   // The capture type preference says Task; the restored draft says Note.
   await page.evaluate(() => localStorage.setItem('vc.captureKind', 'task'));
   await page.getByRole('button', { name: 'Capture' }).click();
-  await expect(page.getByRole('button', { name: 'Note' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Note', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByLabel('Note text')).toHaveValue('A synthetic half-finished thought');
   expect(api.bodies).toHaveLength(0); // restoring sent nothing
 
@@ -92,7 +92,7 @@ test('two windows with the same draft: exactly one Save sends it, and the other 
   await page.goto('/');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   await page.getByRole('button', { name: 'Capture' }).click();
-  await page.getByRole('button', { name: 'Note' }).click();
+  await page.getByRole('button', { name: 'Note', exact: true }).click();
   await page.getByLabel('Note text').fill('A synthetic shared thought');
   await expect.poll(() => storedDrafts(page)).toHaveLength(1);
 

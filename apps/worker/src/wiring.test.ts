@@ -203,6 +203,10 @@ describe('production composition (review R10)', () => {
     const history = await app.fetch(new Request(`${ORIGIN}/api/history`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
     expect(history.status).toBe(503); // ADR-0021: wired to the real store.
     expect(history.headers.get('Cache-Control')).toBe('no-store');
+    const notes = await app.fetch(new Request(`${ORIGIN}/api/notes`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
+    expect(notes.status).toBe(503); // ADR-0022: wired to the real store, never an unwired 404.
+    const noteRead = await app.fetch(new Request(`${ORIGIN}/api/notes/read`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
+    expect(noteRead.status).toBe(400); // Wired; requires the note header.
     const scoutOutput = await app.fetch(new Request(`${ORIGIN}/api/scouts/output`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
     expect(scoutOutput.status).toBe(400); // Wired; requires the scout ID header.
     const other = await new SignJWT({ email: 'owner@example.com' })

@@ -1,6 +1,6 @@
 // Phone-like client: plain HTTP with the real wire contracts. Every envelope is validated with `Command` before it is
 // sent and every answer is parsed with `Receipt` / `ApiError` / `TasksResponse`, so a contract drift fails here.
-import { ActiveWorkResponse, ApiError, Command, Receipt, SessionResponse, TasksResponse, type CommandType } from '@vault-companion/contracts';
+import { ActiveWorkResponse, ApiError, Command, encodeNoteHeader, NOTE_HEADER, NoteReadResponse, NotesResponse, Receipt, SessionResponse, TasksResponse, type CommandType } from '@vault-companion/contracts';
 import { randomUUID } from 'node:crypto';
 import { APP_ORIGIN } from './server.ts';
 
@@ -42,6 +42,21 @@ export class Phone {
     const res = await fetch(`${this.baseUrl}/api/active-work`, { headers: { 'Cf-Access-Jwt-Assertion': this.token } });
     const r = ActiveWorkResponse.parse(await res.json());
     if (r.status !== 'ok') throw new Error(`Active Work read failed: ${r.status}`);
+    return r;
+  }
+
+  /** ADR-0022: the Inbox notes list. */
+  async notes(): Promise<NotesResponse> {
+    const res = await fetch(`${this.baseUrl}/api/notes`, { headers: { 'Cf-Access-Jwt-Assertion': this.token } });
+    if (res.status !== 200) throw new Error(`notes failed: ${res.status}`);
+    return NotesResponse.parse(await res.json());
+  }
+
+  /** ADR-0022: one Inbox note; throws unless it was read. */
+  async note(path: string): Promise<Extract<NoteReadResponse, { status: 'ok' }>> {
+    const res = await fetch(`${this.baseUrl}/api/notes/read`, { headers: { 'Cf-Access-Jwt-Assertion': this.token, [NOTE_HEADER]: encodeNoteHeader(path) } });
+    const r = NoteReadResponse.parse(await res.json());
+    if (r.status !== 'ok') throw new Error(`note read failed: ${r.code}`);
     return r;
   }
 

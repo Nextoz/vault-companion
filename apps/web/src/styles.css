@@ -97,6 +97,20 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
+/* Five views must fit 390 px with any font metrics: tabs may shrink, and in the worst case (large text) the tab bar
+   scrolls inside itself — the page itself never scrolls sideways. */
+.tabs {
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
 .tabs button[aria-pressed='true'],
 .segmented button[aria-pressed='true'] {
   background: var(--accent-soft);
@@ -615,3 +629,14 @@ textarea:focus-visible {
 .scouts .note-body { color: #e5e7eb; padding: 0; }
 .scouts .note-body a { color: #93c5fd; }
 .scout-attention { margin-bottom: 16px; }
+
+/* Inbox notes (ADR-0022) */
+.note-list { list-style: none; margin: 0; padding: 0; }
+.note-row {
+  display: flex; width: 100%; min-height: 44px; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 10px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: inherit;
+  font: inherit; text-align: left;
+}
+.note-row-title { overflow-wrap: anywhere; }
+.notes .note-head h1 { flex: 1; margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+.note-edit-sheet textarea { min-height: 40dvh; }
