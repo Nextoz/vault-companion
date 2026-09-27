@@ -691,6 +691,12 @@ textarea:focus-visible {
 .triage-undo small { display: block; font-size: 12px; opacity: .8; }
 .triage-undo button { background: none; border: none; color: var(--bg); font-weight: 700; }
 .triage-done { display: grid; place-items: center; color: var(--text); font-size: 20px; }
+.triage-screen { position: fixed; inset: 0; z-index: 60; background: var(--bg); overflow-y: auto; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+.triage-screen > header { display: flex; align-items: center; justify-content: space-between; max-width: 440px; margin: auto; }
+.triage-screen > p, .triage-screen > small, .triage-details, .triage-statuses { display: block; max-width: 420px; margin: 12px auto; overflow-wrap: anywhere; }
+.triage-statuses { font-size: 13px; padding-left: 20px; }
+.triage-statuses li { margin-bottom: 8px; }
+.triage-indicator { margin: 12px 0; }
 @media (prefers-reduced-motion: reduce) {
   .triage-card { transition: none; transform: translate(var(--triage-x, 0px), var(--triage-y, 0px)); }
   .triage-stamp.triage-go, .triage-stamp.triage-skip { transform: none; }

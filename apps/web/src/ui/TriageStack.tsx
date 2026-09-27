@@ -5,6 +5,8 @@ export interface TriageStackProps {
   cards: readonly TriageCardView[];
   onDecide: (eventId: string, decision: TriageDecision, reason?: SkipReason) => void;
   onUndo: () => void;
+  onDetails?: (eventId: string) => void;
+  disabled?: boolean;
 }
 type Choice = { card: TriageCardView; decision: TriageDecision; reason: SkipReason | undefined; sent: boolean };
 const reasons: [SkipReason, string][] = [['topic', 'Not my topic'], ['too-far', 'Too far'], ['bad-time', 'Bad time'], ['too-basic', 'Too basic'], ['busy', 'Busy']];
@@ -12,7 +14,7 @@ const origin = { dx: 0, dy: 0 };
 
 /** Owns the local stack. Skip emits once after its two-second reason window (or before the next decision).
  * Undo during that window cancels the unsent choice; otherwise it calls onUndo. No persistence or Calendar IO. */
-export function TriageStack({ cards, onDecide, onUndo }: TriageStackProps) {
+export function TriageStack({ cards, onDecide, onUndo, onDetails, disabled = false }: TriageStackProps) {
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [last, setLast] = useState<Choice | null>(null);
   const [reasonOpen, setReasonOpen] = useState(false);
@@ -36,6 +38,11 @@ export function TriageStack({ cards, onDecide, onUndo }: TriageStackProps) {
       media.removeEventListener('change', change);
       clearTimeout(animationTimer.current);
       clearTimeout(reasonTimer.current);
+      const choice = pending.current;
+      if (choice && !choice.sent) {
+        choice.sent = true;
+        decideCallback.current(choice.card.eventId, choice.decision, choice.reason);
+      }
     };
   }, []);
   const queue = cards.filter((card) => !dismissed.includes(card.eventId));
@@ -52,12 +59,13 @@ export function TriageStack({ cards, onDecide, onUndo }: TriageStackProps) {
     }
   }
   function decide(decision: TriageDecision, vx = 0) {
-    if (!card || busy.current) return;
+    if (!card || busy.current || disabled) return;
     busy.current = true;
     active.current = null;
     setDragging(false);
     flushReason();
     const choice: Choice = { card, decision, reason: decision === 'skip' ? defaultSkipReason(card) : undefined, sent: false };
+    pending.current = choice;
     const momentum = Math.max(1, Math.min(2, Math.abs(vx)));
     setPosition(decision === 'maybe' ? { dx: 0, dy: -(stage.current?.clientHeight ?? 470) * 1.2 } : {
       dx: (decision === 'go' ? 1 : -1) * (stage.current?.clientWidth ?? 420) * 1.4 * momentum, dy: 40,
@@ -74,6 +82,7 @@ export function TriageStack({ cards, onDecide, onUndo }: TriageStackProps) {
         setReasonOpen(true);
         reasonTimer.current = setTimeout(flushReason, 2000);
       } else {
+        pending.current = null;
         choice.sent = true;
         decideCallback.current(card.eventId, decision);
       }
@@ -103,10 +112,13 @@ export function TriageStack({ cards, onDecide, onUndo }: TriageStackProps) {
     setDragging(false);
     const decision = cancel ? null : decideFromGesture({ dx: event.clientX - drag.x, dy: event.clientY - drag.y, vx: event.timeStamp - drag.time > 100 ? 0 : drag.vx });
     if (decision) decide(decision, drag.vx);
-    else setPosition(origin);
+    else {
+      setPosition(origin);
+      if (!cancel && Math.abs(event.clientX - drag.x) < 8 && Math.abs(event.clientY - drag.y) < 8 && card) onDetails?.(card.eventId);
+    }
   }
   function undo() {
-    if (!last || busy.current) return;
+    if (!last || busy.current || disabled) return;
     clearTimeout(reasonTimer.current);
     pending.current = null;
     setReasonOpen(false);
@@ -116,7 +128,7 @@ export function TriageStack({ cards, onDecide, onUndo }: TriageStackProps) {
   }
   const fade = (distance: number) => Math.max(0, Math.min(1, distance / 110));
   return <section className="triage-stack" aria-label="Event triage">
-    <p className="triage-meta" aria-live="polite">{card ? `Card ${dismissed.length + 1} of ${cards.length}` : `${dismissed.length} decided`}</p>
+    <p className="triage-meta" aria-live="polite">{queue.length} events waiting</p>
     <div className="triage-stage" ref={stage}>
       {queue.slice(0, 2).reverse().map((item) => {
         const next = item !== card;
@@ -124,6 +136,7 @@ export function TriageStack({ cards, onDecide, onUndo }: TriageStackProps) {
         const style = next ? undefined : { '--triage-x': `${position.dx}px`, '--triage-y': `${position.dy}px`, '--triage-tilt': `${reduce ? 0 : position.dx * 0.04}deg`, opacity: leaving ? 0 : 1 } as CSSProperties;
         return <article key={item.eventId} className={`triage-card${next ? ' triage-next' : ''}${dragging ? ' triage-dragging' : ''}`} style={style}
           aria-hidden={next || undefined} aria-label={`${item.title}, ${date.dow} ${date.dom} ${date.mon} ${timeInCopenhagen(item.start)}`}
+          tabIndex={next ? -1 : 0} onKeyDown={(event) => { if (!next && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onDetails?.(item.eventId); } }}
           onPointerDown={next ? undefined : down} onPointerMove={next ? undefined : move} onPointerUp={next ? undefined : end}
           onPointerCancel={(event) => end(event, true)} onLostPointerCapture={(event) => end(event, true)}>
           <div className="triage-datehead"><div className="triage-dateblock"><span>{date.dow}</span><strong>{date.dom}</strong><span>{date.mon}</span></div>
@@ -135,19 +148,18 @@ export function TriageStack({ cards, onDecide, onUndo }: TriageStackProps) {
             <span className="triage-stamp triage-maybe" style={{ opacity: Math.abs(position.dx) < 60 ? fade(-position.dy) : 0 }}>MAYBE</span></div>}
         </article>;
       })}
-      {!card && <div className="triage-done"><strong>All caught up</strong></div>}
+      {!card && <div className="triage-done"><strong>All caught up. Next scouts: tomorrow 06:50</strong></div>}
     </div>
     {reasonOpen && last && <div className="triage-reasons" role="group" aria-label="Skip reason"><span>Why?</span>{reasons.map(([reason, label]) =>
       <button key={reason} type="button" aria-pressed={last.reason === reason} onClick={() => {
         if (pending.current) { pending.current.reason = reason; setLast({ ...pending.current }); }
       }}>{label}</button>)}</div>}
     {card && <div className="triage-actions">
-      <button type="button" className="triage-skip" aria-label="Skip this event" disabled={leaving} onClick={() => decide('skip')}>Skip</button>
-      <button type="button" className="triage-maybe" aria-label="Ask me later" disabled={leaving} onClick={() => decide('maybe')}>Maybe</button>
-      <button type="button" className="triage-go" aria-label="Go: add to Calendar" disabled={leaving} onClick={() => decide('go')}>Go</button>
+      <button type="button" className="triage-skip" aria-label="Skip this event" disabled={leaving || disabled} onClick={() => decide('skip')}>Skip</button>
+      <button type="button" className="triage-maybe" aria-label="Ask me later" disabled={leaving || disabled} onClick={() => decide('maybe')}>Maybe</button>
+      <button type="button" className="triage-go" aria-label="Go: add to Calendar" disabled={leaving || disabled} onClick={() => decide('go')}>Go</button>
     </div>}
     {last && <div className="triage-undo"><span role="status">{{ go: 'Going', skip: 'Skipped', maybe: 'Asking again later' }[last.decision]}: {last.card.title}
-      <small>Local preview — nothing sent to Calendar</small></span><button type="button" disabled={leaving} onClick={undo}>Undo</button></div>}
+      </span><button type="button" disabled={leaving || disabled} onClick={undo}>Undo</button></div>}
   </section>;
 }
-

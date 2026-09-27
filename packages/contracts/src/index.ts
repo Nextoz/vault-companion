@@ -522,7 +522,7 @@ export const TriageCard = z.object({
   location: z.string().max(500),
   online: z.boolean(),
   cost: z.string().max(200),
-  registration: z.object({ state: z.string().max(40), deadline: isoInstant.nullable() }),
+  registration: z.object({ state: z.enum(['open', 'unknown', 'not-required']), deadline: isoInstant.nullable() }),
   aiScore: z.number().min(0).max(100),
   why: z.string().max(1000),
   category: z.string().max(100),
