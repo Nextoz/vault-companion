@@ -5,7 +5,7 @@ import { coalescedRead, type ReadReason } from '../coalescedRead.ts';
 import { notRedoneBy, stillUnresolved, UNRESOLVED_TEXT, unresolvedFrom, type Unresolved } from '../attention.ts';
 import { completeTask, undoCompleteTask, undoDraft } from '../commands.ts';
 import { unreachableText, wake as wakeUp, type Connection } from '../connection.ts';
-import { prefs } from '../prefs.ts';
+import { captureDefaultForTab, prefs } from '../prefs.ts';
 import { getUpdateReady, subscribeUpdateReady } from '../update-ready.ts';
 import type { DraftStore } from '../draft.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
@@ -429,6 +429,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
       )}
       {captureOpen && (
         <CaptureSheet
+          defaultKind={captureDefaultForTab(tab)}
           queue={queue}
           drafts={drafts}
           accountKey={accountKey}

@@ -14,6 +14,7 @@ const DRAFT_NOTICE: Partial<Record<DraftStatus, string>> = {
 };
 
 interface Props {
+  defaultKind?: CaptureKind | undefined;
   queue: PendingQueue;
   drafts: DraftStore;
   /** Drafts are kept under this account; on a change to another account the sheet shows only that one's draft. */
@@ -29,8 +30,9 @@ interface Props {
  * as this account's draft (P4-C) and restored on reopen; closing keeps it, only "Discard draft" or Save removes it.
  * With several windows open, each draft is saved at most once: see draft.ts.
  */
-export function CaptureSheet({ queue, drafts, accountKey, baseRevision, taskBlocked = null, onClose }: Props) {
-  const [chosen, setKind] = useState<CaptureKind>(prefs.captureKind);
+export function CaptureSheet({ queue, drafts, accountKey, baseRevision, defaultKind, taskBlocked = null, onClose }: Props) {
+  // Only fresh sheets use the view default; recovery below restores the draft's own kind and fields.
+  const [chosen, setKind] = useState<CaptureKind>(() => defaultKind ?? prefs.captureKind());
   // The remembered choice stays; only this sheet falls back to a note while tasks cannot be written.
   const kind: CaptureKind = taskBlocked && chosen === 'task' ? 'note' : chosen;
   const [text, setText] = useState('');
