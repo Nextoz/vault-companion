@@ -41,7 +41,7 @@ describe('write allowlist', () => {
     expect(canWrite(parseVaultPath('Inbox/sub/Note.md')!, 'create')).toBe(false);
     expect(canWrite(parseVaultPath('Inbox/Note.md')!, 'update')).toBe(false);
     expect(canWrite(parseVaultPath(TODO_LIST_PATH)!, 'create')).toBe(false);
-    expect(canWrite(parseVaultPath('Tasks/Active Work Now.md')!, 'update')).toBe(false);
+    expect(canWrite(parseVaultPath('Tasks/Active Work Now.md')!, 'update')).toBe(true);
     expect(canWrite(parseVaultPath('Journal/Daily/2026-09-24.md')!, 'create')).toBe(false);
   });
 });

@@ -10,7 +10,7 @@ Any change here is consequential: update the golden tests and record an ADR.
 |---|---|---|
 | Task source | `Tasks/To-Do List.md` | read, complete, undo, edit, append capture |
 | Note capture | `Inbox/*.md` (new files only, no subfolders) | create |
-| Read-only context | `Tasks/Active Work Now.md` | read |
+| Active Work | `Tasks/Active Work Now.md` | read, capture, edit, review, exact Undo (ADR-0019) |
 | Linked notes | resolved **server-side** from a wikilink in a current task line (`{taskLocator, linkIndex}`), target under an allowlisted root: `Projects/`, `Tasks/`, `Inbox/` (owner decision D2 may widen) | read |
 | Never | `.git/`, `.obsidian/`, `.trash/`, `Tools/`, `tmp/`, `output/`, `..`, absolute paths, backslashes, `%`, control chars, non-`.md` | — |
 
@@ -191,7 +191,8 @@ User timezone `Europe/Copenhagen` (IANA; server setting; device zone ignored). D
 user-zone calendar date of `occurredAt`. `occurredAt` > 5 min in the future ⇒ `clock-skew`; > 14 days old ⇒
 accepted and flagged `backdated`. `uploadedAt` = commit committer date only.
 
-## 7. What the app never does
+## 7. Active Work writes
 
-Bulk-add IDs; trim or archive `## Done`; rewrite existing frontmatter; reformat tables/prose; touch
-`Tasks/Active Work Now.md`; write outside §1; resolve a merge conflict.
+`Tasks/Active Work Now.md` follows [ADR-0019](decisions/0019-active-work-writes.md): exact item grammar,
+minimal span edits, section placement, unknown-content preservation and verified exact-inverse Undo.
+The app never rewrites existing frontmatter, reformats prose, writes outside §1 or resolves merge conflicts.

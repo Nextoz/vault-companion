@@ -3,7 +3,7 @@
 // locally generated key set and signed tokens; nothing is bypassed. Fault injection is limited to what a network or
 // an upstream can do to the real stack: drop a response after the server finished, or make the repository vanish.
 import { serve, type HttpBindings } from '@hono/node-server';
-import { createCommandService } from '@vault-companion/domain';
+import { createActiveWorkService, createCommandService } from '@vault-companion/domain';
 import { LocalGitStore } from '@vault-companion/github/local-git';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import type { AddressInfo } from 'node:net';
@@ -53,7 +53,8 @@ export async function startServer(opts: HarnessServerOptions): Promise<HarnessSe
     Object.assign(process.env, saved);
   }
 
-  const services = createCommandService({ store, now: opts.now, timeZone: opts.timeZone });
+  const deps = { store, now: opts.now, timeZone: opts.timeZone };
+  const services = { ...createCommandService(deps), ...createActiveWorkService(deps) };
   const logs: LogRecord[] = [];
   const app = createApp({ verify, appOrigin: opts.appOrigin ?? APP_ORIGIN, services, log: (r) => logs.push(r) });
 

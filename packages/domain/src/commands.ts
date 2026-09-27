@@ -1,6 +1,6 @@
 // Application services: one WritePlan per command type (docs/commands.md) and the task read model.
 // Pure orchestration over the VaultStore port and the Markdown kernel; no HTTP, no GitHub.
-import { MAX_KNOWN, MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type TasksResponse, type TaskView } from '@vault-companion/contracts';
+import { ACTIVE_WORK_PATH, MAX_KNOWN, MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type TasksResponse, type TaskView } from '@vault-companion/contracts';
 import * as md from '@vault-companion/vault-markdown';
 import { executeWrite, type Planned, type Refused, type WritePlan } from './execute.ts';
 import { canWrite, INBOX_DIR, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
@@ -15,6 +15,7 @@ export interface CommandServiceDeps {
 }
 
 const TODO = TODO_LIST_PATH as VaultPath;
+const ACTIVE = ACTIVE_WORK_PATH as VaultPath;
 
 /** Undo re-plans at most this often when the head moves (ADR-0013 budget: ≤ 3 × ≈ 10 GitHub calls). */
 export const UNDO_MAX_ATTEMPTS = 3;
@@ -35,10 +36,10 @@ function decodeUtf8(bytes: Uint8Array): string | null {
 /** Read the To-Do List at X as text, or a refusal. */
 type TodoFile = { ok: true; text: string; blobSha: string; bytes: Uint8Array };
 
-async function readTodo(store: VaultStore, at: string): Promise<TodoFile | { ok: false; planned: Planned<never> }> {
+async function readTodo(store: VaultStore, at: string, path: VaultPath = TODO): Promise<TodoFile | { ok: false; planned: Planned<never> }> {
   let file;
   try {
-    file = await store.readFile(TODO, at);
+    file = await store.readFile(path, at);
   } catch (e) {
     if (e instanceof FileTooLarge) return { ok: false, planned: refuse('refused:too-large', 'the task list is too large to edit safely') };
     throw e;
@@ -220,8 +221,124 @@ function undoPlan(cmd: Extract<Command, { type: 'UndoCompleteTask' }>, raw: unkn
   };
 }
 
+type ActiveWriteCommand = Extract<Command, { type: 'CaptureActiveWork' | 'EditActiveWork' | 'ReviewActiveWork' }>;
+function activeWorkOn(cmd: ActiveWriteCommand, f: TodoFile, timeZone: string): Planned<md.ActiveWorkEffect> {
+  if (cmd.type === 'CaptureActiveWork') return fromKernel(md.captureActiveWork(f.text, cmd.payload), ACTIVE, (e) => e);
+  const t = cmd.payload.item;
+  const locator = { lineIndex: t.lineIndex, lineText: t.lineText, occurrencesAtRead: t.occurrencesAtRead, sameRevision: f.blobSha === t.blobSha };
+  const r = cmd.type === 'EditActiveWork' ? md.editActiveWork(f.text, locator, cmd.payload.changes) :
+    md.reviewActiveWork(f.text, locator, cmd.payload.action, userDate(cmd.occurredAt, timeZone), cmd.payload.action === 'drop' ? cmd.payload.reason : undefined);
+  return fromKernel(r, ACTIVE, (e) => e);
+}
+export function activeWorkPlan(cmd: ActiveWriteCommand, timeZone: string): WritePlan<md.ActiveWorkEffect> {
+  return {
+    message: 'Vault Companion: update Active Work',
+    async compute(store, at) {
+      const f = await readTodo(store, at, ACTIVE);
+      return f.ok ? activeWorkOn(cmd, f, timeZone) : f.planned;
+    },
+  };
+}
+async function verifiedActiveWork(store: VaultStore, c: CommitInfo, target: Extract<Command, { type: 'ReviewActiveWork' }>, timeZone: string) {
+  const changed = c.files.length === 1 ? c.files[0] : undefined;
+  if (c.parent === null || changed?.path !== ACTIVE || changed.blobSha === null) {
+    return { ok: false as const, planned: refuse('invalid', 'undo target does not match the recorded review') };
+  }
+  const before = await readTodo(store, c.parent, ACTIVE);
+  if (!before.ok) return { ok: false as const, planned: refuse('dedupe-unknown', 'the review cannot be verified') };
+  const replay = activeWorkOn(target, before, timeZone);
+  if (!replay.ok || (await gitBlobSha(replay.bytes)) !== changed.blobSha) {
+    return { ok: false as const, planned: refuse('dedupe-unknown', 'the review cannot be verified') };
+  }
+  return { ok: true as const, before, afterBytes: replay.bytes, effect: replay.effect };
+}
+function undoActiveWorkPlan(cmd: Extract<Command, { type: 'UndoActiveWork' }>, raw: unknown, timeZone: string): WritePlan<Receipt['effect']> {
+  const target = cmd.payload.target;
+  const token = cmd.payload.targetCommit;
+  const rawTarget = (raw as { payload: { target: unknown } }).payload.target;
+  // Filled by `findApplied` for the X that `compute` then runs at.
+  let checked: { x: string; completion: CommitInfo } | null = null;
+  // Filled by `findApplied` when this Undo's own commit U is found: `deriveApplied` reuses both (call budget).
+  let applied: { completion: CommitInfo; undo: CommitInfo } | null = null;
+
+  /** The inverse of the verified completion `v` on the task list at `at` (X for a write, U^ to verify U). */
+  const inverseAt = async (store: VaultStore, v: Extract<Awaited<ReturnType<typeof verifiedActiveWork>>, { ok: true }>, at: string): Promise<Planned<Receipt['effect']>> => {
+    const f = await readTodo(store, at, ACTIVE);
+    if (!f.ok) return f.planned;
+    return fromKernel(md.undoActiveWork(f.text, decodeUtf8(v.afterBytes)!, v.before.text, v.effect), ACTIVE, (e) => e);
+  };
+
+  const readToken = async (store: VaultStore): Promise<CommitInfo | Refused> => {
+    const c = await store.readCommit(token);
+    if (!c) return refused('conflict:task-changed', 'that completion is not in the vault');
+    // Never trust the token: it must name the target's own commit, by operation ID and payload hash.
+    if (c.trailers[TRAILER_OP] !== target.operationId || c.trailers[TRAILER_PAYLOAD] !== (await payloadHash(rawTarget))) {
+      return refused('invalid', 'undo target does not match the recorded completion');
+    }
+    return c;
+  };
+
+  return {
+    message: 'Vault Companion: undo Active Work review',
+    trailers: { [TRAILER_UNDOES]: target.operationId },
+    maxAttempts: UNDO_MAX_ATTEMPTS,
+    async findApplied(store, x, operationId) {
+      checked = null;
+      applied = null;
+      const c = await readToken(store);
+      if ('kind' in c) return c;
+      const since = await store.commitsSince(c.sha, x);
+      // Review O5: neither answer can tell whether an earlier attempt of THIS Undo already applied (its own commit would be
+      // in the unlisted range), so neither may claim "not applied".
+      if (since.kind === 'not-ancestor' || since.kind === 'too-many') {
+        return refused('dedupe-unknown', 'this Undo may already have been applied; check the task in Obsidian');
+      }
+      const own = since.commits.find((k) => k.trailers[TRAILER_OP] === operationId);
+      if (own) {
+        const info = await store.readCommit(own.sha);
+        if (info) applied = { completion: c, undo: info };
+        return { kind: 'found', op: { commitSha: own.sha, payloadHash: own.trailers[TRAILER_PAYLOAD] ?? '', paths: (info?.files ?? []).map((f) => f.path) } };
+      }
+      // Rerun review Opus N6: a completion can be undone once; a stale second Undo would reopen a LATER completion.
+      if (since.commits.some((k) => k.trailers[TRAILER_UNDOES] === target.operationId)) {
+        return refused('conflict:task-changed', 'that completion was already undone');
+      }
+      checked = { x, completion: c };
+      return { kind: 'not-found' };
+    },
+    async compute(store, at) {
+      if (checked?.x !== at) return refuse('dedupe-unknown', 'the completion was not checked at this revision');
+      const v = await verifiedActiveWork(store, checked.completion, target, timeZone);
+      if (!v.ok) return v.planned;
+      return inverseAt(store, v, at);
+    },
+    // This Undo's own commit U (found by operation ID, payload hash checked by the executor). Review P4E-Astra #3: U
+    // must actually be the inverse — rebuilt against U's first-parent task list, it must equal U's blob — before a
+    // receipt certifies it. Reuses the C and U already read in this attempt.
+    async deriveApplied(store, commitSha) {
+      const u = applied?.undo.sha === commitSha ? applied.undo : await store.readCommit(commitSha);
+      if (!u || u.trailers[TRAILER_UNDOES] !== target.operationId || u.parent === null) return { ok: false, reason: 'not an undo of this completion' };
+      const changed = u.files.length === 1 ? u.files[0] : undefined;
+      if (changed?.path !== ACTIVE || changed.blobSha === null) return { ok: false, reason: 'the undo commit does not update the task list' };
+      const c = applied?.completion ?? (await readToken(store));
+      if ('kind' in c) return { ok: false, reason: c.message };
+      const v = await verifiedActiveWork(store, c, target, timeZone);
+      if (!v.ok) return { ok: false, reason: 'the completion cannot be verified' };
+      const rebuilt = await inverseAt(store, v, u.parent);
+      if (!rebuilt.ok || (await gitBlobSha(rebuilt.bytes)) !== changed.blobSha) return { ok: false, reason: 'the undo commit is not the inverse' };
+      return { ok: true, path: ACTIVE, effect: rebuilt.effect };
+    },
+  };
+}
+
 function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePlan<Receipt['effect']> {
   switch (cmd.type) {
+    case 'CaptureActiveWork':
+    case 'EditActiveWork':
+    case 'ReviewActiveWork':
+      return activeWorkPlan(cmd, deps.timeZone);
+    case 'UndoActiveWork':
+      return undoActiveWorkPlan(cmd, raw, deps.timeZone);
     case 'EditTask':
       return editPlan(cmd);
     case 'CompleteTask': {
