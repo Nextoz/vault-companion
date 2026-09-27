@@ -142,7 +142,17 @@ export function buildView(
     if (!locator) continue;
     if (a.type === 'EditTask') {
       if (!live(a)) continue;
-      const match = resolve(locator, allOpen);
+      let match = resolve(locator, allOpen);
+      const effect = a.receipt?.effect;
+      if (a.state === 'saved' && effect?.kind === 'edited') {
+        // A saved edit is identified by its receipt, not by its old text: exact locator first, then the unique line the
+        // edit produced (Markdown can contain it before the read acknowledges its commit), else its own row. The loose
+        // old-text match is skipped — once edited, another task may carry the old text (CodeRabbit #34).
+        const exact = allOpen.find((t) => t.locator.blobSha === locator.blobSha && t.locator.lineIndex === locator.lineIndex && t.locator.lineText === locator.lineText);
+        const after = allOpen.filter((t) => t.locator.lineText === effect.afterLineText);
+        const [only] = after;
+        match = exact ? { kind: 'row', task: exact } : after.length === 1 && only ? { kind: 'row', task: only } : { kind: 'none' };
+      }
       if (match.kind === 'row') onRow.set(rowKey(match.task), a);
       else ownOpen.push(overlay(a, false));
       continue;

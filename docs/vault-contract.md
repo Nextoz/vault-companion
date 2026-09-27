@@ -122,8 +122,8 @@ semantics: a delayed app Undo can reopen an identical line that the desktop unch
    **No adoption (review A5/R2):** if the next non-blank line after the insertion point is indented, or the
    insertion would split another task block, refuse with `refused:structure`. The result must leave every other
    task's block length unchanged and give the restored task exactly its completed block's child lines.
-   **Blank residue (R7):** if completion inserted a blank line into an empty Done (`blankInserted`), the semantic
-   inverse removes it when it is still blank and Done has no other non-blank content.
+   **Blank residue (R7):** if completion inserted a blank line directly before the block (`blankInserted`), the
+   semantic inverse removes exactly that one line when it is still present and blank, regardless of other Done content.
 3. Completed-in-place: revert the line in place.
 
 ### 4.3 Capture task

@@ -388,6 +388,39 @@ describe('EditTask overlay', () => {
     expect(buildView(read([openTask], []), [item(edit, 'attention')]).all)
       .toMatchObject([{ description: openTask.description, action: null }]);
   });
+  it('attaches an unreflected saved edit to the unique receipt after-line', () => {
+    const changed = { ...task('- [ ] Water the herbs', 12), description: 'Water the herbs' };
+    const saved = item(edit, 'saved', { receipt });
+    const v = buildView(read([changed], [], { [COMMIT]: 'not-included' }), [saved]);
+    expect(v.all).toMatchObject([{ task: changed, action: saved }]);
+    expect(v.today).toEqual(v.all);
+  });
+  it('never attaches a saved edit to another task that still carries the old text (CodeRabbit #34)', () => {
+    // The edited line is gone from this read; a different task (another line) has the pre-edit text.
+    const other = task(OPEN, 20);
+    const saved = item(edit, 'saved', { receipt });
+    const v = buildView(read([other], [], { [COMMIT]: 'not-included' }), [saved]);
+    expect(v.all.find((r) => r.task?.locator.lineIndex === 20)).toMatchObject({ action: null });
+    expect(v.all.some((r) => r.task === null && r.action?.operationId === edit.operationId)).toBe(true);
+  });
+  it('keeps both after-line twins visible without attaching the saved edit', () => {
+    const twins = [12, 13].map((index) => ({ ...task('- [ ] Water the herbs', index), description: 'Water the herbs' }));
+    const saved = item(edit, 'saved', { receipt });
+    const v = buildView(read(twins, [], { [COMMIT]: 'not-included' }), [saved]);
+    expect(v.all).toMatchObject([
+      { task: null, action: saved },
+      { task: twins[0], action: null },
+      { task: twins[1], action: null },
+    ]);
+    expect(v.today).toEqual(v.all);
+  });
+  it('does not attach a pending edit without a receipt to matching new text', () => {
+    const changed = { ...task('- [ ] Water the herbs', 12), description: 'Water the herbs' };
+    const pending = item(edit, 'pending');
+    expect(buildView(read([changed], []), [pending]).all).toMatchObject([
+      { task: null, action: pending }, { task: changed, action: null },
+    ]);
+  });
   it('does not change an identical neighbouring task', () => {
     const neighbour = { ...openTask, locator: { ...openTask.locator, lineIndex: 11 } };
     expect(buildView(read([openTask, neighbour], []), [item(edit, 'pending')]).all.map((r) => r.description))
