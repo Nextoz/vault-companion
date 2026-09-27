@@ -80,6 +80,9 @@ export class MockApi {
   /** Every decoded linked-note request, and the raw URL it came on (must never carry task text). */
   /** Active Work Now: Markdown, `null` for an absent file, or `'error'` for a 503. */
   activeWork: string | null | 'error' = null;
+  activeWorkItems: Extract<ActiveWorkResponse, { status: 'ok' }>['items'] = [];
+  unknownNowLines: string[] = [];
+  #awBefore = new Map<string, Extract<ActiveWorkResponse, { status: 'ok' }>['items']>();
   readonly noteRequests: { req: LinkedNoteRequest; url: string }[] = [];
   readonly #receipts = new Map<string, Receipt>();
   #held: (() => void)[] = [];
@@ -122,7 +125,7 @@ export class MockApi {
     }
     const body = this.activeWork === null
       ? { status: 'absent', revision: this.#revision }
-      : { status: 'ok', revision: this.#revision, blobSha: '5'.repeat(40), markdown: this.activeWork };
+      : { status: 'ok', revision: this.#revision, blobSha: '5'.repeat(40), markdown: this.activeWork, items: this.activeWorkItems, unknownNowLines: this.unknownNowLines, today: TODAY };
     return this.#json(route, 200, ActiveWorkResponse.parse(body));
   }
 
@@ -196,7 +199,7 @@ export class MockApi {
     if (typeof mode === 'object') return this.#json(route, 409, ApiError.parse({ ...mode.refuse, operationId: command.operationId }));
 
     // Like the Worker (ADR-0013): an Undo's token must be its completion's commit.
-    if (command.type === 'UndoCompleteTask' && this.#receipts.get(command.payload.target.operationId)?.commitSha !== command.payload.targetCommit) {
+    if ((command.type === 'UndoCompleteTask' || command.type === 'UndoActiveWork') && this.#receipts.get(command.payload.target.operationId)?.commitSha !== command.payload.targetCommit) {
       return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'Undo target does not match.', retryable: false }));
     }
     const previous = this.#receipts.get(command.operationId);
@@ -235,6 +238,42 @@ export class MockApi {
     const base = { operationId: command.operationId, status: 'applied' as const, commitSha: this.#revision, blobSha: sha() };
     if (command.type !== 'CaptureNote') this.blobSha = base.blobSha;
     switch (command.type) {
+      case 'CaptureActiveWork': {
+        const p = command.payload;
+        const lineText = '- [ ] **' + p.name + ':**' + (p.next ? ' Next: ' + p.next : '') + (p.review ? ' ⏳ ' + p.review : '') + (p.link ? ' ' + p.link : '');
+        this.activeWork ??= '## Now';
+        this.activeWorkItems.push({ name: p.name, outcome: null, next: p.next ?? null, review: p.review ?? null,
+          link: p.link ?? null, needsReview: !!p.review && p.review < TODAY,
+          locator: { path: 'Tasks/Active Work Now.md', blobSha: base.blobSha, lineIndex: 10 + this.activeWorkItems.length, lineText, occurrencesAtRead: 1 } });
+        return { ...base, path: 'Tasks/Active Work Now.md', effect: { kind: 'active-work', op: 'captured', beforeLineText: null, afterLineText: lineText } };
+      }
+      case 'ReviewActiveWork':
+      case 'EditActiveWork': {
+        const p = command.payload;
+        const item = this.activeWorkItems.find((i) => i.locator.lineText === p.item.lineText && i.locator.lineIndex === p.item.lineIndex);
+        if (!item) throw new Error('mock: unknown active work item');
+        this.#awBefore.set(command.operationId, structuredClone(this.activeWorkItems));
+        let afterLineText: string | null = null;
+        if (command.type === 'EditActiveWork') {
+          Object.assign(item, command.payload.changes);
+        } else if (command.payload.action === 'keep') {
+          item.review = '2026-10-01'; item.needsReview = false;
+        } else {
+          this.activeWorkItems = this.activeWorkItems.filter((i) => i !== item);
+        }
+        if (this.activeWorkItems.includes(item)) {
+          afterLineText = '- [ ] **' + item.name + ':**' + (item.next ? ' Next: ' + item.next : '') + (item.review ? ' ⏳ ' + item.review : '') + (item.link ? ' ' + item.link : '');
+          item.locator = { ...item.locator, lineText: afterLineText, blobSha: base.blobSha };
+        }
+        return { ...base, path: p.item.path, effect: { kind: 'active-work', op: command.type === 'EditActiveWork' ? 'edited' : command.payload.action,
+          beforeLineText: p.item.lineText, afterLineText } };
+      }
+      case 'UndoActiveWork': {
+        const before = this.#awBefore.get(command.payload.target.operationId);
+        if (!before) throw new Error('mock: unknown active work undo');
+        this.activeWorkItems = structuredClone(before);
+        return { ...base, path: 'Tasks/Active Work Now.md', effect: { kind: 'active-work', op: 'undone', beforeLineText: null, afterLineText: command.payload.target.payload.item.lineText } };
+      }
       case 'EditTask': {
         const { task: locator, changes } = command.payload;
         const same = this.open.filter((t) => t.locator.lineText === locator.lineText);

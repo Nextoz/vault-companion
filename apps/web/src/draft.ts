@@ -9,6 +9,7 @@ import type { DraftBasis, PendingStore } from './queue/db.ts';
 export type DraftStore = Pick<PendingStore, 'draft' | 'putDraft' | 'deleteDraft'>;
 
 export interface DraftContent {
+  activeWork?: { next: string; review: string; link: string };
   kind: CaptureKind;
   text: string;
 }
@@ -92,7 +93,7 @@ export class DraftKeeper {
       if (!draft || draft.accountKey !== this.#accountKey) return null;
       this.#basis = { id: draft.id, version: draft.version };
       this.#updatedAt = draft.updatedAt;
-      return draft.text.length > 0 ? { kind: draft.kind, text: draft.text } : null;
+      return draft.text.length > 0 ? { kind: draft.kind, text: draft.text, ...(draft.activeWork ? { activeWork: draft.activeWork } : {}) } : null;
     } catch {
       this.#onStatus('unavailable');
       return null;
@@ -185,6 +186,7 @@ export class DraftKeeper {
         accountKey,
         id: basis?.id ?? this.#newId(),
         version: (basis?.version ?? 0) + 1,
+        ...(content.activeWork ? { activeWork: content.activeWork } : {}),
         kind: content.kind,
         text: content.text,
         updatedAt,

@@ -582,3 +582,10 @@ textarea:focus-visible {
   border-radius: 10px;
   padding: 8px;
 }
+
+.active-work-item { padding: 12px 0; border-bottom: 1px solid var(--border, #ddd); overflow-wrap: anywhere; }
+.active-work-item p { margin: 6px 0; }
+.active-work-item .chip { display: inline-block; margin: 8px 0; }
+.active-work-unknown pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.sheet label { display: block; margin: 8px 0; }
+.sheet label input { display: block; width: 100%; min-height: 44px; box-sizing: border-box; }

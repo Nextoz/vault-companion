@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { captureNote, captureTask } from '../commands.ts';
+import { captureActiveWork, captureNote, captureTask } from '../commands.ts';
 import { DraftKeeper, type DraftStatus, type DraftStore } from '../draft.ts';
+import { reviewInSevenDays } from '../active-work.ts';
 import { prefs, type CaptureKind } from '../prefs.ts';
 import type { PendingQueue } from '../queue/queue.ts';
 
-const LIMIT: Record<CaptureKind, number> = { task: 2000, note: 50_000 };
+const LIMIT: Record<CaptureKind, number> = { task: 2000, note: 50_000, 'active-work': 500 };
 
 const DRAFT_NOTICE: Partial<Record<DraftStatus, string>> = {
   unavailable: 'This draft cannot be kept on this device.',
@@ -31,8 +32,9 @@ interface Props {
 export function CaptureSheet({ queue, drafts, accountKey, baseRevision, taskBlocked = null, onClose }: Props) {
   const [chosen, setKind] = useState<CaptureKind>(prefs.captureKind);
   // The remembered choice stays; only this sheet falls back to a note while tasks cannot be written.
-  const kind: CaptureKind = taskBlocked ? 'note' : chosen;
+  const kind: CaptureKind = taskBlocked && chosen === 'task' ? 'note' : chosen;
   const [text, setText] = useState('');
+  const [activeWork, setActiveWork] = useState(() => ({ next: '', review: reviewInSevenDays(), link: '' }));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [draftStatus, setDraftStatus] = useState<DraftStatus>('kept');
@@ -40,8 +42,8 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, taskBloc
   const keeperRef = useRef<DraftKeeper | null>(null);
   const typedRef = useRef(false);
   const boundRef = useRef(accountKey);
-  const contentRef = useRef({ kind, text });
-  contentRef.current = { kind, text };
+  const contentRef = useRef({ kind, text, activeWork });
+  contentRef.current = { kind, text, activeWork };
 
   useEffect(() => {
     const keeper = new DraftKeeper({ store: drafts, accountKey, onStatus: setDraftStatus });
@@ -53,6 +55,7 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, taskBloc
       // Another account: the previous keeper has written the text under its own account; none of it is shown here.
       typedRef.current = false;
       setText('');
+      setActiveWork({ next: '', review: reviewInSevenDays(), link: '' });
       setError(null);
     } else if (typedRef.current) {
       // First confirmed account: what was typed before it is now kept under it.
@@ -64,6 +67,7 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, taskBloc
       if (!live || !draft || typedRef.current) return;
       setKind(draft.kind);
       setText(draft.text);
+      if (draft.activeWork) setActiveWork(draft.activeWork);
     });
     const flush = () => void keeper.flush();
     document.addEventListener('visibilitychange', flush);
@@ -78,25 +82,34 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, taskBloc
   }, [drafts, accountKey]);
 
   const ready = accountKey !== null && baseRevision !== null;
-  const canSave = ready && text.trim().length > 0 && !saving && draftStatus !== 'superseded';
+  const validActiveWork = kind !== 'active-work' || (!/[\r\n]/.test(text) && (!activeWork.link.trim() || /^\[\[[^[\]]+\]\]$/.test(activeWork.link.trim())));
+  const canSave = validActiveWork && ready && text.trim().length > 0 && !saving && draftStatus !== 'superseded';
 
   const choose = (next: CaptureKind) => {
     setKind(next);
     prefs.setCaptureKind(next);
-    keeperRef.current?.change({ kind: next, text });
+    keeperRef.current?.change({ kind: next, text, activeWork });
   };
 
   const edit = (next: string) => {
     typedRef.current = true;
     setText(next);
     setError(null);
-    keeperRef.current?.change({ kind, text: next });
+    keeperRef.current?.change({ kind, text: next, activeWork });
+  };
+
+  const editActiveWork = (field: keyof typeof activeWork, value: string) => {
+    typedRef.current = true;
+    const updated = { ...activeWork, [field]: value };
+    setActiveWork(updated);
+    keeperRef.current?.change({ kind, text, activeWork: updated });
   };
 
   const discard = () => {
     typedRef.current = true;
     setText('');
     setError(null);
+    setActiveWork({ next: '', review: reviewInSevenDays(), link: '' });
     void keeperRef.current?.discard();
   };
 
@@ -111,7 +124,12 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, taskBloc
       await keeper?.suspend();
       if (keeper?.superseded) return;
       const ctx = { baseRevision };
-      const envelope = kind === 'task' ? captureTask(ctx, { text }) : captureNote(ctx, { text });
+      const envelope = kind === 'active-work' ? captureActiveWork(ctx, {
+        name: text.trim(),
+        ...(activeWork.next.trim() ? { next: activeWork.next.trim() } : {}),
+        ...(activeWork.review ? { review: activeWork.review } : {}),
+        ...(activeWork.link.trim() ? { link: activeWork.link.trim() } : {}),
+      }) : kind === 'task' ? captureTask(ctx, { text }) : captureNote(ctx, { text });
       const label = text.length > 80 ? `${text.slice(0, 79)}…` : text;
       // One transaction: the draft is still that version, the command is kept and the draft is gone; or nothing.
       const result = await queue.enqueue(envelope, {
@@ -126,7 +144,7 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, taskBloc
       setText('');
       onClose();
     } catch {
-      keeper?.resume({ kind, text });
+      keeper?.resume({ kind, text, activeWork });
       setError('Could not keep this on the device. Your text is still here.');
     } finally {
       savingRef.current = false;
@@ -145,16 +163,23 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, taskBloc
           <button type="button" aria-pressed={kind === 'note'} onClick={() => choose('note')}>
             Note
           </button>
+          <button type="button" aria-pressed={kind === 'active-work'} onClick={() => choose('active-work')}>Active Work</button>
         </div>
         <textarea
-          aria-label={kind === 'task' ? 'Task text' : 'Note text'}
-          placeholder={kind === 'task' ? 'What needs doing?' : 'What is on your mind?'}
+          aria-label={kind === 'active-work' ? 'Name' : kind === 'task' ? 'Task text' : 'Note text'}
+          placeholder={kind === 'active-work' ? 'Name of this work' : kind === 'task' ? 'What needs doing?' : 'What is on your mind?'}
           value={text}
           maxLength={LIMIT[kind]}
           rows={kind === 'task' ? 3 : 8}
           autoFocus
           onChange={(e) => edit(e.target.value)}
         />
+        {kind === 'active-work' && <>
+          <label>Next action<input value={activeWork.next} maxLength={500} onChange={(e) => editActiveWork('next', e.target.value)} /></label>
+          <label>Review date<input type="date" value={activeWork.review} onChange={(e) => editActiveWork('review', e.target.value)} /></label>
+          <button type="button" disabled={!activeWork.review} onClick={() => editActiveWork('review', '')}>Clear review date</button>
+          <label>Link<input placeholder="[[Note name]]" value={activeWork.link} onChange={(e) => editActiveWork('link', e.target.value)} /></label>
+        </>}
         {taskBlocked && <p className="muted small">{taskBlocked} Notes still work.</p>}
         {!ready && <p className="muted small">Connect once to set up this device before capturing.</p>}
         {DRAFT_NOTICE[draftStatus] && (

@@ -18,6 +18,7 @@ export type RefusalCode =
   | 'refused:duplicate-field'
   | 'refused:already-completed'
   | 'refused:invalid-edit'
+  | 'refused:undo-expired'
   | 'conflict:task-changed'
   | 'conflict:ambiguous'
   /** Malformed command input (bad date/context, capture text empty after sanitisation, NUL in note text). */

@@ -1,10 +1,10 @@
-import type { LinkedNoteRefusalCode, LinkedNoteResponse, TaskView } from '@vault-companion/contracts';
+import type { LinkedNoteRefusalCode, LinkedNoteResponse, ActiveWorkLocator, TaskLocator } from '@vault-companion/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getLinkedNote, type Fetched } from '../api.ts';
 import type { NoteRenderer } from '../note/render.ts';
 
 export interface OpenLink {
-  task: TaskView;
+  task: { locator: TaskLocator | ActiveWorkLocator };
   linkIndex: number;
   /** What the link shows in the task (alias or target): the heading until the note arrives. */
   label: string;

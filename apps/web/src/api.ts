@@ -9,7 +9,7 @@ import {
   TasksResponse,
   type LinkedNoteRequest,
 } from '@vault-companion/contracts';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 export type Fetched<T> =
   | { kind: 'ok'; data: T }
@@ -66,7 +66,7 @@ export const getLinkedNote = (req: LinkedNoteRequest) =>
   getJson('/api/linked-note', LinkedNoteResponse, { [LINKED_NOTE_HEADER]: encodeLinkedNoteHeader(req) });
 
 /** Active Work Now card: fixed server-side path, `no-store`, never cached by the SW. */
-export const getActiveWork = () => getJson('/api/active-work', ActiveWorkResponse);
+export const getActiveWork = () => getJson('/api/active-work', z.union(ActiveWorkResponse.options.map((option) => option.strip())));
 
 /** `accountKey` is the queued item's binding, checked by the Worker against the session (A7), outside the body. */
 export const postCommand = (body: string, accountKey: string) =>

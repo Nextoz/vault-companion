@@ -33,15 +33,16 @@ describe('parseVaultPath', () => {
 });
 
 describe('write allowlist', () => {
-  it('allows only the To-Do List and direct Inbox children', () => {
+  it('allows updates to To-Do and Active Work, and creates of direct Inbox children', () => {
     expect(canWrite(parseVaultPath(TODO_LIST_PATH)!, 'update')).toBe(true);
+    expect(canWrite(parseVaultPath('Tasks/Active Work Now.md')!, 'update')).toBe(true);
     expect(canWrite(parseVaultPath('Inbox/Note - 2026-09-24.md')!, 'create')).toBe(true);
   });
   it('denies Inbox subfolders, updates of Inbox notes, creates of the To-Do list, and anything else', () => {
     expect(canWrite(parseVaultPath('Inbox/sub/Note.md')!, 'create')).toBe(false);
     expect(canWrite(parseVaultPath('Inbox/Note.md')!, 'update')).toBe(false);
     expect(canWrite(parseVaultPath(TODO_LIST_PATH)!, 'create')).toBe(false);
-    expect(canWrite(parseVaultPath('Tasks/Active Work Now.md')!, 'update')).toBe(false);
+    expect(canWrite(parseVaultPath('Tasks/Active Work Now.md')!, 'create')).toBe(false);
     expect(canWrite(parseVaultPath('Journal/Daily/2026-09-24.md')!, 'create')).toBe(false);
   });
 });

@@ -93,7 +93,7 @@ describe('activeWorkState (quiet states)', () => {
   it('maps every read outcome', () => {
     expect(activeWorkState(null)).toEqual({ kind: 'message', text: 'Loading…' });
     expect(activeWorkState({ kind: 'ok', data: { status: 'absent', revision: rev } })).toEqual({ kind: 'hidden' });
-    expect(activeWorkState({ kind: 'ok', data: { status: 'ok', revision: rev, blobSha: rev, markdown: '# a' } })).toEqual({ kind: 'content', markdown: '# a' });
+    expect(activeWorkState({ kind: 'ok', data: { status: 'ok', revision: rev, blobSha: rev, markdown: '# a', items: [], unknownNowLines: [], today: '2026-09-27' } })).toEqual({ kind: 'content', markdown: '# a' });
     expect(activeWorkState({ kind: 'ok', data: { status: 'refused', revision: rev, code: 'too-large', message: 'm' } })).toEqual({ kind: 'message', text: 'Too large to show here.' });
     expect(activeWorkState({ kind: 'ok', data: { status: 'refused', revision: rev, code: 'encoding', message: 'm' } })).toEqual({ kind: 'message', text: 'Cannot be displayed.' });
     expect(activeWorkState({ kind: 'offline' })).toEqual({ kind: 'message', text: 'Offline.' });

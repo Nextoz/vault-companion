@@ -42,7 +42,7 @@ export function parseVaultPath(raw: string): VaultPath | null {
 }
 
 export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
-  if (path === TODO_LIST_PATH) return kind === 'update';
+  if (path === TODO_LIST_PATH || path === 'Tasks/Active Work Now.md') return kind === 'update';
   const segments = path.split('/');
   return kind === 'create' && segments.length === 2 && segments[0] === INBOX_DIR;
 }
