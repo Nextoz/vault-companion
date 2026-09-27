@@ -129,6 +129,12 @@ the only record.
 
 ## Claude Code Cloud workers (owner rules, 2026-09-25)
 
+**Push works only after the owner prompts the session (verified 2026-09-27, D):** a CLI-launched session starts from an
+uploaded bundle without a remote even after /web-setup; once the owner writes one line in the session page ("you may
+push") it pushes. Workflow: Lead launches -> tells the owner the session link -> owner sends that line -> the Lead
+watches for the branch (no branch after 15 min = ask again). Cloud containers have no WebKit: the Lead runs the WebKit
+e2e locally before merging.
+
 - Only for bounded, repo-contained tasks: no live vault, Windows-only tooling, Herdr state or local sync. Never send the
   personal vault repository to the cloud. Cloud workers count as workers for concurrency planning.
 - Precondition: `git remote -v` shows a GitHub remote for this repo. If not, stop and tell the owner; never create one.
