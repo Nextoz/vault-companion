@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canReadLinkedNote, canWrite, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
+import { canReadLinkedNote, canWrite, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 
 describe('parseVaultPath', () => {
   it.each([
@@ -38,9 +38,22 @@ describe('write allowlist', () => {
     expect(canWrite(parseVaultPath('Tasks/Active Work Now.md')!, 'update')).toBe(true);
     expect(canWrite(parseVaultPath('Inbox/Note - 2026-09-24.md')!, 'create')).toBe(true);
   });
-  it('denies Inbox subfolders, updates of Inbox notes, creates of the To-Do list, and anything else', () => {
+  it('denies Inbox subfolders, creates of the To-Do list, and anything else', () => {
     expect(canWrite(parseVaultPath('Inbox/sub/Note.md')!, 'create')).toBe(false);
-    expect(canWrite(parseVaultPath('Inbox/Note.md')!, 'update')).toBe(false);
+  });
+
+  it('ADR-0022: update of Inbox notes directly in Inbox/ only; subfolders and other roots stay denied', () => {
+    expect(canWrite(parseVaultPath('Inbox/Note.md')!, 'update')).toBe(true);
+    expect(canWrite(parseVaultPath('Inbox/Note - 2026-09-24 (2).md')!, 'update')).toBe(true);
+    expect(canWrite(parseVaultPath('Inbox/sub/Note.md')!, 'update')).toBe(false);
+    expect(canWrite(parseVaultPath('Inbox/.hidden.md')!, 'update')).toBe(false);
+    expect(canWrite(parseVaultPath('Projects/Note.md')!, 'update')).toBe(false);
+    expect(canWrite(parseVaultPath('Tasks/Other.md')!, 'update')).toBe(false);
+    expect(canWrite(parseVaultPath('Scratch/Inbox/Note.md')!, 'update')).toBe(false);
+    expect(isInboxNotePath('Inbox/Note.md')).toBe(true);
+    for (const bad of ['Inbox/sub/Note.md', 'Inbox/Note.txt', 'Inbox/', 'Inbox/../Note.md', 'inbox/Note.md', 'Inbox/ Note.md', 'Inbox/Note%2F.md', 'Inbox/.x.md', 'Inbox/Cafe' + String.fromCharCode(0x301) + '.md']) {
+      expect(isInboxNotePath(bad), bad).toBe(false);
+    }
     expect(canWrite(parseVaultPath(TODO_LIST_PATH)!, 'create')).toBe(false);
     expect(canWrite(parseVaultPath('Tasks/Active Work Now.md')!, 'create')).toBe(false);
     expect(canWrite(parseVaultPath('Journal/Daily/2026-09-24.md')!, 'create')).toBe(false);

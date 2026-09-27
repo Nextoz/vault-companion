@@ -3,7 +3,7 @@
 import { ACTIVE_WORK_PATH, MAX_KNOWN, MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type TasksResponse, type TaskView } from '@vault-companion/contracts';
 import * as md from '@vault-companion/vault-markdown';
 import { executeWrite, type Planned, type Refused, type WritePlan } from './execute.ts';
-import { canWrite, INBOX_DIR, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
+import { canWrite, INBOX_DIR, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 import { payloadHash } from './payload-hash.ts';
 import { FileTooLarge, gitBlobSha, TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type CommitInfo, type VaultPath, type VaultStore } from './store.ts';
 import { checkOccurredAt, userDate } from './time.ts';
@@ -37,7 +37,7 @@ function decodeUtf8(bytes: Uint8Array): string | null {
 type TodoFile = { ok: true; text: string; blobSha: string; bytes: Uint8Array };
 
 export async function readTodo(store: VaultStore, at: string, path: VaultPath = TODO): Promise<TodoFile | { ok: false; planned: Planned<never> }> {
-  const label = path === ACTIVE ? 'Active Work' : 'the task list';
+  const label = path === ACTIVE ? 'Active Work' : path === TODO ? 'the task list' : 'the note';
   let file;
   try {
     file = await store.readFile(path, at);
@@ -93,6 +93,30 @@ export function editPlan(cmd: Extract<Command, { type: 'EditTask' }>): WritePlan
         lineIndex: t.lineIndex, lineText: t.lineText, occurrencesAtRead: t.occurrencesAtRead,
         sameRevision: f.blobSha === t.blobSha,
       }, cmd.payload.changes), TODO, (e) => e);
+    },
+  };
+}
+
+/**
+ * ADR-0022: replace an Inbox note's body. CAS on the blob the owner read (a newer blob is a visible conflict, never an
+ * overwrite); BOM, frontmatter, EOL and final newline kept by the kernel. Dedupe/replay: the executor's default parent
+ * replay, which reproduces the exact bytes because the parent still holds the blob this edit was computed against.
+ */
+export function editNotePlan(cmd: Extract<Command, { type: 'EditNote' }>): WritePlan<Receipt['effect']> {
+  const { note, body } = cmd.payload;
+  return {
+    message: 'Vault Companion: edit note',
+    async compute(store, at) {
+      const path = parseVaultPath(note.path);
+      if (!path || !isInboxNotePath(path) || !canWrite(path, 'update')) return refuse('refused:path', 'only notes directly in Inbox/ can be edited');
+      const f = await readTodo(store, at, path);
+      if (!f.ok) {
+        const p = f.planned as Extract<Planned<never>, { ok: false }>;
+        // Gone since the read: the same fix as a changed note (reload).
+        return p.code === 'refused:structure' ? refuse('conflict:task-changed', 'the note changed on another device; reload it') : f.planned;
+      }
+      if (f.blobSha !== note.blobSha) return refuse('conflict:task-changed', 'the note changed on another device; reload it');
+      return fromKernel(md.editNoteBody(f.text, body), path, () => ({ kind: 'note-edited' as const, path }));
     },
   };
 }
@@ -342,6 +366,8 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
       return undoActiveWorkPlan(cmd, raw, deps.timeZone);
     case 'EditTask':
       return editPlan(cmd);
+    case 'EditNote':
+      return editNotePlan(cmd);
     case 'CompleteTask': {
       const inner = completePlan(cmd, deps.timeZone);
       return {
