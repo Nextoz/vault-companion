@@ -11,7 +11,7 @@ test('Today attention opens Scouts, panels and history lead to sanitised finding
   const failed = scouts.getByRole('button', { name: /City events/ });
   const healthy = scouts.getByRole('button', { name: /Learning opportunities/ });
   await expect(failed).toContainText('Failed');
-  await expect(failed).toContainText('Last run 2 h ago');
+  await expect(failed).toContainText('Last attempt Today 06:50');
   await expect(failed).toContainText('— findings');
   await expect(healthy).toContainText('Healthy');
   await expect(healthy).toContainText('4 findings');
@@ -25,8 +25,8 @@ test('Today attention opens Scouts, panels and history lead to sanitised finding
   await healthy.click();
   const runs = scouts.getByRole('list', { name: 'Run history, oldest to newest' }).getByRole('listitem');
   await expect(runs).toHaveCount(2);
-  await expect(runs.first()).toHaveAttribute('aria-label', /2026-09-26.*degraded/);
-  await expect(runs.last()).toHaveAttribute('aria-label', /2026-09-27.*success/);
+  await expect(runs.first()).toHaveAttribute('aria-label', /26 Sep 2026.*degraded/);
+  await expect(runs.last()).toHaveAttribute('aria-label', /27 Sep 2026.*success/);
   await expect(page.getByTestId('scout-findings')).toContainText('Four synthetic opportunities.');
   await expect(page.getByTestId('scout-findings').locator('script')).toHaveCount(0);
   expect(api.scoutOutputRequests).toEqual(['learning']);
@@ -35,4 +35,51 @@ test('Today attention opens Scouts, panels and history lead to sanitised finding
   await page.getByRole('button', { name: 'Today', exact: true }).click();
   expect((await (await refreshed).json()).scouts).toHaveLength(1);
   await expect(page.getByRole('button', { name: /scouts need attention/ })).toHaveCount(0);
+});
+
+
+test('five-column offers become labelled cards at 390px with relative freshness', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const api = new MockApi();
+  const entry = api.scouts.scouts.find((entry) => entry.state === 'ok' && entry.status.scoutId === 'learning');
+  if (entry?.state !== 'ok') throw new Error('missing fixture');
+  entry.status.lastAttemptAt = '2026-09-27T08:38:02+02:00';
+  entry.status.lastSuccessAt = '2026-09-26T06:51:00+02:00';
+  entry.status.runStatus = 'failed';
+  await api.install(page);
+  await page.route('**/api/scouts/output', (route) => route.fulfill({ json: {
+    status: 'ok', revision: 'a'.repeat(40), blobSha: 'b'.repeat(40), path: 'Discoveries/Offers.md',
+    markdown: '| Item | Store | Price | Was | Until |\n| --- | --- | --- | --- | --- |\n| [Synthetic tea](https://example.com/tea) | Example shop | 12 DKK | 20 DKK | Sunday |\n| Coffee | Other shop | 30 DKK | 40 DKK | Monday |\n\n| A | B |\n| --- | --- |\n| uneven |',
+  } }));
+  await page.goto('/');
+  await page.getByRole('button', { name: '2 scouts need attention' }).click();
+  const panel = page.getByRole('button', { name: /Learning opportunities/ });
+  await expect(panel).toContainText('Last attempt 12 min ago');
+  await expect(panel).toContainText('Last success Yesterday 06:51');
+  await panel.click();
+  const detail = page.locator('.scout-detail');
+  await expect(detail.locator('dd').nth(0)).toHaveText('Yesterday 06:51');
+  await expect(detail.locator('dd').nth(1)).toHaveText('12 min ago');
+  expect(await detail.innerText()).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
+  const findings = page.getByTestId('scout-findings');
+  const cards = findings.locator('.scout-table-cards tbody tr');
+  await expect(cards).toHaveCount(2);
+  for (const card of await cards.all()) {
+    await expect(card).toHaveCSS('display', 'block');
+    for (const label of ['Item', 'Store', 'Price', 'Was', 'Until']) {
+      await expect(card.locator(`[data-label="${label}"]`)).toBeVisible();
+    }
+    // Every value keeps its label, the first (title) column included.
+    for (const label of ['Item', 'Price']) {
+      expect(await card.locator(`[data-label="${label}"]`).evaluate((cell) =>
+        getComputedStyle(cell, '::before').content.replace(/"\s*"/g, '').replaceAll('"', ''))).toBe(`${label}: `);
+    }
+  }
+  await expect(findings.getByRole('link', { name: 'Synthetic tea' })).toHaveAttribute('href', 'https://example.com/tea');
+  const fallback = findings.locator('.scout-table-scroll').last();
+  await expect(fallback).toHaveCSS('overflow-x', 'auto');
+  await expect(fallback.locator('.scout-table-cards')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1024, height: 844 });
+  await expect(cards.first()).toHaveCSS('display', 'table-row');
 });

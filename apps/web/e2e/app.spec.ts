@@ -89,9 +89,10 @@ test('capture offline, then send the identical envelope once back online', async
   // Any attempt made while offline carried exactly the same bytes as the one that landed.
   expect(new Set(api.bodies).size).toBe(1);
 
-  // The Task | Note choice is remembered.
+  // C3: a fresh Add follows the tab (Today → Task), not the kind chosen in the previous sheet.
   await page.getByRole('button', { name: 'Capture' }).click();
-  await expect(page.getByRole('button', { name: 'Note', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Task', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Note', exact: true })).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('a changed-task refusal moves back with the error and offers Refresh / Copy / Discard, never Retry', async ({ page }) => {

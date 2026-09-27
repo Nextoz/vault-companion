@@ -4,6 +4,9 @@ const SW_SPEC = /offline-shell\.spec\.ts$/;
 const REAL_SPEC = /real-stack\.spec\.ts$/;
 // Optional: a preinstalled Chromium when Playwright's own download is unavailable (e.g. cloud sandboxes).
 const chromiumPath = process.env['PW_CHROMIUM_EXECUTABLE'];
+// Parallel local clones can select their own preview without reusing another clone's build.
+const previewPort = process.env['PW_PREVIEW_PORT'] ?? '4173';
+const previewUrl = `http://localhost:${previewPort}`;
 
 // Against the production build (vite preview), API mocked per test.
 // - WebKit on an iPhone 15 viewport: everything except the service worker, which is blocked there so
@@ -21,7 +24,7 @@ export default defineConfig({
   workers: 2,
   forbidOnly: !!process.env['CI'],
   use: {
-    baseURL: 'http://localhost:4173',
+    baseURL: previewUrl,
     trace: 'retain-on-failure',
   },
   projects: [
@@ -53,9 +56,9 @@ export default defineConfig({
   webServer: {
     // Built by the `e2e` script first: one long-lived process that Playwright can stop (a shell chain left
     // `vite preview` orphaned and hung CI after the tests passed).
-    command: 'vite preview --port 4173 --strictPort',
-    url: 'http://localhost:4173',
-    reuseExistingServer: !process.env['CI'],
+    command: `vite preview --port ${previewPort} --strictPort`,
+    url: previewUrl,
+    reuseExistingServer: !process.env['CI'] && !process.env['PW_PREVIEW_PORT'],
     timeout: 120_000,
     gracefulShutdown: { signal: 'SIGINT', timeout: 5_000 },
   },

@@ -647,6 +647,19 @@ textarea:focus-visible {
 .notes .note-head h1 { flex: 1; margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
 .note-edit-sheet textarea { min-height: 40dvh; }
 
+/* Scout findings only: regular tables become labelled cards on phones. */
+.scout-findings, .scout-detail { min-width: 0; max-width: 100%; }
+.scout-table-scroll { max-width: 100%; overflow-x: auto; margin-block: 12px; }
+.scout-findings .scout-table-scroll table { display: table; width: 100%; }
+@media (max-width: 600px) {
+  .scout-findings .scout-table-scroll .scout-table-cards, .scout-table-cards tbody { display: block; }
+  .scout-table-cards thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .scout-table-cards tr { display: block; border: 1px solid #64748b; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+  .scout-findings .scout-table-cards td { display: block; border: 0; padding: 4px 0; overflow-wrap: anywhere; }
+  .scout-table-cards td::before { content: attr(data-label) ': '; font-weight: 650; }
+  .scout-table-cards td:first-child { font-size: 1.1rem; font-weight: 650; }
+  .scout-table-cards a { display: inline-block; padding-block: 8px; }
+}
 
 /* Explicit dark theme mirrors the system theme tokens. */
 :root[data-theme='dark'] {

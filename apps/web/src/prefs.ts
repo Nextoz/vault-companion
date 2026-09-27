@@ -1,6 +1,13 @@
 // Small per-device conveniences in localStorage. None of it is vault content; all of it is optional.
 export type CaptureKind = 'task' | 'note' | 'active-work';
 
+/** Fresh captures follow the invoking view; other views keep the device preference. */
+export function captureDefaultForTab(tab: string): CaptureKind | undefined {
+  if (tab === 'notes') return 'note';
+  if (tab === 'today' || tab === 'all') return 'task';
+  return undefined;
+}
+
 function read(key: string): string | null {
   try {
     return localStorage.getItem(key);

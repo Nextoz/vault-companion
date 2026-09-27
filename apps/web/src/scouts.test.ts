@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ScoutStatus, ScoutsResponse } from '@vault-companion/contracts';
 import { attentionCount, displayState, lastRun, relativeTime } from './scouts.ts';
 
@@ -39,11 +39,19 @@ describe('displayState', () => {
     expect(displayState(healthy, now)).toBe('Healthy');
   });
 });
+it('Today and Yesterday do not depend on the engine parsing non-ISO date strings', () => {
+  const parse = Date.parse;
+  const spy = vi.spyOn(Date, 'parse').mockImplementation((s) => /^\d{4}-\d{2}-\d{2}T/.test(s) ? parse(s) : NaN);
+  try {
+    expect(relativeTime('2026-09-27T16:42:00Z', '2026-09-27T17:42:00Z')).toBe('Today 18:42');
+    expect(relativeTime('2026-09-26T04:51:00Z', '2026-09-27T08:00:00Z')).toBe('Yesterday 06:51');
+  } finally { spy.mockRestore(); }
+});
 it('relative time and newer failed attempts', () => {
-  expect(relativeTime(at, now)).toBe('2 h ago');
+  expect(relativeTime(at, now)).toBe('Today 06:50');
   expect(relativeTime(at, Date.parse(at) + 60_000)).toBe('1 min ago');
   expect(relativeTime(at, at)).toBe('just now');
-  expect(relativeTime(at, Date.parse(at) + 86_400_000)).toBe('1 d ago');
+  expect(relativeTime(at, Date.parse(at) + 86_400_000)).toBe('Yesterday 06:50');
   expect(relativeTime(null, now)).toBe('—');
   expect(lastRun({ ...healthy, runStatus: 'failed', lastSuccessAt: '2026-09-26T04:00:00Z' })).toBe(at);
   expect(lastRun({ ...healthy, lastAttemptAt: null, lastSuccessAt: null })).toBeNull();
@@ -56,4 +64,34 @@ it('only Failed and Stale need attention; unreadable is neutral', () => {
   ] };
   expect(attentionCount(response)).toBe(2);
   expect(attentionCount({ ...response, scouts: [] })).toBe(0);
+});
+
+
+describe('Copenhagen freshness boundaries using server now', () => {
+  it.each([
+    ['2026-09-27T16:42:00Z', '2026-09-27T16:42:59Z', 'just now'],
+    ['2026-09-27T16:42:00Z', '2026-09-27T16:43:00Z', '1 min ago'],
+    ['2026-09-27T16:42:00Z', '2026-09-27T16:54:00Z', '12 min ago'],
+    ['2026-09-27T16:42:00Z', '2026-09-27T17:41:59Z', '59 min ago'],
+    ['2026-09-27T16:42:00Z', '2026-09-27T17:42:00Z', 'Today 18:42'],
+    ['2026-09-27T16:42:00Z', '2026-09-27T21:59:59Z', 'Today 18:42'],
+    ['2026-09-27T16:42:00Z', '2026-09-27T22:00:00Z', 'Yesterday 18:42'],
+    ['2026-09-27T21:50:00Z', '2026-09-27T22:02:00Z', '12 min ago'],
+    ['2026-09-26T04:51:00Z', '2026-09-27T08:00:00Z', 'Yesterday 06:51'],
+    ['2026-09-26T04:51:00Z', '2026-09-27T22:00:00Z', 'Sat 26 Sep 06:51'],
+    ['2026-12-31T17:42:00Z', '2026-12-31T23:00:00Z', 'Yesterday 18:42'],
+    // Spring jump: 01:59 CET -> 03:00 CEST, real elapsed minutes still win.
+    ['2026-03-29T00:59:00Z', '2026-03-29T01:00:00Z', '1 min ago'],
+    ['2026-03-29T00:00:00Z', '2026-03-29T01:00:00Z', 'Today 01:00'],
+    ['2026-03-28T22:30:00Z', '2026-03-29T22:00:00Z', 'Sat 28 Mar 23:30'],
+    ['2026-03-28T23:00:00Z', '2026-03-29T22:00:00Z', 'Yesterday 00:00'],
+    // Autumn repeat and 25-hour yesterday.
+    ['2026-10-25T00:59:00Z', '2026-10-25T01:00:00Z', '1 min ago'],
+    ['2026-10-25T00:00:00Z', '2026-10-25T01:00:00Z', 'Today 02:00'],
+    ['2026-10-24T22:00:00Z', '2026-10-25T23:00:00Z', 'Yesterday 00:00'],
+    ['2026-09-27T18:00:00Z', '2026-09-27T17:00:00Z', 'just now'],
+    [null, '2026-09-27T17:00:00Z', '—'],
+    ['invalid', '2026-09-27T17:00:00Z', '—'],
+    ['2026-09-27T18:00:00Z', 'invalid', '—'],
+  ])('%s at %s => %s', (at, now, expected) => expect(relativeTime(at, now)).toBe(expected));
 });
