@@ -10,6 +10,7 @@ import {
   type LinkedNoteRequest,
   Receipt,
   SessionResponse,
+  ScoutsResponse,
   TasksResponse,
   type TaskView,
 } from '@vault-companion/contracts';
@@ -88,10 +89,43 @@ export class MockApi {
   #held: (() => void)[] = [];
   #revision = sha();
 
+  scouts: ScoutsResponse = ScoutsResponse.parse({
+    revision: 'a'.repeat(40), now: '2026-09-27T08:50:02+02:00', scouts: [
+      { state: 'ok', file: 'city-events.json', status: {
+        schemaVersion: 1, scoutId: 'city-events', displayName: 'City events', schedule: 'daily 06:50', expectedEveryHours: 24,
+        lastAttemptAt: '2026-09-27T06:50:02+02:00', lastSuccessAt: null, runStatus: 'failed', sources: null, aiHealth: null,
+        findings: null, added: null, errors: 1, lastError: 'runner could not start', latestOutput: null,
+        history: [{ at: '2026-09-27T06:50:02+02:00', status: 'failed', findings: null }],
+      } },
+      { state: 'ok', file: 'learning.json', status: {
+        schemaVersion: 1, scoutId: 'learning', displayName: 'Learning opportunities', schedule: 'daily 07:00', expectedEveryHours: 24,
+        lastAttemptAt: '2026-09-27T07:00:00+02:00', lastSuccessAt: '2026-09-27T07:00:00+02:00', runStatus: 'success',
+        sources: { configured: 3, successful: 3 }, aiHealth: 'healthy', findings: 4, added: 2, errors: 0,
+        lastError: 'Previous run: one source timed out', latestOutput: 'Discoveries/Learning.md',
+        history: [
+          { at: '2026-09-26T07:00:00+02:00', status: 'degraded', findings: 2 },
+          { at: '2026-09-27T07:00:00+02:00', status: 'success', findings: 4 },
+        ],
+      } },
+      { state: 'unreadable', file: 'unreadable.json' },
+    ],
+  });
+  readonly scoutOutputRequests: string[] = [];
   /** Route a page, or a whole context: only a context route also sees requests made by a service worker. */
   async install(target: Page | BrowserContext): Promise<void> {
     const on = (glob: string, handle: (route: Route) => Promise<void>) =>
       target.route(glob, (route) => (this.network === 'down' ? route.abort('internetdisconnected') : handle(route)));
+    await on('**/api/scouts', (route) => this.session === 'signed-out'
+      ? route.fulfill({ status: 401, body: '' })
+      : this.#json(route, 200, ScoutsResponse.parse(this.scouts)));
+    await on('**/api/scouts/output', (route) => {
+      if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+      const id = route.request().headers()['x-vc-scout'] ?? '';
+      this.scoutOutputRequests.push(id);
+      return this.#json(route, 200, LinkedNoteResponse.parse(id === 'learning'
+        ? { status: 'ok', revision: this.#revision, blobSha: 'b'.repeat(40), path: 'Discoveries/Learning.md', markdown: '# Learning findings\n\nFour synthetic opportunities.\n\n<script>alert(1)</script>' }
+        : { status: 'refused', revision: this.#revision, code: 'not-found', message: 'No findings note yet.' }));
+    });
     await on('**/api/session', (route) => this.#session(route));
     await on('**/api/tasks**', (route) => this.#tasks(route));
     await on('**/api/commands', (route) => this.#command(route));

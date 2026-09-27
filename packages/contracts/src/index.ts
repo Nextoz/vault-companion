@@ -360,3 +360,44 @@ export const ActiveWorkResponse = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('refused'), revision: commitSha, code: ActiveWorkRefusalCode, message: z.string() }),
 ]);
 export type ActiveWorkResponse = z.infer<typeof ActiveWorkResponse>;
+
+// ---- Scout status page (ADR-0020): read-only projection of Automation/Scout Status/*.json ----
+
+export const SCOUT_STATUS_DIR = 'Automation/Scout Status';
+const nullableCount = z.number().int().nonnegative().nullable();
+/** One status file (schemaVersion 1). Unknown fields are ignored (`z.object` strips); most fields may be null. */
+export const ScoutStatus = z.object({
+  schemaVersion: z.literal(1),
+  scoutId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+  displayName: z.string().min(1).max(100),
+  schedule: z.string().max(100).nullable(),
+  expectedEveryHours: z.number().positive().max(24 * 31).nullable(),
+  lastAttemptAt: isoInstant.nullable(),
+  lastSuccessAt: isoInstant.nullable(),
+  runStatus: z.enum(['running', 'success', 'degraded', 'failed']).nullable(),
+  sources: z.object({ configured: z.number().int().nonnegative(), successful: z.number().int().nonnegative() }).nullable(),
+  aiHealth: z.enum(['healthy', 'degraded', 'failed']).nullable(),
+  findings: nullableCount,
+  added: nullableCount,
+  errors: nullableCount,
+  /** Shown as one line, truncated by the server to 200 characters. */
+  lastError: z.string().max(200).nullable(),
+  latestOutput: z.string().max(500).nullable(),
+  history: z
+    .array(z.object({ at: isoInstant, status: z.enum(['running', 'success', 'degraded', 'failed']), findings: nullableCount }))
+    .max(30),
+});
+export type ScoutStatus = z.infer<typeof ScoutStatus>;
+
+export const ScoutsResponse = z.strictObject({
+  revision: commitSha,
+  /** Server time: staleness never depends on the phone clock. */
+  now: isoInstant,
+  scouts: z.array(
+    z.discriminatedUnion('state', [
+      z.strictObject({ state: z.literal('ok'), file: z.string(), status: ScoutStatus }),
+      z.strictObject({ state: z.literal('unreadable'), file: z.string() }),
+    ]),
+  ),
+});
+export type ScoutsResponse = z.infer<typeof ScoutsResponse>;

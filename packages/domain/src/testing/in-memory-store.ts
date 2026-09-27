@@ -158,11 +158,11 @@ export class InMemoryStore implements VaultStore {
   listFilesLimit = Number.POSITIVE_INFINITY;
 
   async listFiles(dir: string, atCommit: string): Promise<readonly ListedFile[]> {
-    guard(dir);
+    if (dir !== '') guard(dir);
     const commit = this.commits.get(atCommit);
     if (!commit) throw new StoreUnavailable(`unknown commit ${atCommit}`);
     if (commit.tree.has(dir)) throw new StoreUnavailable('not a directory');
-    const prefix = `${dir}/`;
+    const prefix = dir === '' ? '' : `${dir}/`;
     const out = [...commit.tree].filter(([p]) => p.startsWith(prefix)).map(([path, blobSha]) => ({ path, blobSha }));
     if (out.length > this.listFilesLimit) throw new FileTooLarge('listing truncated');
     return out;

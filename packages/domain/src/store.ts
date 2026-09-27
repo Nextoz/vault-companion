@@ -99,6 +99,7 @@ export interface VaultStore {
    * Every **regular file** (Git mode 100644/100755; never symlinks, submodules or directories) anywhere below `dir` at
    * `atCommit`, as full vault-relative paths with their blob SHAs. `[]` only when `dir` is confirmed absent; a truncated
    * listing throws `FileTooLarge`; any other failure throws (fail closed). Used to resolve linked notes (P4-A).
+   * `dir === ''` lists from the vault root (read-only scout output notes, ADR-0020).
    */
   listFiles(dir: string, atCommit: string): Promise<readonly ListedFile[]>;
   /** Single-file commit parented on `baseCommit`; publishes only as a fast-forward from it (head-CAS, ADR-0011). */

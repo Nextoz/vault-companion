@@ -1,4 +1,5 @@
 // Path policy: docs/vault-contract.md §1. Every path passes here before an adapter sees it.
+import { SCOUT_STATUS_DIR } from '@vault-companion/contracts';
 import type { VaultPath } from './store.ts';
 
 export const TODO_LIST_PATH = 'Tasks/To-Do List.md';
@@ -31,13 +32,14 @@ export function isStructurallySafePath(raw: string): boolean {
   return raw.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..' && seg === seg.trim());
 }
 
-/** Validate and NFC-normalise a vault-relative Markdown path; `null` when unsafe or out of scope. */
+/** Validate and NFC-normalise a note or read-only scout status path. */
 export function parseVaultPath(raw: string): VaultPath | null {
   if (!isStructurallySafePath(raw)) return null;
   const path = raw.normalize('NFC');
   if (!isStructurallySafePath(path)) return null;
   if (isDenied(path.split('/')[0]!)) return null;
-  if (!path.endsWith('.md')) return null;
+  const scoutStatus = path.startsWith(`${SCOUT_STATUS_DIR}/`) && path.split('/').length === 3 && path.endsWith('.json');
+  if (!path.endsWith('.md') && !scoutStatus) return null;
   return path as VaultPath;
 }
 
@@ -58,3 +60,9 @@ export function canReadLinkedNote(path: VaultPath): boolean {
 }
 
 export const LINKED_NOTE_ROOTS: readonly string[] = [...LINKED_NOTE_ALLOWED_ROOTS];
+
+/** ADR-0020: any note folder, with the same hidden/denied segment policy as linked notes. */
+export function canReadScoutOutput(raw: string): boolean {
+  return isStructurallySafePath(raw) && raw.endsWith('.md') &&
+    raw.split('/').every((s) => !s.startsWith('.') && !isDenied(s));
+}

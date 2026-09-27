@@ -19,9 +19,10 @@ import { EditSheet } from './EditSheet.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
 import { VaultStatus } from './VaultStatus.tsx';
+import { Scouts } from './Scouts.tsx';
 import { TaskList } from './TaskList.tsx';
 
-type Tab = 'today' | 'all';
+type Tab = 'today' | 'all' | 'scouts';
 interface Toast {
   target: CompleteTaskCommand;
   label: string;
@@ -294,6 +295,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <button type="button" aria-pressed={tab === 'all'} onClick={() => setTab('all')}>
             All
           </button>
+          <button type="button" aria-pressed={tab === 'scouts'} onClick={() => setTab('scouts')}>Scouts</button>
         </nav>
       </header>
 
@@ -367,6 +369,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
 
+        {tab !== 'all' && !signedOut && <Scouts key={`scouts:${accountKey}`} page={tab === 'scouts'} onOpen={() => setTab('scouts')} refreshKey={checkedAt} />}
+
         {tab === 'today' && !signedOut && <ActiveWorkCard key={accountKey} revision={tasks?.revision ?? null} queue={queue} accountKey={accountKey} onOpenLink={openNote} />}
 
         {connection === 'loading' && !tasks && <p className="muted">Loading…</p>}
@@ -375,7 +379,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         )}
 
         {tasks && lock?.conflict && <p className="muted small">{FROZEN_NOTE}</p>}
-        {tasks &&
+        {tasks && tab !== 'scouts' &&
           (tab === 'today' ? (
             <>
               <TaskList title="Today" rows={view.today} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} empty="Nothing due today." />

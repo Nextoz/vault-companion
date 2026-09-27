@@ -198,6 +198,10 @@ describe('production composition (review R10)', () => {
     const work = await app.fetch(new Request(`${ORIGIN}/api/active-work`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
     expect(work.status).toBe(503);
     expect(work.headers.get('Cache-Control')).toBe('no-store');
+    const scouts = await app.fetch(new Request(`${ORIGIN}/api/scouts`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
+    expect(scouts.status).toBe(503); // Reaches the real store, never an unwired 404.
+    const scoutOutput = await app.fetch(new Request(`${ORIGIN}/api/scouts/output`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
+    expect(scoutOutput.status).toBe(400); // Wired; requires the scout ID header.
     const other = await new SignJWT({ email: 'owner@example.com' })
       .setProtectedHeader({ alg: 'RS256', kid: 'k' })
       .setIssuer('https://team.cloudflareaccess.com')
