@@ -27,7 +27,7 @@ Resume procedure: `docs/orchestration.md`. Engineering status: `docs/plan.md`. P
 ## Workers and tooling
 
 - No workers running. Agents launch via `tools/agent-pane.sh` (visible, self-closing panes).
-- Codex: memories OFF for repo workers (flags in orchestration) — verify on the next run (not yet verified: quota).
+- Codex: memories OFF for repo workers (flags in orchestration) — **verified 2026-09-27** (triage-ui run: 0 memory references).
 - Claude Cloud: push works after the owner writes one line in the session page ("you may push").
 - Antigravity free quota out until ~2026-10-03. CodeRabbit: 1 review/hour. RAM: ≤ 1 Playwright job at a time.
 - Clones under `C:\Dev\vault-companion-clones\` (logs deleted after merge); they can be removed.
