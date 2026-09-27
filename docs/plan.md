@@ -38,10 +38,9 @@ identity-safe duplicate-row fix · #25 e2e flakes. **Deployed: `3feaf6b6` (N). *
 Claude Cloud ~$10 credit; owner ran /web-setup (GitHub connected as Nextoz), so new Cloud sessions clone with push —
 still probe a push at launch · CodeRabbit 1 review/hour · RAM 2–4 GB free: ≤ 1 Playwright job at a time.
 
-**In parallel (2026-09-27):** astra-medium · view-fixes (w3:p1Q: B edit double row + O8 verify via History) · astra-high · r7-undo-blank (w3:p1R: reproduce first). O4 later (RAM); R3 needs a live-log session while the owner uses the app.
+**Batched fixes PR #34** (branch agent/fixes-r7-view): R7 blank-line residue fixed (reproduced first), B edit double row fixed, O8 verified resolved by History; full check 1153/1153; CodeRabbit requested 15:36. **T card stack** committed on agent/triage-ui (not merged until the feed contract exists; review its playwright.config change at integration). O4 later (RAM); R3 needs a live-log session.
 
-**Open technical follow-ups:** R3 CPU re-measure after the latest deploys · O8
-completion queued before midnight disappears · O4 harness through production composition · R7 blank line in Done ·
+**Open technical follow-ups:** R3 CPU re-measure after the latest deploys · O4 harness through production composition ·
 B follow-up: an edit applied but not yet receipted can briefly render twice · "New version — tap to reload" banner (owner
 ran an old build after deploy) · post-save wording "reaches Obsidian at your next desktop sync" (desktop sync is hourly at
 :06, vault task Sync-ObsidianVaultToGoogleDrive -RequireGitHubSync) — bundle both into C.
