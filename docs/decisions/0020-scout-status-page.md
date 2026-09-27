@@ -29,9 +29,11 @@ Derived display state (client, pure function, unit-tested):
 
 `GET /api/scouts/output` with header `X-VC-Scout: <scoutId>`: the server re-reads that scout's status file at X and
 renders its `latestOutput` note through the existing linked-note rendering (sanitised, read-only, 1 MB cap, symlinks
-never followed). **Owner decision (2026-09-27): any folder a status file names**, subject to the existing structural
-path policy (`isStructurallySafePath`: vault-relative, `.md`, no `..`/absolute/backslash/`%`/control characters, never
-`.git/`, `.obsidian/`, `.trash/`, `Tools/`, `tmp/`, `output/`). The client never supplies a path.
+never followed). **Owner decision (2026-09-27): any folder a status file names** — the one exception to the
+linked-note root allowlist (`LINKED_NOTE_ROOTS` does not apply). What still applies is `canReadScoutOutput` in
+`paths.ts`: `isStructurallySafePath` (vault-relative, no `..`/absolute/backslash/`%`/control characters) **plus** `.md`
+only **plus** the linked-note segment rule (no segment starting with `.`, no denied segment such as `Tools`, `tmp`,
+`output`). The path is NFC-normalised before validation and lookup. The client never supplies a path.
 
 ## UI
 

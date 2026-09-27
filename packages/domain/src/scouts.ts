@@ -59,12 +59,13 @@ async function readOutput(store: VaultStore, scoutId: string): Promise<LinkedNot
       if (match) return refused('not-found', 'scout ID is ambiguous');
       match = entry.status;
     }
-    const path = match?.latestOutput;
+    // Vault paths are compared in NFC (vault-contract §1): a decomposed name written by another tool still matches.
+    const path = match?.latestOutput?.normalize('NFC');
     if (!path) return refused('not-found', 'the scout has no output note');
     if (!canReadScoutOutput(path)) return refused('outside-allowlist', 'the output path is not allowed');
     // Root-level notes are supported too; the store's recursive root listing uses an empty directory.
     const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-    const listed = (await store.listFiles(dir, x)).find((f) => f.path === path);
+    const listed = (await store.listFiles(dir, x)).find((f) => f.path.normalize('NFC') === path);
     if (!listed) return refused('not-found', 'the output note does not exist');
     return await readResolvedNote(store, x, listed);
   } catch (e) {

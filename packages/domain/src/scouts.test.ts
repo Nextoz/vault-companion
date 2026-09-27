@@ -227,3 +227,11 @@ describe('scout upstream errors', () => {
     expect(await service(store).readScoutOutput('city-events')).toMatchObject({ status: 'refused', code: 'too-large' });
   });
 });
+
+it('matches a decomposed (NFD) latestOutput to the stored NFC note (CodeRabbit #31)', async () => {
+  const composed = 'Events/Caf' + String.fromCharCode(0xe9) + '.md';
+  const decomposed = 'Events/Cafe' + String.fromCharCode(0x301) + '.md';
+  expect(decomposed).not.toBe(composed);
+  const store = await seed({ latestOutput: decomposed }, { [composed]: '# Findings\n' });
+  expect(await service(store).readScoutOutput('city-events')).toMatchObject({ status: 'ok', path: composed });
+});
