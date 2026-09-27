@@ -63,6 +63,36 @@ export const EditTaskChanges = z
   .refine((c) => Object.keys(c).length > 0, 'at least one change');
 export const EditTaskPayload = z.strictObject({ task: TaskLocator, changes: EditTaskChanges });
 
+/** ADR-0019: an item line in Tasks/Active Work Now.md, addressed like a task (ADR-0003). */
+export const ActiveWorkLocator = z.strictObject({
+  path: z.literal('Tasks/Active Work Now.md'),
+  blobSha,
+  lineIndex: z.number().int().nonnegative(),
+  lineText: singleLine,
+  occurrencesAtRead: z.number().int().positive(),
+});
+export type ActiveWorkLocator = z.infer<typeof ActiveWorkLocator>;
+const awText = singleLine.pipe(z.string().max(500));
+const awLink = z.string().regex(/^\[\[[^[\]]+\]\]$/, 'must be a [[wikilink]]');
+export const CaptureActiveWorkPayload = z.strictObject({
+  name: awText,
+  next: awText.optional(),
+  review: z.iso.date().optional(),
+  link: awLink.optional(),
+});
+export const EditActiveWorkPayload = z.strictObject({
+  item: ActiveWorkLocator,
+  changes: z
+    .strictObject({ name: awText.optional(), next: awText.nullable().optional(), review: z.iso.date().nullable().optional() })
+    .refine((c) => Object.keys(c).length > 0, 'at least one change'),
+});
+export const ReviewActiveWorkPayload = z.discriminatedUnion('action', [
+  z.strictObject({ item: ActiveWorkLocator, action: z.literal('keep') }),
+  z.strictObject({ item: ActiveWorkLocator, action: z.literal('done') }),
+  z.strictObject({ item: ActiveWorkLocator, action: z.literal('park') }),
+  z.strictObject({ item: ActiveWorkLocator, action: z.literal('drop'), reason: singleLine.pipe(z.string().max(200)) }),
+]);
+
 export const CaptureNotePayload = z.strictObject({
   text: z.string().min(1).max(50_000),
   context: Context.optional(),
@@ -88,12 +118,20 @@ export type CompleteTaskCommand = z.infer<typeof CompleteTaskCommand>;
  */
 export const UndoCompleteTaskPayload = z.strictObject({ target: CompleteTaskCommand, targetCommit: commitSha });
 
+/** Undo of a review action names it verbatim plus its receipt commit; exact inverse only (ADR-0019). */
+export const ReviewActiveWorkCommand = envelope('ReviewActiveWork', ReviewActiveWorkPayload);
+export type ReviewActiveWorkCommand = z.infer<typeof ReviewActiveWorkCommand>;
+
 export const Command = z.discriminatedUnion('type', [
   CompleteTaskCommand,
   envelope('UndoCompleteTask', UndoCompleteTaskPayload),
   envelope('CaptureTask', CaptureTaskPayload),
   envelope('CaptureNote', CaptureNotePayload),
   envelope('EditTask', EditTaskPayload),
+  envelope('CaptureActiveWork', CaptureActiveWorkPayload),
+  envelope('EditActiveWork', EditActiveWorkPayload),
+  ReviewActiveWorkCommand,
+  envelope('UndoActiveWork', z.strictObject({ target: ReviewActiveWorkCommand, targetCommit: commitSha })),
 ]);
 export type Command = z.infer<typeof Command>;
 export type CommandType = Command['type'];
@@ -109,7 +147,13 @@ export const ReopenEffect = z.strictObject({ kind: z.literal('reopened'), openLi
 export const CaptureTaskEffect = z.strictObject({ kind: z.literal('task-captured'), lineText: singleLine });
 export const CaptureNoteEffect = z.strictObject({ kind: z.literal('note-captured'), path: z.string() });
 export const EditEffect = z.strictObject({ kind: z.literal('edited'), beforeLineText: singleLine, afterLineText: singleLine });
-export const Effect = z.discriminatedUnion('kind', [CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect]);
+export const ActiveWorkEffect = z.strictObject({
+  kind: z.literal('active-work'),
+  op: z.enum(['captured', 'edited', 'keep', 'done', 'park', 'drop', 'undone']),
+  beforeLineText: singleLine.nullable(),
+  afterLineText: singleLine.nullable(),
+});
+export const Effect = z.discriminatedUnion('kind', [CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect]);
 export type Effect = z.infer<typeof Effect>;
 
 export const Receipt = z.strictObject({
@@ -289,7 +333,27 @@ export const ActiveWorkRefusalCode = z.enum([
 export type ActiveWorkRefusalCode = z.infer<typeof ActiveWorkRefusalCode>;
 
 export const ActiveWorkResponse = z.discriminatedUnion('status', [
-  z.strictObject({ status: z.literal('ok'), revision: commitSha, blobSha, markdown: z.string().max(MAX_NOTE_BYTES) }),
+  z.strictObject({
+    status: z.literal('ok'),
+    revision: commitSha,
+    blobSha,
+    markdown: z.string().max(MAX_NOTE_BYTES),
+    /** ADR-0019: parsed items of `## Now`, in file order; `needsReview` = review date before today. */
+    items: z.array(
+      z.strictObject({
+        locator: ActiveWorkLocator,
+        name: z.string(),
+        outcome: z.string().nullable(),
+        next: z.string().nullable(),
+        review: z.iso.date().nullable(),
+        link: z.string().nullable(),
+        needsReview: z.boolean(),
+      }),
+    ),
+    /** Lines inside `## Now` that are not items (prose, odd hand edits): shown read-only, never rewritten. */
+    unknownNowLines: z.array(z.string()),
+    today: z.iso.date(),
+  }),
   /** No regular file at the path: an ordinary state, not an error. */
   z.strictObject({ status: z.literal('absent'), revision: commitSha }),
   z.strictObject({ status: z.literal('refused'), revision: commitSha, code: ActiveWorkRefusalCode, message: z.string() }),
