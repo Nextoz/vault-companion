@@ -38,7 +38,9 @@ identity-safe duplicate-row fix · #25 e2e flakes. **Deployed: `3feaf6b6` (N). *
 Claude Cloud ~$10 credit; owner ran /web-setup (GitHub connected as Nextoz), so new Cloud sessions clone with push —
 still probe a push at launch · CodeRabbit 1 review/hour · RAM 2–4 GB free: ≤ 1 Playwright job at a time.
 
-**Batched fixes PR #34** (branch agent/fixes-r7-view): R7 blank-line residue fixed (reproduced first), B edit double row fixed, O8 verified resolved by History; full check 1153/1153; CodeRabbit requested 15:36. **T card stack** committed on agent/triage-ui (not merged until the feed contract exists; review its playwright.config change at integration). O4 later (RAM); R3 needs a live-log session.
+**Autonomous mode (owner away, 2026-09-27 afternoon):** session cron every :17/:47 — merge/deploy PR #34 when green; wire T as soon as Part 1 files exist (ADR-0024 + contract + one astra-high worker on the parked agent/triage-ui); O4 when RAM allows; summary for the owner at the top of docs/checkpoint.md.
+
+**Batched fixes PR #34** (branch agent/fixes-r7-view): R7 blank-line residue fixed (reproduced first), B edit double row fixed, O8 verified resolved by History; full check 1153/1153; CodeRabbit real review: 2 findings fixed (saved-edit resolution order with regression test; ADR-0023 for the R7 rule). **T card stack** committed on agent/triage-ui (not merged until the feed contract exists; review its playwright.config change at integration). O4 later (RAM); R3 needs a live-log session.
 
 **Open technical follow-ups:** R3 CPU re-measure after the latest deploys · O4 harness through production composition ·
 B follow-up: an edit applied but not yet receipted can briefly render twice · "New version — tap to reload" banner (owner
