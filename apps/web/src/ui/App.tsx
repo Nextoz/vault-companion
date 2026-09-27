@@ -22,6 +22,7 @@ import { VaultStatus } from './VaultStatus.tsx';
 import { History } from './History.tsx';
 import { Notes } from './Notes.tsx';
 import { Scouts } from './Scouts.tsx';
+import { Triage } from './Triage.tsx';
 import { TaskList } from './TaskList.tsx';
 
 type Tab = 'today' | 'all' | 'notes' | 'scouts' | 'history';
@@ -382,6 +383,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {(tab === 'today' || tab === 'scouts') && !signedOut && <Scouts key={`scouts:${accountKey}`} page={tab === 'scouts'} onOpen={() => setTab('scouts')} refreshKey={checkedAt} />}
 
         {tab === 'today' && !signedOut && <ActiveWorkCard key={accountKey} revision={tasks?.revision ?? null} queue={queue} accountKey={accountKey} onOpenLink={openNote} />}
+        {tab === 'today' && !signedOut && <Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} />}
 
         {connection === 'loading' && !tasks && <p className="muted">Loading…</p>}
         {connection !== 'loading' && !tasks && (connection === 'refreshing' || rendered) && (

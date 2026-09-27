@@ -37,6 +37,12 @@ runner="${log%.*}.run.sh"
   echo '#!/usr/bin/env bash'
   printf 'cd %q\n' "$cwd"
   printf 'echo %q\n' "── $label ── started $(date '+%H:%M:%S')"
+  # AGENT_USER_ENV="NAME [NAME…]": read Windows *user* variables at run time (a session started before the owner set them
+  # does not inherit them). Only the lookup is written here; the value never reaches this file or the log.
+  for name in ${AGENT_USER_ENV:-}; do
+    [[ "$name" =~ ^[A-Z_][A-Z0-9_]*$ ]] || { echo "bad AGENT_USER_ENV name" >&2; exit 2; }
+    printf 'export %s="$(powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('"'"'%s'"'"','"'"'User'"'"')" | tr -d '"'"'\\r\\n'"'"')"\n' "$name" "$name"
+  done
   printf '%q ' "$@"; if [ -n "${AGENT_STDIN:-}" ]; then printf '< %q ' "$AGENT_STDIN"; fi; printf '2>&1 | tee %q\n' "$log"
   echo 'echo; echo "── finished $(date +%H:%M:%S) — pane closes in 60 s ──"; sleep 60'
   printf 'herdr pane close %q\n' "$pane"

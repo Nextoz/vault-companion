@@ -1,6 +1,6 @@
 // Phone-like client: plain HTTP with the real wire contracts. Every envelope is validated with `Command` before it is
 // sent and every answer is parsed with `Receipt` / `ApiError` / `TasksResponse`, so a contract drift fails here.
-import { ActiveWorkResponse, ApiError, Command, encodeNoteHeader, NOTE_HEADER, NoteReadResponse, NotesResponse, Receipt, SessionResponse, TasksResponse, type CommandType } from '@vault-companion/contracts';
+import { ActiveWorkResponse, ApiError, Command, encodeNoteHeader, NOTE_HEADER, NoteReadResponse, NotesResponse, Receipt, SessionResponse, TasksResponse, TriageResponse, type CommandType } from '@vault-companion/contracts';
 import { randomUUID } from 'node:crypto';
 import { APP_ORIGIN } from './server.ts';
 
@@ -43,6 +43,12 @@ export class Phone {
     const r = ActiveWorkResponse.parse(await res.json());
     if (r.status !== 'ok') throw new Error(`Active Work read failed: ${r.status}`);
     return r;
+  }
+
+  async triage(): Promise<TriageResponse> {
+    const res = await fetch(`${this.baseUrl}/api/triage`, { headers: { 'Cf-Access-Jwt-Assertion': this.token } });
+    if (res.status !== 200) throw new Error(`triage failed: ${res.status}`);
+    return TriageResponse.parse(await res.json());
   }
 
   /** ADR-0022: the Inbox notes list. */

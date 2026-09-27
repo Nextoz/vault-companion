@@ -18,9 +18,11 @@ import {
   SessionResponse,
   ScoutsResponse,
   TasksResponse,
+  TriageResponse,
   type TaskView,
 } from '@vault-companion/contracts';
 import type { BrowserContext, Page, Route } from '@playwright/test';
+import { copenhagenDay } from '../src/triage.ts';
 
 export const ACCOUNT = 'a'.repeat(64);
 const TODAY = '2026-09-24';
@@ -95,6 +97,9 @@ export class MockApi {
   #held: (() => void)[] = [];
   #revision = sha();
 
+  triage: TriageResponse = { revision: 'a'.repeat(40), now: '2026-09-27T12:00:00Z', feedState: 'absent', generatedAt: null,
+    cards: [], droppedCards: 0, decisions: [], applied: {}, appliedUpdatedAt: null };
+
   scouts: ScoutsResponse = ScoutsResponse.parse({
     revision: 'a'.repeat(40), now: '2026-09-27T08:50:02+02:00', scouts: [
       { state: 'ok', file: 'city-events.json', status: {
@@ -150,6 +155,8 @@ export class MockApi {
     await on('**/api/commands', (route) => this.#command(route));
     await on('**/api/linked-note**', (route) => this.#linkedNote(route));
     await on('**/api/active-work', (route) => this.#activeWork(route));
+    await on('**/api/triage', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
+      : this.#json(route, 200, TriageResponse.parse({ ...this.triage, revision: this.#revision })));
     await on('**/api/history', (route) => this.#history(route));
     await on('**/api/notes', (route) => this.#notes(route));
     await on('**/api/notes/read', (route) => this.#noteRead(route));
@@ -321,6 +328,12 @@ export class MockApi {
     const base = { operationId: command.operationId, status: 'applied' as const, commitSha: this.#revision, blobSha: sha() };
     if (command.type !== 'CaptureNote' && command.type !== 'EditNote') this.blobSha = base.blobSha;
     switch (command.type) {
+      case 'TriageDecide': {
+        const { eventId, decision, undoes } = command.payload;
+        this.triage.decisions.push({ decisionId: command.operationId, eventId, decision, undoes, at: command.occurredAt });
+        const path = `Events/Triage/Decisions/${copenhagenDay(command.occurredAt).slice(0, 7)}.jsonl`;
+        return { ...base, path, effect: { kind: 'triage-decided', path, decisionId: command.operationId } };
+      }
       case 'CaptureActiveWork': {
         const p = command.payload;
         const lineText = '- [ ] **' + p.name + ':**' + (p.next ? ' Next: ' + p.next : '') + (p.review ? ' ⏳ ' + p.review : '') + (p.link ? ' ' + p.link : '');

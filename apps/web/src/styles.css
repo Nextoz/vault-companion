@@ -9,6 +9,9 @@
   --warn: #8a4b00;
   --warn-soft: #fbefdc;
   --danger: #a1261b;
+  --danger-soft: #f8e4e1;
+  --maybe: #3d5a8a;
+  --maybe-soft: #e4eaf4;
   --tap: 44px;
   color-scheme: light dark;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -19,7 +22,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #121211;
     --surface: #1c1c1a;
     --text: #ededea;
@@ -30,6 +33,9 @@
     --warn: #f0b566;
     --warn-soft: #33260f;
     --danger: #ff8a7a;
+    --danger-soft: #3a1c18;
+    --maybe: #9db6e8;
+    --maybe-soft: #1c2536;
   }
 }
 
@@ -653,4 +659,58 @@ textarea:focus-visible {
   .scout-table-cards td::before { content: attr(data-label) ': '; font-weight: 650; }
   .scout-table-cards td:first-child { font-size: 1.1rem; font-weight: 650; }
   .scout-table-cards a { display: inline-block; padding-block: 8px; }
+}
+
+/* Explicit dark theme mirrors the system theme tokens. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #121211; --surface: #1c1c1a; --text: #ededea; --muted: #9b9b95; --line: #2e2e2b;
+  --accent: #7cc4ad; --accent-soft: #1d302a; --warn: #f0b566; --warn-soft: #33260f; --danger: #ff8a7a;
+  --danger-soft: #3a1c18; --maybe: #9db6e8; --maybe-soft: #1c2536;
+}
+.triage-stack { max-width: 420px; margin: 0 auto; padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; overflow: clip; }
+.triage-meta { color: var(--muted); font-size: 13px; margin: 0; font-variant-numeric: tabular-nums; }
+.triage-stage { position: relative; min-height: 470px; display: grid; margin-bottom: 14px; }
+.triage-card { grid-area: 1 / 1; min-width: 0; position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 12px; user-select: none; touch-action: none; cursor: grab; transform: translate(var(--triage-x, 0px), var(--triage-y, 0px)) rotate(var(--triage-tilt, 0deg)); transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 260ms; overflow-wrap: anywhere; }
+.triage-card.triage-dragging { transition: none; cursor: grabbing; }
+.triage-card.triage-next { transform: translateY(14px) scale(.955); opacity: .85; pointer-events: none; }
+.triage-datehead { display: flex; align-items: center; gap: 14px; }
+.triage-dateblock { width: 68px; flex: none; border-radius: 14px; padding: 8px 0; display: flex; flex-direction: column; align-items: center; line-height: 1.05; background: var(--accent); color: var(--surface); }
+.triage-dateblock span { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.triage-dateblock strong { font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.triage-time { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.triage-where { color: var(--muted); font-size: 14px; margin: 0; }
+.triage-card h2 { font-size: 20px; font-weight: 650; line-height: 1.25; margin: 0; text-wrap: balance; }
+.triage-why { margin: 0; padding: 10px 12px; background: var(--bg); border-radius: 10px; }
+.triage-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.triage-chip { font-size: 12.5px; padding: 5px 9px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+.triage-chip.triage-ok { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.triage-chip.triage-warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.triage-chip.triage-explore { background: var(--maybe-soft); border-color: transparent; color: var(--maybe); font-weight: 600; }
+.triage-stamp { position: absolute; top: 22px; font-weight: 800; font-size: 26px; letter-spacing: .08em; padding: 4px 12px; border: 3px solid currentColor; border-radius: 8px; pointer-events: none; }
+.triage-stamp.triage-go { left: 18px; color: var(--accent); transform: rotate(-12deg); }
+.triage-stamp.triage-skip { right: 18px; color: var(--danger); transform: rotate(12deg); }
+.triage-stamp.triage-maybe { left: 50%; top: auto; bottom: 90px; color: var(--maybe); transform: translateX(-50%); }
+.triage-actions { display: flex; gap: 10px; justify-content: center; }
+.triage-actions button { flex: 1 1 0; min-height: 52px; border-radius: 14px; font-size: 16px; font-weight: 700; }
+.triage-actions .triage-skip { color: var(--danger); }
+.triage-actions .triage-maybe { color: var(--maybe); flex: .8 1 0; }
+.triage-actions .triage-go { color: var(--surface); background: var(--accent); border-color: var(--accent); }
+.triage-stack button:focus-visible { outline: 3px solid var(--maybe); outline-offset: 2px; }
+.triage-reasons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.triage-reasons button { font-size: 13px; padding: 6px 10px; border-radius: 999px; }
+.triage-reasons button[aria-pressed='true'] { background: var(--danger-soft); color: var(--danger); border-color: transparent; font-weight: 600; }
+.triage-undo { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border-radius: 12px; background: var(--text); color: var(--bg); font-size: 14px; min-height: 48px; }
+.triage-undo small { display: block; font-size: 12px; opacity: .8; }
+.triage-undo button { background: none; border: none; color: var(--bg); font-weight: 700; }
+.triage-done { display: grid; place-items: center; color: var(--text); font-size: 20px; }
+.triage-screen { position: fixed; inset: 0; z-index: 60; background: var(--bg); overflow-y: auto; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+.triage-screen > header { display: flex; align-items: center; justify-content: space-between; max-width: 440px; margin: auto; }
+.triage-screen > p, .triage-screen > small, .triage-details, .triage-statuses { display: block; max-width: 420px; margin: 12px auto; overflow-wrap: anywhere; }
+.triage-statuses { font-size: 13px; padding-left: 20px; }
+.triage-statuses li { margin-bottom: 8px; }
+.triage-indicator { margin: 12px 0; }
+@media (prefers-reduced-motion: reduce) {
+  .triage-card { transition: none; transform: translate(var(--triage-x, 0px), var(--triage-y, 0px)); }
+  .triage-stamp.triage-go, .triage-stamp.triage-skip { transform: none; }
 }
