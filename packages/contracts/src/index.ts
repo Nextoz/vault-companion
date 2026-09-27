@@ -93,6 +93,13 @@ export const ReviewActiveWorkPayload = z.discriminatedUnion('action', [
   z.strictObject({ item: ActiveWorkLocator, action: z.literal('drop'), reason: singleLine.pipe(z.string().max(200)) }),
 ]);
 
+/** ADR-0022: an Inbox note as read (path + blob), and its new body; frontmatter/BOM/EOL are kept by the server. */
+export const InboxNotePath = z.string().regex(/^Inbox\/[^/]+\.md$/, 'must be a note directly in Inbox/');
+export const EditNotePayload = z.strictObject({
+  note: z.strictObject({ path: InboxNotePath, blobSha }),
+  body: z.string().max(50_000),
+});
+
 export const CaptureNotePayload = z.strictObject({
   text: z.string().min(1).max(50_000),
   context: Context.optional(),
@@ -127,6 +134,7 @@ export const Command = z.discriminatedUnion('type', [
   envelope('UndoCompleteTask', UndoCompleteTaskPayload),
   envelope('CaptureTask', CaptureTaskPayload),
   envelope('CaptureNote', CaptureNotePayload),
+  envelope('EditNote', EditNotePayload),
   envelope('EditTask', EditTaskPayload),
   envelope('CaptureActiveWork', CaptureActiveWorkPayload),
   envelope('EditActiveWork', EditActiveWorkPayload),
@@ -147,13 +155,14 @@ export const ReopenEffect = z.strictObject({ kind: z.literal('reopened'), openLi
 export const CaptureTaskEffect = z.strictObject({ kind: z.literal('task-captured'), lineText: singleLine });
 export const CaptureNoteEffect = z.strictObject({ kind: z.literal('note-captured'), path: z.string() });
 export const EditEffect = z.strictObject({ kind: z.literal('edited'), beforeLineText: singleLine, afterLineText: singleLine });
+export const NoteEditedEffect = z.strictObject({ kind: z.literal('note-edited'), path: InboxNotePath });
 export const ActiveWorkEffect = z.strictObject({
   kind: z.literal('active-work'),
   op: z.enum(['captured', 'edited', 'keep', 'done', 'park', 'drop', 'undone']),
   beforeLineText: singleLine.nullable(),
   afterLineText: singleLine.nullable(),
 });
-export const Effect = z.discriminatedUnion('kind', [CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect]);
+export const Effect = z.discriminatedUnion('kind', [CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect]);
 export type Effect = z.infer<typeof Effect>;
 
 export const Receipt = z.strictObject({
@@ -417,3 +426,30 @@ export const HistoryResponse = z.strictObject({
   items: z.array(HistoryItem).max(MAX_HISTORY_ITEMS),
 });
 export type HistoryResponse = z.infer<typeof HistoryResponse>;
+
+// ---- Notes in the app (ADR-0022): Inbox notes list, view, edit ----
+
+export const MAX_NOTES_LISTED = 200;
+export const NotesResponse = z.strictObject({
+  revision: commitSha,
+  /** Newest first by the " - YYYY-MM-DD" name suffix; undated names after, by name. No contents are read. */
+  notes: z
+    .array(z.strictObject({ path: InboxNotePath, title: z.string(), date: z.iso.date().nullable(), blobSha }))
+    .max(MAX_NOTES_LISTED),
+});
+export type NotesResponse = z.infer<typeof NotesResponse>;
+export const NoteReadResponse = z.discriminatedUnion('status', [
+  z.strictObject({
+    status: z.literal('ok'),
+    revision: commitSha,
+    path: InboxNotePath,
+    blobSha,
+    markdown: z.string().max(MAX_NOTE_BYTES),
+    /** The leading --- … --- block incl. its line break, or "" (kept byte for byte on edit). */
+    frontmatter: z.string(),
+    /** Everything after the frontmatter: what the editor shows and replaces. */
+    body: z.string(),
+  }),
+  z.strictObject({ status: z.literal('refused'), revision: commitSha, code: LinkedNoteRefusalCode, message: z.string() }),
+]);
+export type NoteReadResponse = z.infer<typeof NoteReadResponse>;
