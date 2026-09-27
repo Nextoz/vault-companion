@@ -16,6 +16,7 @@ const VERB: Record<CommandType, string> = {
   EditActiveWork: 'Edit Active Work',
   ReviewActiveWork: 'Review Active Work',
   UndoActiveWork: 'Undo Active Work',
+  TriageDecide: 'Event decision',
 };
 
 /** The action's time is too far from the server's; the stored bytes carry that time, so only a redo can pass. */
