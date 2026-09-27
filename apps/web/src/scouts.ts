@@ -20,6 +20,7 @@ const localDate = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhage
 function dateParts(at: number) {
   return Object.fromEntries(localDate.formatToParts(at).map(({ type, value }) => [type, type === 'month' ? value.slice(0, 3) : value]));
 }
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export function exactTime(at: string | null): string {
   if (!Number.isFinite(instant(at))) return '—';
   const p = dateParts(instant(at));
@@ -36,7 +37,7 @@ export function relativeTime(at: string | null, now: string | number): string {
   const p = dateParts(instant(at));
   const current = dateParts(typeof now === 'number' ? now : Date.parse(now));
   // Calendar dates, not elapsed 24-hour periods: Copenhagen days may be 23 or 25 hours.
-  const day = (parts: Record<string, string>) => Date.parse(`${parts['day']} ${parts['month']} ${parts['year']} 00:00:00 GMT`);
+  const day = (parts: Record<string, string>) => Date.UTC(Number(parts['year']), MONTHS.indexOf(parts['month']!), Number(parts['day']));
   const days = (day(current) - day(p)) / 86_400_000;
   const label = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : `${p['weekday']} ${p['day']} ${p['month']}`;
   return `${label} ${p['hour']}:${p['minute']}`;

@@ -652,6 +652,5 @@ textarea:focus-visible {
   .scout-findings .scout-table-cards td { display: block; border: 0; padding: 4px 0; overflow-wrap: anywhere; }
   .scout-table-cards td::before { content: attr(data-label) ': '; font-weight: 650; }
   .scout-table-cards td:first-child { font-size: 1.1rem; font-weight: 650; }
-  .scout-table-cards td:first-child::before { content: none; }
   .scout-table-cards a { display: inline-block; padding-block: 8px; }
 }

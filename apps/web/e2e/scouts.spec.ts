@@ -69,8 +69,11 @@ test('five-column offers become labelled cards at 390px with relative freshness'
     for (const label of ['Item', 'Store', 'Price', 'Was', 'Until']) {
       await expect(card.locator(`[data-label="${label}"]`)).toBeVisible();
     }
-    expect(await card.locator('[data-label="Price"]').evaluate((cell) =>
-      getComputedStyle(cell, '::before').content.replace(/"\s*"/g, '').replaceAll('"', ''))).toBe('Price: ');
+    // Every value keeps its label, the first (title) column included.
+    for (const label of ['Item', 'Price']) {
+      expect(await card.locator(`[data-label="${label}"]`).evaluate((cell) =>
+        getComputedStyle(cell, '::before').content.replace(/"\s*"/g, '').replaceAll('"', ''))).toBe(`${label}: `);
+    }
   }
   await expect(findings.getByRole('link', { name: 'Synthetic tea' })).toHaveAttribute('href', 'https://example.com/tea');
   const fallback = findings.locator('.scout-table-scroll').last();

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ScoutStatus, ScoutsResponse } from '@vault-companion/contracts';
 import { attentionCount, displayState, lastRun, relativeTime } from './scouts.ts';
 
@@ -38,6 +38,14 @@ describe('displayState', () => {
   it('zero findings on a successful run is Healthy', () => {
     expect(displayState(healthy, now)).toBe('Healthy');
   });
+});
+it('Today and Yesterday do not depend on the engine parsing non-ISO date strings', () => {
+  const parse = Date.parse;
+  const spy = vi.spyOn(Date, 'parse').mockImplementation((s) => /^\d{4}-\d{2}-\d{2}T/.test(s) ? parse(s) : NaN);
+  try {
+    expect(relativeTime('2026-09-27T16:42:00Z', '2026-09-27T17:42:00Z')).toBe('Today 18:42');
+    expect(relativeTime('2026-09-26T04:51:00Z', '2026-09-27T08:00:00Z')).toBe('Yesterday 06:51');
+  } finally { spy.mockRestore(); }
 });
 it('relative time and newer failed attempts', () => {
   expect(relativeTime(at, now)).toBe('Today 06:50');
