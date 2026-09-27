@@ -76,12 +76,12 @@ export function ActiveWorkCard({ revision, queue, accountKey, onOpenLink }: {
             task: { locator: item.locator }, linkIndex: Math.max(0, [...item.locator.lineText.matchAll(/\[\[[^[\]]+\]\]/g)].findIndex((m) => m[0] === item.link)), label: item.link ?? '', invoker: e.currentTarget,
           })}>{item.link}</button>}
           {action && <StateChip state={action.state} />}
-          {item.needsReview && <>
-            <span className="chip">Needs review</span>
-            <div className="action-buttons">{(['keep', 'done', 'park', 'drop'] as const).map((a) => <button type="button" key={a}
+          {item.needsReview && <span className="chip">Needs review</span>}
+          {/* C2: Done, Park and Drop any time (finishing early); Keep (+7 days) only makes sense once review is due. */}
+          <div className="action-buttons">{(item.needsReview ? (['keep', 'done', 'park', 'drop'] as const) : (['done', 'park', 'drop'] as const)).map((a) =>
+            <button type="button" key={a} aria-label={`${a[0]?.toUpperCase()}${a.slice(1)}: ${item.name}`}
               disabled={busy || blocked || !accountKey} onClick={() => a === 'drop' ? (setDropping(item), setReason('')) : void review(item, a)}>
               {a[0]?.toUpperCase()}{a.slice(1)}</button>)}</div>
-          </>}
         </article>)}
         {read && read.unknownNowLines.length > 0 && <div className="active-work-unknown"><p className="muted small">edited in Obsidian</p>
           <pre>{read.unknownNowLines.join('\n')}</pre></div>}

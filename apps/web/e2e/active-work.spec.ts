@@ -49,7 +49,8 @@ test('needs-review Done → queued Undo, then capture Active Work request body',
   await expect(card.getByText('Needs review', { exact: true })).toBeVisible();
   await expect(card).toContainText('edited in Obsidian');
   await expect(card).toContainText('A hand-edited reminder');
-  await card.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Keep: Garden plan', exact: true })).toBeVisible();
+  await card.getByRole('button', { name: 'Done: Garden plan', exact: true }).click();
   await expect.poll(() => api.heldCount).toBe(1);
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   expect(api.bodies).toHaveLength(1);
@@ -86,4 +87,25 @@ test('needs-review Done → queued Undo, then capture Active Work request body',
   await edit.getByRole('button', { name: 'Save', exact: true }).click();
   await expect.poll(() => api.applied.length).toBe(4);
   expect(JSON.parse(api.bodies[3]!).payload.changes).toEqual({ name: 'Bike service', review: null });
+});
+
+test('C2: an item not yet due can be finished early — Done, Park, Drop shown, Keep hidden', async ({ page }) => {
+  const api = new MockApi();
+  api.activeWork = '## Now';
+  api.activeWorkItems = [{
+    name: 'Bike repair', outcome: null, next: 'Call the shop', review: '2099-01-01', link: null, needsReview: false,
+    locator: { path: 'Tasks/Active Work Now.md', blobSha: '5'.repeat(40), lineIndex: 3,
+      lineText: '- [ ] **Bike repair:** Next: Call the shop ⏳ 2099-01-01', occurrencesAtRead: 1 },
+  }];
+  api.commandMode = 'hold';
+  await api.install(page);
+  await page.goto('/');
+  const card = page.getByRole('region', { name: 'Active work', exact: true });
+  await expect(card.getByText('Needs review', { exact: true })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Keep: Bike repair', exact: true })).toHaveCount(0);
+  for (const a of ['Park', 'Drop']) await expect(card.getByRole('button', { name: a + ': Bike repair', exact: true })).toBeVisible();
+  await card.getByRole('button', { name: 'Done: Bike repair', exact: true }).click();
+  await expect.poll(() => api.heldCount).toBe(1);
+  expect(JSON.parse(api.bodies[0]!).payload).toMatchObject({ action: 'done', item: { lineIndex: 3 } });
+  api.release();
 });
