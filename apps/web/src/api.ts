@@ -3,6 +3,7 @@
 import {
   ActiveWorkResponse,
   encodeLinkedNoteHeader,
+  HistoryResponse,
   LINKED_NOTE_HEADER,
   LinkedNoteResponse,
   SessionResponse,
@@ -70,6 +71,9 @@ export const getLinkedNote = (req: LinkedNoteRequest) =>
 
 /** Active Work Now card: fixed server-side path, `no-store`, never cached by the SW. */
 export const getActiveWork = () => getJson('/api/active-work', z.union(ActiveWorkResponse.options.map((option) => option.strip())));
+
+/** Completion history (ADR-0021): read-only, `no-store`, never cached by the SW. */
+export const getHistory = () => getJson('/api/history', HistoryResponse.strip());
 
 /** `accountKey` is the queued item's binding, checked by the Worker against the session (A7), outside the body. */
 export const postCommand = (body: string, accountKey: string) =>
