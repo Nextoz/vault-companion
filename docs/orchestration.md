@@ -193,6 +193,33 @@ lines at the top of the Codex log). Codex quota can run out (2026-09-25: until 1
 Every brief is small: owned files, dependencies, acceptance checks, evidence-based handoff. Codex sandbox cannot
 reach the pnpm store: the Lead runs `pnpm install` in the clone **before** launching Astra.
 
+## Worker routing (owner, 2026-09-27 evening — supersedes earlier tier tables where they conflict)
+
+Lead: Claude Opus 5.5. All Codex models share ONE ChatGPT Plus quota (GPT-6 Sol/Luna/Terra are not available on Plus).
+Every Codex run: memories OFF (`-c features.memories=false -c memories.use_memories=false -c memories.generate_memories=false`).
+Launch every worker through `AGENT_STDIN=<brief> bash tools/agent-pane.sh "<model> · <task>" <clone> <log> <command…>`.
+
+| Task | Worker |
+|---|---|
+| tiny/mechanical (rename, one-line fix, docs tweak) | Codex `gpt-5.6-luna` |
+| small bounded (a test, small UI/CSS, simple bug) | Codex `gpt-5.6-terra` or Gemini CLI |
+| ordinary implementation / debugging | Codex `gpt-5.6-sol` (effort low/medium) |
+| complex implementation; identity, integrity, security; reviews | Codex `gpt-6-astra` (effort per task: medium default, high when risky) |
+| substantial self-contained features when Codex is out | Claude Cloud (owner writes "you may push" in the session) |
+
+**Gemini CLI** (0.61.0, `gemini-3.8-flash`): the API key is a Windows *user* variable, so launch with
+`AGENT_USER_ENV=GEMINI_API_KEY` (agent-pane reads it at run time; it never reaches a file or log) and run
+`gemini --skip-trust -m gemini-3.8-flash --output-format json -p "Read the file .agent/brief.md in the current directory and carry out that task exactly as written."`.
+Bounded low-risk work only (UI/CSS, straightforward TypeScript, tests, docs, mechanical refactors, simple bugs); public
+repo and synthetic data only, never live/private vault text. Occasional 503s: retry once, then reroute. DeepSeek: to be
+added when the owner has credits.
+
+**Shell hygiene (Lead):** never put Markdown with backticks or `$(…)` inside `node -e "…"`/`bash -c "…"` strings — the
+shell executes them (it once started a stray `codex` process). Write such text with the file tools instead.
+
+**RAM:** close finished Agents panes and stray preview servers; one Playwright job at a time; run e2e on a free
+`PW_PREVIEW_PORT`.
+
 ## Cheaper tiers and judgment helpers (owner, 2026-09-26)
 
 Lead stays Opus 5.5; paid heavy models (Astra high, Claude Cloud) only for hard work (concurrency, identity,
