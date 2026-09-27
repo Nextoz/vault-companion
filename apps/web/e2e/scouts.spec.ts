@@ -1,0 +1,38 @@
+import { expect, test } from '@playwright/test';
+import { MockApi } from './mock-api.ts';
+
+test('Today attention opens Scouts, panels and history lead to sanitised findings at phone width', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const api = new MockApi();
+  await api.install(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: '1 scouts need attention' }).click();
+  const scouts = page.getByRole('region', { name: 'Scouts', exact: true });
+  const failed = scouts.getByRole('button', { name: /City events/ });
+  const healthy = scouts.getByRole('button', { name: /Learning opportunities/ });
+  await expect(failed).toContainText('Failed');
+  await expect(failed).toContainText('Last run 2 h ago');
+  await expect(failed).toContainText('— findings');
+  await expect(healthy).toContainText('Healthy');
+  await expect(healthy).toContainText('4 findings');
+  await expect(healthy).toContainText('Sources 3/3');
+  await expect(scouts.getByRole('button', { name: /unreadable.json/ })).toContainText('No status yet');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await failed.click();
+  await expect(scouts.getByRole('list', { name: 'Run history, oldest to newest' }).getByRole('listitem')).toHaveCount(1);
+  await expect(scouts).toContainText('runner could not start');
+  await scouts.getByRole('button', { name: 'Back to scouts' }).click();
+  await healthy.click();
+  const runs = scouts.getByRole('list', { name: 'Run history, oldest to newest' }).getByRole('listitem');
+  await expect(runs).toHaveCount(2);
+  await expect(runs.first()).toHaveAttribute('aria-label', /2026-09-26.*degraded/);
+  await expect(runs.last()).toHaveAttribute('aria-label', /2026-09-27.*success/);
+  await expect(page.getByTestId('scout-findings')).toContainText('Four synthetic opportunities.');
+  await expect(page.getByTestId('scout-findings').locator('script')).toHaveCount(0);
+  expect(api.scoutOutputRequests).toEqual(['learning']);
+  api.scouts.scouts = api.scouts.scouts.filter((entry) => entry.state === 'ok' && entry.status.runStatus === 'success');
+  const refreshed = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/scouts');
+  await page.getByRole('button', { name: 'Today', exact: true }).click();
+  expect((await (await refreshed).json()).scouts).toHaveLength(1);
+  await expect(page.getByRole('button', { name: /scouts need attention/ })).toHaveCount(0);
+});
