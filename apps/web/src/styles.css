@@ -97,6 +97,20 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
+/* Five views must fit 390 px with any font metrics: tabs may shrink, and in the worst case (large text) the tab bar
+   scrolls inside itself — the page itself never scrolls sideways. */
+.tabs {
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
 .tabs button[aria-pressed='true'],
 .segmented button[aria-pressed='true'] {
   background: var(--accent-soft);
