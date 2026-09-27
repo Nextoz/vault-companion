@@ -395,6 +395,14 @@ describe('EditTask overlay', () => {
     expect(v.all).toMatchObject([{ task: changed, action: saved }]);
     expect(v.today).toEqual(v.all);
   });
+  it('never attaches a saved edit to another task that still carries the old text (CodeRabbit #34)', () => {
+    // The edited line is gone from this read; a different task (another line) has the pre-edit text.
+    const other = task(OPEN, 20);
+    const saved = item(edit, 'saved', { receipt });
+    const v = buildView(read([other], [], { [COMMIT]: 'not-included' }), [saved]);
+    expect(v.all.find((r) => r.task?.locator.lineIndex === 20)).toMatchObject({ action: null });
+    expect(v.all.some((r) => r.task === null && r.action?.operationId === edit.operationId)).toBe(true);
+  });
   it('keeps both after-line twins visible without attaching the saved edit', () => {
     const twins = [12, 13].map((index) => ({ ...task('- [ ] Water the herbs', index), description: 'Water the herbs' }));
     const saved = item(edit, 'saved', { receipt });
