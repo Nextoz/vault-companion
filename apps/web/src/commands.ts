@@ -83,6 +83,11 @@ export function captureNote(ctx: MintContext, input: { text: string; context?: s
   return checked({ ...base(ctx), type: 'CaptureNote', payload: input });
 }
 
+/** ADR-0022: the note as read (path + blob) and the whole new body; the server keeps frontmatter/BOM/EOL. */
+export function editNote(ctx: MintContext, note: { path: string; blobSha: string }, body: string): Command {
+  return checked({ ...base(ctx), type: 'EditNote', payload: { note, body } });
+}
+
 /** Human-readable text of a pending action, for "Export text" when it needs attention. */
 export function exportText(envelope: Command): string {
   switch (envelope.type) {
@@ -97,6 +102,8 @@ export function exportText(envelope: Command): string {
     case 'CaptureTask':
     case 'CaptureNote':
       return envelope.payload.text;
+    case 'EditNote':
+      return envelope.payload.body;
     case 'EditTask':
       return envelope.payload.changes.text ?? envelope.payload.task.lineText;
     case 'CompleteTask':

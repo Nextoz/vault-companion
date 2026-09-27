@@ -3,9 +3,13 @@
 import {
   ActiveWorkResponse,
   encodeLinkedNoteHeader,
+  encodeNoteHeader,
   HistoryResponse,
   LINKED_NOTE_HEADER,
   LinkedNoteResponse,
+  NOTE_HEADER,
+  NoteReadResponse,
+  NotesResponse,
   SessionResponse,
   ScoutsResponse,
   TasksResponse,
@@ -74,6 +78,11 @@ export const getActiveWork = () => getJson('/api/active-work', z.union(ActiveWor
 
 /** Completion history (ADR-0021): read-only, `no-store`, never cached by the SW. */
 export const getHistory = () => getJson('/api/history', HistoryResponse.strip());
+
+/** Inbox notes (ADR-0022): `no-store`, never cached by the SW. The path rides in a header, never in the URL. */
+export const getNotes = () => getJson('/api/notes', NotesResponse.strip());
+export const getNote = (path: string) =>
+  getJson('/api/notes/read', z.union(NoteReadResponse.options.map((option) => option.strip())), { [NOTE_HEADER]: encodeNoteHeader(path) });
 
 /** `accountKey` is the queued item's binding, checked by the Worker against the session (A7), outside the body. */
 export const postCommand = (body: string, accountKey: string) =>

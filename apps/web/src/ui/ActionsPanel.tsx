@@ -11,6 +11,7 @@ const VERB: Record<CommandType, string> = {
   UndoCompleteTask: 'Undo',
   CaptureTask: 'Task',
   CaptureNote: 'Note',
+  EditNote: 'Edit note',
   CaptureActiveWork: 'Active Work',
   EditActiveWork: 'Edit Active Work',
   ReviewActiveWork: 'Review Active Work',

@@ -20,10 +20,11 @@ import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
 import { VaultStatus } from './VaultStatus.tsx';
 import { History } from './History.tsx';
+import { Notes } from './Notes.tsx';
 import { Scouts } from './Scouts.tsx';
 import { TaskList } from './TaskList.tsx';
 
-type Tab = 'today' | 'all' | 'scouts' | 'history';
+type Tab = 'today' | 'all' | 'notes' | 'scouts' | 'history';
 interface Toast {
   target: CompleteTaskCommand;
   label: string;
@@ -296,6 +297,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <button type="button" aria-pressed={tab === 'all'} onClick={() => setTab('all')}>
             All
           </button>
+          <button type="button" aria-pressed={tab === 'notes'} onClick={() => setTab('notes')}>Notes</button>
           <button type="button" aria-pressed={tab === 'scouts'} onClick={() => setTab('scouts')}>Scouts</button>
           <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')}>History</button>
         </nav>
@@ -373,6 +375,9 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
         {tab === 'history' && !signedOut && <History key={`history:${accountKey}`} refreshKey={checkedAt} queued={snapshot.items}
           accountKey={accountKey} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />}
+
+        {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
+          accountKey={accountKey} baseRevision={revision} />}
 
         {(tab === 'today' || tab === 'scouts') && !signedOut && <Scouts key={`scouts:${accountKey}`} page={tab === 'scouts'} onOpen={() => setTab('scouts')} refreshKey={checkedAt} />}
 

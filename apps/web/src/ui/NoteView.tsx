@@ -14,7 +14,7 @@ export interface OpenLink {
 
 const FOCUSABLE = 'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
-const REFUSED: Record<LinkedNoteRefusalCode, string> = {
+export const REFUSED: Record<LinkedNoteRefusalCode, string> = {
   'not-found': 'No note with this name was found.',
   ambiguous: 'Several notes have this name. Open it in Obsidian.',
   'outside-allowlist': 'This note is outside the folders the app may open.',
@@ -25,7 +25,7 @@ const REFUSED: Record<LinkedNoteRefusalCode, string> = {
 
 /** Loaded on first use: Markdown and the sanitiser stay out of the start-up bundle. */
 let renderer: Promise<NoteRenderer> | null = null;
-const loadRenderer = () => (renderer ??= import('../note/render.ts').then((m) => m.createNoteRenderer(window)));
+export const loadRenderer = () => (renderer ??= import('../note/render.ts').then((m) => m.createNoteRenderer(window)));
 
 const titleOf = (path: string) => path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, '');
 
