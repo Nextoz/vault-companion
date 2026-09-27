@@ -51,13 +51,18 @@ Rules:
 Every non-interactive worker starts through `tools/agent-pane.sh` so the owner can watch it live:
 one labelled pane per agent (`<model>-<effort> · <task>`) in the **Agents** tab (created on demand, never focused),
 output streamed in the pane and tee'd to the log, pane closes itself 60 s after the command ends (the tab closes with
-its last pane). Codex runs add `-c model_reasoning_summary=concise -c model_verbosity=low` so reasoning summaries are visible.
+its last pane). Codex runs add `-c model_reasoning_summary=concise -c model_verbosity=low -c features.memories=false -c memories.use_memories=false -c memories.generate_memories=false` so reasoning summaries are visible.
 
 ```sh
 AGENT_STDIN=<clone>/.agent/brief.md bash tools/agent-pane.sh "astra-high · pr18" <clone> <clone>/.agent/run.log \
-  codex exec -m gpt-6-astra -c model_reasoning_effort=high -c model_reasoning_summary=concise -c model_verbosity=low \
+  codex exec -m gpt-6-astra -c model_reasoning_effort=high -c model_reasoning_summary=concise -c model_verbosity=low -c features.memories=false -c memories.use_memories=false -c memories.generate_memories=false \
   --sandbox workspace-write -C <clone> -
 ```
+
+**Codex memories OFF for repo workers (owner, 2026-09-27):** the owner's global Codex memory (~200 KB, vault-related
+personal notes) was being loaded into worker context — a privacy boundary we do not want and a large token cost. Always
+pass the three memory overrides above; verify on the first run after a quota reset. Worker logs in the clones are
+deleted once their PRs merge (they may contain such context); they are never committed.
 
 **Token economy (owner, 2026-09-26):** measured 59k tokens for a 10-line fix and 95–130k per review, mostly whole-doc
 reads and 8–16 full `pnpm check` runs per worker. Rules: briefs are self-contained (quote the finding, name files +
