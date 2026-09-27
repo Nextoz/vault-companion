@@ -253,7 +253,8 @@ export const MAX_LINK_INDEX = 99;
  * locator names. There is deliberately no path field — a client path is never accepted.
  */
 export const LinkedNoteRequest = z.strictObject({
-  taskLocator: TaskLocator,
+  /** A task line, or (ADR-0019) an Active Work item line: each locator's path is a fixed literal, never client-chosen. */
+  taskLocator: z.union([TaskLocator, ActiveWorkLocator]),
   linkIndex: z.number().int().nonnegative().max(MAX_LINK_INDEX),
 });
 export type LinkedNoteRequest = z.infer<typeof LinkedNoteRequest>;

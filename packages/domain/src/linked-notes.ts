@@ -1,6 +1,6 @@
 // Read-only linked notes (vault-contract §1 "Linked notes", security.md "Rendering", brief P4-A).
 // The server resolves the n-th wikilink of a task line at one pinned commit X; a client-supplied path is never read.
-import { MAX_NOTE_BYTES, type ApiError, type LinkedNoteRefusalCode, type LinkedNoteRequest, type LinkedNoteResponse, type TaskLocator } from '@vault-companion/contracts';
+import { ACTIVE_WORK_PATH, MAX_NOTE_BYTES, type ApiError, type LinkedNoteRefusalCode, type LinkedNoteRequest, type LinkedNoteResponse, type TaskLocator } from '@vault-companion/contracts';
 import * as md from '@vault-companion/vault-markdown';
 import { canReadLinkedNote, isStructurallySafePath, LINKED_NOTE_ROOTS, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 import { FileTooLarge, StoreUnavailable, StoreUnknownOutcome, type ListedFile, type VaultPath, type VaultStore } from './store.ts';
@@ -88,20 +88,40 @@ async function read(store: VaultStore, req: LinkedNoteRequest): Promise<LinkedNo
   const { commitSha: x } = await store.head();
   const refused = (code: LinkedNoteRefusalCode, message: string): LinkedNoteResponse => ({ status: 'refused', revision: x, code, message });
 
-  let todo;
-  try {
-    todo = await store.readFile(TODO_LIST_PATH as VaultPath, x);
-  } catch (e) {
-    if (e instanceof FileTooLarge) return refused('too-large', 'the task list is too large to read here');
-    throw e;
+  let target: string | undefined;
+  const loc = req.taskLocator;
+  if (loc.path === ACTIVE_WORK_PATH) {
+    // ADR-0019: an Active Work item's single trailing [[link]]. Exact match only (same blob, same line): no fuzzy
+    // re-location on this path; the allowlist below still decides which note may open.
+    let aw;
+    try {
+      aw = await store.readFile(ACTIVE_WORK_PATH as VaultPath, x);
+    } catch (e) {
+      if (e instanceof FileTooLarge) return refused('too-large', 'Active Work is too large to read here');
+      throw e;
+    }
+    const text = aw ? decodeUtf8(aw.bytes) : null;
+    const line = text?.split('\n')[loc.lineIndex]?.replace(/\r$/, '');
+    if (!aw || aw.blobSha !== loc.blobSha || line !== loc.lineText) return refused('task-changed', 'Active Work changed since it was loaded; reload it');
+    const link = /\[\[([^[\]]+)\]\]$/.exec(line)?.[1];
+    target = req.linkIndex === 0 && link ? link.split(/[|#]/)[0]!.trim() : undefined;
+    if (!target) return refused('not-found', 'the item has no link at that position');
+  } else {
+    let todo;
+    try {
+      todo = await store.readFile(TODO_LIST_PATH as VaultPath, x);
+    } catch (e) {
+      if (e instanceof FileTooLarge) return refused('too-large', 'the task list is too large to read here');
+      throw e;
+    }
+    const text = todo ? decodeUtf8(todo.bytes) : null;
+    const parsed = text === null ? null : md.parseTodoList(text);
+    if (!todo || !parsed?.ok) return refused('task-changed', 'the task list changed; reload it');
+    const task = locateTask(parsed.tasks, loc, todo.blobSha);
+    if (!task) return refused('task-changed', 'the task changed since it was loaded; reload the list');
+    target = task.links[req.linkIndex];
+    if (target === undefined) return refused('not-found', 'the task has no link at that position');
   }
-  const text = todo ? decodeUtf8(todo.bytes) : null;
-  const parsed = text === null ? null : md.parseTodoList(text);
-  if (!todo || !parsed?.ok) return refused('task-changed', 'the task list changed; reload it');
-  const task = locateTask(parsed.tasks, req.taskLocator, todo.blobSha);
-  if (!task) return refused('task-changed', 'the task changed since it was loaded; reload the list');
-  const target = task.links[req.linkIndex];
-  if (target === undefined) return refused('not-found', 'the task has no link at that position');
 
   const resolved = await resolveWikilink(store, x, target);
   if (!resolved.ok) return refused(resolved.code, resolved.message);
