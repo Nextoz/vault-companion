@@ -1,5 +1,5 @@
 // Small per-device conveniences in localStorage. None of it is vault content; all of it is optional.
-export type CaptureKind = 'task' | 'note';
+export type CaptureKind = 'task' | 'note' | 'active-work';
 
 function read(key: string): string | null {
   try {
@@ -18,7 +18,7 @@ function write(key: string, value: string): void {
 }
 
 export const prefs = {
-  captureKind: (): CaptureKind => (read('vc.captureKind') === 'note' ? 'note' : 'task'),
+  captureKind: (): CaptureKind => (read('vc.captureKind') === 'active-work' ? 'active-work' : read('vc.captureKind') === 'note' ? 'note' : 'task'),
   setCaptureKind: (kind: CaptureKind) => write('vc.captureKind', kind),
   /** Last TasksResponse revision: the baseRevision for actions taken while offline. */
   lastRevision: () => read('vc.lastRevision'),

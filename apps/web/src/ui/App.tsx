@@ -51,6 +51,12 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   // ADR-0012: Overdue is its own group below Today, collapsed until the user opens it.
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [updateReady, setUpdateReady] = useState(false);
+  useEffect(() => {
+    const update = () => setUpdateReady(true);
+    window.addEventListener('vc-update-ready', update);
+    return () => window.removeEventListener('vc-update-ready', update);
+  }, []);
   const [notice, setNotice] = useState<string | null>(null);
   // Discarded refusals whose tasks still need attention (attention.ts).
   const [unresolved, setUnresolved] = useState<readonly Unresolved[]>([]);
@@ -296,6 +302,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
       </header>
 
       <main className="content" inert={noteOpen || editing !== null}>
+        {updateReady && <div className="banner" role="status"><button type="button" onClick={() => window.location.reload()}>New version — tap to reload</button></div>}
         <VaultStatus read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0} onRefresh={() => refreshTasks()} />
         {lock && (
           <div className="banner banner-warn" role="alert">
@@ -364,7 +371,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
 
-        {tab === 'today' && <ActiveWorkCard revision={tasks?.revision ?? null} />}
+        {tab === 'today' && !signedOut && <ActiveWorkCard key={accountKey} revision={tasks?.revision ?? null} queue={queue} accountKey={accountKey} onOpenLink={openNote} />}
 
         {connection === 'loading' && !tasks && <p className="muted">Loading…</p>}
         {connection !== 'loading' && !tasks && (connection === 'refreshing' || rendered) && (

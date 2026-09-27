@@ -26,6 +26,7 @@ export interface Draft {
   id: string;
   /** Bumped by every write. A write is accepted only from the version it was based on (compare-and-swap). */
   version: number;
+  activeWork?: { next: string; review: string; link: string };
   kind: CaptureKind;
   text: string;
   updatedAt: number;

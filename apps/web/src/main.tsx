@@ -28,7 +28,20 @@ async function start() {
   );
 
   if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-    void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    void navigator.serviceWorker.register('/sw.js').then((registration) => {
+      const announce = () => window.dispatchEvent(new Event('vc-update-ready'));
+      if (registration.waiting && navigator.serviceWorker.controller) announce();
+      const watch = () => {
+        const worker = registration.installing;
+        if (!worker) return;
+        const isUpdate = navigator.serviceWorker.controller !== null;
+        const check = () => { if (worker.state === 'installed' && isUpdate) announce(); };
+        worker.addEventListener('statechange', check);
+        check();
+      };
+      registration.addEventListener('updatefound', watch);
+      watch();
+    }).catch(() => undefined);
   }
 }
 

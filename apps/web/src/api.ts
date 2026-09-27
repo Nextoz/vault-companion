@@ -2,6 +2,7 @@
 // opaque redirect instead of silently following it to a login page (F11).
 import {
   ActiveWorkResponse,
+  type ActiveWorkLocator,
   encodeLinkedNoteHeader,
   LINKED_NOTE_HEADER,
   LinkedNoteResponse,
@@ -9,7 +10,7 @@ import {
   TasksResponse,
   type LinkedNoteRequest,
 } from '@vault-companion/contracts';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 export type Fetched<T> =
   | { kind: 'ok'; data: T }
@@ -62,11 +63,20 @@ export const getTasks = (known: readonly string[]) =>
  * Linked note: the server resolves the note from the task locator; the request rides in a header so task text is never part
  * of a URL. `no-store` (base) and the service worker's `/api/*` bypass keep note text out of every cache.
  */
-export const getLinkedNote = (req: LinkedNoteRequest) =>
-  getJson('/api/linked-note', LinkedNoteResponse, { [LINKED_NOTE_HEADER]: encodeLinkedNoteHeader(req) });
+export type AppLinkedNoteRequest = { taskLocator: LinkedNoteRequest['taskLocator'] | ActiveWorkLocator; linkIndex: number };
+// Same endpoint/header and locator semantics; the server must accept the Active Work path (ADR-0019).
+export function linkedNoteHeader(req: AppLinkedNoteRequest): string {
+  if (req.taskLocator.path === 'Tasks/To-Do List.md') return encodeLinkedNoteHeader({ ...req, taskLocator: req.taskLocator });
+  const bytes = new TextEncoder().encode(JSON.stringify(req));
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+export const getLinkedNote = (req: AppLinkedNoteRequest) =>
+  getJson('/api/linked-note', LinkedNoteResponse, { [LINKED_NOTE_HEADER]: linkedNoteHeader(req) });
 
 /** Active Work Now card: fixed server-side path, `no-store`, never cached by the SW. */
-export const getActiveWork = () => getJson('/api/active-work', ActiveWorkResponse);
+export const getActiveWork = () => getJson('/api/active-work', z.union(ActiveWorkResponse.options.map((option) => option.strip())));
 
 /** `accountKey` is the queued item's binding, checked by the Worker against the session (A7), outside the body. */
 export const postCommand = (body: string, accountKey: string) =>

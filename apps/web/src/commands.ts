@@ -2,6 +2,8 @@
 import {
   Command,
   type CompleteTaskCommand,
+  type ReviewActiveWorkCommand,
+  type ActiveWorkLocator,
   type Priority,
   type TaskLocator,
 } from '@vault-companion/contracts';
@@ -60,11 +62,12 @@ export function undoDraft(ctx: MintContext, target: CompleteTaskCommand): Comman
 
 /** An Undo draft (no token yet), as the queue stores it. */
 export function isUndoDraft(envelope: Command): boolean {
-  return envelope.type === 'UndoCompleteTask' && !('targetCommit' in envelope.payload);
+  return (envelope.type === 'UndoCompleteTask' || envelope.type === 'UndoActiveWork') && !('targetCommit' in envelope.payload);
 }
 
 /** The draft with its token: a checked, sendable Undo whose other fields are unchanged. */
 export function withTargetCommit(draft: Command, targetCommit: string): Command {
+  if (draft.type === 'UndoActiveWork') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type !== 'UndoCompleteTask') throw new TypeError('not an Undo');
   return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
 }
@@ -83,6 +86,14 @@ export function captureNote(ctx: MintContext, input: { text: string; context?: s
 /** Human-readable text of a pending action, for "Export text" when it needs attention. */
 export function exportText(envelope: Command): string {
   switch (envelope.type) {
+    case 'CaptureActiveWork':
+      return JSON.stringify(envelope.payload, null, 2);
+    case 'EditActiveWork':
+      return envelope.payload.item.lineText + '\n' + JSON.stringify(envelope.payload.changes, null, 2);
+    case 'ReviewActiveWork':
+      return envelope.payload.item.lineText + '\n' + JSON.stringify(envelope.payload, null, 2);
+    case 'UndoActiveWork':
+      return exportText(envelope.payload.target);
     case 'CaptureTask':
     case 'CaptureNote':
       return envelope.payload.text;
@@ -93,4 +104,31 @@ export function exportText(envelope: Command): string {
     case 'UndoCompleteTask':
       return envelope.payload.target.payload.task.lineText;
   }
+}
+
+export type ActiveWorkChanges = Extract<Command, { type: 'EditActiveWork' }>['payload']['changes'];
+export function captureActiveWork(ctx: MintContext, payload: Extract<Command, { type: 'CaptureActiveWork' }>['payload']) {
+  return checked({ ...base(ctx), type: 'CaptureActiveWork', payload });
+}
+export function editActiveWork(ctx: MintContext, item: ActiveWorkLocator, changes: ActiveWorkChanges) {
+  return checked({ ...base(ctx), type: 'EditActiveWork', payload: { item, changes } });
+}
+export function reviewActiveWork(ctx: MintContext, payload: ReviewActiveWorkCommand['payload']): ReviewActiveWorkCommand {
+  return checked({ ...base(ctx), type: 'ReviewActiveWork', payload });
+}
+export function undoActiveWork(ctx: MintContext, target: ReviewActiveWorkCommand, targetCommit: string): Command {
+  return checked({ ...base(ctx), type: 'UndoActiveWork', payload: { target, targetCommit } });
+}
+export function undoActiveWorkDraft(ctx: MintContext, target: ReviewActiveWorkCommand): Command {
+  const draft = { ...base(ctx), type: 'UndoActiveWork' as const, payload: { target } };
+  checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
+  return draft as Command;
+}
+/** Bind to the durable, possibly rebased target, preserving the discriminated command pair. */
+export function bindUndoTarget(undo: Command, target: Command): Command | null {
+  if (undo.type === 'UndoCompleteTask' && target.type === 'CompleteTask')
+    return { ...undo, payload: { ...undo.payload, target } };
+  if (undo.type === 'UndoActiveWork' && target.type === 'ReviewActiveWork')
+    return { ...undo, payload: { ...undo.payload, target } };
+  return null;
 }

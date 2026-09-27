@@ -22,8 +22,8 @@
 //   fills the token from the completion's receipt and persists it before the request leaves, so every attempt sends
 //   the same bytes. A draft whose completion is refused (known not applied) is discarded locally; a receipt a draft
 //   still needs is never evicted.
-import type { Command, CommandType, CompleteTaskCommand, Receipt, TasksResponse } from '@vault-companion/contracts';
-import { isUndoDraft, withTargetCommit } from '../commands.ts';
+import type { Command, CommandType, CompleteTaskCommand, ReviewActiveWorkCommand, Receipt, TasksResponse } from '@vault-companion/contracts';
+import { bindUndoTarget, isUndoDraft, withTargetCommit } from '../commands.ts';
 import { backoffMs, classify, knownNotApplied, type Outcome } from './classify.ts';
 import type { DraftBasis, PendingError, PendingRecord, PendingStore, ReceiptRecord, Watermark } from './db.ts';
 
@@ -231,7 +231,7 @@ export class PendingQueue {
    * Otherwise — or without Web Locks to prove it — the Undo is a real command queued behind it (`'queued'`).
    */
   async undoCompletion(
-    target: CompleteTaskCommand,
+    target: CompleteTaskCommand | ReviewActiveWorkCommand,
     undo: Command,
     options: Omit<EnqueueOptions, 'dependsOn'>,
   ): Promise<'cancelled' | 'queued'> {
@@ -248,9 +248,10 @@ export class PendingQueue {
       const receipt = this.#receipts.get(target.operationId);
       const durable = receipt ?? predecessor;
       const durableTarget = durable ? this.#envelopeOf(durable) : null;
-      if (undo.type === 'UndoCompleteTask') {
-        if (durableTarget?.type === 'CompleteTask') {
-          undo = { ...undo, payload: { ...undo.payload, target: durableTarget } };
+      if (undo.type === 'UndoCompleteTask' || undo.type === 'UndoActiveWork') {
+        const bound = durableTarget && bindUndoTarget(undo, durableTarget);
+        if (bound) {
+          undo = bound;
           if (receipt && !isUndoDraft(undo)) undo = withTargetCommit(undo, receipt.receipt.commitSha);
         } else {
           // No durable target: keep only a draft, which the claim will refuse rather than trusting UI bytes.
@@ -438,18 +439,19 @@ export class PendingQueue {
       }
       const draft = this.#envelopeOf(record);
       let body = record.body;
-      if (!record.everSent && isUndoDraft(draft) && draft.type === 'UndoCompleteTask') {
+      if (!record.everSent && isUndoDraft(draft) && (draft.type === 'UndoCompleteTask' || draft.type === 'UndoActiveWork')) {
         const targetId = draft.payload.target.operationId;
         const receipt = this.#receipts.get(targetId);
         const predecessor = this.#records.get(targetId);
         if (receipt) {
           // Both the exact completion envelope and its token, once, before the request leaves (ADR-0013).
           const target = this.#envelopeOf(receipt);
-          if (target.type !== 'CompleteTask') {
+          const bound = bindUndoTarget(draft, target);
+          if (!bound) {
             await this.#persist({ ...record, state: 'attention', lastError: UNDO_TARGET_UNKNOWN });
             continue;
           }
-          body = JSON.stringify(withTargetCommit({ ...draft, payload: { ...draft.payload, target } }, receipt.receipt.commitSha));
+          body = JSON.stringify(withTargetCommit(bound, receipt.receipt.commitSha));
         } else if (predecessor?.state === 'attention' && knownNotApplied(predecessor.lastError)) {
           // Nothing was completed, so there is nothing to undo (ADR-0013): dropped locally, never sent.
           await this.#store.delete(record.operationId);
@@ -611,7 +613,7 @@ export class PendingQueue {
     const needed = new Set<string>();
     for (const r of this.#records.values()) {
       const e = this.#envelopeOf(r);
-      if (isUndoDraft(e) && e.type === 'UndoCompleteTask') needed.add(e.payload.target.operationId);
+      if (isUndoDraft(e) && (e.type === 'UndoCompleteTask' || e.type === 'UndoActiveWork')) needed.add(e.payload.target.operationId);
     }
     return needed;
   }

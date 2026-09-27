@@ -11,6 +11,10 @@ const VERB: Record<CommandType, string> = {
   UndoCompleteTask: 'Undo',
   CaptureTask: 'Task',
   CaptureNote: 'Note',
+  CaptureActiveWork: 'Active Work',
+  EditActiveWork: 'Edit Active Work',
+  ReviewActiveWork: 'Review Active Work',
+  UndoActiveWork: 'Undo Active Work',
 };
 
 /** The action's time is too far from the server's; the stored bytes carry that time, so only a redo can pass. */
@@ -20,10 +24,11 @@ export const UNDO_UNKNOWN_TEXT = 'This Undo may already have been applied. Check
 
 /** The line shown for an action that needs attention: the conflict in plain words, else the server's message. */
 export function attentionText(item: QueueItem): string | null {
+  if (item.type === 'UndoActiveWork' && item.error && knownNotApplied(item.error)) return 'Cannot restore the exact previous file; undo it in Obsidian.';
   if (item.error?.code === 'conflict:task-changed') return 'This task changed on another device.';
   if (item.error?.code === 'clock-skew') return CLOCK_SKEW_TEXT;
   // Review O5: the outcome is unknown, not refused — never tell the owner to redo something that may have happened.
-  if (item.error?.code === 'dedupe-unknown' && item.type === 'UndoCompleteTask') return UNDO_UNKNOWN_TEXT;
+  if (item.error?.code === 'dedupe-unknown' && (item.type === 'UndoCompleteTask' || item.type === 'UndoActiveWork')) return UNDO_UNKNOWN_TEXT;
   return item.error?.message ?? null;
 }
 
@@ -37,7 +42,7 @@ export function attentionText(item: QueueItem): string | null {
  */
 export function canRetry(item: QueueItem, read: Pick<TasksResponse, 'writeBlock'> | null = null): boolean {
   if (item.accountMismatch || item.error?.code === 'clock-skew') return false;
-  if (read?.writeBlock && item.type !== 'CaptureNote') return false;
+  if (read?.writeBlock && ['CompleteTask', 'UndoCompleteTask', 'EditTask', 'CaptureTask'].includes(item.type)) return false;
   return item.error?.code === 'refused:vault-conflict' || !knownNotApplied(item.error);
 }
 
@@ -86,9 +91,10 @@ export function ActionsPanel({
               <span className="action-label">{item.label}</span>
               <StateChip state={item.state} />
             </div>
+            {item.state === 'saved' && <p className="muted small">{item.type === 'CaptureNote' && 'Saved to the vault; '}reaches Obsidian at your next desktop sync</p>}
             {item.state === 'attention' && (
               <>
-                {item.error && <p className="error">{attentionText(item)}</p>}
+                {item.error && <p className="error">{item.error.code}: {attentionText(item)}</p>}
                 {isTaskAction(item) && (
                   <p className="muted small">Discarding removes only this action; the task will still need attention.</p>
                 )}
@@ -120,7 +126,7 @@ export function ActionsPanel({
         ))}
       </ul>
       <p className="muted small">Pending actions are kept on this device while possible.</p>
-      {exporting && <ExportDialog text={exportText(exporting.envelope)} onClose={() => setExporting(null)} />}
+      {exporting && <ExportDialog text={(exporting.error ? exporting.error.code + ': ' + attentionText(exporting) + '\n\n' : '') + exportText(exporting.envelope)} onClose={() => setExporting(null)} />}
       {discarding && (
         <ExportDialog
           text={exportText(discarding.envelope)}
