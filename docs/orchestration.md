@@ -78,6 +78,10 @@ O11 CSP smoke good and found a real Zod CSP violation (PR #23). Review its diffs
 
 Wait for completion with the log's last line (Codex: `tokens used`) rather than polling the pane.
 
+**Parallel Playwright hazard (2026-09-27):** apps/web/playwright.config.ts uses reuseExistingServer locally, so two clones
+running e2e at once share port 4173 and one tests the OTHER clone's build (a triage spec "failed" against a worker's
+preview). Run e2e in one clone at a time, or check the port is free (Get-NetTCPConnection -LocalPort 4173) first.
+
 ## Herdr mechanics learned (Windows / Git Bash)
 
 - Git Bash rewrites a leading `/word` argument into a Windows path: prefix Herdr calls that send slash
