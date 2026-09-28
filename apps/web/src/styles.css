@@ -681,6 +681,7 @@ textarea:focus-visible {
 .triage-time { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .triage-where { color: var(--muted); font-size: 14px; margin: 0; }
 .triage-card h2 { font-size: 20px; font-weight: 650; line-height: 1.25; margin: 0; text-wrap: balance; }
+.triage-summary { margin: 0; font-size: 16px; line-height: 1.45; }
 .triage-why { margin: 0; padding: 10px 12px; background: var(--bg); border-radius: 10px; }
 .triage-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
 .triage-chip { font-size: 12.5px; padding: 5px 9px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
@@ -710,6 +711,7 @@ textarea:focus-visible {
 .triage-statuses { font-size: 13px; padding-left: 20px; }
 .triage-statuses li { margin-bottom: 8px; }
 .triage-indicator { margin: 12px 0; }
+.triage-checkin { max-width: 420px; margin: 12px auto; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); display: grid; gap: 14px; }
 @media (prefers-reduced-motion: reduce) {
   .triage-card { transition: none; transform: translate(var(--triage-x, 0px), var(--triage-y, 0px)); }
   .triage-stamp.triage-go, .triage-stamp.triage-skip { transform: none; }

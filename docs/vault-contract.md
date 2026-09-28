@@ -16,6 +16,16 @@ Any change here is consequential: update the golden tests and record an ADR.
 | Linked notes | resolved **server-side** from a wikilink in a current task or Active Work item line (`{taskLocator, linkIndex}`); Active Work requires an exact blob SHA and line match, with `linkIndex` 0; target under an allowlisted root: `Projects/`, `Tasks/`, `Inbox/` (owner decision D2 may widen) | read |
 | Never | `.git/`, `.obsidian/`, `.trash/`, `Tools/`, `tmp/`, `output/`, `..`, absolute paths, backslashes, `%`, control chars, non-`.md` — **except** exactly `Automation/Scout Status/<id>.json` (read, ADR-0020) and `Events/Triage/feed.json`, `Events/Triage/applied.json` (read) and `Events/Triage/Decisions/YYYY-MM.jsonl` (read, create/append; ADR-0024) | — |
 
+### Event triage rows
+
+`Events/Triage/feed.json` is the ADR-0024 feed with optional `card.summary` (string, at most 300 characters; absent means
+`""`), optional `card.calendar.clash.kind` (`go | own`; absent means `own`), and optional `checkins` (absent means
+`[]`). Each check-in is `{ eventId, title, start }`; malformed cards and check-ins are independently dropped and counted.
+
+Decision JSONL rows keep the exact ADR-0024 key order. An attended row is
+`{"schemaVersion":1,"decisionId","eventId","decision":"attended","outcome":"worth|not-worth|missed","reason":null,"undoes":null,"explore":false,"at","card":{"title","category":null,"sourceName":null,"aiScore":null,"start"}}`.
+`outcome` occurs only on `attended`, immediately after `decision`; `reason` remains skip-only and `undoes` undo-only.
+
 Paths are vault-relative, `/`-separated, NFC-normalised, validated by `packages/domain/src/paths.ts` before any
 adapter sees them; adapters re-check. There is no endpoint that reads an arbitrary client-supplied path.
 Wikilink resolution: exact vault-relative path if the link contains `/`, else unique basename match among

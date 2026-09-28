@@ -16,7 +16,7 @@ it('phone decision → desktop pull: one appended line, byte-identical prefix an
     const phone = await Phone.signIn(server.baseUrl, await server.token(), '2026-09-30T22:30:00Z');
     const desktop = Desktop.clone(remote.env, remote.bare, join(remote.root, 'desktop'));
     const initial = await phone.triage();
-    const cmd = phone.envelope('TriageDecide', { eventId: '0a1b2c3d4e5f60718293', decision: 'go', reason: null, undoes: null, explore: false,
+    const cmd = phone.envelope('TriageDecide', { eventId: '0a1b2c3d4e5f60718293', decision: 'go', outcome: null, reason: null, undoes: null, explore: false,
       card: { title: 'Evening talk on city gardens', category: 'community', sourceName: 'Example source', aiScore: 88, start: '2026-10-02T17:00:00+02:00' } }, initial.revision);
     expect(await phone.send(cmd)).toMatchObject({ receipt: { status: 'applied', path, effect: { kind: 'triage-decided', decisionId: cmd.operationId } } });
     expect(await phone.send(cmd)).toMatchObject({ receipt: { status: 'already-applied' } });
@@ -28,7 +28,11 @@ it('phone decision → desktop pull: one appended line, byte-identical prefix an
     expect(appended.endsWith('\n')).toBe(true);
     const lines = appended.trim().split('\n');
     expect(lines).toHaveLength(1);
-    expect(JSON.parse(lines[0]!)).toEqual({ schemaVersion: 1, decisionId: cmd.operationId, ...cmd.payload, at: cmd.occurredAt });
+    // ADR-0026: `outcome` is written only on attended lines, so a Go line has no outcome key at all.
+    const { outcome, ...written } = cmd.payload;
+    expect(outcome).toBeNull();
+    expect(Object.keys(JSON.parse(lines[0]!))).not.toContain('outcome');
+    expect(JSON.parse(lines[0]!)).toEqual({ schemaVersion: 1, decisionId: cmd.operationId, ...written, at: cmd.occurredAt });
     expect((await phone.triage()).decisions).toMatchObject([{ decisionId: cmd.operationId, decision: 'go' }]);
     expect(logWithOps(remote.env, remote.bare).filter((c) => c.operationId === cmd.operationId)).toHaveLength(1);
     expect(JSON.stringify(server.logs)).not.toContain(cmd.payload.card.title);

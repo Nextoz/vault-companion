@@ -12,7 +12,9 @@ it('triage route requires auth, is no-store, omits content from logs, and maps o
     registration: { state: 'open', deadline: '2026-09-28T23:59:00+02:00' }, aiScore: 88, why: 'Hands-on and close by.',
     category: 'community', scouts: ['city-events'], sourceName: 'Example source', sourceUrl: 'https://example.org/e1',
     calendar: { inCalendar: 'auto', clash: { title: 'Gym class', start: '2026-09-29T17:30:00+02:00', end: '2026-09-29T18:30:00+02:00' }, freeThatEvening: false } };
-  const store = await InMemoryStore.create({ 'Events/Triage/feed.json': JSON.stringify({ schemaVersion: 1, generatedAt: now, cards: [card] }) });
+  const checkin = { eventId: 'aaaaaaaaaaaaaaaaaaaa', title: 'Synthetic past workshop', start: '2026-09-25T17:00:00+02:00' };
+  const store = await InMemoryStore.create({ 'Events/Triage/feed.json': JSON.stringify({ schemaVersion: 1, generatedAt: now, cards: [card],
+    checkins: [checkin, { ...checkin, eventId: 'bad' }] }) });
   const logs: unknown[] = [];
   const consoleCalls: unknown[] = [];
   for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) vi.spyOn(console, method).mockImplementation((...args) => { consoleCalls.push(args); });
@@ -28,11 +30,11 @@ it('triage route requires auth, is no-store, omits content from logs, and maps o
   const result = await get();
   expect(result.status).toBe(200);
   expect(result.headers.get('Cache-Control')).toBe('no-store');
-  expect(TriageResponse.parse(await result.json())).toMatchObject({ feedState: 'ok', cards: [card] });
+  expect(TriageResponse.parse(await result.json())).toMatchObject({ feedState: 'ok', cards: [card], checkins: [checkin], droppedCheckins: 1 });
   expect((await get(false)).status).toBe(404);
   vi.spyOn(store, 'listFiles').mockRejectedValue(new StoreUnavailable('down'));
   const failed = await get();
   expect(failed.status).toBe(503);
   expect(await failed.json()).toMatchObject({ code: 'upstream-unavailable', retryable: true });
-  for (const secret of [card.title, card.why, card.calendar.clash.title, 'Events/Triage']) expect(JSON.stringify([logs, consoleCalls])).not.toContain(secret);
+  for (const secret of [card.title, card.why, card.calendar.clash.title, checkin.title, 'Events/Triage']) expect(JSON.stringify([logs, consoleCalls])).not.toContain(secret);
 });
