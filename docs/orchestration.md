@@ -132,10 +132,10 @@ preview). Run e2e in one clone at a time, or check the port is free (Get-NetTCPC
 - Hand briefs/diffs over as files; reviewers reply with a one-line verdict and write details to a file.
 - **Codex in Herdr (Windows, codex-cli 0.154):** interactive `codex` first shows a *"Do you trust the contents of
   this directory?"* dialog that Herdr reports as `idle` (not `blocked`); a prompt sent then answers the dialog and
-  quits Codex. Do not trust directories on the owner's behalf. Instead run bounded Codex tasks non-interactively
-  inside a Herdr pane: `herdr pane run <pane> "Get-Content -Raw <prompt-file> | codex exec -m gpt-6-astra
-  --sandbox workspace-write -C <repo> - 2>&1 | Tee-Object -FilePath <log>"` (log is UTF-16 under PowerShell 5).
-  Verify `model:` in the log header. The owner may choose to trust the repo once to enable interactive agents.
+  quits Codex. Do not trust directories on the owner's behalf. Run bounded Codex tasks non-interactively through the
+  visible-agent wrapper, using the model + effort selected by the current routing table and a disposable full clone.
+  Verify both `model:` and `reasoning effort:` in the log header. The owner may choose to trust the repo once to
+  enable interactive agents.
 
 ## Resumability (owner requirement, 2026-09-24)
 
