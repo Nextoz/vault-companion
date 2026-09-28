@@ -82,6 +82,11 @@ export interface EnqueueOptions {
 /** The part of `navigator.locks` the queue uses: an exclusive lock held for the callback's duration. */
 export interface LockManagerLike {
   request<T>(name: string, callback: () => Promise<T>): Promise<T>;
+  /**
+   * The locks held now, by any tab (ADR-0028). With it, an in-flight claim holds `vc-claim:<claimId>` and a lease whose
+   * lock is not held is reclaimed at once; without it, a dead tab's lease just expires.
+   */
+  query?(): Promise<{ held: { name?: string | undefined }[] }>;
 }
 
 export interface QueueOptions {
@@ -104,7 +109,9 @@ export interface QueueOptions {
 }
 
 const LOCK_NAME = 'vc-pending';
-/** How long a claim keeps other tabs off an item. Longer than any request (`COMMAND_TIMEOUT_MS`); a dead tab's lease just expires. */
+/** Held by the claiming tab while a claimed request is in flight: the browser drops it when the page dies (ADR-0028). */
+const claimLockName = (claimId: string) => `vc-claim:${claimId}`;
+/** How long a claim keeps other tabs off an item. Longer than any request (`COMMAND_TIMEOUT_MS`); without `locks.query`, a dead tab's lease just expires. */
 export const LEASE_MS = 60_000;
 /** Acknowledged receipts kept for the "Saved to GitHub" list. Unacknowledged receipts are never evicted. */
 const MAX_ACKNOWLEDGED = 20;
@@ -124,6 +131,8 @@ interface Claim {
   record: PendingRecord;
   /** Session generation the claim was made under; any session change since releases it unsent. */
   generation: number;
+  /** Drops the claim's liveness lock; called once the attempt is settled (or the claim abandoned). */
+  release: () => void;
 }
 
 /** The session changed between claim and request: nothing was sent. */
@@ -131,7 +140,11 @@ type Attempt = Outcome | { kind: 'released' };
 
 function defaultLocks(): LockManagerLike | null {
   const locks = globalThis.navigator?.locks;
-  return locks ? { request: (name, callback) => locks.request(name, () => callback()) } : null;
+  if (!locks) return null;
+  return {
+    request: (name, callback) => locks.request(name, () => callback()),
+    query: async () => ({ held: (await locks.query()).held ?? [] }),
+  };
 }
 
 export class PendingQueue {
@@ -178,6 +191,8 @@ export class PendingQueue {
   static async open(options: QueueOptions): Promise<PendingQueue> {
     const queue = new PendingQueue(options);
     await queue.#reload();
+    // A lease left by a page that died mid-request stops showing "Saving…" at once (ADR-0028).
+    if (queue.#locks?.query) await queue.#locked(() => queue.#reclaimDead());
     queue.#emit();
     return queue;
   }
@@ -388,8 +403,14 @@ export class PendingQueue {
           for (;;) {
             const claim = await this.#locked(() => this.#claimNext());
             if (!claim) break;
-            const outcome = await this.#attempt(claim);
-            await this.#locked(() => this.#settle(claim.record, outcome));
+            let outcome: Attempt;
+            try {
+              outcome = await this.#attempt(claim);
+              await this.#locked(() => this.#settle(claim.record, outcome));
+            } finally {
+              // Only once the outcome is persisted: until then the lease is live and no other tab may reclaim it.
+              claim.release();
+            }
             if (outcome.kind === 'signed-out' || outcome.kind === 'released') break;
           }
         } while (this.#flushAgain && !this.#signedOut);
@@ -403,6 +424,7 @@ export class PendingQueue {
 
   /** Under the lock, on freshly read records. */
   async #claimNext(): Promise<Claim | null> {
+    await this.#reclaimDead();
     if (this.#signedOut || this.#accountKey === null) return null;
     const account = this.#accountKey;
     const generation = this.#generation;
@@ -475,10 +497,19 @@ export class PendingQueue {
         if (envelope.baseRevision !== latest) body = JSON.stringify({ ...envelope, baseRevision: latest });
       }
       // Mark before the request leaves: from here on its effect may exist in Git, and other tabs keep off it.
-      const claimed: PendingRecord = { ...record, body, everSent: true, leaseUntil: now + LEASE_MS, claimId: crypto.randomUUID() };
-      await this.#persist(claimed);
+      const claimId = crypto.randomUUID();
+      // Its liveness lock is held before the claim is visible to any tab (all read it under this lock), so a live claim
+      // is never reclaimed (ADR-0028).
+      const release = await this.#holdClaimLock(claimId);
+      const claimed: PendingRecord = { ...record, body, everSent: true, leaseUntil: now + LEASE_MS, claimId };
+      try {
+        await this.#persist(claimed);
+      } catch (error) {
+        release();
+        throw error;
+      }
       // The session is re-checked in #attempt, synchronously before the request and after every await here.
-      return { record: claimed, generation };
+      return { record: claimed, generation, release };
     }
     return null;
   }
@@ -675,6 +706,42 @@ export class PendingQueue {
 
   #unleased(record: PendingRecord): PendingRecord {
     return { ...record, leaseUntil: 0, claimId: null };
+  }
+
+  /**
+   * Resolves once `vc-claim:<claimId>` is held; the returned function releases it. Only with `locks.query`: without it
+   * no tab can see the lock, and a lock manager may not keep distinct names apart.
+   */
+  async #holdClaimLock(claimId: string): Promise<() => void> {
+    const locks = this.#locks;
+    if (!locks?.query) return () => undefined;
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    await new Promise<void>((granted, failed) => {
+      locks
+        .request(claimLockName(claimId), () => {
+          granted();
+          return released;
+        })
+        .catch(failed);
+    });
+    return release;
+  }
+
+  /**
+   * Under the lock, on freshly read records (ADR-0028 §2). A lease still unexpired whose claim lock no tab holds belongs
+   * to a page that died mid-request: unleased now, as expiry would, so it is sent again with the same bytes. A lease
+   * whose lock is held is never touched.
+   */
+  async #reclaimDead(): Promise<void> {
+    const locks = this.#locks;
+    if (!locks?.query) return;
+    const now = this.#now();
+    const leased = [...this.#records.values()].filter((r) => r.claimId && this.#leased(r, now));
+    if (leased.length === 0) return;
+    const held = new Set((await locks.query()).held.map((lock) => lock.name));
+    const dead = leased.filter((r) => !held.has(claimLockName(r.claimId as string)));
+    if (dead.length > 0) await this.#persist(...dead.map((r) => this.#unleased(r)));
   }
 
   #ordered(): PendingRecord[] {
