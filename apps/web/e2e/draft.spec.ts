@@ -44,7 +44,7 @@ test('a fresh reopen follows the new tab; views without a default remember the c
   await page.getByRole('button', { name: 'Capture' }).click();
   await expect(page.getByLabel('Task text')).toBeFocused();
   await page.getByRole('button', { name: 'Close' }).click();
-  await views.getByRole('button', { name: 'History', exact: true }).click();
+  await views.getByRole('button', { name: 'Progress', exact: true }).click();
   await page.getByRole('button', { name: 'Capture' }).click();
   await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
 });
