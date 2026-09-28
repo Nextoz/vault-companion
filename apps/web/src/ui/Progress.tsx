@@ -4,7 +4,7 @@ import type { CompleteTaskCommand, HistoryItem, HistoryResponse, NotesResponse, 
 import { useEffect, useId, useState } from 'react';
 import { getHistory, getNotes, getTraining, getTriage, type Fetched } from '../api.ts';
 import { dayHeading } from '../history.ts';
-import { progressWeeks, unavailable, weekRange, weekSummary, type ProgressInputs, type ProgressWeek } from '../progress.ts';
+import { progressWeeks, weekRange, weekSummary, type ProgressInputs, type ProgressWeek } from '../progress.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { plainWikilinks, taskSegments } from '../text.ts';
 import { trainingSummary } from '../training.ts';
@@ -49,7 +49,10 @@ export function Progress({ refreshKey, queue, queued, accountKey, baseRevision, 
   const t = ok(training);
   const d = ok(triage);
   const n = ok(notes);
-  const loading = [h, t, d, n].includes(undefined);
+  // Settled sources render at once; `undefined` = still loading, `null` = failed (shown per source, never as empty).
+  const loading = [h, t, d, n].every((s) => s === undefined);
+  const missing = ([['Tasks', h], ['Training', t], ['Events', d], ['Notes', n]] as const)
+    .flatMap(([name, s]) => s === undefined ? [`${name} loading…`] : s === null ? [`${name} unavailable`] : []);
   const inputs: ProgressInputs = {
     history: h?.items ?? null,
     training: t ? (t.status === 'ok' ? t.rows : t.status === 'absent' ? [] : null) : null,
@@ -64,15 +67,14 @@ export function Progress({ refreshKey, queue, queued, accountKey, baseRevision, 
     {loading && <p role="status">Loading progress…</p>}
     {week && <section aria-label="This week" className="progress-card">
       <h2>This week <span className="muted small">{weekRange(week)}</span></h2>
-      <p className="progress-summary" data-testid="week-summary">{weekSummary(week, true)}</p>
-      {unavailable(inputs).map((u) => <p key={u} className="muted small">{u}</p>)}
+      <p className="progress-summary" data-testid="week-summary">{weekSummary(week, true, missing)}</p>
       <Expandable label="Show what happened" closeLabel="Hide what happened"><Evidence week={week} {...evidence} /></Expandable>
     </section>}
     {earlier.length > 0 && <section aria-label="Earlier weeks" className="progress-earlier">
       <h2>Earlier weeks</h2>
       <ul>
         {earlier.map((w) => <li key={w.monday}>
-          <Expandable label={`${weekRange(w)}: ${weekSummary(w, false)}`} row>
+          <Expandable label={`${weekRange(w)}: ${weekSummary(w, false, missing)}`} row>
             <Evidence week={w} {...evidence} />
           </Expandable>
         </li>)}

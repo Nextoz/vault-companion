@@ -84,7 +84,7 @@ export function progressWeeks(inputs: ProgressInputs, today: string, weeks = 8):
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** "6 tasks · 2 Active Work · 3 runs (14.6 km) · 1 gym · 2 events (1 attended) · 2 notes"; zero sources are omitted. */
-export function weekSummary(week: ProgressWeek, current: boolean): string {
+export function weekSummary(week: ProgressWeek, current: boolean, missing: readonly string[] = []): string {
   const events = week.events ? week.events.go.length + week.events.attended.length : 0;
   const parts = [
     week.tasks?.length ? plural(week.tasks.length, 'task') : '',
@@ -94,6 +94,8 @@ export function weekSummary(week: ProgressWeek, current: boolean): string {
     events ? `${plural(events, 'event')}${week.events!.attended.length ? ` (${week.events!.attended.length} attended)` : ''}` : '',
     week.notes?.length ? plural(week.notes.length, 'note') : '',
   ].filter(Boolean);
+  // A week is only "Nothing recorded" when every source answered; otherwise say which ones are missing.
+  if (missing.length) return [...parts, ...missing].join(' · ');
   return parts.length ? parts.join(' · ') : current ? 'Nothing recorded this week' : 'Nothing recorded';
 }
 

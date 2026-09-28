@@ -74,8 +74,16 @@ test('Progress: a failed training read says "Training unavailable" and the rest 
   api.trainingMode = 'error';
   const progress = await openProgress(page, api);
   const week = progress.getByRole('region', { name: 'This week' });
-  await expect(week.getByTestId('week-summary')).toHaveText('2 tasks · 1 Active Work · 2 events (1 attended) · 1 note');
-  await expect(week.getByText('Training unavailable')).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Earlier weeks' }).getByRole('button').first()).toHaveText('14–20 Sep: Nothing recorded');
+  await expect(week.getByTestId('week-summary')).toHaveText('2 tasks · 1 Active Work · 2 events (1 attended) · 1 note · Training unavailable');
+  // An earlier week with a failed source is never presented as empty.
+  await expect(page.getByRole('region', { name: 'Earlier weeks' }).getByRole('button').first()).toHaveText('14–20 Sep: Training unavailable');
   await expect(page.getByRole('region', { name: 'History', exact: true }).getByRole('heading', { level: 2 })).toHaveCount(3);
+});
+
+test('Progress: a training read that never answers does not hold back the other sources', async ({ page }) => {
+  const api = seeded();
+  api.trainingMode = 'hang';
+  const progress = await openProgress(page, api);
+  const week = progress.getByRole('region', { name: 'This week' });
+  await expect(week.getByTestId('week-summary')).toHaveText('2 tasks · 1 Active Work · 2 events (1 attended) · 1 note · Training loading…');
 });

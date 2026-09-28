@@ -83,6 +83,11 @@ describe('progressWeeks', () => {
     expect(weekSummary(week!, true)).toBe('Nothing recorded this week');
     expect(weekSummary(earlier!, false)).toBe('Nothing recorded');
   });
+  it('never calls a week empty while a source is missing', () => {
+    const [week, earlier] = progressWeeks(empty, TODAY);
+    expect(weekSummary(earlier!, false, ['Training unavailable'])).toBe('Training unavailable');
+    expect(weekSummary(week!, true, ['Notes loading…'])).toBe('Notes loading…');
+  });
 });
 
 describe('weekRange', () => {
