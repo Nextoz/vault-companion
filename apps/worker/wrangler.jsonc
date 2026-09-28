@@ -21,6 +21,12 @@
     "not_found_handling": "single-page-application",
   },
 
+  // ADR-0029 research explainer: daily run + catch-up (UTC). Must equal EXPLAINER_CRONS (config.test.ts).
+  // Its key GEMINI_API_KEY is an optional secret (`wrangler secret put`, docs/deploy.md), not in `secrets.required`.
+  "triggers": {
+    "crons": ["30 4 * * *", "30 6 * * *"],
+  },
+
   // Non-secret settings (Env in src/index.ts). AUTH_MODE must stay "access": configProblems() refuses anything else.
   "vars": {
     "AUTH_MODE": "access",

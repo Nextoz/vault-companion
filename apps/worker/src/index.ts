@@ -5,7 +5,9 @@ import { createInstallationTokenSource, GitHubContentsStore } from '@vault-compa
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createApp } from './app.ts';
 import { createAccessVerifier } from './auth.ts';
+import { createGeminiExplainer } from './gemini.ts';
 import type { LogRecord } from './log.ts';
+import { EXPLAINER_ROUTE, runExplainerJob } from './research-explainer.ts';
 
 export interface Env {
   AUTH_MODE: string;
@@ -20,6 +22,16 @@ export interface Env {
   VAULT_REPO: string;
   VAULT_BRANCH?: string;
   USER_TIME_ZONE?: string;
+  /** ADR-0029: only the research-explainer cron uses it; optional so the API never depends on it. Never logged. */
+  GEMINI_API_KEY?: string;
+}
+
+/** The two members of Cloudflare's ScheduledController/ExecutionContext the cron handler uses. */
+export interface CronEvent {
+  readonly cron: string;
+}
+export interface WaitUntil {
+  waitUntil(promise: Promise<unknown>): void;
 }
 
 const REQUIRED: readonly (keyof Env)[] = [
@@ -81,7 +93,41 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey) {
   return createApp({ verify, appOrigin: env.APP_ORIGIN, services, log });
 }
 
+/**
+ * ADR-0029 cron: production composition of the research explainer. Every GitHub and Gemini request goes through one
+ * counting `fetch`, so the run stays inside the subrequest budget (ADR-0029 amendment). `fetchImpl` is for tests.
+ */
+export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis)): Promise<void> {
+  const started = { requestId: crypto.randomUUID(), method: 'CRON', route: EXPLAINER_ROUTE, durationMs: 0 };
+  if (configProblems(env).length > 0) return log({ ...started, status: 503, errorCode: 'not-configured' });
+  if (!env.GEMINI_API_KEY) return log({ ...started, status: 503, errorCode: 'gemini-key-missing' });
+  let used = 0;
+  const counted: typeof fetch = (input, init) => {
+    used++;
+    return fetchImpl(input, init);
+  };
+  const store = new GitHubContentsStore({
+    owner: env.VAULT_OWNER,
+    repo: env.VAULT_REPO,
+    ...(env.VAULT_BRANCH ? { branch: env.VAULT_BRANCH } : {}),
+    fetch: counted,
+    token: createInstallationTokenSource({ appId: env.GITHUB_APP_ID, privateKeyPem: env.GITHUB_APP_PRIVATE_KEY, installationId: env.GITHUB_INSTALLATION_ID, fetch: counted }),
+  });
+  await runExplainerJob(cron, {
+    store,
+    explainer: createGeminiExplainer({ apiKey: env.GEMINI_API_KEY, fetch: counted }),
+    now: () => new Date(),
+    timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE,
+    subrequests: () => used,
+    log,
+  });
+}
+
 export default {
+  scheduled(event: CronEvent, env: Env, ctx: WaitUntil): void {
+    ctx.waitUntil(runScheduled(event.cron, env));
+  },
+
   fetch(request: Request, env: Env): Response | Promise<Response> {
     const problems = configProblems(env);
     if (problems.length > 0) {

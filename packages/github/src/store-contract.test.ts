@@ -102,6 +102,34 @@ describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_0
     expect(await store.readFile(TODO, x)).toMatchObject({ blobSha: blob }); // history is immutable
   });
 
+  it('writeFiles (ADR-0029): all files in ONE commit on the pinned head; any unmet precondition or a moved head writes nothing', async () => {
+    const { store, external } = await make();
+    const x = (await store.head()).commitSha;
+    const files = [
+      { path: 'Research/Explained/2026-09-28 - a.md' as VaultPath, expect: 'absent' as const, bytes: enc('a\n') },
+      { path: 'Automation/Scout Status/research-explainer.json' as VaultPath, expect: 'absent' as const, bytes: enc('{}\n') },
+      { path: TODO, expect: 'regular-file' as const, bytes: enc('t\n') },
+    ];
+    const req = { baseCommit: x, files, message: 'Vault Companion: research explainer', trailers: { [TRAILER_OP]: 'multi-op' } };
+    // One absent-expected file already exists ⇒ nothing is written.
+    expect(await store.writeFiles({ ...req, files: [...files.slice(1), { ...files[0]!, path: 'Inbox/Første note - 2026-09-20.md' as VaultPath }] }))
+      .toEqual({ ok: false, reason: 'precondition-failed' });
+    expect((await store.head()).commitSha).toBe(x);
+    const r = await store.writeFiles(req);
+    if (!r.ok) throw new Error('write failed');
+    expect(r.blobShas).toEqual(await Promise.all(files.map((f) => gitBlobSha(f.bytes))));
+    const info = (await store.readCommit(r.commitSha))!;
+    expect(info.parent).toBe(x);
+    expect(info.trailers[TRAILER_OP]).toBe('multi-op');
+    expect(info.files.map((f) => f.path).sort()).toEqual(files.map((f) => f.path).sort());
+    for (const f of files) expect(dec((await store.readFile(f.path, r.commitSha))!.bytes)).toBe(dec(f.bytes));
+    // A later commit makes a write from the old head fail as a whole.
+    await external({ 'Inbox/other.md': 'o\n' });
+    const again = await store.writeFiles({ ...req, files: [{ ...files[0]!, path: 'Research/Explained/2026-09-28 - b.md' as VaultPath }] });
+    expect(again).toEqual({ ok: false, reason: 'head-moved' });
+    await expect(store.writeFiles({ ...req, files: [files[0]!, files[0]!] })).rejects.toThrow('distinct');
+  });
+
   it('precondition (rerun Astra N1 / Opus N1): create never replaces a file or a directory; update needs a regular file', async () => {
     const { store } = await make();
     const x = (await store.head()).commitSha;

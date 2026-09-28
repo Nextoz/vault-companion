@@ -108,7 +108,7 @@ export function readableUrl(url: string): string {
 /** ASCII, lowercase, hyphen-separated, ≤ 80 characters, never empty. */
 export function slugify(text: string): string {
   const ascii = text.normalize('NFKD').replace(/\p{M}/gu, '').replace(/ß/g, 'ss').replace(/[æÆ]/g, 'ae').replace(/[øØ]/g, 'o');
-  const slug = ascii.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const slug = ascii.toLowerCase().replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const cut = slug.slice(0, 80).replace(/-+$/, '');
   return cut || 'paper';
 }

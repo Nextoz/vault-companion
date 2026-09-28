@@ -91,6 +91,52 @@ describe('GitHubContentsStore', () => {
     ]);
   });
 
+  it('multi-file write (ADR-0029): one blob per file, ONE tree and commit on the pinned head, precondition per folder', async () => {
+    const trees: Record<string, unknown> = {
+      Tasks: TASKS_TREE,
+      'Research/Explained': { truncated: false, tree: [] },
+    };
+    let blob = 0;
+    const { s, calls } = store((url, init) => {
+      const m = init.method ?? 'GET';
+      if (m === 'GET' && url.includes('/git/trees/')) return json(200, trees[decodeURIComponent(url.split(':').at(-1)!)] ?? { truncated: false, tree: [] });
+      if (m === 'GET' && url.includes('/git/commits/')) return json(200, { sha: SHA('a'), tree: { sha: SHA('7') } });
+      if (m === 'POST' && url.endsWith('/git/blobs')) return json(201, { sha: SHA(String(++blob)) });
+      if (m === 'POST' && url.endsWith('/git/trees')) return json(201, { sha: SHA('e') });
+      if (m === 'POST' && url.endsWith('/git/commits')) return json(201, { sha: SHA('c') });
+      if (m === 'PATCH') return json(200, {});
+      return json(500, {});
+    });
+    const res = await s.writeFiles({
+      baseCommit: SHA('a'),
+      message: 'Vault Companion: research explainer',
+      trailers: { 'Vault-Companion-Op': 'op' },
+      files: [
+        { path: 'Research/Explained/2026-09-28 - a.md' as VaultPath, expect: 'absent', bytes: new TextEncoder().encode('a') },
+        { path: 'Tasks/To-Do List.md' as VaultPath, expect: 'regular-file', bytes: new TextEncoder().encode('b') },
+      ],
+    });
+    expect(res).toEqual({ ok: true, commitSha: SHA('c'), blobShas: [SHA('1'), SHA('2')] });
+    expect(calls.map((c) => `${c.init.method} ${c.url.replace('https://api.github.com/repos/o/r', '')}`)).toEqual([
+      `GET /git/trees/${SHA('a')}:Research/Explained`,
+      `GET /git/trees/${SHA('a')}:Tasks`,
+      `GET /git/commits/${SHA('a')}`,
+      'POST /git/blobs',
+      'POST /git/blobs',
+      'POST /git/trees',
+      'POST /git/commits',
+      'PATCH /git/refs/heads/main',
+    ]);
+    expect(JSON.parse(calls[5]!.init.body as string)).toEqual({
+      base_tree: SHA('7'),
+      tree: [
+        { path: 'Research/Explained/2026-09-28 - a.md', mode: '100644', type: 'blob', sha: SHA('1') },
+        { path: 'Tasks/To-Do List.md', mode: '100644', type: 'blob', sha: SHA('2') },
+      ],
+    });
+    expect(JSON.parse(calls[6]!.init.body as string)).toEqual({ message: 'Vault Companion: research explainer\n\nVault-Companion-Op: op\n', tree: SHA('e'), parents: [SHA('a')] });
+  });
+
   it.each([
     ['update: target is a directory', 'regular-file', [{ path: 'To-Do List.md', mode: '040000', type: 'tree' }]],
     ['update: target is executable (mode would change, Opus N7)', 'regular-file', [{ path: 'To-Do List.md', mode: '100755', type: 'blob' }]],

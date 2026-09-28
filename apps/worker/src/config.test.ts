@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { EXPLAINER_CRONS, slotForCron } from '@vault-companion/domain';
 import runbook from '../../../docs/deploy.md?raw';
 import raw from '../wrangler.jsonc?raw';
 import { configProblems } from './index.ts';
@@ -33,6 +34,7 @@ interface WranglerConfig {
   preview_urls?: boolean;
   vars?: Record<string, string>;
   secrets?: { required?: string[] };
+  triggers?: { crons?: string[] };
   assets?: { directory?: string; run_worker_first?: boolean | string[] };
 }
 
@@ -85,5 +87,13 @@ describe('wrangler.jsonc', () => {
   it('routes /api/* to the Worker and serves the web build from the same origin', () => {
     expect(config.assets?.directory).toBe('../web/dist');
     expect(config.assets?.run_worker_first).toEqual(['/api/*']);
+  });
+
+  it('schedules exactly the research explainer crons (ADR-0029) and keeps its key optional and secret', () => {
+    expect(config.triggers?.crons).toEqual(Object.values(EXPLAINER_CRONS));
+    expect(Object.values(EXPLAINER_CRONS).map(slotForCron)).toEqual(['primary', 'catchup']);
+    expect('GEMINI_API_KEY' in vars).toBe(false);
+    expect(secrets).not.toContain('GEMINI_API_KEY');
+    expect(required).not.toContain('GEMINI_API_KEY');
   });
 });
