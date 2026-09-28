@@ -36,7 +36,8 @@ export function createTriageService(deps: { store: VaultStore; now?: () => Date 
           read(`${TRIAGE_DIR}/feed.json`), read(`${TRIAGE_DIR}/applied.json`), read(triageDecisionPath(previous)), read(triageDecisionPath(now)),
         ]);
         const decisions = [...parseDecisionLines(before), ...parseDecisionLines(current)].slice(-5000)
-          .map(({ decisionId, eventId, decision, outcome, undoes, at }) => ({ decisionId, eventId, decision, outcome, undoes, at }));
+          .map(({ decisionId, eventId, decision, outcome, undoes, at, card }) =>
+            ({ decisionId, eventId, decision, outcome, undoes, at, title: card.title, start: card.start }));
         return { revision, now: now.toISOString(), ...parseTriageFeed(feed), ...parseTriageApplied(applied), decisions };
       } catch (e) {
         if (e instanceof StoreUnavailable || e instanceof StoreUnknownOutcome || e instanceof FileTooLarge) {

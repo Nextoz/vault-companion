@@ -96,6 +96,20 @@ describe('triage reads and path guards', () => {
     expect(files.mock.calls.every(([, at]) => at === pinned)).toBe(true);
     expect(files.mock.calls.some(([p]) => p.endsWith('2026-08.jsonl'))).toBe(false);
   });
+  it('carries the stored card title and start into each decision; outcome only on attended (ADR-0027)', async () => {
+    const attended: DecisionLine = { ...line, decisionId: ID.replace('024', '026'), decision: 'attended', outcome: 'worth',
+      card: { title: 'Synthetic workshop', category: null, sourceName: null, aiScore: null, start: '2026-09-20T18:00:00+02:00' } };
+    const store = await InMemoryStore.create({ [path]: text(appendDecisionLine(null, line)) + text(appendDecisionLine(null, attended)) });
+    const { decisions } = await read(store);
+    expect(decisions).toEqual([
+      { decisionId: ID, eventId: card.eventId, decision: 'go', outcome: null, undoes: null, at: NOW, title: card.title, start: card.start },
+      { decisionId: attended.decisionId, eventId: card.eventId, decision: 'attended', outcome: 'worth', undoes: null, at: NOW,
+        title: 'Synthetic workshop', start: '2026-09-20T18:00:00+02:00' }]);
+  });
+  it('parses a pre-ADR-0027 decision entry without title/start as null', () => {
+    const legacy = { decisionId: ID, eventId: card.eventId, decision: 'go', undoes: null, at: NOW };
+    expect(TriageResponse.shape.decisions.element.parse(legacy)).toEqual({ ...legacy, outcome: null, title: null, start: null });
+  });
   it('never reads an unlisted symlink or a mismatched blob', async () => {
     const store = await InMemoryStore.create({ 'Events/Triage/feed.json': feed() });
     const reads = vi.spyOn(store, 'readFile');
