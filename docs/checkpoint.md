@@ -20,8 +20,8 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
    (`GEMINI_API_KEY` from the owner's Windows user env, piped, never printed — `wrangler secret put` deploys a version),
    clean build, deploy, 302 check, and watch the first cron run (04:30 UTC) on the Scouts page.
 2. **PR #43 lease reclaim (ADR-0028)** — **merged 2026-09-28 (`7c5309e`)** after the CodeRabbit ADR fix, full check
-   (1355) and full e2e (77) on the merged tree. Clean build + dry run OK (14 assets, `sw.js`). **Deploy pending:** the
-   Lead's `wrangler deploy` was denied by the auto-mode classifier ("Production Deploy"); the owner deploys or allows it.
+   (1355) and full e2e (77) on the merged tree. **Deployed** by the owner: version `12692438`, anonymous 302 OK. The
+   Lead may now deploy: `.claude/settings.local.json` allows `pnpm exec wrangler deploy *` (owner, 2026-09-28).
    R1 session was blocked by its own classifier (remote repoint / "Data Exfiltration"); owner re-approved in-session.
    ADR-0029 amended (`1d0eac2`) with the worker's three design answers. Open bug **B1** (Danish comma in weight/distance:
    `type="number"` rejects `84,5`; fix = text input + `inputMode="decimal"` + comma→dot), batched with further bugs.
