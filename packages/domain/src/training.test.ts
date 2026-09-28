@@ -4,13 +4,18 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as contracts from '@vault-companion/contracts';
 import { Command, TrainingResponse, TRAINING_PATH, type Receipt } from '@vault-companion/contracts';
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { createTrainingService } from './training.ts';
 import { createCommandService } from './commands.ts';
 import * as paths from './paths.ts';
 import { payloadHash } from './payload-hash.ts';
 import { TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type VaultPath } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
+vi.mock('./paths.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof paths>();
+  return { ...actual, canWrite: vi.fn(actual.canWrite) };
+});
+afterEach(() => vi.mocked(paths.canWrite).mockReset());
 const fixture = '\uFEFF---\r\nprivate: synthetic\r\n---\r\n## Sessions\r\n| Date | Time | Type | Distance | Duration | Weight | Split | Note |\r\n| --- | --- | --- | --- | --- | --- | --- | --- |\r\n| 2026-09-27 | | Group workout | | | | | |\r\n| unknown | bytes |\r\n\r\n## Week summaries\r\nNever display this\r\n';
 const NOW = new Date('2026-09-28T16:42:00Z');
 const session = { type: 'Run', when: NOW.toISOString(), distance: 5.2, duration: 28, note: 'Easy loop' };
@@ -25,6 +30,20 @@ async function setup(text: string | null = fixture) {
   const run = (cmd: Command) => service.execute(cmd, cmd);
   return { store, command, run, read: reader.readTraining };
 }
+it.each(['LogTraining', 'UndoLogTraining'])('denied canWrite refuses %s without writing', async (type) => {
+  const h = await setup();
+  const target = h.command('LogTraining', { session });
+  const saved = type === 'UndoLogTraining' ? receipt(await h.run(target)) : null;
+  const cmd = saved ? h.command(type, { target, targetCommit: saved.commitSha }) : target;
+  const head = h.store.headCommit;
+  const writes = h.store.writeCalls;
+  vi.mocked(paths.canWrite).mockReturnValue(false);
+  const result = await h.run(cmd);
+  expect(h.store.writeCalls).toBe(writes);
+  expect(h.store.headCommit).toBe(head);
+  expect(result).toMatchObject({ code: 'refused:path' });
+  expect(paths.canWrite).toHaveBeenCalledWith(TRAINING_PATH, 'update');
+});
 it('read exposes newest sessions and unknown lines only', async () => {
   const h = await setup();
   receipt(await h.run(h.command('LogTraining', { session })));

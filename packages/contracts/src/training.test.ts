@@ -2,6 +2,12 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { Command, TrainingSession } from './index.ts';
 const run = { type: 'Run', when: '2026-09-28T10:00:00+02:00', distance: 5.2, duration: 28 };
 afterEach(() => vi.useRealTimers());
+it('enforces the inclusive year-2000 instant lower bound', () => {
+  for (const when of ['0001-01-01T12:00:00Z', '1999-12-31T23:59:59Z', '2000-01-01T00:00:00+01:00'])
+    expect(TrainingSession.safeParse({ ...run, when }).success).toBe(false);
+  for (const when of ['2000-01-01T00:00:00Z', '1999-12-31T23:00:00-01:00'])
+    expect(TrainingSession.safeParse({ ...run, when }).success).toBe(true);
+});
 it.each([
   { distance: 0 }, { distance: 100.1 }, { duration: 0 }, { duration: 601 }, { duration: 1.1 },
   { when: '2026-09-28T10:00:00' }, { when: '2026-09-30T12:00:01Z' }, { note: 'x'.repeat(281) },

@@ -5,6 +5,7 @@ import ts from 'typescript';
 import { expect, it } from 'vitest';
 import * as kernel from './training.ts';
 import * as textTools from './text.ts';
+import * as scanTools from './scan.ts';
 
 const header = '| Date | Time | Type | Distance | Duration | Weight | Split | Note |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n';
 const today = '| 2026-09-28 | 19:00 | Gym | | 60 | 82.4 | Bicep | |';
@@ -13,6 +14,36 @@ const unknown = '| bad-date |  odd bytes  |';
 const fixture = '\uFEFF---\nprivate: synthetic\n---\n## Sessions\n\n' + header + today + '\n' + unknown + '\n' + legacy + '\n\n## Week summaries\nKeep  spaces \nWorth keeping…\n';
 const session: kernel.TrainingSession = { type: 'Run', when: '2026-09-28T18:00:00+02:00', distance: 5.2, duration: 28, note: ' Easy | loop\nagain ' };
 const line = '| 2026-09-28 | 18:00 | Run | 5.2 | 28 | | | Easy \\| loop again |';
+
+it.each([
+  ['backtick fence', '## Sessions\n```md\n' + header + '```'],
+  ['tilde fence', '## Sessions\n~~~~~md\n' + header + '~~~~~'],
+  ['fenced heading', '```\n## Sessions\n```\n' + header],
+  ['indented table', '## Sessions\n' + header.split('\n').map((s) => '    ' + s).join('\n')],
+  ['tab table', '## Sessions\n' + header.split('\n').map((s) => '\t' + s).join('\n')],
+  ...['```', '~~~~', '```` trailing', '    ````', '\t````', '> ````'].map((close) => ['invalid closing fence ' + close, '## Sessions\n````\n' + close + '\n' + header]),
+])('ignores code: %s', (_name, input) => {
+  expect(kernel.insertTrainingRow(input!, session)).toMatchObject({ code: 'refused:training-table-missing' });
+});
+it('discovers a real table after a longer closing fence and ignores fenced section headings', () => {
+  const input = '## Sessions\n   ~~~~md\n## Other\n' + header + '   ~~~~~ \t\n' + header;
+  expect(kernel.insertTrainingRow(input, session)).toMatchObject({ text: input + line + '\n' });
+});
+it('refuses adjacent headers in one contiguous pipe block', () => {
+  expect(kernel.insertTrainingRow('## Sessions\n' + header + today + '\n' + header + today, session)).toMatchObject({ code: 'refused:training-table-missing' });
+});
+it.each([
+  header.replace('Note |', 'Note X'), header.slice(1),
+  header.replace('\n| ---', '\nX ---'), header.replace(/\|\n$/, 'X\n'),
+])('refuses malformed outer pipes %#', (input) => {
+  expect(kernel.insertTrainingRow('## Sessions\n' + input, session)).toMatchObject({ code: 'refused:training-table-missing' });
+});
+it('keeps a session row without its closing pipe unknown and unchanged', () => {
+  const odd = today.slice(0, -1);
+  const input = '## Sessions\n' + header + odd + '\n';
+  expect(kernel.parseTraining(input)).toMatchObject({ rows: [], unknownLines: [odd] });
+  expect(kernel.insertTrainingRow(input, session)).toMatchObject({ text: input + line + '\n' });
+});
 
 it('inserts in date/time order, keeping legacy, unknown and outside bytes exactly', () => {
   const r = kernel.insertTrainingRow(fixture, session);
@@ -64,7 +95,7 @@ function mutant(from: string, to: string): typeof kernel {
   expect(source).toContain(from);
   const js = ts.transpileModule(source.replace(from, to), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
   const exports = {};
-  runInNewContext(js, { exports, require: () => textTools });
+  runInNewContext(js, { exports, require: (name: string) => name === './scan.ts' ? scanTools : textTools });
   return exports as typeof kernel;
 }
 it.each([

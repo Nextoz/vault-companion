@@ -365,6 +365,7 @@ function trainingOn(cmd: Extract<Command, { type: 'LogTraining' }>, f: TodoFile)
 }
 export function trainingPlan(cmd: Extract<Command, { type: 'LogTraining' }>): WritePlan<md.TrainingEffect> {
   return { message: 'Vault Companion: log training', async compute(store, at) {
+    if (!canWrite(TRAINING, 'update')) return refuse('refused:path', 'training path is not writable');
     const f = await readTodo(store, at, TRAINING);
     return f.ok ? trainingOn(cmd, f) : f.planned;
   } };
@@ -393,6 +394,7 @@ function undoTrainingPlan(cmd: Extract<Command, { type: 'UndoLogTraining' }>, ra
 
   /** The inverse of the verified session `v` on Training at `at` (X for a write, U^ to verify U). */
   const inverseAt = async (store: VaultStore, v: Extract<Awaited<ReturnType<typeof verifiedTraining>>, { ok: true }>, at: string): Promise<Planned<Receipt['effect']>> => {
+    if (!canWrite(TRAINING, 'update')) return refuse('refused:path', 'training path is not writable');
     const f = await readTodo(store, at, TRAINING);
     if (!f.ok) return f.planned;
     return fromKernel(md.undoTraining(f.text, decodeUtf8(v.afterBytes)!, v.before.text, v.effect), TRAINING, (e) => e);

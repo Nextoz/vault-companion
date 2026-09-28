@@ -165,7 +165,8 @@ export type ReviewActiveWorkCommand = z.infer<typeof ReviewActiveWorkCommand>;
 
 export const TRAINING_PATH = 'Health/Training Log.md';
 const trainingCommon = {
-  when: isoInstant.refine((s) => Date.parse(s) <= Date.now() + 86_400_000, 'must not be more than one day in the future'),
+  when: isoInstant.refine((s) => Date.parse(s) >= Date.parse('2000-01-01T00:00:00Z'), 'must be on or after 2000-01-01T00:00:00Z')
+    .refine((s) => Date.parse(s) <= Date.now() + 86_400_000, 'must not be more than one day in the future'),
   duration: z.number().int().min(1).max(600),
   note: z.string().max(280).optional(),
 };

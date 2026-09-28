@@ -1,6 +1,7 @@
 // ADR-0025: only the sessions table is interpreted. Original lines are never reformatted.
 import type { MutationOk, Refusal } from './api.ts';
 import { joinDoc, refuse, splitDoc } from './text.ts';
+import { scanLines } from './scan.ts';
 
 export const TRAINING_HEADER = '| Date | Time | Type | Distance | Duration | Weight | Split | Note |';
 export type TrainingRow = { date: string; time: string; type: string; distance: string; duration: string; weight: string; split: string; note: string };
@@ -12,6 +13,7 @@ const missing = () => refuse('refused:training-table-missing', 'Training log tab
 
 /** Escaped pipes belong to a cell; backslashes are decoded only when escaping a pipe or another backslash. */
 function cells(line: string): string[] {
+  if (!line.trim().startsWith('|') || !line.trim().endsWith('|')) return [];
   const body = line.trim().slice(1, -1);
   const result: string[] = [];
   let cell = '';
@@ -27,20 +29,29 @@ const tableLine = (line: string) => line.trim().startsWith('|');
 export function parseTraining(source: string) {
   const doc = splitDoc(source);
   if ('ok' in doc) return doc;
-  const headings = doc.lines.flatMap((line, i) => line.trim() === '## Sessions' ? [i] : []);
+  // Mask indented code and blockquotes before scanning: neither can open/close a top-level fence.
+  const codeOrQuote = (line: string) => /^(?: {4}| {0,3}\t| {0,3}>)/.test(line);
+  const scan = scanLines(doc.lines.map((line) => codeOrQuote(line) ? '' : line));
+  const visible = (i: number) => scan.visible[i] && !codeOrQuote(doc.lines[i]!);
+  const pipeLine = (i: number) => visible(i) && tableLine(doc.lines[i]!);
+  const headings = doc.lines.flatMap((line, i) => visible(i) && line.trim() === '## Sessions' ? [i] : []);
   if (headings.length !== 1) return missing();
   const start = headings[0]! + 1;
-  let end = doc.lines.findIndex((line, i) => i >= start && /^##(?:\s|$)/.test(line.trim()));
+  let end = doc.lines.findIndex((line, i) => i >= start && visible(i) && /^##(?:\s|$)/.test(line.trim()));
   if (end < 0) end = doc.lines.length;
   const tables: number[] = [];
-  for (let i = start; i < end; i++) if (tableLine(doc.lines[i]!) && (i === start || !tableLine(doc.lines[i - 1]!))) tables.push(i);
+  for (let i = start; i < end; i++) {
+    const next = i + 1 < end && pipeLine(i + 1) ? cells(doc.lines[i + 1]!) : [];
+    const headerPair = cells(doc.lines[i]!).length > 0 && next.length > 0 && next.every((c) => /^:?-{3,}:?$/.test(c));
+    if (pipeLine(i) && (i === start || !pipeLine(i - 1) || headerPair)) tables.push(i);
+  }
   if (tables.length !== 1) return missing();
   const header = tables[0]!;
   if (JSON.stringify(cells(doc.lines[header]!)) !== JSON.stringify(cells(TRAINING_HEADER))) return missing();
   const separator = doc.lines[header + 1] ?? '';
-  if (!separator.trim().endsWith('|') || cells(separator).length !== 8 || !cells(separator).every((c) => /^:?-{3,}:?$/.test(c))) return missing();
+  if (!visible(header + 1) || cells(separator).length !== 8 || !cells(separator).every((c) => /^:?-{3,}:?$/.test(c))) return missing();
   let tableEnd = header + 2;
-  while (tableEnd < end && tableLine(doc.lines[tableEnd]!)) tableEnd++;
+  while (tableEnd < end && pipeLine(tableEnd)) tableEnd++;
   const rows: (TrainingRow & { lineIndex: number })[] = [];
   const unknownLines: string[] = [];
   for (let i = header + 2; i < tableEnd; i++) {
