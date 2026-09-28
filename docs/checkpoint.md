@@ -45,6 +45,11 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
    Access, secrets, deploy runbook, service-worker updates, cron jobs. Each chapter: what runs where, the 5–8 files that
    matter, one traced path, why it was built this way (link the ADR), self-check questions. Then refresh
    `docs/learning-guide.md` to point at the tour instead of duplicating it. Later chapters: features since 25 Sep, testing.
+   Reader: the owner on a computer (VS Code), experienced engineer but **new to TypeScript**. So: chapter 0 is a short
+   "TypeScript you need for this repo" (only what the code uses: types/interfaces, Zod schemas as runtime checks,
+   discriminated unions, async/await, `#private` fields, `satisfies`/generics as met), each shown on a real line of this
+   repo; every chapter marks what to **read closely** vs **skim** vs **skip** (boilerplate, UI styling, test helpers), so
+   no time is wasted on unimportant code.
 
 ## Capacity (2026-09-28)
 
