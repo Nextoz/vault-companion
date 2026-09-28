@@ -1,7 +1,7 @@
 # Brief PR — address CodeRabbit review on one pull request (reusable)
 
 Type: **review follow-up**. Input: a PR number `<N>` on `Nextoz/vault-companion` and its head branch.
-Runs on Claude Code Cloud (substantive changes) or Codex GPT-6 Astra effort low (small/doc PRs).
+Worker/model: chosen by the current routing table in `docs/orchestration.md` (small/doc PRs sit at the bottom tier).
 
 1. Read AGENTS.md, then `gh pr view <N> --comments` and `gh api repos/Nextoz/vault-companion/pulls/<N>/comments`.
 2. For **each** CodeRabbit comment, decide:
