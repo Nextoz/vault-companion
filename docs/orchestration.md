@@ -208,15 +208,27 @@ Launch every worker through `AGENT_STDIN=<brief> bash tools/agent-pane.sh "<mode
 | tiny/mechanical (rename, one-line fix, docs tweak) | Codex `gpt-5.6-luna` |
 | small bounded (a test, small UI/CSS, simple bug) | Codex `gpt-5.6-terra` or Gemini CLI |
 | ordinary implementation / debugging | Codex `gpt-5.6-sol` (effort low/medium) |
-| complex implementation; identity, integrity, security; reviews | Codex `gpt-6-astra` (effort per task: medium default, high when risky) |
+| complex implementation; identity, integrity, security; reviews | Codex `gpt-6-astra` **medium** (default) |
+| truly critical only: adversarial review of a new write target, data-loss/identity bugs | Codex `gpt-6-astra` **high** |
 | substantial self-contained features when Codex is out | Claude Cloud (owner writes "you may push" in the session) |
 
-**Gemini CLI** (0.61.0, `gemini-3.8-flash`): the API key is a Windows *user* variable, so launch with
-`AGENT_USER_ENV=GEMINI_API_KEY` (agent-pane reads it at run time; it never reaches a file or log) and run
-`gemini --skip-trust -m gemini-3.8-flash --output-format json -p "Read the file .agent/brief.md in the current directory and carry out that task exactly as written."`.
-Bounded low-risk work only (UI/CSS, straightforward TypeScript, tests, docs, mechanical refactors, simple bugs); public
-repo and synthetic data only, never live/private vault text. Occasional 503s: retry once, then reroute. DeepSeek: to be
-added when the owner has credits.
+**Codex budget (owner, 2026-09-28):** one ChatGPT Plus window lasts ~5 h. On 2026-09-28 three parallel runs (two on
+Astra high) used it up in 32 min (~424k tokens), leaving the Lead to finish fixes itself. Rules: Astra **high** only for
+the critical row above; builds go to Sol/Terra, Astra medium reviews them. At most **two Codex runs at once**; queue the rest.
+
+**Gemini CLI** (0.61.0): launch through the wrapper, never bare `gemini`:
+`AGENT_USER_ENV=GEMINI_API_KEY bash tools/agent-pane.sh "gemini · <task>" <clone> <clone>/.agent/run.log bash tools/gemini-worker.sh <clone>`.
+The wrapper (tested 2026-09-28) reads `.agent/brief.md`, writes clone-local `.gemini/settings.json` with sub-agents off
+(the built-in "generalist" sub-agent spends extra requests), runs `--approval-mode yolo` (headless runs cannot approve
+edits; the clone is disposable), and falls back `gemini-3.5-flash-lite → gemini-3.1-flash-lite → gemini-3.8-flash`
+(`GEMINI_MODELS` overrides): one 60 s retry on 503/429, next model on daily-quota errors, exit 3 "GEMINI UNAVAILABLE" ⇒
+reroute to Codex. Why: the free API tier is **per model** — `gemini-3.8-flash` allows only 20 requests/day (measured:
+`free_tier_requests, limit: 20`), Flash-Lite far more — and Flash returned 503 "high demand" at night (2026-09-28, both
+README attempts failed). Login-with-Google quota is no longer available to unpaid users (Gemini CLI replaced by
+Antigravity CLI, 2026-06-18). A retry on the next model restarts the brief on a possibly half-edited clone: keep Gemini
+briefs idempotent. Bounded low-risk work only (UI/CSS, straightforward TypeScript, tests, docs, mechanical refactors,
+simple bugs); public repo and synthetic data only, never live/private vault text. DeepSeek: to be added when the owner
+has credits.
 
 **Shell hygiene (Lead):** never put Markdown with backticks or `$(…)` inside `node -e "…"`/`bash -c "…"` strings — the
 shell executes them (it once started a stray `codex` process). Write such text with the file tools instead.
@@ -270,6 +282,10 @@ Config: `.coderabbit.yaml`.
   which it was in the PR. Actionable findings: fix with a test or reject with a reason.
 - **CodeRabbit allowance: 1 full review per hour** (its own review footer, 2026-09-26). More PRs than that get "Review rate
   limited". Batch small changes into fewer PRs and request reviews for the riskiest PR first.
+- **Batching (owner, 2026-09-28):** small follow-ups, bug fixes and docs ride in **one combined PR** per round (one
+  commit per item, one full review), like #36 (C2 + S2a + C3). A feature with a new write target or security surface
+  keeps its own PR. Request the review as soon as a PR is complete and keep integrating other work meanwhile; a
+  rate-limited request is re-posted at the time CodeRabbit names (a timed background wait), never polled.
 - CodeRabbit auto-review stopped (free OSS plan requires ≥ 10 repo stars, 2026-09-26). Trigger manually as above; **CodeRabbit availability never blocks a merge** — CI, the Lead's review and, for
   risky code, an Astra or local reviewer are the gate.
 - Codex `--sandbox workspace-write` cannot write a git **worktree's** git dir (it lives in the main repo's `.git`), so
