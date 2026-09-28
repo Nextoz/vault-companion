@@ -20,7 +20,11 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
    verify against current docs and one real call), 429 handling (QuotaFailure ⇒ next model, else one retry), CPU
    unmeasured, `GEMINI_API_KEY` optional (missing ⇒ logs `gemini-key-missing`, writes nothing). **Before review
    (owner, 2026-09-28): add ADR-0029 Amendment 2** (carry-over ≤ 3 days, pending notes, blob-SHA-guarded replace,
-   `status: unavailable` on the last day) and **one real Gemini call** with the owner's key before deploy. Then: review (write targets `Research/Explained/*.md` create-only + `Automation/Scout Status/research-explainer.json`,
+   `status: unavailable` on the last day) and **one real Gemini call** with the owner's key before deploy.
+   **Status 2026-09-28 evening:** reviewed + amendment 2 built (`9296f1b`, 10-min model time budget added: Cron wall
+   limit 15 min); **PR #45** open; `pnpm check` 1408 + e2e 77 green; review worktree `../vault-companion-clones/explainer`.
+   Live Gemini: all 3 chain models exist on the key, but every call got 503 "high demand" (format never 400); one plain
+   url_context call returned 200. Deploy only after one real call succeeds. Then: review (write targets `Research/Explained/*.md` create-only + `Automation/Scout Status/research-explainer.json`,
    Gemini client, cron), `pnpm check` + e2e, PR, one CodeRabbit review, merge; then set the Worker secret
    (`GEMINI_API_KEY` from the owner's Windows user env, piped, never printed — `wrangler secret put` deploys a version),
    clean build, deploy, 302 check, and watch the first cron run (04:30 UTC) on the Scouts page.
