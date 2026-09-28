@@ -73,8 +73,8 @@ export function formatTrainingRow(session: TrainingSession): string {
   const part = (type: string) => parts.find((p) => p.type === type)!.value;
   const note = (session.note ?? '').replace(/[\r\n\u2028\u2029]+/g, ' ').trim().replaceAll('\\', '\\\\').replaceAll('|', '\\|');
   const values = [`${part('year')}-${part('month')}-${part('day')}`, `${part('hour')}:${part('minute')}`, session.type,
-    session.type === 'Run' ? session.distance.toFixed(1) : '', String(session.duration),
-    session.type === 'Gym' && session.weight !== undefined ? session.weight.toFixed(1) : '', session.type === 'Gym' ? session.split : '', note];
+    session.type === 'Run' ? `${session.distance.toFixed(1)} km` : '', `${session.duration} min`,
+    session.type === 'Gym' && session.weight !== undefined ? `${session.weight.toFixed(1)} kg` : '', session.type === 'Gym' ? session.split : '', note];
   return '|' + values.map((v) => v ? ` ${v} ` : ' ').join('|') + '|';
 }
 

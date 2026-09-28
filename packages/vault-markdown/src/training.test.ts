@@ -8,12 +8,12 @@ import * as textTools from './text.ts';
 import * as scanTools from './scan.ts';
 
 const header = '| Date | Time | Type | Distance | Duration | Weight | Split | Note |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n';
-const today = '| 2026-09-28 | 19:00 | Gym | | 60 | 82.4 | Bicep | |';
+const today = '| 2026-09-28 | 19:00 | Gym | | 60 min | 82.4 kg | Bicep | |';
 const legacy = '| 2026-09-26 | | Group workout | | | | | |\n| 2026-09-25 | 09:00 | Run | 5.2 km | 28 min | | | Legacy |';
 const unknown = '| bad-date |  odd bytes  |';
 const fixture = '\uFEFF---\nprivate: synthetic\n---\n## Sessions\n\n' + header + today + '\n' + unknown + '\n' + legacy + '\n\n## Week summaries\nKeep  spaces \nWorth keeping…\n';
 const session: kernel.TrainingSession = { type: 'Run', when: '2026-09-28T18:00:00+02:00', distance: 5.2, duration: 28, note: ' Easy | loop\nagain ' };
-const line = '| 2026-09-28 | 18:00 | Run | 5.2 | 28 | | | Easy \\| loop again |';
+const line = '| 2026-09-28 | 18:00 | Run | 5.2 km | 28 min | | | Easy \\| loop again |';
 
 it.each([
   ['backtick fence', '## Sessions\n```md\n' + header + '```'],
@@ -56,9 +56,9 @@ it('inserts in date/time order, keeping legacy, unknown and outside bytes exactl
   ] });
 });
 it('inserts at top and yesterday below all today rows', () => {
-  const top = '| 2026-09-29 | 00:00 | Run | 5.2 | 28 | | | |';
+  const top = '| 2026-09-29 | 00:00 | Run | 5.2 km | 28 min | | | |';
   expect(kernel.insertTrainingRow(fixture, { ...session, when: '2026-09-28T22:00:00Z', note: '' })).toMatchObject({ text: fixture.replace(today, top + '\n' + today) });
-  const yesterday = '| 2026-09-27 | 18:00 | Run | 5.2 | 28 | | | |';
+  const yesterday = '| 2026-09-27 | 18:00 | Run | 5.2 km | 28 min | | | |';
   expect(kernel.insertTrainingRow(fixture, { ...session, when: '2026-09-27T18:00:00+02:00', note: '' })).toMatchObject({ text: fixture.replace(legacy, yesterday + '\n' + legacy) });
 });
 it('appends after table, preserves CRLF and absence of final newline', () => {
@@ -68,8 +68,8 @@ it('appends after table, preserves CRLF and absence of final newline', () => {
   expect(kernel.insertTrainingRow(full, session)).toMatchObject({ text: fixture.replace(legacy, line + '\n' + legacy).replaceAll('\n', '\r\n') });
 });
 it('formats Gym, blank optional weight, backslash plus pipe and Copenhagen DST', () => {
-  expect(kernel.formatTrainingRow({ type: 'Gym', split: 'Legs', duration: 60, when: '2026-01-01T23:00:00Z' })).toBe('| 2026-01-02 | 00:00 | Gym | | 60 | | Legs | |');
-  expect(kernel.formatTrainingRow({ type: 'Gym', split: 'Bicep', weight: 82.4, duration: 60, when: '2026-09-28T16:42:00Z' })).toBe('| 2026-09-28 | 18:42 | Gym | | 60 | 82.4 | Bicep | |');
+  expect(kernel.formatTrainingRow({ type: 'Gym', split: 'Legs', duration: 60, when: '2026-01-01T23:00:00Z' })).toBe('| 2026-01-02 | 00:00 | Gym | | 60 min | | Legs | |');
+  expect(kernel.formatTrainingRow({ type: 'Gym', split: 'Bicep', weight: 82.4, duration: 60, when: '2026-09-28T16:42:00Z' })).toBe('| 2026-09-28 | 18:42 | Gym | | 60 min | 82.4 kg | Bicep | |');
   const r = kernel.insertTrainingRow(fixture, { ...session, note: 'slash \\| pipe' });
   expect(r.ok && kernel.parseTraining(r.text)).toMatchObject({ rows: [{}, { note: 'slash \\| pipe' }, {}, {}] });
 });

@@ -19,7 +19,7 @@ afterEach(() => vi.mocked(paths.canWrite).mockReset());
 const fixture = '\uFEFF---\r\nprivate: synthetic\r\n---\r\n## Sessions\r\n| Date | Time | Type | Distance | Duration | Weight | Split | Note |\r\n| --- | --- | --- | --- | --- | --- | --- | --- |\r\n| 2026-09-27 | | Group workout | | | | | |\r\n| unknown | bytes |\r\n\r\n## Week summaries\r\nNever display this\r\n';
 const NOW = new Date('2026-09-28T16:42:00Z');
 const session = { type: 'Run', when: NOW.toISOString(), distance: 5.2, duration: 28, note: 'Easy loop' };
-const line = '| 2026-09-28 | 18:42 | Run | 5.2 | 28 | | | Easy loop |';
+const line = '| 2026-09-28 | 18:42 | Run | 5.2 km | 28 min | | | Easy loop |';
 let n = 0;
 function receipt(r: Receipt | { code: string }): Receipt { if ('code' in r) throw new Error(r.code); return r; }
 async function setup(text: string | null = fixture) {
