@@ -222,6 +222,13 @@ There is also a **weekly** limit: after ~540k tokens in one night plus 115k the 
 activity in the log (exec/thinking lines), not just the `model:` header. When Codex is out: Claude Code Cloud for
 features, local Claude Code workers for fixes and reviews, Gemini Flash-Lite for small bounded jobs (owner, 2026-09-28).
 
+**Claude usage is one pool (owner, 2026-09-28):** local Claude Code (the Lead and local workers), Claude Cloud sessions
+and claude.ai chat all spend the owner's Pro plan (5-hour window + weekly cap); no usage credits are enabled, so hitting
+the limit stops work (no surprise bill). Rules: the Lead is the largest consumer — start a fresh Lead session from
+`docs/checkpoint.md` after each integrated increment instead of carrying a very long context; workers default to Sonnet
+(Opus only for critical code such as the queue/write core); at most **one Claude worker at a time**; small bounded jobs
+go to Gemini (`tools/gemini-worker.sh`); large builds wait for Codex when it is due back within a few days.
+
 **ChatGPT chat relay — temporary, only while Codex is out (owner, 2026-09-28; drop it when Codex credits return):**
 ChatGPT chat has its own Plus limits, but no repo access, so the owner is the relay. Use it **only for critical reviews**
 (what Astra high would do: a new write target, data-loss or identity risk), at most once or twice a week. The Lead
