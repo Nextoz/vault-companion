@@ -1,4 +1,4 @@
-# Checkpoint — 2026-09-28 night (Lead session `6f65db54`, Herdr agent `lead`, overnight autonomous run)
+# Checkpoint — 2026-09-28 ~05:00 (Lead session `6f65db54`, Herdr agent `lead`, overnight autonomous run)
 
 Read this first, then `docs/plan.md`, then `docs/orchestration.md` (routing, Herdr, Cloud, token + RAM rules).
 Priority and product decisions: the owner's vault note *Projects/Vault Companion/Vault Companion - Ready Backlog*
@@ -6,39 +6,37 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
 
 ## Deployed (verified)
 
-- `main` = `8a5ca2d` (PR #36 C2 + S2a + C3), Worker `vault-companion` **version `0e34d79f`** at `https://app.karpov.dk`
+- `main` = `37fca45` (PR #38 Scout insights), Worker `vault-companion` **version `5d52c100`** at `https://app.karpov.dk`
   (Workers Free, Cloudflare Access owner-only). Anonymous `/` and `/api/*` → 302 after the deploy.
-- Deploy runbook: `rm -rf apps/web/dist && pnpm build` — **check the build succeeded before deploying** (Windows `EBUSY`
-  on `copyfile` of an icon happened again 2026-09-28: retry the clean build), `wrangler deploy --dry-run`, then
+- Live since the owner's last phone use: C2 + S2a + C3 (#36), Scout insights v1 (#38). README rewritten (#37, docs).
+- Deploy runbook: `rm -rf apps/web/dist && pnpm build` — **check the build succeeded** (Windows `EBUSY` on an icon
+  `copyfile` recurs: retry the clean build), `wrangler deploy --dry-run`, then
   `cd apps/worker && pnpm exec wrangler deploy --domain "app.karpov.dk"`, then `curl` the anonymous 302.
-- T (swipe triage) is live; the owner did not see it. Diagnosis (counts only): `Events/Triage/feed.json` is on the vault
-  remote, 92 valid cards, 0 dropped, all future, no decisions ⇒ the app shows "10 new events" on **Today** (daily cap 10).
-  Likely an old cached build on the phone; ask the owner to reload (update banner) and report what Today shows.
+- T (swipe triage) is live; the owner did not see it. Counts-only check: `Events/Triage/feed.json` on the vault remote,
+  92 valid cards, 0 dropped, all future, no decisions ⇒ Today should show "10 new events" (daily cap 10). Likely an
+  old cached build on the phone: owner reloads (update banner) and reports what Today shows.
 
-## Owner decisions this session
+## Open work (exact next actions)
 
-- Overnight: merge + deploy engineering work when green; Scout insights v1 built and deployed for live testing.
-- New README (Gemini worker), everything the app can do, modelled on popular READMEs.
-- Ready Backlog **L — Training log** is next (order: after #36). ADR-0025 written by the Lead.
-- Workers start without memory; use matching Claude Code plugins/skills (Lead memory `agents-no-memory-use-plugins`).
-
-## Workers (Herdr workspace w4, Agents tab)
-
-| Pane | Worker | Clone / branch | Brief |
-|---|---|---|---|
-| w4:p3 | Codex `gpt-6-astra` high | `vault-companion-clones/training`, `agent/training` | `.agent/brief.md` (L, ADR-0025) |
-| w4:p4 | Codex `gpt-5.6-sol` medium | `vault-companion-clones/insights`, `agent/insights` | `.agent/brief.md` (Scout insights v1) |
-| w4:p5 | Gemini `gemini-3.8-flash` | `vault-companion-clones/readme`, `agent/readme` | `.agent/brief.md` (README) — first run hit 503, retried |
-
-Each writes `.agent/report.md` ending in `… DONE` / `… BLOCKED`. Workers do not push; the Lead reviews, runs the full
-check + e2e (one Playwright job at a time), pushes, opens the PR, requests `@coderabbitai full review` once.
-
-## Next actions
-
-1. Integrate each worker as it finishes (L first priority): review diff (adversarial review of the new `Health/` write
-   target for L), `pnpm check`, e2e, PR, CodeRabbit, merge, deploy.
-2. After a push, check `gh pr view --json mergeStateStatus`: a conflicting PR runs **no CI** (lost ~1 h on #36).
-3. Leftovers if quota allows: edited task briefly renders twice (B), R7 blank line, Dependabot #29.
-4. Morning: owner phone tests T (reload first), C2, S2a, C3, L, Scout insights; confirm L's written-row format
-   (numbers without units) matches the converted vault table.
+1. **PR #39 (branch `agent/training`, clone `vault-companion-clones/training`) = L Training log.** Green locally on the
+   merged tree (check 1328, e2e 73/73). CodeRabbit full review auto-requested ~05:27 (rate limit 1/hour). Fix findings
+   with mutation-checked tests, merge, clean build, deploy, 302 check.
+2. Morning, owner phone tests: T (reload first), C2, S2a, C3, Scout insights, L. Owner confirms L's written row format
+   (numbers without units, e.g. `| 2026-09-28 | 18:42 | Run | 5.2 | 28 | | | … |`) against the converted vault table —
+   the Lead may not read `Health/` (outside ADR-0018); a one-function change if units are wanted.
+3. Owner decision: AGENTS.md rule 4 still says "CAS on blob SHA"; ADR-0011 replaced it with head-CAS. Owner approves
+   the wording fix (constitution file).
+4. Leftovers (Codex back 08:16): edited task briefly renders twice (B), R7 blank line, Dependabot #29 (@types/node 26
+   vs Node 24 runtime — recommend ignoring the major until the runtime moves).
 5. Owner decision still open: G3.
+
+## Workers, capacity, tooling
+
+- No workers running. Herdr w4 panes of finished workers have closed themselves.
+- **Codex quota out until 2026-09-28 08:16** (hit during the L fix run; the Lead finished and verified the fixes).
+  Gemini CLI returned 503 twice tonight (README rerouted to Codex Terra). CodeRabbit: 1 full review/hour.
+- Codex sandbox cannot write `.git` (index.lock denied): workers leave changes uncommitted, the Lead commits.
+  Codex workers also cannot run `tsc -b` project references (TS6305): the Lead's full check catches type errors.
+- Owner's tools fixed 2026-09-27: Python 3.13 on user PATH, jq installed (new shells only).
+- RAM: one Playwright job at a time; `PW_PREVIEW_PORT=4191` for the Lead's runs.
+- Local-only files never committed: `.claude/`.
