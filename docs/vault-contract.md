@@ -11,6 +11,7 @@ Any change here is consequential: update the golden tests and record an ADR.
 | Task source | `Tasks/To-Do List.md` | read, complete, undo, edit, append capture |
 | Inbox notes | `Inbox/*.md` (regular files directly in `Inbox/`, no subfolders) | create (capture); list, read, body edit with frontmatter/BOM/EOL kept (ADR-0022) |
 | Active Work | `Tasks/Active Work Now.md` | read, capture, edit, review, exact Undo (ADR-0019) |
+| Training log | `Health/Training Log.md` | read, insert one session row, exact Undo; update only, never create (ADR-0025) |
 | Event triage | `Events/Triage/feed.json`, `applied.json`, `Decisions/YYYY-MM.jsonl` | read; create/append **only** decision JSONL, per [ADR-0024](decisions/0024-event-triage.md) |
 | Linked notes | resolved **server-side** from a wikilink in a current task or Active Work item line (`{taskLocator, linkIndex}`); Active Work requires an exact blob SHA and line match, with `linkIndex` 0; target under an allowlisted root: `Projects/`, `Tasks/`, `Inbox/` (owner decision D2 may widen) | read |
 | Never | `.git/`, `.obsidian/`, `.trash/`, `Tools/`, `tmp/`, `output/`, `..`, absolute paths, backslashes, `%`, control chars, non-`.md` — **except** exactly `Automation/Scout Status/<id>.json` (read, ADR-0020) and `Events/Triage/feed.json`, `Events/Triage/applied.json` (read) and `Events/Triage/Decisions/YYYY-MM.jsonl` (read, create/append; ADR-0024) | — |

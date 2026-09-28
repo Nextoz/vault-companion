@@ -11,3 +11,5 @@ export * from './history.ts';
 export * from './notes.ts';
 export * from './triage.ts';
 export * from './triage-format.ts';
+
+export * from './training.ts';

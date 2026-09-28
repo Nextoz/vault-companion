@@ -163,8 +163,25 @@ export const UndoCompleteTaskPayload = z.strictObject({ target: CompleteTaskComm
 export const ReviewActiveWorkCommand = envelope('ReviewActiveWork', ReviewActiveWorkPayload);
 export type ReviewActiveWorkCommand = z.infer<typeof ReviewActiveWorkCommand>;
 
+export const TRAINING_PATH = 'Health/Training Log.md';
+const trainingCommon = {
+  when: isoInstant.refine((s) => Date.parse(s) >= Date.parse('2000-01-01T00:00:00Z'), 'must be on or after 2000-01-01T00:00:00Z')
+    .refine((s) => Date.parse(s) <= Date.now() + 86_400_000, 'must not be more than one day in the future'),
+  duration: z.number().int().min(1).max(600),
+  note: z.string().max(280).optional(),
+};
+export const TrainingSession = z.discriminatedUnion('type', [
+  z.strictObject({ ...trainingCommon, type: z.literal('Run'), distance: z.number().min(0.1).max(100) }),
+  z.strictObject({ ...trainingCommon, type: z.literal('Gym'), split: z.enum(['Bicep', 'Tricep', 'Legs']), weight: z.number().min(30).max(250).optional() }),
+]);
+export type TrainingSession = z.infer<typeof TrainingSession>;
+export const LogTrainingCommand = envelope('LogTraining', z.strictObject({ session: TrainingSession }));
+export type LogTrainingCommand = z.infer<typeof LogTrainingCommand>;
+
 export const Command = z.discriminatedUnion('type', [
   CompleteTaskCommand,
+  LogTrainingCommand,
+  envelope('UndoLogTraining', z.strictObject({ target: LogTrainingCommand, targetCommit: commitSha })),
   envelope('UndoCompleteTask', UndoCompleteTaskPayload),
   envelope('CaptureTask', CaptureTaskPayload),
   envelope('CaptureNote', CaptureNotePayload),
@@ -198,7 +215,8 @@ export const ActiveWorkEffect = z.strictObject({
   beforeLineText: singleLine.nullable(),
   afterLineText: singleLine.nullable(),
 });
-export const Effect = z.discriminatedUnion('kind', [CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect]);
+export const TrainingEffect = z.strictObject({ kind: z.literal('training'), op: z.enum(['logged', 'undone']), lineText: singleLine });
+export const Effect = z.discriminatedUnion('kind', [TrainingEffect, CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect]);
 export type Effect = z.infer<typeof Effect>;
 
 export const Receipt = z.strictObject({
@@ -213,6 +231,7 @@ export const Receipt = z.strictObject({
 export type Receipt = z.infer<typeof Receipt>;
 
 export const ErrorCode = z.enum([
+  'refused:training-table-missing',
   'refused:recurring',
   'refused:on-completion',
   'refused:structure',
@@ -553,3 +572,13 @@ export const TriageResponse = z.strictObject({
   appliedUpdatedAt: isoInstant.nullable(),
 });
 export type TriageResponse = z.infer<typeof TriageResponse>;
+
+/** Only sessions and unknown table lines, never the surrounding health note. */
+export const TrainingRow = z.strictObject({ date: z.iso.date(), time: z.string(), type: z.string(), distance: z.string(), duration: z.string(), weight: z.string(), split: z.string(), note: z.string() });
+export type TrainingRow = z.infer<typeof TrainingRow>;
+export const TrainingResponse = z.discriminatedUnion('status', [
+  z.strictObject({ status: z.literal('ok'), revision: commitSha, blobSha, rows: z.array(TrainingRow), unknownLines: z.array(z.string()) }),
+  z.strictObject({ status: z.literal('absent'), revision: commitSha }),
+  z.strictObject({ status: z.literal('refused'), revision: commitSha, code: ErrorCode, message: z.string() }),
+]);
+export type TrainingResponse = z.infer<typeof TrainingResponse>;

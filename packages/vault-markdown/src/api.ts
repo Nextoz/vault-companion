@@ -8,6 +8,7 @@ export type Priority = 'highest' | 'high' | 'medium' | 'low' | 'lowest';
 
 /** vault-contract.md §5 (the subset the pure kernel can produce). */
 export type RefusalCode =
+  | 'refused:training-table-missing'
   | 'refused:recurring'
   | 'refused:on-completion'
   | 'refused:structure'

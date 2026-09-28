@@ -7,3 +7,6 @@ export type { NoteEditEffect, NoteParts } from './note-edit.ts';
 export { sanitizeCaptureText } from './sanitize.ts';
 export { parseActiveWork, captureActiveWork, editActiveWork, reviewActiveWork, undoActiveWork } from './active-work.ts';
 export type { ActiveWorkItem, ActiveWorkDoneItem, ActiveWorkChanges, ActiveWorkCapture, ActiveWorkEffect } from './active-work.ts';
+
+export { parseTraining, insertTrainingRow, formatTrainingRow, undoTraining } from './training.ts';
+export type { TrainingRow, TrainingSession, TrainingEffect } from './training.ts';

@@ -1,5 +1,5 @@
 // Path policy: docs/vault-contract.md §1. Every path passes here before an adapter sees it.
-import { SCOUT_STATUS_DIR } from '@vault-companion/contracts';
+import { SCOUT_STATUS_DIR, TRAINING_PATH } from '@vault-companion/contracts';
 import type { VaultPath } from './store.ts';
 
 export const TODO_LIST_PATH = 'Tasks/To-Do List.md';
@@ -57,7 +57,7 @@ export function isInboxNotePath(raw: string): raw is VaultPath {
 
 export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
   if (isTriageDecisionPath(path)) return true;
-  if (path === TODO_LIST_PATH || path === 'Tasks/Active Work Now.md') return kind === 'update';
+  if (path === TRAINING_PATH || path === TODO_LIST_PATH || path === 'Tasks/Active Work Now.md') return kind === 'update';
   if (kind === 'update') return isInboxNotePath(path);
   const segments = path.split('/');
   return segments.length === 2 && segments[0] === INBOX_DIR;

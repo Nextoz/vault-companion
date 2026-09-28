@@ -1,6 +1,6 @@
 // Phone-like client: plain HTTP with the real wire contracts. Every envelope is validated with `Command` before it is
 // sent and every answer is parsed with `Receipt` / `ApiError` / `TasksResponse`, so a contract drift fails here.
-import { ActiveWorkResponse, ApiError, Command, encodeNoteHeader, NOTE_HEADER, NoteReadResponse, NotesResponse, Receipt, SessionResponse, TasksResponse, TriageResponse, type CommandType } from '@vault-companion/contracts';
+import { TrainingResponse, ActiveWorkResponse, ApiError, Command, encodeNoteHeader, NOTE_HEADER, NoteReadResponse, NotesResponse, Receipt, SessionResponse, TasksResponse, TriageResponse, type CommandType } from '@vault-companion/contracts';
 import { randomUUID } from 'node:crypto';
 import { APP_ORIGIN } from './server.ts';
 
@@ -36,6 +36,13 @@ export class Phone {
     const r = await this.tasks();
     if (!('tasks' in r)) throw new Error(`read failed: ${r.status} ${r.error.code}`);
     return r.tasks;
+  }
+
+  async training(): Promise<Extract<TrainingResponse, { status: 'ok' }>> {
+    const res = await fetch(`${this.baseUrl}/api/training`, { headers: { 'Cf-Access-Jwt-Assertion': this.token } });
+    const r = TrainingResponse.parse(await res.json());
+    if (r.status !== 'ok') throw new Error(`Training read failed: ${r.status}`);
+    return r;
   }
 
   async activeWork(): Promise<Extract<ActiveWorkResponse, { status: 'ok' }>> {

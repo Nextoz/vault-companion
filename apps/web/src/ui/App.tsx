@@ -22,10 +22,12 @@ import { VaultStatus } from './VaultStatus.tsx';
 import { History } from './History.tsx';
 import { Notes } from './Notes.tsx';
 import { Scouts } from './Scouts.tsx';
+import { Training } from './Training.tsx';
+import { TrainingSheet } from './TrainingSheet.tsx';
 import { Triage } from './Triage.tsx';
 import { TaskList } from './TaskList.tsx';
 
-type Tab = 'today' | 'all' | 'notes' | 'scouts' | 'history';
+type Tab = 'today' | 'all' | 'notes' | 'training' | 'scouts' | 'history';
 interface Toast {
   target: CompleteTaskCommand;
   label: string;
@@ -299,6 +301,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             All
           </button>
           <button type="button" aria-pressed={tab === 'notes'} onClick={() => setTab('notes')}>Notes</button>
+          <button type="button" aria-pressed={tab === 'training'} onClick={() => setTab('training')}>Training</button>
           <button type="button" aria-pressed={tab === 'scouts'} onClick={() => setTab('scouts')}>Scouts</button>
           <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')}>History</button>
         </nav>
@@ -377,6 +380,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {tab === 'history' && !signedOut && <History key={`history:${accountKey}`} refreshKey={checkedAt} queued={snapshot.items}
           accountKey={accountKey} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />}
 
+        {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} />}
+
         {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
           accountKey={accountKey} baseRevision={revision} />}
 
@@ -421,7 +426,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         )}
       </main>
 
-      <button type="button" className="fab" inert={noteOpen || editing !== null} onClick={() => setCaptureOpen(true)} aria-label="Capture">
+      <button type="button" className="fab" inert={noteOpen || editing !== null} onClick={() => setCaptureOpen(true)} aria-label={tab === 'training' ? 'Add training' : 'Capture'}>
         +
       </button>
 
@@ -429,7 +434,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         <EditSheet queue={queue} task={editing.task} accountKey={accountKey} baseRevision={editing.revision}
           blocked={writeBlocked} onClose={() => setEditing(null)} />
       )}
-      {captureOpen && (
+      {captureOpen && tab === 'training' && !signedOut && <TrainingSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} onClose={() => setCaptureOpen(false)} />}
+      {captureOpen && tab !== 'training' && (
         <CaptureSheet
           defaultKind={captureDefaultForTab(tab)}
           queue={queue}
