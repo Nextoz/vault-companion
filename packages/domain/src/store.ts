@@ -41,6 +41,29 @@ export type WriteResult =
   | { readonly ok: true; readonly commitSha: string; readonly blobSha: string }
   | { readonly ok: false; readonly reason: 'head-moved' | 'precondition-failed' };
 
+/**
+ * Several files in ONE commit parented on `baseCommit` (ADR-0029: a research-explainer run commits all new notes plus its
+ * status record together). Same head-CAS and per-file preconditions as `WriteRequest`; any unmet precondition refuses
+ * the whole commit. Paths must be distinct.
+ */
+export interface MultiWriteRequest {
+  readonly baseCommit: string;
+  readonly files: readonly { readonly path: VaultPath; readonly expect: 'absent' | 'regular-file'; readonly bytes: Uint8Array }[];
+  readonly message: string;
+  readonly trailers: Readonly<Record<string, string>>;
+}
+
+export type MultiWriteResult =
+  | { readonly ok: true; readonly commitSha: string; readonly blobShas: readonly string[] }
+  | { readonly ok: false; readonly reason: 'head-moved' | 'precondition-failed' };
+
+/** Rejects an empty or duplicate-path multi-write before any adapter work (a Git tree cannot hold a path twice). */
+export function assertDistinctFiles(req: MultiWriteRequest): void {
+  if (req.files.length === 0 || new Set(req.files.map((f) => f.path)).size !== req.files.length) {
+    throw new StoreUnavailable('multi-file write needs distinct paths');
+  }
+}
+
 export interface FoundOperation {
   readonly commitSha: string;
   readonly payloadHash: string;
@@ -104,6 +127,8 @@ export interface VaultStore {
   listFiles(dir: string, atCommit: string): Promise<readonly ListedFile[]>;
   /** Single-file commit parented on `baseCommit`; publishes only as a fast-forward from it (head-CAS, ADR-0011). */
   writeFile(req: WriteRequest): Promise<WriteResult>;
+  /** Multi-file commit with the same head-CAS as `writeFile` (ADR-0029). */
+  writeFiles(req: MultiWriteRequest): Promise<MultiWriteResult>;
   /** Find a commit in `baseCommitSha..untilCommit` whose trailer `key` (default `Vault-Companion-Op`) equals `value`. */
   findOperation(baseCommitSha: string, untilCommit: string, value: string, key?: string): Promise<FindOperationResult>;
   /** True when `commit` is `head` or an ancestor of it; false when not or unknown. */

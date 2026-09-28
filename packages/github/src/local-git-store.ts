@@ -8,6 +8,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  assertDistinctFiles,
   COMPARE_PAGE,
   StoreUnavailable,
   TRAILER_OP,
@@ -16,6 +17,8 @@ import {
   type CommitsSinceResult,
   type FindOperationResult,
   type ListedFile,
+  type MultiWriteRequest,
+  type MultiWriteResult,
   type StoredFile,
   type VaultPath,
   type VaultStore,
@@ -169,25 +172,36 @@ export class LocalGitStore implements VaultStore {
   }
 
   async writeFile(req: WriteRequest): Promise<WriteResult> {
-    guardPath(req.path);
-    const blob = (await this.ok(['hash-object', '-w', '--stdin'], req.bytes)).toString('utf8').trim();
+    const r = await this.writeFiles({ baseCommit: req.baseCommit, files: [req], message: req.message, trailers: req.trailers });
+    return r.ok ? { ok: true, commitSha: r.commitSha, blobSha: r.blobShas[0]! } : r;
+  }
+
+  async writeFiles(req: MultiWriteRequest): Promise<MultiWriteResult> {
+    assertDistinctFiles(req);
+    for (const f of req.files) guardPath(f.path);
+    const blobShas: string[] = [];
+    for (const f of req.files) blobShas.push((await this.ok(['hash-object', '-w', '--stdin'], f.bytes)).toString('utf8').trim());
     const trailers = Object.entries(req.trailers).map(([k, v]) => `${k}: ${v}`).join('\n');
     const message = `${req.message}\n\n${trailers}\n`;
-    // Precondition against the pinned tree (rerun Astra N1 / Opus N1, N7).
-    const entry = await this.entryAt(req.baseCommit, req.path);
-    const satisfied = req.expect === 'absent' ? entry === null : entry?.type === 'blob' && entry.mode === '100644';
-    if (!satisfied) return { ok: false, reason: 'precondition-failed' };
+    // Precondition against the pinned tree (rerun Astra N1 / Opus N1, N7), for every file.
+    for (const f of req.files) {
+      const entry = await this.entryAt(req.baseCommit, f.path);
+      const satisfied = f.expect === 'absent' ? entry === null : entry?.type === 'blob' && entry.mode === '100644';
+      if (!satisfied) return { ok: false, reason: 'precondition-failed' };
+    }
     // Head-CAS (ADR-0011): commit parented on the pinned base; `update-ref <new> <old>` refuses unless the branch is
     // still exactly at the base, atomically (same as GitHub's non-force ref update).
     const indexFile = join(tmpdir(), `vc-index-${randomUUID()}`);
     const env = { GIT_INDEX_FILE: indexFile };
     try {
       await this.ok(['read-tree', req.baseCommit], undefined, env);
-      await this.ok(['update-index', '--add', '--cacheinfo', `100644,${blob},${req.path}`], undefined, env);
+      for (const [i, f] of req.files.entries()) {
+        await this.ok(['update-index', '--add', '--cacheinfo', `100644,${blobShas[i]!},${f.path}`], undefined, env);
+      }
       const tree = (await this.ok(['write-tree'], undefined, env)).toString('utf8').trim();
       const commit = (await this.ok(['commit-tree', tree, '-p', req.baseCommit, '-F', '-'], new TextEncoder().encode(message))).toString('utf8').trim();
       const upd = await this.run(['update-ref', this.ref, commit, req.baseCommit]);
-      return upd.code === 0 ? { ok: true, commitSha: commit, blobSha: blob } : { ok: false, reason: 'head-moved' };
+      return upd.code === 0 ? { ok: true, commitSha: commit, blobShas } : { ok: false, reason: 'head-moved' };
     } finally {
       await rm(indexFile, { force: true });
     }

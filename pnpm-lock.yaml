@@ -270,6 +270,9 @@ importers:
       '@vault-companion/vault-markdown':
         specifier: workspace:*
         version: link:../vault-markdown
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@vault-companion/test-vault':
         specifier: workspace:*

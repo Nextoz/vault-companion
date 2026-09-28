@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canReadLinkedNote, canWrite, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
+import { canReadLinkedNote, canWrite, EXPLAINER_STATUS_PATH, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 
 describe('parseVaultPath', () => {
   it.each([
@@ -93,5 +93,37 @@ describe('ADR-0024 triage write scope', () => {
     expect(parseVaultPath('Events/Triage/Decisions/2026-13.jsonl')).toBeNull();
     expect(parseVaultPath('Events/Triage/Decisions/sub/2026-09.jsonl')).toBeNull();
     expect(parseVaultPath('Events/Triage/other.json')).toBeNull();
+  });
+});
+
+describe('ADR-0029 research explainer write scope', () => {
+  const w = (p: string, kind: 'create' | 'update') => {
+    const path = parseVaultPath(p);
+    return path !== null && canWrite(path, kind);
+  };
+  it('creates notes directly in Research/Explained, never updates them', () => {
+    expect(w('Research/Explained/2026-09-28 - sparse-attention.md', 'create')).toBe(true);
+    expect(w('Research/Explained/2026-09-28 - sparse-attention.md', 'update')).toBe(false);
+  });
+  it.each([
+    'Research/Explained/sub/2026-09-28 - x.md',
+    'Research/Explained/.hidden.md',
+    'Research/Explained/2026-09-28 - x.txt',
+    'Research/Explained.md',
+    'Research/Reading Briefs/Research Reading Brief - 2026-09-28.md',
+    'Research/Daily Research Scout/Daily Research Scout - 2026-09-28.md',
+    'Research/x.md',
+    'Other/Research/Explained/x.md',
+    'research/explained/x.md',
+  ])('refuses sibling or other folder %s', (p) => {
+    expect(w(p, 'create')).toBe(false);
+    expect(w(p, 'update')).toBe(false);
+  });
+  it('creates and updates only its own status record', () => {
+    expect(w(EXPLAINER_STATUS_PATH, 'create')).toBe(true);
+    expect(w(EXPLAINER_STATUS_PATH, 'update')).toBe(true);
+    expect(w('Automation/Scout Status/city-events.json', 'create')).toBe(false);
+    expect(w('Automation/Scout Status/city-events.json', 'update')).toBe(false);
+    expect(w('Automation/Scout Status/research-explainer.md', 'create')).toBe(false);
   });
 });

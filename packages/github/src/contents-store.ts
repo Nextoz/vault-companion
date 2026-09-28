@@ -2,6 +2,7 @@
 // Response shapes and write/conflict semantics were probed against the real API (Phase 0 and gate G1):
 // docs/discovery/phase-0-findings.md, docs/discovery/github-api-probe-2026-09-24.md.
 import {
+  assertDistinctFiles,
   COMPARE_PAGE,
   FileTooLarge,
   isStructurallySafePath,
@@ -13,6 +14,8 @@ import {
   type CommitsSinceResult,
   type FindOperationResult,
   type ListedFile,
+  type MultiWriteRequest,
+  type MultiWriteResult,
   type StoredFile,
   type VaultPath,
   type VaultStore,
@@ -183,25 +186,37 @@ export class GitHubContentsStore implements VaultStore {
   }
 
   async writeFile(req: WriteRequest): Promise<WriteResult> {
-    guardPath(req.path);
+    const r = await this.writeFiles({ baseCommit: req.baseCommit, files: [req], message: req.message, trailers: req.trailers });
+    return r.ok ? { ok: true, commitSha: r.commitSha, blobSha: r.blobShas[0]! } : r;
+  }
+
+  /** One file costs exactly what the single-file write always did; each extra file adds one blob (+ one listing per new folder). */
+  async writeFiles(req: MultiWriteRequest): Promise<MultiWriteResult> {
+    assertDistinctFiles(req);
+    for (const f of req.files) guardPath(f.path);
     // Precondition against the pinned tree (rerun Astra N1 / Opus N1, N7): a supplied tree entry REPLACES whatever is at
     // the path in `base_tree`, so creation must prove absence and updates must prove a regular 100644 file.
-    const cut = req.path.lastIndexOf('/');
-    const siblings = await this.treeEntries(req.baseCommit, cut < 0 ? '' : req.path.slice(0, cut));
-    const entry = siblings?.find((e) => e.path === req.path.slice(cut + 1));
-    const satisfied = req.expect === 'absent' ? entry === undefined : entry?.type === 'blob' && entry.mode === '100644';
-    if (!satisfied) return { ok: false, reason: 'precondition-failed' };
-    // Head-CAS (ADR-0011, probe 2026-09-25): blob → tree on X's tree → commit parented on X → fast-forward ref.
+    for (const f of req.files) {
+      const cut = f.path.lastIndexOf('/');
+      const siblings = await this.treeEntries(req.baseCommit, cut < 0 ? '' : f.path.slice(0, cut));
+      const entry = siblings?.find((e) => e.path === f.path.slice(cut + 1));
+      const satisfied = f.expect === 'absent' ? entry === undefined : entry?.type === 'blob' && entry.mode === '100644';
+      if (!satisfied) return { ok: false, reason: 'precondition-failed' };
+    }
+    // Head-CAS (ADR-0011, probe 2026-09-25): blobs → tree on X's tree → commit parented on X → fast-forward ref.
     let baseTree = this.trees.get(req.baseCommit);
     if (baseTree === undefined) {
       const base = await this.getJson<{ tree: { sha: string } }>(`/git/commits/${req.baseCommit}`);
       if (!base) throw new StoreUnavailable('base commit not found');
       baseTree = base.tree.sha;
     }
-    const blob = await this.createObject<{ sha: string }>('/git/blobs', { content: bytesToBase64(req.bytes), encoding: 'base64' });
+    const blobShas: string[] = [];
+    for (const f of req.files) {
+      blobShas.push((await this.createObject<{ sha: string }>('/git/blobs', { content: bytesToBase64(f.bytes), encoding: 'base64' })).sha);
+    }
     const tree = await this.createObject<{ sha: string }>('/git/trees', {
       base_tree: baseTree,
-      tree: [{ path: req.path, mode: '100644', type: 'blob', sha: blob.sha }],
+      tree: req.files.map((f, i) => ({ path: f.path, mode: '100644', type: 'blob', sha: blobShas[i] })),
     });
     const trailers = Object.entries(req.trailers).map(([k, v]) => `${k}: ${v}`).join('\n');
     const commit = await this.createObject<{ sha: string }>('/git/commits', {
@@ -211,7 +226,7 @@ export class GitHubContentsStore implements VaultStore {
     });
     // Only this request can make the effect durable; a lost response here is an unknown outcome (call() throws it).
     const res = await this.call('PATCH', `/git/refs/heads/${encodeURIComponent(this.branch)}`, { sha: commit.sha, force: false });
-    if (res.status === 200) return { ok: true, commitSha: commit.sha, blobSha: blob.sha };
+    if (res.status === 200) return { ok: true, commitSha: commit.sha, blobShas };
     // Probed: 422 "Update is not a fast forward" when the head moved past X (including the A2 ABA case).
     if (res.status === 422 || res.status === 409) return { ok: false, reason: 'head-moved' };
     if (res.status >= 500) throw new StoreUnknownOutcome(`GitHub ref update status ${res.status}`);

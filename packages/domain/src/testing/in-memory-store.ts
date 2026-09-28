@@ -3,6 +3,7 @@
 // commit and succeeds only if the branch head is still exactly that commit; trailers are searchable; blob SHAs are
 // real Git blob SHAs. Checked against real Git by packages/github/src/store-contract.test.ts.
 import {
+  assertDistinctFiles,
   COMPARE_PAGE,
   FileTooLarge,
   gitBlobSha,
@@ -14,6 +15,8 @@ import {
   type CommitsSinceResult,
   type FindOperationResult,
   type ListedFile,
+  type MultiWriteRequest,
+  type MultiWriteResult,
   type StoredFile,
   type VaultPath,
   type VaultStore,
@@ -170,27 +173,43 @@ export class InMemoryStore implements VaultStore {
 
   async writeFile(req: WriteRequest): Promise<WriteResult> {
     this.calls.push('writeFile');
-    guard(req.path);
+    const r = await this.commitWrite({ baseCommit: req.baseCommit, files: [req], message: req.message, trailers: req.trailers });
+    return r.ok ? { ok: true, commitSha: r.commitSha, blobSha: r.blobShas[0]! } : r;
+  }
+
+  async writeFiles(req: MultiWriteRequest): Promise<MultiWriteResult> {
+    this.calls.push('writeFiles');
+    return this.commitWrite(req);
+  }
+
+  private async commitWrite(req: MultiWriteRequest): Promise<MultiWriteResult> {
+    assertDistinctFiles(req);
+    for (const f of req.files) guard(f.path);
     this.writeCalls++;
     const fault = this.writeFaults.shift() ?? 'normal';
     if (fault === 'unavailable') throw new StoreUnavailable('simulated outage');
     if (fault === 'drop-then-unknown') throw new StoreUnknownOutcome('simulated timeout (not applied)');
     // Hash BEFORE the check: from here to pushCommit there must be no `await`, so check-and-set is atomic
     // like GitHub's ref update. An await in between let two concurrent writers both pass the CAS.
-    const blobSha = await gitBlobSha(req.bytes);
+    const blobShas: string[] = [];
+    for (const f of req.files) blobShas.push(await gitBlobSha(f.bytes));
     // Head-CAS (ADR-0011): publish only as a fast-forward from the pinned commit.
     if (this.headSha !== req.baseCommit) return { ok: false, reason: 'head-moved' };
     const head = this.commits.get(this.headSha)!;
     // Precondition against the pinned tree (rerun Astra N1 / Opus N1): no file AND no directory for 'absent'.
-    const isFile = head.tree.has(req.path);
-    const isDir = [...head.tree.keys()].some((p) => p.startsWith(`${req.path}/`));
-    if (req.expect === 'absent' ? isFile || isDir : !isFile) return { ok: false, reason: 'precondition-failed' };
-    this.blobs.set(blobSha, req.bytes);
+    for (const f of req.files) {
+      const isFile = head.tree.has(f.path);
+      const isDir = [...head.tree.keys()].some((p) => p.startsWith(`${f.path}/`));
+      if (f.expect === 'absent' ? isFile || isDir : !isFile) return { ok: false, reason: 'precondition-failed' };
+    }
     const tree = new Map(head.tree);
-    tree.set(req.path, blobSha);
-    const commitSha = this.pushCommit(tree, { ...req.trailers }, [req.path], req.message);
+    req.files.forEach((f, i) => {
+      this.blobs.set(blobShas[i]!, f.bytes);
+      tree.set(f.path, blobShas[i]!);
+    });
+    const commitSha = this.pushCommit(tree, { ...req.trailers }, req.files.map((f) => f.path), req.message);
     if (fault === 'apply-then-unknown') throw new StoreUnknownOutcome('simulated lost response (applied)');
-    return { ok: true, commitSha, blobSha };
+    return { ok: true, commitSha, blobShas };
   }
 
   async findOperation(baseCommitSha: string, untilCommit: string, operationId: string, key: string = TRAILER_OP): Promise<FindOperationResult> {
