@@ -3,8 +3,8 @@
 // Pure domain code: the model is behind `PaperExplainer`, the vault behind `VaultStore` (AGENTS rule 5).
 import { ScoutStatus } from '@vault-companion/contracts';
 import { z } from 'zod';
-import { canWrite, EXPLAINED_DIR, EXPLAINER_STATUS_PATH, parseVaultPath } from './paths.ts';
-import { StoreUnknownOutcome, TRAILER_OP, type VaultPath, type VaultStore } from './store.ts';
+import { canWrite, EXPLAINED_DIR, EXPLAINER_STATUS_PATH, isExplainedNotePath, parseVaultPath } from './paths.ts';
+import { gitBlobSha, StoreUnknownOutcome, TRAILER_OP, type VaultPath, type VaultStore } from './store.ts';
 import { userDate } from './time.ts';
 
 export const BRIEF_DIR = 'Research/Reading Briefs';
@@ -342,6 +342,17 @@ function parseExplanation(raw: string, model: string): ChainResult {
 
 // ---- the run ----
 
+/** ADR-0029 amendment 2: a picked paper is retried on the day it was first seen and the next two; then it is given up. */
+export const PENDING_DAYS = 3;
+/**
+ * Model calls stop after this much wall time, so the run (plus its commit) ends inside the 15-minute limit of a Cron
+ * Trigger even when every call runs into its 60 s timeout.
+ */
+export const MODEL_TIME_BUDGET_MS = 10 * 60_000;
+
+export type PendingPaper = NonNullable<ScoutStatus['pending']>[number];
+type RetryReason = PendingPaper['lastReason'];
+
 export interface ResearchExplainerDeps {
   readonly store: VaultStore;
   readonly explainer: PaperExplainer;
@@ -350,6 +361,8 @@ export interface ResearchExplainerDeps {
   /** Subrequests (GitHub + model) this invocation has made so far; the Worker counts its `fetch`. */
   readonly subrequests: () => number;
   readonly budget?: number;
+  /** Wall time of this run so far (default: measured with `Date.now`). */
+  readonly elapsedMs?: () => number;
 }
 
 export type ExplainerRunResult =
@@ -403,16 +416,66 @@ async function readStatus(store: VaultStore, at: string): Promise<StatusAt> {
   }
 }
 
+/** Every note in `Research/Explained/` at a commit: path → blob SHA (one listing). */
+async function listExplained(store: VaultStore, at: string): Promise<ReadonlyMap<string, string>> {
+  return new Map((await store.listFiles(EXPLAINED_DIR, at)).map((f) => [f.path, f.blobSha]));
+}
+
 /** Dedupe (ADR-0029 amendment): the status record is committed with the notes, so it says whether this run landed. */
 const alreadyRan = (prev: ScoutStatus | null, operationId: string): boolean =>
   prev?.history.some((h) => h.operationId === operationId) ?? false;
 
-const REASON_TEXT: Record<FailureReason, string> = {
+const REASON_TEXT: Record<FailureReason | 'budget', string> = {
   'models-unavailable': 'all models failed',
   'invalid-json': 'invalid model output',
   'url-unreadable': 'paper could not be read',
   'path-refused': 'note path refused',
+  budget: 'not reached within the run limits',
 };
+
+const daysBetween = (from: string, to: string): number =>
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+
+export interface PlaceholderMeta {
+  /** The day the paper was first picked (the note's `created` and file-name date). */
+  readonly date: string;
+  readonly source: string;
+  readonly scoutNote: string;
+  readonly title: string | null;
+  readonly why: string;
+}
+
+/**
+ * ADR-0029 amendment 2: the note a picked paper gets while it has no explanation (`pending`), or after its last retry
+ * failed (`unavailable`). Only the paper link and the scout's own why line: no model text.
+ */
+export function renderPlaceholder(
+  meta: PlaceholderMeta, state: { readonly kind: 'pending' } | { readonly kind: 'unavailable'; readonly reason: RetryReason },
+): string {
+  const heading = meta.title ?? meta.source;
+  const lines = [
+    '---',
+    'type: research-explained',
+    `created: ${meta.date}`,
+    `source: ${yamlString(meta.source)}`,
+    `scout_note: ${yamlString(`[[${meta.scoutNote}]]`)}`,
+    'model: ""',
+    `status: ${state.kind}`,
+    '---',
+    '',
+    `# ${inline(heading)}`,
+    '',
+    state.kind === 'pending'
+      ? 'Explanation pending; retried automatically.'
+      : `No explanation: ${REASON_TEXT[state.reason]} (tried for ${PENDING_DAYS} days).`,
+    '',
+    '## Source',
+    '',
+    `- [${linkText(heading)}](${linkUrl(meta.source)})`,
+  ];
+  if (meta.why) lines.push(`- Why the scout picked it: ${inline(meta.why)}`);
+  return `${lines.join('\n')}\n`;
+}
 
 export interface RunFacts {
   readonly nowIso: string;
@@ -421,17 +484,22 @@ export interface RunFacts {
   readonly written: readonly string[];
   readonly failures: readonly FailureReason[];
   readonly deferred: readonly string[];
+  /** Papers given up after `PENDING_DAYS` (their note now says `unavailable`). */
+  readonly gaveUp: number;
+  readonly pending: readonly PendingPaper[];
   readonly stats: ModelStats;
 }
 
-/** The ScoutStatus record (ADR-0020 schema): counts, fixed phrases and paper URLs only, never model text. */
+/** The ScoutStatus record (ADR-0020 schema): counts and fixed phrases, plus the retry list (links and scout lines). */
 export function buildExplainerStatus(prev: ScoutStatus | null, f: RunFacts): ScoutStatus {
-  const runStatus: ScoutStatus['runStatus'] & string = f.failures.length === 0 && f.deferred.length === 0 ? 'success' : 'degraded';
+  const clean = f.failures.length === 0 && f.deferred.length === 0 && f.gaveUp === 0;
+  const runStatus: ScoutStatus['runStatus'] & string = clean ? 'success' : 'degraded';
   const calls = f.stats.successes + f.stats.errors;
   const aiHealth = calls === 0 ? (prev?.aiHealth ?? null) : f.stats.successes === 0 ? 'failed' : f.stats.errors > 0 ? 'degraded' : 'healthy';
   const problems = [
     ...(f.failures.length > 0 ? [`${f.failures.length} of ${f.configured} papers not explained (${[...new Set(f.failures)].map((r) => REASON_TEXT[r]).join(', ')})`] : []),
-    ...(f.deferred.length > 0 ? [`${f.deferred.length} deferred to the next run (subrequest budget)`] : []),
+    ...(f.deferred.length > 0 ? [`${f.deferred.length} deferred to the next run (run limits)`] : []),
+    ...(f.gaveUp > 0 ? [`${f.gaveUp} given up after ${PENDING_DAYS} days`] : []),
   ];
   return {
     schemaVersion: 1,
@@ -450,25 +518,36 @@ export function buildExplainerStatus(prev: ScoutStatus | null, f: RunFacts): Sco
     lastError: problems.length === 0 ? null : problems.join('; ').slice(0, 200),
     latestOutput: f.written.at(-1) ?? prev?.latestOutput ?? null,
     history: [...(prev?.history ?? []), { at: f.nowIso, status: runStatus, findings: f.written.length, operationId: f.operationId }].slice(-30),
-    ...(f.deferred.length > 0 ? { deferred: [...f.deferred] } : {}),
+    ...(f.pending.length > 0 ? { pending: [...f.pending] } : {}),
   };
 }
 
-interface Note {
-  readonly path: VaultPath;
-  readonly slug: string;
-  readonly bytes: Uint8Array;
-}
-
-/** Items whose slug is not already explained (any date) at a commit; one per slug. */
-function notYetExplained<T extends { readonly slug: string }>(items: readonly T[], existingNames: readonly string[]): T[] {
-  const seen = new Set(existingNames.map(slugOfNoteName).filter((s) => s !== null));
+/** Items whose slug is not already a note (any date) at a commit; one per slug. */
+function notYetExplained<T extends { readonly slug: string }>(items: readonly T[], existingPaths: Iterable<string>): T[] {
+  const seen = new Set([...existingPaths].map((p) => slugOfNoteName(p.slice(p.lastIndexOf('/') + 1))).filter((s) => s !== null));
   return items.filter((i) => (seen.has(i.slug) ? false : (seen.add(i.slug), true)));
 }
+
+type Candidate =
+  | { readonly kind: 'new'; readonly item: ReadingItem; readonly scoutNote: string; readonly path: VaultPath | null }
+  | { readonly kind: 'retry'; readonly item: ReadingItem; readonly scoutNote: string; readonly path: VaultPath; readonly pending: PendingPaper };
+
+interface PlannedWrite {
+  readonly path: VaultPath;
+  /** Blob SHA the path must still have at the commit's base (null: absent). */
+  readonly oldSha: string | null;
+  readonly bytes: Uint8Array;
+  /** A full explanation (counts as a finding). */
+  readonly complete: boolean;
+}
+
+const encode = (s: string): Uint8Array => new TextEncoder().encode(s);
 
 export async function runResearchExplainer(deps: ResearchExplainerDeps, slot: ExplainerSlot): Promise<ExplainerRunResult> {
   const { store } = deps;
   const budget = deps.budget ?? SUBREQUEST_BUDGET;
+  const t0 = Date.now();
+  const elapsed = deps.elapsedMs ?? (() => Date.now() - t0);
   const now = deps.now();
   const date = userDate(now, deps.timeZone);
   const operationId = await explainerOperationId(date, slot);
@@ -476,58 +555,101 @@ export async function runResearchExplainer(deps: ResearchExplainerDeps, slot: Ex
   const x0 = (await store.head()).commitSha;
   const status0 = await readStatus(store, x0);
   if (alreadyRan(status0.prev, operationId)) return { kind: 'already-ran' };
+  const pending0 = status0.prev?.pending ?? [];
   const input = await readInput(store, x0, date);
-  if (!input) return { kind: 'no-input' };
+  if (!input && pending0.length === 0) return { kind: 'no-input' };
+  const listed0 = await listExplained(store, x0);
 
-  // Papers an earlier run deferred go first (ADR-0029 amendment), then note order.
-  const wasDeferred = new Set(status0.prev?.deferred ?? []);
-  const ordered = [...input.items.filter((i) => wasDeferred.has(i.url)), ...input.items.filter((i) => !wasDeferred.has(i.url))];
-  const candidates = notYetExplained(ordered.map((item) => ({ item, slug: itemSlug(item) })), await store.listDir(EXPLAINED_DIR, x0));
+  // Carry-over first, oldest first (ADR-0029 amendment 2). A pending note that no longer has the content this job wrote
+  // (the owner edited or removed it) is left alone and dropped from the list.
+  const writes: PlannedWrite[] = [];
+  const retries: Candidate[] = [];
+  let gaveUp = 0;
+  for (const p of [...pending0].sort((a, b) => a.firstSeen.localeCompare(b.firstSeen))) {
+    const path = parseVaultPath(p.path);
+    if (!path || !isExplainedNotePath(path) || listed0.get(path) !== p.blobSha) continue;
+    if (daysBetween(p.firstSeen, date) >= PENDING_DAYS) {
+      const meta = { date: p.firstSeen, source: p.url, scoutNote: p.scoutNote, title: p.title, why: p.why };
+      writes.push({ path, oldSha: p.blobSha, bytes: encode(renderPlaceholder(meta, { kind: 'unavailable', reason: p.lastReason })), complete: false });
+      gaveUp++;
+      continue;
+    }
+    retries.push({ kind: 'retry', item: { url: p.url, title: p.title, why: p.why }, scoutNote: p.scoutNote, path, pending: p });
+  }
+  const pendingUrls = new Set(pending0.map((p) => p.url));
+  const fresh = input
+    ? notYetExplained(input.items.filter((i) => !pendingUrls.has(i.url)).map((item) => ({ item, slug: itemSlug(item) })), listed0.keys())
+    : [];
+  const candidates: Candidate[] = [
+    ...retries,
+    ...fresh.map(({ item, slug }): Candidate => ({ kind: 'new', item, scoutNote: input!.scoutNote, path: parseVaultPath(notePathFor(date, slug)) })),
+  ];
 
-  const statusPath = parseVaultPath(EXPLAINER_STATUS_PATH)!;
   const stats: ModelStats = { errors: 0, successes: 0 };
-  const notes: Note[] = [];
   const failures: FailureReason[] = [];
   const deferred: string[] = [];
-  // A model call is made only if the commit (notes so far + the one it may produce + the status record) stays paid for.
-  const canCall = () => deps.subrequests() + 1 + commitCost(notes.length + 2) <= budget;
-  for (const { item, slug } of candidates) {
-    const path = parseVaultPath(notePathFor(date, slug));
-    if (!path || !canWrite(path, 'create')) {
+  const nextPending: PendingPaper[] = [];
+  let attempted = 0;
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i]!;
+    if (!c.path || !canWrite(c.path, c.kind === 'new' ? 'create' : 'update')) {
       failures.push('path-refused');
       continue;
     }
-    const result = deferred.length > 0 ? { ok: false as const, reason: 'budget' as const } : await explainWithChain(deps.explainer, item, canCall, stats);
+    // Files the commit must hold whatever happens next: those planned, one per remaining new paper (explained or
+    // pending), this retry's replacement, and the status record. A model call is made only if they stay paid for.
+    const reserve = writes.length + candidates.slice(i).filter((k) => k.kind === 'new').length + (c.kind === 'retry' ? 1 : 0) + 1;
+    const canCall = () => elapsed() < MODEL_TIME_BUDGET_MS && deps.subrequests() + 1 + commitCost(reserve) <= budget;
+    const outOfRun = attempted >= MAX_PAPERS_PER_DAY || deferred.length > 0;
+    if (!outOfRun) attempted++;
+    const result: ChainResult = outOfRun ? { ok: false, reason: 'budget' } : await explainWithChain(deps.explainer, c.item, canCall, stats);
     if (result.ok) {
-      const markdown = renderExplanation(result.json, { date, source: item.url, scoutNote: input.scoutNote, model: result.model });
-      notes.push({ path, slug, bytes: new TextEncoder().encode(markdown) });
-    } else if (result.reason === 'budget') {
-      deferred.push(item.url);
-    } else {
-      failures.push(result.reason);
+      const created = c.kind === 'retry' ? c.pending.firstSeen : date;
+      const markdown = renderExplanation(result.json, { date: created, source: c.item.url, scoutNote: c.scoutNote, model: result.model });
+      writes.push({ path: c.path, oldSha: c.kind === 'retry' ? c.pending.blobSha : null, bytes: encode(markdown), complete: true });
+      continue;
     }
+    const reason = result.reason as RetryReason;
+    if (reason === 'budget') deferred.push(c.item.url);
+    else failures.push(reason);
+    if (c.kind === 'retry') {
+      nextPending.push({ ...c.pending, lastReason: reason });
+      continue;
+    }
+    // Every picked paper gets its note at once: a pending one, replaced when a later run explains it.
+    const bytes = encode(renderPlaceholder({ date, source: c.item.url, scoutNote: c.scoutNote, title: c.item.title, why: c.item.why }, { kind: 'pending' }));
+    writes.push({ path: c.path, oldSha: null, bytes, complete: false });
+    nextPending.push({
+      url: c.item.url, title: c.item.title, why: c.item.why, scoutNote: c.scoutNote, firstSeen: date, path: c.path,
+      blobSha: await gitBlobSha(bytes), lastReason: reason,
+    });
   }
 
+  const statusPath = parseVaultPath(EXPLAINER_STATUS_PATH)!;
   let status = status0;
-  let names: readonly string[] | null = null;
+  let listed = listed0;
   let unknown = false;
   for (let attempt = 1; attempt <= EXPLAINER_WRITE_ATTEMPTS; attempt++) {
     let x = x0;
     if (attempt > 1) {
-      if (deps.subrequests() + REPLAN_COST + commitCost(notes.length + 1) > budget) return { kind: 'not-written', reason: 'budget' };
+      if (deps.subrequests() + REPLAN_COST + commitCost(writes.length + 1) > budget) return { kind: 'not-written', reason: 'budget' };
       // Re-plan at the new head without new model calls: our own lost commit, or a concurrent run, shows in the status.
       x = (await store.head()).commitSha;
       status = await readStatus(store, x);
       if (alreadyRan(status.prev, operationId)) return { kind: 'already-ran' };
-      names = await store.listDir(EXPLAINED_DIR, x);
+      listed = await listExplained(store, x);
     }
-    const fresh = names === null ? notes : notYetExplained(notes, names);
+    // CAS on blob SHA at the pinned base (rule 4): a note that appeared or changed since planning is left alone.
+    const due = writes.filter((w) => (listed.get(w.path) ?? null) === w.oldSha);
+    const duePaths = new Set<string>(due.map((w) => w.path));
+    const pending = nextPending.filter((p) => duePaths.has(p.path) || listed.get(p.path) === p.blobSha);
+    const written = due.filter((w) => w.complete).map((w) => w.path);
     const record = buildExplainerStatus(status.prev, {
-      nowIso: now.toISOString(), operationId, configured: input.items.length, written: fresh.map((n) => n.path), failures, deferred, stats,
+      nowIso: now.toISOString(), operationId, configured: candidates.length, written, failures, deferred, gaveUp, pending, stats,
     });
     const files = [
-      ...fresh.map((n) => ({ path: n.path, expect: 'absent' as const, bytes: n.bytes })),
-      { path: statusPath, expect: status.exists ? 'regular-file' as const : 'absent' as const, bytes: new TextEncoder().encode(`${JSON.stringify(record, null, 2)}\n`) },
+      ...due.map((w) => ({ path: w.path, expect: w.oldSha === null ? 'absent' as const : 'regular-file' as const, bytes: w.bytes })),
+      { path: statusPath, expect: status.exists ? 'regular-file' as const : 'absent' as const, bytes: encode(`${JSON.stringify(record, null, 2)}\n`) },
     ];
     // Every path passes the write allowlist before any blob is sent (ADR-0029 amendment).
     if (!files.every((f) => canWrite(f.path, f.expect === 'absent' ? 'create' : 'update'))) return { kind: 'not-written', reason: 'precondition-failed' };
@@ -538,7 +660,9 @@ export async function runResearchExplainer(deps: ResearchExplainerDeps, slot: Ex
         message: 'Vault Companion: research explainer',
         trailers: { [TRAILER_JOB]: EXPLAINER_SCOUT_ID, [TRAILER_OP]: operationId },
       });
-      if (res.ok) return { kind: 'committed', commitSha: res.commitSha, operationId, written: fresh.length, failed: failures.length, deferred: deferred.length };
+      if (res.ok) {
+        return { kind: 'committed', commitSha: res.commitSha, operationId, written: written.length, failed: failures.length, deferred: deferred.length };
+      }
       if (res.reason === 'precondition-failed') return { kind: 'not-written', reason: 'precondition-failed' };
       unknown = false;
     } catch (err) {

@@ -161,6 +161,7 @@ export class InMemoryStore implements VaultStore {
   listFilesLimit = Number.POSITIVE_INFINITY;
 
   async listFiles(dir: string, atCommit: string): Promise<readonly ListedFile[]> {
+    this.calls.push('listFiles');
     if (dir !== '') guard(dir);
     const commit = this.commits.get(atCommit);
     if (!commit) throw new StoreUnavailable(`unknown commit ${atCommit}`);

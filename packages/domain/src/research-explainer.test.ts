@@ -10,6 +10,7 @@ import {
   parseReadingItems,
   readableUrl,
   renderExplanation,
+  renderPlaceholder,
   slotForCron,
   slugify,
   uuidV5,
@@ -188,28 +189,48 @@ It may make local models on a laptop cheaper.
   });
 });
 
+const PENDING = {
+  url: 'https://arxiv.org/abs/2601.00003', title: 'Synthetic Paper 3', why: 'cheaper inference',
+  scoutNote: 'Research Reading Brief - 2026-09-28', firstSeen: '2026-09-28',
+  path: 'Research/Explained/2026-09-28 - synthetic-paper-3.md', blobSha: 'a'.repeat(40), lastReason: 'budget' as const,
+};
+
+describe('renderPlaceholder', () => {
+  const meta = { date: '2026-09-28', source: 'https://arxiv.org/abs/2601.00003', scoutNote: 'Research Reading Brief - 2026-09-28', title: 'Synthetic <b>Paper</b> 3', why: '# cheaper inference' };
+  it('renders the exact pending and unavailable notes (link and scout line only, inert)', () => {
+    const head = ['---', 'type: research-explained', 'created: 2026-09-28', 'source: "https://arxiv.org/abs/2601.00003"',
+      'scout_note: "[[Research Reading Brief - 2026-09-28]]"', 'model: ""'];
+    const tail = ['', '## Source', '', '- [Synthetic &lt;b&gt;Paper&lt;/b&gt; 3](https://arxiv.org/abs/2601.00003)', '- Why the scout picked it: \\# cheaper inference', ''];
+    expect(renderPlaceholder(meta, { kind: 'pending' })).toBe([...head, 'status: pending', '---', '',
+      '# Synthetic &lt;b&gt;Paper&lt;/b&gt; 3', '', 'Explanation pending; retried automatically.', ...tail].join('\n'));
+    expect(renderPlaceholder({ ...meta, title: null, why: '' }, { kind: 'unavailable', reason: 'url-unreadable' })).toBe([...head, 'status: unavailable', '---', '',
+      '# https://arxiv.org/abs/2601.00003', '', 'No explanation: paper could not be read (tried for 3 days).', '', '## Source', '',
+      '- [https://arxiv.org/abs/2601.00003](https://arxiv.org/abs/2601.00003)', ''].join(String.fromCharCode(10)));
+  });
+});
+
 describe('buildExplainerStatus', () => {
   const facts = {
     nowIso: '2026-09-28T04:30:05.000Z', operationId: '00000000-0000-5000-8000-000000000000', configured: 3,
     written: ['Research/Explained/2026-09-28 - a.md'], failures: ['invalid-json' as const], deferred: ['https://arxiv.org/abs/2601.00003'],
-    stats: { errors: 1, successes: 2 },
+    gaveUp: 1, pending: [PENDING], stats: { errors: 1, successes: 2 },
   };
   it('is a valid ScoutStatus with counts and fixed phrases only', () => {
     const s = buildExplainerStatus(null, facts);
     expect(ScoutStatus.parse(s)).toEqual(s);
     expect(s).toMatchObject({
       runStatus: 'degraded', aiHealth: 'degraded', findings: 1, errors: 1, sources: { configured: 3, successful: 1 },
-      lastError: '1 of 3 papers not explained (invalid model output); 1 deferred to the next run (subrequest budget)',
-      latestOutput: 'Research/Explained/2026-09-28 - a.md', deferred: ['https://arxiv.org/abs/2601.00003'], lastSuccessAt: null,
+      lastError: '1 of 3 papers not explained (invalid model output); 1 deferred to the next run (run limits); 1 given up after 3 days',
+      latestOutput: 'Research/Explained/2026-09-28 - a.md', pending: [PENDING], lastSuccessAt: null,
     });
     expect(s.history).toEqual([{ at: facts.nowIso, status: 'degraded', findings: 1, operationId: facts.operationId }]);
   });
   it('keeps at most 30 history entries and older records without the new fields still parse', () => {
-    const old = { ...buildExplainerStatus(null, { ...facts, failures: [], deferred: [] }), history: Array.from({ length: 30 }, () => ({ at: facts.nowIso, status: 'success' as const, findings: 1 })) };
-    const s = buildExplainerStatus(ScoutStatus.parse(old), { ...facts, failures: [], deferred: [] });
+    const old = { ...buildExplainerStatus(null, { ...facts, failures: [], deferred: [], gaveUp: 0, pending: [] }), history: Array.from({ length: 30 }, () => ({ at: facts.nowIso, status: 'success' as const, findings: 1 })) };
+    const s = buildExplainerStatus(ScoutStatus.parse(old), { ...facts, failures: [], deferred: [], gaveUp: 0, pending: [] });
     expect(s.history).toHaveLength(30);
     expect(s.history.at(-1)?.operationId).toBe(facts.operationId);
-    expect(s).not.toHaveProperty('deferred');
+    expect(s).not.toHaveProperty('pending');
     expect(s.runStatus).toBe('success');
   });
 });

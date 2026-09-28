@@ -5,6 +5,7 @@ import {
   EXPLAINER_STATUS_PATH,
   explainerOperationId,
   MODEL_CHAIN,
+  MODEL_TIME_BUDGET_MS,
   TRAILER_OP,
   type VaultPath,
 } from '@vault-companion/domain';
@@ -65,7 +66,7 @@ function fakeGemini(replies: Reply[]) {
 }
 const ok = (i: number): Reply => ({ json: explanation(`Synthetic Paper ${i}`) });
 
-async function run(store: InMemoryStore, replies: Reply[], opts: { cron?: string; budget?: number; now?: string } = {}) {
+async function run(store: InMemoryStore, replies: Reply[], opts: { cron?: string; budget?: number; now?: string; elapsedMs?: () => number } = {}) {
   const gemini = fakeGemini(replies);
   const logs: LogRecord[] = [];
   const before = store.calls.length; // per invocation, like the Worker's counting fetch
@@ -77,6 +78,7 @@ async function run(store: InMemoryStore, replies: Reply[], opts: { cron?: string
     subrequests: () => store.calls.length - before + gemini.calls.length,
     log: (r) => logs.push(r),
     ...(opts.budget !== undefined ? { budget: opts.budget } : {}),
+    ...(opts.elapsedMs ? { elapsedMs: opts.elapsedMs } : {}),
   });
   return { gemini, logs };
 }
@@ -130,7 +132,7 @@ describe('research explainer job (ADR-0029)', () => {
     expect(gemini.calls).toHaveLength(2);
     expect(await changed(store)).toEqual([EXPLAINER_STATUS_PATH, note(1), note(3)].sort());
     expect(store.text(note(2, '2026-09-20'))).toBe('mine\n');
-    expect(await statusOf(store)).toMatchObject({ runStatus: 'success', findings: 2, sources: { configured: 3, successful: 3 } });
+    expect(await statusOf(store)).toMatchObject({ runStatus: 'success', findings: 2, sources: { configured: 2, successful: 2 } });
   });
 
   it('falls back to the scout note when the brief has nothing under Read today', async () => {
@@ -154,29 +156,35 @@ describe('research explainer job (ADR-0029)', () => {
     expect(store.text(note(1))).toContain(`model: ${MODEL_CHAIN[2]}`);
   });
 
-  it('all models fail ⇒ status degraded with the error, no note', async () => {
+  it('all models fail ⇒ a pending note at once, status degraded, the paper kept for retry', async () => {
     const store = await InMemoryStore.create({ [BRIEF]: brief(1) });
     const { gemini } = await run(store, [503, 503, 429, 429, 503, 503]);
     expect(gemini.calls.map((c) => c.model)).toEqual(MODEL_CHAIN.flatMap((m) => [m, m]));
-    expect(await changed(store)).toEqual([EXPLAINER_STATUS_PATH]);
+    expect(await changed(store)).toEqual([EXPLAINER_STATUS_PATH, note(1)].sort());
+    expect(store.text(note(1))).toContain('status: pending');
+    expect(store.text(note(1))).toContain(`Why the scout picked it: ${WHY}`);
     expect(await statusOf(store)).toMatchObject({
       runStatus: 'degraded', aiHealth: 'failed', findings: 0, errors: 1, lastError: '1 of 1 papers not explained (all models failed)', lastSuccessAt: null,
+      pending: [{ url: 'https://arxiv.org/abs/2601.00001', firstSeen: DATE, path: note(1), lastReason: 'models-unavailable' }],
     });
   });
 
-  it('invalid model JSON ⇒ that paper skipped, the others written', async () => {
+  it('invalid model JSON ⇒ that paper gets a pending note, the others are explained', async () => {
     const store = await InMemoryStore.create({ [BRIEF]: brief(2) });
     const { gemini } = await run(store, [{ text: '{"title": "no other fields"}' }, ok(2)]);
     expect(gemini.calls).toHaveLength(2);
-    expect(await changed(store)).toEqual([EXPLAINER_STATUS_PATH, note(2)].sort());
-    expect(await statusOf(store)).toMatchObject({ runStatus: 'degraded', errors: 1, lastError: '1 of 2 papers not explained (invalid model output)' });
+    expect(await changed(store)).toEqual([EXPLAINER_STATUS_PATH, note(1), note(2)].sort());
+    expect(store.text(note(1))).toContain('status: pending');
+    expect(store.text(note(2))).toContain('status: complete');
+    expect(await statusOf(store)).toMatchObject({ runStatus: 'degraded', findings: 1, errors: 1, lastError: '1 of 2 papers not explained (invalid model output)' });
   });
 
-  it('a paper the model could not open is skipped, never explained from a guess', async () => {
+  it('a paper the model could not open is never explained from a guess: pending note only', async () => {
     const store = await InMemoryStore.create({ [BRIEF]: brief(1) });
     const { gemini } = await run(store, [{ json: explanation('Synthetic Paper 1'), url: 'URL_RETRIEVAL_STATUS_ERROR' }]);
     expect(gemini.calls).toHaveLength(1);
-    expect(store.text(note(1))).toBeNull();
+    expect(store.text(note(1))).toContain('status: pending');
+    expect(store.text(note(1))).not.toContain('SENTINEL-model-text');
     expect((await statusOf(store)).lastError).toContain('paper could not be read');
   });
 
@@ -222,19 +230,92 @@ describe('research explainer job (ADR-0029)', () => {
     expect(store.text(note(1))).not.toBeNull();
   });
 
-  it('stops model calls before the subrequest budget cannot pay for the commit; the catch-up takes deferred papers first', async () => {
+  it('stops model calls before the subrequest budget cannot pay for the commit; the catch-up retries pending papers first', async () => {
     const store = await InMemoryStore.create({ [BRIEF]: brief(3) });
-    // Reads so far: head, status, brief, listDir = 4. A call needs used + 1 + commitCost(notes + 2) = used + notes + 10 ≤ budget.
-    const { gemini } = await run(store, [{ text: 'not json' }, ok(2), ok(3)], { budget: 16 });
+    // Reads: head, status, brief, listing = 4. A call needs used + 1 + commitCost(reserve) ≤ budget; reserve = planned
+    // files + remaining new papers + this retry + the status record. Paper 1: 4 + 1 + (4 + 7) = 16; paper 2: 17; paper 3: 18.
+    const { gemini } = await run(store, [{ text: 'not json' }, ok(2), ok(3)], { budget: 17 });
     expect(gemini.calls).toHaveLength(2);
+    expect(await changed(store)).toEqual([EXPLAINER_STATUS_PATH, note(1), note(2), note(3)].sort());
+    expect(store.text(note(3))).toContain('status: pending');
     const first = await statusOf(store);
-    expect(first).toMatchObject({ runStatus: 'degraded', findings: 1, errors: 1, deferred: ['https://arxiv.org/abs/2601.00003'] });
-    expect(first.lastError).toBe('1 of 3 papers not explained (invalid model output); 1 deferred to the next run (subrequest budget)');
-    // Room for one call: the deferred paper 3 goes before the failed paper 1 (which is deferred in turn).
-    const catchup = await run(store, [ok(3)], { cron: CATCHUP, budget: 15 });
+    expect(first).toMatchObject({ runStatus: 'degraded', findings: 1, errors: 1 });
+    expect(first.pending?.map((p) => [p.url, p.lastReason])).toEqual([
+      ['https://arxiv.org/abs/2601.00001', 'invalid-json'], ['https://arxiv.org/abs/2601.00003', 'budget'],
+    ]);
+    expect(first.lastError).toBe('1 of 3 papers not explained (invalid model output); 1 deferred to the next run (run limits)');
+    // Room for one call (4 + 1 + (2 + 7) = 14): pending paper 1 is retried and replaced; paper 3 waits (deferred again).
+    const catchup = await run(store, [ok(1)], { cron: CATCHUP, budget: 14 });
     expect(catchup.gemini.calls).toHaveLength(1);
-    expect(catchup.gemini.calls[0]!.body.contents[0]!.parts[0]!.text).toContain('2601.00003');
-    expect(await statusOf(store)).toMatchObject({ findings: 1, deferred: ['https://arxiv.org/abs/2601.00001'] });
+    expect(catchup.gemini.calls[0]!.body.contents[0]!.parts[0]!.text).toContain('2601.00001');
+    expect(await changed(store)).toEqual([EXPLAINER_STATUS_PATH, note(1)].sort());
+    expect(store.text(note(1))).toContain('status: complete');
+    expect((await statusOf(store)).pending?.map((p) => p.url)).toEqual(['https://arxiv.org/abs/2601.00003']);
+  });
+
+  it('carries a failed paper over for 3 days, then marks its note unavailable without another model call', async () => {
+    const store = await InMemoryStore.create({ [BRIEF]: brief(1) });
+    const allFail = [503, 503, 503, 503, 503, 503];
+    await run(store, allFail);
+    // No brief on the next days: the run still retries what is pending.
+    expect((await run(store, allFail, { now: '2026-09-29T04:30:05Z' })).gemini.calls).toHaveLength(6);
+    expect((await run(store, allFail, { now: '2026-09-30T04:30:05Z' })).gemini.calls).toHaveLength(6);
+    expect(store.text(note(1))).toContain('status: pending');
+    const day4 = await run(store, [ok(1)], { now: '2026-10-01T04:30:05Z' });
+    expect(day4.gemini.calls).toHaveLength(0);
+    expect(store.text(note(1))).toContain('status: unavailable');
+    expect(store.text(note(1))).toContain('No explanation: all models failed (tried for 3 days).');
+    const s = await statusOf(store);
+    expect(s).toMatchObject({ runStatus: 'degraded', lastError: '1 given up after 3 days' });
+    expect(s).not.toHaveProperty('pending');
+    expect((await run(store, [ok(1)], { now: '2026-10-02T04:30:05Z' })).logs).toMatchObject([{ errorCode: 'no-input' }]);
+  });
+
+  it('a retry that succeeds replaces its pending note; a pending note the owner edited is never overwritten', async () => {
+    const store = await InMemoryStore.create({ [BRIEF]: brief(2) });
+    await run(store, Array.from({ length: 12 }, () => 503));
+    expect(store.text(note(1))).toContain('status: pending');
+    await store.commitFiles({ [note(2)]: 'my own notes\n' });
+    const next = await run(store, [ok(1), ok(2)], { now: '2026-09-29T04:30:05Z' });
+    expect(next.gemini.calls).toHaveLength(1);
+    expect(store.text(note(1))).toContain('status: complete');
+    expect(store.text(note(1))).toContain('created: 2026-09-28');
+    expect(store.text(note(2))).toBe('my own notes\n');
+    expect(await statusOf(store)).not.toHaveProperty('pending');
+  });
+
+  it('stops model calls after the wall-time budget; the paper waits as pending', async () => {
+    const store = await InMemoryStore.create({ [BRIEF]: brief(1) });
+    const { gemini } = await run(store, [ok(1)], { elapsedMs: () => MODEL_TIME_BUDGET_MS });
+    expect(gemini.calls).toHaveLength(0);
+    expect(store.text(note(1))).toContain('status: pending');
+    expect((await statusOf(store)).pending?.[0]?.lastReason).toBe('budget');
+  });
+
+  it('an owner edit to a pending note during a head-moved re-plan is kept (blob SHA re-checked at the new head)', async () => {
+    const store = await InMemoryStore.create({ [BRIEF]: brief(1) });
+    await run(store, Array.from({ length: 6 }, () => 503));
+    let once = true;
+    store.afterHead = async () => {
+      if (once) {
+        once = false;
+        await store.commitFiles({ [note(1)]: 'edited on the desktop\n' });
+      }
+    };
+    const { gemini } = await run(store, [ok(1)], { now: '2026-09-29T04:30:05Z' });
+    expect(gemini.calls).toHaveLength(1);
+    expect(store.writeCalls).toBe(3);
+    expect(store.text(note(1))).toBe('edited on the desktop\n');
+    expect(await statusOf(store)).not.toHaveProperty('pending');
+  });
+
+  it('a pending paper listed again (other link text) is retried once, not explained twice', async () => {
+    const store = await InMemoryStore.create({ [BRIEF]: brief(1) });
+    await run(store, Array.from({ length: 6 }, () => 503));
+    await store.commitFiles({ ['Research/Reading Briefs/Research Reading Brief - 2026-09-29.md']: brief(1).replace('Synthetic Paper 1', 'Renamed Paper') });
+    const { gemini } = await run(store, [ok(1), ok(1)], { now: '2026-09-29T04:30:05Z' });
+    expect(gemini.calls).toHaveLength(1);
+    expect(await changed(store)).toEqual([EXPLAINER_STATUS_PATH, note(1)].sort());
   });
 
   it('an unknown cron does nothing', async () => {

@@ -14,6 +14,8 @@ export interface ExplainerJobDeps {
   readonly log: LogSink;
   /** Override of SUBREQUEST_BUDGET (tests). */
   readonly budget?: number;
+  /** Override of the run clock (tests). */
+  readonly elapsedMs?: () => number;
 }
 
 export async function runExplainerJob(cron: string, deps: ExplainerJobDeps): Promise<void> {

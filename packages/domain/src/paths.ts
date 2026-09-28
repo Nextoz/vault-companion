@@ -68,7 +68,8 @@ export function isExplainedNotePath(path: string): boolean {
 export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
   if (isTriageDecisionPath(path)) return true;
   if (path === EXPLAINER_STATUS_PATH) return true;
-  if (isExplainedNotePath(path)) return kind === 'create';
+  // Create; update only replaces this job's own pending note (blob-SHA checked by the job, ADR-0029 amendment 2).
+  if (isExplainedNotePath(path)) return true;
   if (path === TRAINING_PATH || path === TODO_LIST_PATH || path === 'Tasks/Active Work Now.md') return kind === 'update';
   if (kind === 'update') return isInboxNotePath(path);
   const segments = path.split('/');

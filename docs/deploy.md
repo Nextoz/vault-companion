@@ -26,7 +26,7 @@ attempt, cold installation token, cold Access JWKS), real adapter with a countin
 | `UndoCompleteTask` (ADR-0013) | ≤ 10 per attempt, ≤ 3 attempts: **32** | — |
 | `GET /api/tasks` (review O1) | ≤ 4: **6** | 3.4–12.5 ms before network parsing |
 
-| Research explainer cron (ADR-0029) | one counted budget of **45** for GitHub + Gemini (`SUBREQUEST_BUDGET`); model calls stop while the commit is still paid for, the rest is deferred to the catch-up | fetch-bound (the paper is read by the model by URL, never parsed in the Worker) |
+| Research explainer cron (ADR-0029) | one counted budget of **45** for GitHub + Gemini (`SUBREQUEST_BUDGET`); model calls stop while the commit is still paid for, and after 10 min wall time (Cron limit 15 min); the rest waits as pending notes for the next run | fetch-bound (the paper is read by the model by URL, never parsed in the Worker) |
 
 **The Free plan suffices for subrequests.**
 

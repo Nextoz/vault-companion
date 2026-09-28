@@ -101,9 +101,9 @@ describe('ADR-0029 research explainer write scope', () => {
     const path = parseVaultPath(p);
     return path !== null && canWrite(path, kind);
   };
-  it('creates notes directly in Research/Explained, never updates them', () => {
+  it("creates and updates notes directly in Research/Explained (updates only replace the job's pending notes; the job checks their blob SHA)", () => {
     expect(w('Research/Explained/2026-09-28 - sparse-attention.md', 'create')).toBe(true);
-    expect(w('Research/Explained/2026-09-28 - sparse-attention.md', 'update')).toBe(false);
+    expect(w('Research/Explained/2026-09-28 - sparse-attention.md', 'update')).toBe(true);
   });
   it.each([
     'Research/Explained/sub/2026-09-28 - x.md',
