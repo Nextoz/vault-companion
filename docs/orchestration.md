@@ -157,7 +157,9 @@ e2e locally before merging.
 - Every cloud brief says **push early**: a report stub pushed in the first minutes, then the final push. The Lead only
   sees GitHub, never the container; no branch after ~15 min ⇒ ask the session (`claude -p … --cloud <id>`).
 - Launch: commit + push the brief, then
-  `claude --cloud --permission-mode auto "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, write .agent/handoffs/<brief>.md, commit and push the branch when done. Do not open a PR or spawn agents."`
+  `claude --cloud "Read AGENTS.md, then follow docs/briefs/<brief>.md exactly. Work on branch agent/<name>. Run required tests, write .agent/handoffs/<brief>.md, commit and push the branch early and when done. Do not open a PR or spawn agents." --permission-mode auto`
+  — the description must come **directly after `--cloud`** (2026-09-28: `--cloud --permission-mode auto "…"` fails
+  with "--cloud requires a description"). The Herdr pane shell is PowerShell: quote the description with `'…'`.
   (`--permission-mode auto`: owner request 2026-09-25, so sessions do not stall on approvals — verify in the session.)
   Record session ID + branch in `docs/plan.md`. Continue a session: `claude -p "<message>" --cloud <session-id>`.
 - Finish: `git fetch`, review the branch, run verification locally, merge if accepted.
@@ -215,6 +217,18 @@ Launch every worker through `AGENT_STDIN=<brief> bash tools/agent-pane.sh "<mode
 **Codex budget (owner, 2026-09-28):** one ChatGPT Plus window lasts ~5 h. On 2026-09-28 three parallel runs (two on
 Astra high) used it up in 32 min (~424k tokens), leaving the Lead to finish fixes itself. Rules: Astra **high** only for
 the critical row above; builds go to Sol/Terra, Astra medium reviews them. At most **two Codex runs at once**; queue the rest.
+There is also a **weekly** limit: after ~540k tokens in one night plus 115k the next morning, Codex refused until
+2026-10-03 21:29. A run launched before a window reset fails at once ("usage limit … try again at"); confirm real
+activity in the log (exec/thinking lines), not just the `model:` header. When Codex is out: Claude Code Cloud for
+features, local Claude Code workers for fixes and reviews, Gemini Flash-Lite for small bounded jobs (owner, 2026-09-28).
+
+**ChatGPT chat relay — temporary, only while Codex is out (owner, 2026-09-28; drop it when Codex credits return):**
+ChatGPT chat has its own Plus limits, but no repo access, so the owner is the relay. Use it **only for critical reviews**
+(what Astra high would do: a new write target, data-loss or identity risk), at most once or twice a week. The Lead
+writes one self-contained packet to `.agent/review-packet-<topic>.md` in the clone (ADR + relevant diff, public repo,
+synthetic data only, the reply format asked for) and tells the owner in a line starting **"ACTION NEEDED:"** — what to
+paste, where, and what to send back. No "ACTION NEEDED" line ⇒ the owner has nothing to do. Findings are verified like
+any other review. Never for code edits, never with private vault text.
 
 **Gemini CLI** (0.61.0): launch through the wrapper, never bare `gemini`:
 `AGENT_USER_ENV=GEMINI_API_KEY bash tools/agent-pane.sh "gemini · <task>" <clone> <clone>/.agent/run.log bash tools/gemini-worker.sh <clone>`.

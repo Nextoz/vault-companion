@@ -41,6 +41,25 @@ describe('TriageStack skip reason window', () => {
     await act(async () => root.unmount());
   });
 
+  it('a release while still hovered keeps the reason window open; leaving after expiry flushes', async () => {
+    const onDecide = vi.fn();
+    const root = createRoot(document.getElementById('root')!);
+    await act(async () => root.render(createElement(TriageStack, { cards: [card], onDecide, onUndo() {} })));
+    await act(async () => (document.querySelector('[aria-label="Skip this event"]') as HTMLButtonElement).click());
+    const reasons = () => document.querySelector('[aria-label="Skip reason"]');
+    expect(reasons()).not.toBeNull();
+    await act(async () => reasons()!.dispatchEvent(new dom.window.Event('pointerover', { bubbles: true })));
+    await act(async () => reasons()!.dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true })));
+    await act(async () => vi.advanceTimersByTime(3100));
+    expect(reasons()).not.toBeNull(); expect(onDecide).not.toHaveBeenCalled();
+    await act(async () => reasons()!.dispatchEvent(new dom.window.Event('pointerup', { bubbles: true })));
+    await act(async () => vi.advanceTimersByTime(0));
+    expect(reasons()).not.toBeNull(); expect(onDecide).not.toHaveBeenCalled();
+    await act(async () => reasons()!.dispatchEvent(new dom.window.Event('pointerout', { bubbles: true })));
+    expect(reasons()).toBeNull(); expect(onDecide).toHaveBeenCalledWith(card.eventId, 'skip', undefined);
+    await act(async () => root.unmount());
+  });
+
   it('pre-selects "busy" for a clashing card when no reason is chosen', async () => {
     const onDecide = vi.fn();
     const clashing = { ...card, calendar: { ...card.calendar, clash: { title: 'Own entry', start: card.start, end: card.end!, kind: 'own' as const } } };
