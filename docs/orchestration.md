@@ -222,6 +222,14 @@ There is also a **weekly** limit: after ~540k tokens in one night plus 115k the 
 activity in the log (exec/thinking lines), not just the `model:` header. When Codex is out: Claude Code Cloud for
 features, local Claude Code workers for fixes and reviews, Gemini Flash-Lite for small bounded jobs (owner, 2026-09-28).
 
+**ChatGPT chat relay — temporary, only while Codex is out (owner, 2026-09-28; drop it when Codex credits return):**
+ChatGPT chat has its own Plus limits, but no repo access, so the owner is the relay. Use it **only for critical reviews**
+(what Astra high would do: a new write target, data-loss or identity risk), at most once or twice a week. The Lead
+writes one self-contained packet to `.agent/review-packet-<topic>.md` in the clone (ADR + relevant diff, public repo,
+synthetic data only, the reply format asked for) and tells the owner in a line starting **"ACTION NEEDED:"** — what to
+paste, where, and what to send back. No "ACTION NEEDED" line ⇒ the owner has nothing to do. Findings are verified like
+any other review. Never for code edits, never with private vault text.
+
 **Gemini CLI** (0.61.0): launch through the wrapper, never bare `gemini`:
 `AGENT_USER_ENV=GEMINI_API_KEY bash tools/agent-pane.sh "gemini · <task>" <clone> <clone>/.agent/run.log bash tools/gemini-worker.sh <clone>`.
 The wrapper (tested 2026-09-28) reads `.agent/brief.md`, writes clone-local `.gemini/settings.json` with sub-agents off
