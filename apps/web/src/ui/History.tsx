@@ -1,29 +1,22 @@
 // Completion history (ADR-0021): completed tasks by day, newest first. No counts, scores or streaks.
 import type { CompleteTaskCommand, HistoryResponse } from '@vault-companion/contracts';
-import { useEffect, useState } from 'react';
-import { getHistory, type Fetched } from '../api.ts';
+import type { Fetched } from '../api.ts';
 import { groupByDay, reopenFor } from '../history.ts';
 import type { QueueItem } from '../queue/queue.ts';
 import { plainWikilinks, taskSegments } from '../text.ts';
 import type { OpenLink } from './NoteView.tsx';
 
-export function History({ refreshKey, queued, accountKey, blocked, onReopen, onOpenLink }: {
-  refreshKey: number | null;
+/** The day list inside Progress (ADR-0027); Progress owns the read so it is fetched once. */
+export function History({ result, queued, accountKey, blocked, onReopen, onOpenLink }: {
+  result: Fetched<HistoryResponse> | null;
   queued: readonly QueueItem[];
   accountKey: string | null;
   blocked: boolean;
   onReopen: (target: CompleteTaskCommand, label: string) => void;
   onOpenLink: (link: OpenLink) => void;
 }) {
-  const [result, setResult] = useState<Fetched<HistoryResponse> | null>(null);
-  useEffect(() => {
-    let live = true;
-    void getHistory().then((value) => { if (live) setResult(value); });
-    return () => { live = false; };
-  }, [refreshKey]);
   const data = result?.kind === 'ok' ? result.data : null;
   return <section aria-label="History" className="history">
-    <h1>History</h1>
     {!data && <p role="status">{!result ? 'Loading history…' : result.kind === 'error' ? result.message : result.kind === 'signed-out' ? 'Sign in to view history.' : 'History unavailable offline.'}</p>}
     {data?.items.length === 0 && <p className="muted">No completed tasks yet.</p>}
     {data && groupByDay(data.items).map((day) => <section key={day.date} className="group" aria-label={day.heading}>

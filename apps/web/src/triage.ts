@@ -61,16 +61,23 @@ export function copenhagenDay(at: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(at));
   return ['year', 'month', 'day'].map((type) => parts.find((p) => p.type === type)!.value).join('-');
 }
+type Decision = TriageResponse['decisions'][number];
+/** Decisions that still count: not undo lines and not undone (ADR-0024), in time order. */
+export function effectiveDecisions(decisions: readonly Decision[]): Decision[] {
+  const sorted = [...decisions].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const undone = new Set(sorted.filter((d) => d.decision === 'undo').map((d) => d.undoes));
+  return sorted.filter((d) => d.decision !== 'undo' && !undone.has(d.decisionId));
+}
 export function deriveTriage(read: TriageResponse, items: readonly QueueItem[] = [], accountKey: string | null = null) {
   const byId = new Map(read.decisions.map((d) => [d.decisionId, d]));
   for (const item of [...items].sort((a, b) => a.seq - b.seq)) {
     if (item.accountKey !== accountKey || item.accountMismatch || item.state === 'attention' || item.envelope.type !== 'TriageDecide') continue;
     const { payload: p, occurredAt: at } = item.envelope;
-    byId.set(item.operationId, { decisionId: item.operationId, eventId: p.eventId, decision: p.decision, outcome: p.outcome, undoes: p.undoes, at });
+    byId.set(item.operationId, { decisionId: item.operationId, eventId: p.eventId, decision: p.decision, outcome: p.outcome, undoes: p.undoes, at,
+      title: p.card.title, start: p.card.start });
   }
   const decisions = [...byId.values()].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
-  const undone = new Set(decisions.filter((d) => d.decision === 'undo').map((d) => d.undoes));
-  const effective = decisions.filter((d) => d.decision !== 'undo' && !undone.has(d.decisionId));
+  const effective = effectiveDecisions(decisions);
   const latest = new Map(effective.map((d) => [d.eventId, d]));
   const today = copenhagenDay(read.now);
   const remaining = Math.max(0, 10 - effective.filter((d) => d.decision !== 'attended' && copenhagenDay(d.at) === today).length);

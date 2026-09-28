@@ -577,9 +577,11 @@ export const TriageResponse = z.strictObject({
   /** Cards dropped because they failed validation (shown as a small note, never fatal). */
   droppedCards: z.number().int().nonnegative(),
   droppedCheckins: z.number().int().nonnegative().default(0),
-  /** Decision lines of the current and previous month, file order. */
+  /** Decision lines of the current and previous month, file order. `title`/`start` come from the stored card snapshot
+   * (ADR-0027); responses from before that change parse with null. */
   decisions: z
-    .array(z.strictObject({ decisionId: z.uuid(), eventId: TriageEventId, decision: TriageDecision, outcome: TriageOutcome.nullable().default(null), undoes: z.uuid().nullable(), at: isoInstant }))
+    .array(z.strictObject({ decisionId: z.uuid(), eventId: TriageEventId, decision: TriageDecision, outcome: TriageOutcome.nullable().default(null), undoes: z.uuid().nullable(), at: isoInstant,
+      title: z.string().max(500).nullable().default(null), start: isoInstant.nullable().default(null) }))
     .max(5000),
   applied: z.record(z.string(), z.strictObject({ status: z.enum(['applied', 'failed', 'skipped']), at: isoInstant, message: z.string().max(300) })),
   appliedUpdatedAt: isoInstant.nullable(),

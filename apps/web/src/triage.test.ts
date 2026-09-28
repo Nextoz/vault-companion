@@ -24,23 +24,23 @@ describe('feed derivation and API', () => {
   it('caps at ten minus today’s non-undone decisions using Copenhagen midnight, hides past and decided events, and sorts ranks', () => {
     const read = triageRead();
     read.cards[0]!.start = now;
-    read.decisions = [1, 2, 3].map((n) => ({ decisionId: id(n), eventId: read.cards[n]!.eventId, decision: 'go' as const, outcome: null, undoes: null, at: '2026-09-30T22:00:00Z' }));
+    read.decisions = [1, 2, 3].map((n) => ({ decisionId: id(n), eventId: read.cards[n]!.eventId, decision: 'go' as const, outcome: null, undoes: null, at: '2026-09-30T22:00:00Z', title: null, start: null }));
     read.cards.reverse();
     const view = deriveTriage(read);
     expect(copenhagenDay(now)).toBe('2026-10-01');
     expect(view.cards).toHaveLength(7);
     expect(view.cards.map((c) => c.rank)).toEqual([4, 5, 6, 7, 8, 9, 10]);
     expect(toTriageCardView(view.cards[0]!)).toMatchObject({ end: null, registration: { state: 'open' } });
-    read.decisions = Array.from({ length: 11 }, (_, n) => ({ decisionId: id(n), eventId: n.toString(16).padStart(20, '0'), decision: 'skip' as const, outcome: null, undoes: null, at: now }));
+    read.decisions = Array.from({ length: 11 }, (_, n) => ({ decisionId: id(n), eventId: n.toString(16).padStart(20, '0'), decision: 'skip' as const, outcome: null, undoes: null, at: now, title: null, start: null }));
     expect(deriveTriage(read).cards).toEqual([]);
   });
   it('undo cancels only its named decision, restores the slot, and leaves older non-undone decisions effective', () => {
     const read = triageRead(); const eventId = read.cards[0]!.eventId;
-    const go = { decisionId: id(1), eventId, decision: 'go' as const, outcome: null, undoes: null, at: now };
+    const go = { decisionId: id(1), eventId, decision: 'go' as const, outcome: null, undoes: null, at: now, title: null, start: null };
     read.decisions = [go, { ...go, decisionId: id(2), decision: 'undo', undoes: id(1) }];
     expect(deriveTriage(read).cards[0]?.eventId).toBe(eventId);
     expect(deriveTriage(read).remaining).toBe(10);
-    read.decisions.unshift({ ...go, decisionId: id(3), decision: 'skip', at: '2026-09-30T20:00:00Z' });
+    read.decisions.unshift({ ...go, decisionId: id(3), decision: 'skip', at: '2026-09-30T20:00:00Z', title: null, start: null });
     expect(deriveTriage(read).cards.some((c) => c.eventId === eventId)).toBe(false);
     expect(deriveTriage(read).remaining).toBe(10);
   });
@@ -68,7 +68,7 @@ describe('feed derivation and API', () => {
     const read = triageRead();
     expect(calendarStatus(undefined)).toBe('pending');
     for (const status of ['applied', 'failed', 'skipped'] as const) expect(calendarStatus({ status, at: now, message: 'ok' })).toBe(status === 'failed' ? 'failed' : 'applied');
-    read.decisions = [{ decisionId: id(1), eventId: read.cards[0]!.eventId, decision: 'go', outcome: null, undoes: null, at: now }];
+    read.decisions = [{ decisionId: id(1), eventId: read.cards[0]!.eventId, decision: 'go', outcome: null, undoes: null, at: now, title: null, start: null }];
     read.appliedUpdatedAt = '2026-09-30T21:30:00Z';
     read.generatedAt = '2026-09-29T10:30:00Z';
     expect(deriveTriage(read)).toMatchObject({ waiting: false, staleFeed: false });
@@ -81,10 +81,10 @@ describe('feed derivation and API', () => {
   it('keeps undecided check-ins ahead of cards without consuming the daily ten', () => {
     const read = triageRead();
     read.checkins = [{ eventId: 'eeeeeeeeeeeeeeeeeeee', title: 'Synthetic past meetup', start: '2026-09-25T17:00:00+02:00' }];
-    read.decisions = [{ decisionId: id(1), eventId: read.checkins[0]!.eventId, decision: 'attended', outcome: 'worth', undoes: null, at: now }];
+    read.decisions = [{ decisionId: id(1), eventId: read.checkins[0]!.eventId, decision: 'attended', outcome: 'worth', undoes: null, at: now, title: null, start: null }];
     expect(deriveTriage(read)).toMatchObject({ checkins: [], remaining: 10 });
     expect(deriveTriage(read).cards).toHaveLength(10);
-    read.decisions.push({ decisionId: id(2), eventId: read.checkins[0]!.eventId, decision: 'undo', outcome: null, undoes: id(1), at: now });
+    read.decisions.push({ decisionId: id(2), eventId: read.checkins[0]!.eventId, decision: 'undo', outcome: null, undoes: id(1), at: now, title: null, start: null });
     expect(deriveTriage(read)).toMatchObject({ checkins: read.checkins, remaining: 10 });
     expect(deriveTriage(read).cards).toHaveLength(10);
   });
@@ -92,7 +92,7 @@ describe('feed derivation and API', () => {
     const read = triageRead();
     read.cards[0]!.start = '2026-10-03T16:00:00+02:00'; read.cards[0]!.end = '2026-10-03T18:00:00+02:00'; read.cards[0]!.title = 'Synthetic chosen event';
     read.cards[1]!.start = '2026-10-03T17:00:00+02:00'; read.cards[1]!.end = '2026-10-03T19:00:00+02:00';
-    read.decisions = [{ decisionId: id(1), eventId: read.cards[0]!.eventId, decision: 'go', outcome: null, undoes: null, at: now }];
+    read.decisions = [{ decisionId: id(1), eventId: read.cards[0]!.eventId, decision: 'go', outcome: null, undoes: null, at: now, title: null, start: null }];
     expect(deriveTriage(read).cards.find((c) => c.eventId === read.cards[1]!.eventId)?.calendar.clash).toMatchObject({ kind: 'go', title: 'Synthetic chosen event' });
     const chosen = read.cards[0]!; read.decisions = [];
     const envelope = triageDecide({ baseRevision: read.revision, now: new Date(now), newId: () => id(2) }, { eventId: chosen.eventId,
@@ -106,8 +106,8 @@ describe('feed derivation and API', () => {
     read.cards[0]!.start = '2026-10-03T16:00:00+02:00'; read.cards[0]!.end = '2026-10-03T18:00:00+02:00'; read.cards[0]!.title = 'Synthetic chosen event';
     read.cards[1]!.start = '2026-10-03T17:00:00+02:00'; read.cards[1]!.end = '2026-10-03T19:00:00+02:00';
     read.decisions = [
-      { decisionId: id(1), eventId: read.cards[0]!.eventId, decision: 'go', outcome: null, undoes: null, at: '2026-09-30T20:00:00Z' },
-      { decisionId: id(2), eventId: read.cards[0]!.eventId, decision: 'skip', outcome: null, undoes: null, at: '2026-09-30T21:00:00Z' },
+      { decisionId: id(1), eventId: read.cards[0]!.eventId, decision: 'go', outcome: null, undoes: null, title: null, start: null, at: '2026-09-30T20:00:00Z' },
+      { decisionId: id(2), eventId: read.cards[0]!.eventId, decision: 'skip', outcome: null, undoes: null, title: null, start: null, at: '2026-09-30T21:00:00Z' },
     ];
     expect(deriveTriage(read).cards.find((c) => c.eventId === read.cards[1]!.eventId)?.calendar.clash).toBeNull();
   });
