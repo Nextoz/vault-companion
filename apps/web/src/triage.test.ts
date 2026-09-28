@@ -106,8 +106,8 @@ describe('feed derivation and API', () => {
     read.cards[0]!.start = '2026-10-03T16:00:00+02:00'; read.cards[0]!.end = '2026-10-03T18:00:00+02:00'; read.cards[0]!.title = 'Synthetic chosen event';
     read.cards[1]!.start = '2026-10-03T17:00:00+02:00'; read.cards[1]!.end = '2026-10-03T19:00:00+02:00';
     read.decisions = [
-      { decisionId: id(1), eventId: read.cards[0]!.eventId, decision: 'go', outcome: null, undoes: null, at: '2026-09-30T20:00:00Z' },
-      { decisionId: id(2), eventId: read.cards[0]!.eventId, decision: 'skip', outcome: null, undoes: null, at: '2026-09-30T21:00:00Z' },
+      { decisionId: id(1), eventId: read.cards[0]!.eventId, decision: 'go', outcome: null, undoes: null, title: null, start: null, at: '2026-09-30T20:00:00Z' },
+      { decisionId: id(2), eventId: read.cards[0]!.eventId, decision: 'skip', outcome: null, undoes: null, title: null, start: null, at: '2026-09-30T21:00:00Z' },
     ];
     expect(deriveTriage(read).cards.find((c) => c.eventId === read.cards[1]!.eventId)?.calendar.clash).toBeNull();
   });
