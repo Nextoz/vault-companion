@@ -3,6 +3,8 @@ import {
   Command,
   type CompleteTaskCommand,
   type ReviewActiveWorkCommand,
+  type LogTrainingCommand,
+  type TrainingSession,
   type ActiveWorkLocator,
   type Priority,
   type TaskLocator,
@@ -62,11 +64,12 @@ export function undoDraft(ctx: MintContext, target: CompleteTaskCommand): Comman
 
 /** An Undo draft (no token yet), as the queue stores it. */
 export function isUndoDraft(envelope: Command): boolean {
-  return (envelope.type === 'UndoCompleteTask' || envelope.type === 'UndoActiveWork') && !('targetCommit' in envelope.payload);
+  return (envelope.type === 'UndoCompleteTask' || envelope.type === 'UndoActiveWork' || envelope.type === 'UndoLogTraining') && !('targetCommit' in envelope.payload);
 }
 
 /** The draft with its token: a checked, sendable Undo whose other fields are unchanged. */
 export function withTargetCommit(draft: Command, targetCommit: string): Command {
+  if (draft.type === 'UndoLogTraining') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type === 'UndoActiveWork') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type !== 'UndoCompleteTask') throw new TypeError('not an Undo');
   return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
@@ -95,6 +98,8 @@ export function editNote(ctx: MintContext, note: { path: string; blobSha: string
 /** Human-readable text of a pending action, for "Export text" when it needs attention. */
 export function exportText(envelope: Command): string {
   switch (envelope.type) {
+    case 'LogTraining': return JSON.stringify(envelope.payload.session, null, 2);
+    case 'UndoLogTraining': return exportText(envelope.payload.target);
     case 'TriageDecide':
       return JSON.stringify(envelope.payload, null, 2);
     case 'CaptureActiveWork':
@@ -143,5 +148,19 @@ export function bindUndoTarget(undo: Command, target: Command): Command | null {
     return { ...undo, payload: { ...undo.payload, target } };
   if (undo.type === 'UndoActiveWork' && target.type === 'ReviewActiveWork')
     return { ...undo, payload: { ...undo.payload, target } };
+  if (undo.type === 'UndoLogTraining' && target.type === 'LogTraining')
+    return { ...undo, payload: { ...undo.payload, target } };
   return null;
+}
+
+export function logTraining(ctx: MintContext, session: TrainingSession): LogTrainingCommand {
+  return checked({ ...base(ctx), type: 'LogTraining', payload: { session } });
+}
+export function undoLogTraining(ctx: MintContext, target: LogTrainingCommand, targetCommit: string): Command {
+  return checked({ ...base(ctx), type: 'UndoLogTraining', payload: { target, targetCommit } });
+}
+export function undoLogTrainingDraft(ctx: MintContext, target: LogTrainingCommand): Command {
+  const draft = { ...base(ctx), type: 'UndoLogTraining' as const, payload: { target } };
+  checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
+  return draft as Command;
 }

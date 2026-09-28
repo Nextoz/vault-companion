@@ -1,11 +1,13 @@
 import type { CommandType, TasksResponse } from '@vault-companion/contracts';
 import { useState } from 'react';
-import { exportText } from '../commands.ts';
+import { exportText, undoLogTraining, undoLogTrainingDraft } from '../commands.ts';
 import { knownNotApplied } from '../queue/classify.ts';
 import type { PendingQueue, QueueItem, ReadEvidence } from '../queue/queue.ts';
 import { StateChip } from './StateChip.tsx';
 
 const VERB: Record<CommandType, string> = {
+  LogTraining: 'Training',
+  UndoLogTraining: 'Undo training',
   CompleteTask: 'Complete',
   EditTask: 'Edit',
   UndoCompleteTask: 'Undo',
@@ -26,11 +28,11 @@ export const UNDO_UNKNOWN_TEXT = 'This Undo may already have been applied. Check
 
 /** The line shown for an action that needs attention: the conflict in plain words, else the server's message. */
 export function attentionText(item: QueueItem): string | null {
-  if (item.type === 'UndoActiveWork' && item.error && knownNotApplied(item.error)) return 'Cannot restore the exact previous file; undo it in Obsidian.';
+  if ((item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining') && item.error && knownNotApplied(item.error)) return 'Cannot restore the exact previous file; undo it in Obsidian.';
   if (item.error?.code === 'conflict:task-changed') return 'This task changed on another device.';
   if (item.error?.code === 'clock-skew') return CLOCK_SKEW_TEXT;
   // Review O5: the outcome is unknown, not refused — never tell the owner to redo something that may have happened.
-  if (item.error?.code === 'dedupe-unknown' && (item.type === 'UndoCompleteTask' || item.type === 'UndoActiveWork')) return UNDO_UNKNOWN_TEXT;
+  if (item.error?.code === 'dedupe-unknown' && (item.type === 'UndoCompleteTask' || item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining')) return UNDO_UNKNOWN_TEXT;
   return item.error?.message ?? null;
 }
 
@@ -65,6 +67,8 @@ export function ActionsPanel({
   /** Remove the action from the device (the App remembers that its task still needs attention). */
   onDiscard: (item: QueueItem) => void;
 }) {
+  const [undoing, setUndoing] = useState<string | null>(null);
+  const [undoError, setUndoError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<QueueItem | null>(null);
   // A capture is discarded only from the dialog that shows its text: nothing typed is lost unseen.
   const [discarding, setDiscarding] = useState<QueueItem | null>(null);
@@ -85,6 +89,7 @@ export function ActionsPanel({
           </button>
         )}
       </h2>
+      {undoError && <p role="alert" className="error">{undoError}</p>}
       <ul className="action-list">
         {items.map((item) => (
           <li key={item.operationId} className="action" data-testid="action">
@@ -94,6 +99,18 @@ export function ActionsPanel({
               <StateChip state={item.state} />
             </div>
             {item.state === 'saved' && <p className="muted small">{item.type === 'CaptureNote' && 'Saved to the vault; '}reaches Obsidian at your next desktop sync</p>}
+            {item.envelope.type === 'LogTraining' && !item.accountMismatch && item.state !== 'attention' &&
+              !items.some((q) => q.envelope.type === 'UndoLogTraining' && q.envelope.payload.target.operationId === item.operationId) &&
+              <button type="button" disabled={undoing !== null} onClick={() => {
+                if (item.envelope.type !== 'LogTraining' || undoing !== null) return;
+                setUndoing(item.operationId); setUndoError(null);
+                const target = item.envelope;
+                const ctx = { baseRevision: read?.revision ?? target.baseRevision };
+                const undo = item.receipt ? undoLogTraining(ctx, target, item.receipt.commitSha) : undoLogTrainingDraft(ctx, target);
+                void queue.undoCompletion(target, undo, { accountKey: item.accountKey, label: item.label, taskKey: 'training' })
+                  .catch(() => setUndoError('Could not keep this Undo on the device.'))
+                  .finally(() => setUndoing(null));
+              }}>Undo</button>}
             {item.state === 'attention' && (
               <>
                 {item.error && <p className="error">{attentionText(item)}</p>}

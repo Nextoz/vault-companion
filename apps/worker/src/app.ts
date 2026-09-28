@@ -10,6 +10,7 @@ import {
   ScoutStatus,
   type ScoutsResponse,
   type ActiveWorkResponse,
+  type TrainingResponse,
   type ApiError,
   type ErrorCode,
   type HistoryResponse,
@@ -32,6 +33,7 @@ export interface Services {
   /** Read-only linked note (P4-A). Optional: without it the route answers 404. */
   readLinkedNote?(req: LinkedNoteRequest): Promise<LinkedNoteResponse | ApiError>;
   /** Active Work Now card. Optional: without it the route answers 404. */
+  readTraining?(): Promise<TrainingResponse | ApiError>;
   readActiveWork?(): Promise<ActiveWorkResponse | ApiError>;
   readTriage?(): Promise<TriageResponse | ApiError>;
   readScouts?(): Promise<ScoutsResponse | ApiError>;
@@ -74,7 +76,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -149,6 +151,20 @@ export function createApp(deps: AppDeps) {
       return c.json(result, statusFor(result.code) as 400);
     }
     if (result.status === 'refused') meta.errorCode = `active-work:${result.code}`;
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  app.get('/api/training', async (c) => {
+    const read = deps.services.readTraining;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const meta = c.get('logMeta');
+    const result = await read();
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    if (result.status === 'refused') meta.errorCode = `training:${result.code}`;
     meta.commitSha = result.revision;
     return c.json(result);
   });

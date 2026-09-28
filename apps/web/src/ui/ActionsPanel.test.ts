@@ -30,6 +30,17 @@ const attention = (code: string, extra: Partial<QueueItem> = {}): QueueItem => (
 });
 
 describe('attention next steps (P4-B)', () => {
+  it('Training exact-inverse refusals direct the owner to Obsidian', () => {
+    const item = attention('refused:undo-expired', { type: 'UndoLogTraining' });
+    expect(attentionText(item)).toBe('Cannot restore the exact previous file; undo it in Obsidian.');
+    expect(canRetry(item)).toBe(false);
+    expect(canRetry(attention('refused:training-table-missing', { type: 'LogTraining' }))).toBe(false);
+  });
+  it('Training unknown-outcome Undo stays retryable without claiming it failed', () => {
+    const item = attention('dedupe-unknown', { type: 'UndoLogTraining' });
+    expect(attentionText(item)).toBe(UNDO_UNKNOWN_TEXT);
+    expect(canRetry(item)).toBe(true);
+  });
   it('offers no Retry for refusals the same bytes cannot get past', () => {
     for (const code of ['conflict:task-changed', 'conflict:ambiguous', 'conflict:stale', 'refused:recurring', 'operation-id-reused', 'invalid']) {
       expect(canRetry(attention(code)), code).toBe(false);

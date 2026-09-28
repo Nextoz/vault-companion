@@ -1,3 +1,4 @@
+import { TrainingResponse, type TrainingRow } from '@vault-companion/contracts';
 // In-page API mock for Playwright. Every response is parsed through the contract schema before it is served,
 // so a mock that drifts from packages/contracts fails loudly instead of testing a fiction.
 import {
@@ -62,6 +63,9 @@ export type CommandMode = 'ok' | 'offline' | 'unavailable' | 'hold' | { refuse: 
 export type ReadMode = 'ok' | 'error' | 'offline' | 'hang';
 
 export class MockApi {
+  trainingRows: TrainingRow[] = [];
+  trainingUnknownLines: string[] = [];
+  #trainingBefore = new Map<string, TrainingRow[]>();
   session: 'ok' | 'signed-out' = 'ok';
   /** The account the session reports (switch it to simulate signing in as someone else). */
   account = ACCOUNT;
@@ -154,6 +158,7 @@ export class MockApi {
     await on('**/api/tasks**', (route) => this.#tasks(route));
     await on('**/api/commands', (route) => this.#command(route));
     await on('**/api/linked-note**', (route) => this.#linkedNote(route));
+    await on('**/api/training', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' }) : this.#json(route, 200, TrainingResponse.parse({ status: 'ok', revision: this.#revision, blobSha: this.blobSha, rows: this.trainingRows, unknownLines: this.trainingUnknownLines })));
     await on('**/api/active-work', (route) => this.#activeWork(route));
     await on('**/api/triage', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, TriageResponse.parse({ ...this.triage, revision: this.#revision })));
@@ -328,6 +333,20 @@ export class MockApi {
     const base = { operationId: command.operationId, status: 'applied' as const, commitSha: this.#revision, blobSha: sha() };
     if (command.type !== 'CaptureNote' && command.type !== 'EditNote') this.blobSha = base.blobSha;
     switch (command.type) {
+      case 'LogTraining': {
+        const s = command.payload.session;
+        this.#trainingBefore.set(command.operationId, structuredClone(this.trainingRows));
+        const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(s.when));
+        this.trainingRows.push({ date: copenhagenDay(s.when), time: parts, type: s.type, distance: s.type === 'Run' ? s.distance.toFixed(1) : '', duration: String(s.duration), weight: s.type === 'Gym' && s.weight !== undefined ? s.weight.toFixed(1) : '', split: s.type === 'Gym' ? s.split : '', note: s.note ?? '' });
+        this.trainingRows.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+        return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'logged', lineText: '| synthetic session |' } };
+      }
+      case 'UndoLogTraining': {
+        const before = this.#trainingBefore.get(command.payload.target.operationId);
+        if (!before) throw new Error('mock: unknown training undo');
+        this.trainingRows = before;
+        return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'undone', lineText: '| synthetic session |' } };
+      }
       case 'TriageDecide': {
         const { eventId, decision, undoes } = command.payload;
         this.triage.decisions.push({ decisionId: command.operationId, eventId, decision, undoes, at: command.occurredAt });

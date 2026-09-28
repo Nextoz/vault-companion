@@ -1,6 +1,6 @@
 // Application services: one WritePlan per command type (docs/commands.md) and the task read model.
 // Pure orchestration over the VaultStore port and the Markdown kernel; no HTTP, no GitHub.
-import { ACTIVE_WORK_PATH, MAX_KNOWN, MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type TasksResponse, type TaskView } from '@vault-companion/contracts';
+import { TRAINING_PATH, ACTIVE_WORK_PATH, MAX_KNOWN, MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type TasksResponse, type TaskView } from '@vault-companion/contracts';
 import * as md from '@vault-companion/vault-markdown';
 import { executeWrite, findInOnePage, replayOnParent, type Planned, type Refused, type WritePlan } from './execute.ts';
 import { MAX_NOTE_BYTES } from '@vault-companion/contracts';
@@ -18,6 +18,7 @@ export interface CommandServiceDeps {
 }
 
 const TODO = TODO_LIST_PATH as VaultPath;
+const TRAINING = TRAINING_PATH as VaultPath;
 const ACTIVE = ACTIVE_WORK_PATH as VaultPath;
 
 /** Undo re-plans at most this often when the head moves (ADR-0013 budget: ≤ 3 × ≈ 10 GitHub calls). */
@@ -40,7 +41,7 @@ function decodeUtf8(bytes: Uint8Array): string | null {
 type TodoFile = { ok: true; text: string; blobSha: string; bytes: Uint8Array };
 
 export async function readTodo(store: VaultStore, at: string, path: VaultPath = TODO): Promise<TodoFile | { ok: false; planned: Planned<never> }> {
-  const label = path === ACTIVE ? 'Active Work' : path === TODO ? 'the task list' : 'the note';
+  const label = path === TRAINING ? 'Training log' : path === ACTIVE ? 'Active Work' : path === TODO ? 'the task list' : 'the note';
   let file;
   try {
     file = await store.readFile(path, at);
@@ -359,6 +360,107 @@ function undoActiveWorkPlan(cmd: Extract<Command, { type: 'UndoActiveWork' }>, r
   };
 }
 
+function trainingOn(cmd: Extract<Command, { type: 'LogTraining' }>, f: TodoFile): Planned<md.TrainingEffect> {
+  return fromKernel(md.insertTrainingRow(f.text, cmd.payload.session), TRAINING, (e) => e);
+}
+export function trainingPlan(cmd: Extract<Command, { type: 'LogTraining' }>): WritePlan<md.TrainingEffect> {
+  return { message: 'Vault Companion: log training', async compute(store, at) {
+    const f = await readTodo(store, at, TRAINING);
+    return f.ok ? trainingOn(cmd, f) : f.planned;
+  } };
+}
+async function verifiedTraining(store: VaultStore, c: CommitInfo, target: Extract<Command, { type: 'LogTraining' }>) {
+  const changed = c.files.length === 1 ? c.files[0] : undefined;
+  if (c.parent === null || changed?.path !== TRAINING || changed.blobSha === null) {
+    return { ok: false as const, planned: refuse('invalid', 'undo target does not match the recorded session') };
+  }
+  const before = await readTodo(store, c.parent, TRAINING);
+  if (!before.ok) return { ok: false as const, planned: refuse('dedupe-unknown', 'the session cannot be verified') };
+  const replay = trainingOn(target, before);
+  if (!replay.ok || (await gitBlobSha(replay.bytes)) !== changed.blobSha) {
+    return { ok: false as const, planned: refuse('dedupe-unknown', 'the session cannot be verified') };
+  }
+  return { ok: true as const, before, afterBytes: replay.bytes, effect: replay.effect };
+}
+function undoTrainingPlan(cmd: Extract<Command, { type: 'UndoLogTraining' }>, raw: unknown): WritePlan<Receipt['effect']> {
+  const target = cmd.payload.target;
+  const token = cmd.payload.targetCommit;
+  const rawTarget = (raw as { payload: { target: unknown } }).payload.target;
+  // Filled by `findApplied` for the X that `compute` then runs at.
+  let checked: { x: string; session: CommitInfo } | null = null;
+  // Filled by `findApplied` when this Undo's own commit U is found: `deriveApplied` reuses both (call budget).
+  let applied: { session: CommitInfo; undo: CommitInfo } | null = null;
+
+  /** The inverse of the verified session `v` on Training at `at` (X for a write, U^ to verify U). */
+  const inverseAt = async (store: VaultStore, v: Extract<Awaited<ReturnType<typeof verifiedTraining>>, { ok: true }>, at: string): Promise<Planned<Receipt['effect']>> => {
+    const f = await readTodo(store, at, TRAINING);
+    if (!f.ok) return f.planned;
+    return fromKernel(md.undoTraining(f.text, decodeUtf8(v.afterBytes)!, v.before.text, v.effect), TRAINING, (e) => e);
+  };
+
+  const readToken = async (store: VaultStore): Promise<CommitInfo | Refused> => {
+    const c = await store.readCommit(token);
+    if (!c) return refused('conflict:task-changed', 'that session is not in the vault');
+    // Never trust the token: it must name the target's own commit, by operation ID and payload hash.
+    if (c.trailers[TRAILER_OP] !== target.operationId || c.trailers[TRAILER_PAYLOAD] !== (await payloadHash(rawTarget))) {
+      return refused('invalid', 'undo target does not match the recorded session');
+    }
+    return c;
+  };
+
+  return {
+    message: 'Vault Companion: undo Training session',
+    trailers: { [TRAILER_UNDOES]: target.operationId },
+    maxAttempts: UNDO_MAX_ATTEMPTS,
+    async findApplied(store, x, operationId) {
+      checked = null;
+      applied = null;
+      const c = await readToken(store);
+      if ('kind' in c) return c;
+      const since = await store.commitsSince(c.sha, x);
+      // Review O5: neither answer can tell whether an earlier attempt of THIS Undo already applied (its own commit would be
+      // in the unlisted range), so neither may claim "not applied".
+      if (since.kind === 'not-ancestor' || since.kind === 'too-many') {
+        return refused('dedupe-unknown', 'this Undo may already have been applied; check the Training item in Obsidian');
+      }
+      const own = since.commits.find((k) => k.trailers[TRAILER_OP] === operationId);
+      if (own) {
+        const info = await store.readCommit(own.sha);
+        if (info) applied = { session: c, undo: info };
+        return { kind: 'found', op: { commitSha: own.sha, payloadHash: own.trailers[TRAILER_PAYLOAD] ?? '', paths: (info?.files ?? []).map((f) => f.path) } };
+      }
+      // An operation can be undone only once, even if later edits restore identical bytes.
+      if (since.commits.some((k) => k.trailers[TRAILER_UNDOES] === target.operationId)) {
+        return refused('conflict:task-changed', 'that session was already undone');
+      }
+      checked = { x, session: c };
+      return { kind: 'not-found' };
+    },
+    async compute(store, at) {
+      if (checked?.x !== at) return refuse('dedupe-unknown', 'the session was not checked at this revision');
+      const v = await verifiedTraining(store, checked.session, target);
+      if (!v.ok) return v.planned;
+      return inverseAt(store, v, at);
+    },
+    // This Undo's own commit U (found by operation ID, payload hash checked by the executor). Review P4E-Astra #3: U
+    // must actually be the inverse — rebuilt against U's first-parent Training, it must equal U's blob — before a
+    // receipt certifies it. Reuses the C and U already read in this attempt.
+    async deriveApplied(store, commitSha) {
+      const u = applied?.undo.sha === commitSha ? applied.undo : await store.readCommit(commitSha);
+      if (!u || u.trailers[TRAILER_UNDOES] !== target.operationId || u.parent === null) return { ok: false, reason: 'not an undo of this session' };
+      const changed = u.files.length === 1 ? u.files[0] : undefined;
+      if (changed?.path !== TRAINING || changed.blobSha === null) return { ok: false, reason: 'the undo commit does not update Training' };
+      const c = applied?.session ?? (await readToken(store));
+      if ('kind' in c) return { ok: false, reason: c.message };
+      const v = await verifiedTraining(store, c, target);
+      if (!v.ok) return { ok: false, reason: 'the session cannot be verified' };
+      const rebuilt = await inverseAt(store, v, u.parent);
+      if (!rebuilt.ok || (await gitBlobSha(rebuilt.bytes)) !== changed.blobSha) return { ok: false, reason: 'the undo commit is not the inverse' };
+      return { ok: true, path: TRAINING, effect: rebuilt.effect };
+    },
+  };
+}
+
 export function triageDecidePlan(cmd: Extract<Command, { type: 'TriageDecide' }>, raw: unknown = cmd): WritePlan<Receipt['effect']> {
   const path = triageDecisionPath(cmd.occurredAt);
   const line: DecisionLine = { schemaVersion: 1, decisionId: cmd.operationId, at: cmd.occurredAt, ...cmd.payload };
@@ -421,6 +523,8 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
   switch (cmd.type) {
     case 'TriageDecide':
       return triageDecidePlan(cmd, raw);
+    case 'LogTraining': return trainingPlan(cmd);
+    case 'UndoLogTraining': return undoTrainingPlan(cmd, raw);
     case 'CaptureActiveWork':
     case 'EditActiveWork':
     case 'ReviewActiveWork':

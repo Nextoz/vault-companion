@@ -2,6 +2,7 @@
 // opaque redirect instead of silently following it to a login page (F11).
 import {
   ActiveWorkResponse,
+  TrainingResponse,
   encodeLinkedNoteHeader,
   encodeNoteHeader,
   HistoryResponse,
@@ -100,3 +101,5 @@ export const postCommand = (body: string, accountKey: string) =>
       Accept: 'application/json',
     },
   });
+
+export const getTraining = () => getJson('/api/training', z.union(TrainingResponse.options.map((option) => option.strip())));

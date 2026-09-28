@@ -34,7 +34,7 @@ so the unit style can change in one place if the owner's table uses units.
 | `UndoLogTraining {target, targetCommit}` | exact inverse only (ADR-0013/0019 pattern): if the file is byte-identical to the target commit's blob, write the parent's bytes; otherwise refuse ("undo it in Obsidian"). |
 
 Validation in `packages/contracts` (zod): Run needs distance 0.1–100 and duration 1–600; Gym needs split and duration
-1–600, weight optional 30–250; `when` an offset date-time not more than 1 day in the future. Head-CAS, blob-SHA CAS,
+1–600, weight optional 30–250; `when` an offset date-time not more than 1 day in the future. Head-CAS (ADR-0011),
 operation ID, commit trailers and dedupe exactly as every other write (ADR-0005/0011/0015). A retried `LogTraining`
 whose operation ID is already in history is a no-op (existing dedupe); a stale base re-reads and re-inserts against
 the newest version (a row insert is safe to replay).

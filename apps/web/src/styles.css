@@ -103,7 +103,7 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
-/* Five views must fit 390 px with any font metrics: tabs may shrink, and in the worst case (large text) the tab bar
+/* Six views must fit 390 px with any font metrics: tabs may shrink, and in the worst case (large text) the tab bar
    scrolls inside itself — the page itself never scrolls sideways. */
 .tabs {
   gap: 2px;
@@ -111,9 +111,9 @@ textarea:focus-visible {
   scrollbar-width: none;
 }
 .tabs button {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: 0;
-  padding: 0 6px;
+  padding: 0 4px;
   white-space: nowrap;
 }
 
@@ -714,3 +714,12 @@ textarea:focus-visible {
   .triage-card { transition: none; transform: translate(var(--triage-x, 0px), var(--triage-y, 0px)); }
   .triage-stamp.triage-go, .triage-stamp.triage-skip { transform: none; }
 }
+
+@media (max-width: 400px) {
+  .tabs button { font-size: 0.8rem; padding-inline: 3px; }
+}
+.training-list { list-style: none; padding: 0; margin: 0; }
+.training-list li { border-bottom: 1px solid var(--line); padding: 10px 0; overflow-wrap: anywhere; }
+.training-list p { margin: 4px 0; }
+.training-list summary { cursor: pointer; width: fit-content; padding: 6px; }
+.training-sheet input, .training-sheet select, .training-sheet textarea { min-width: 0; max-width: 100%; }
