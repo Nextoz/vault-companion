@@ -12,6 +12,9 @@ The **local Lead only** may **read** the live vault, read-only, limited to:
 - `Tools/*.state.json` and `Automation/Scout Status/**` once it exists (real shapes for increment S);
 - `Events/Triage/**` (real shapes of `feed.json`, `applied.json` and `Decisions/*.jsonl` for increment T; amendment by the
   owner, 2026-09-27). Event titles, venues and calendar clash titles never enter the repository.
+- `Research/**` (the whole research hub, for Research Radar; amendment by the owner, 2026-09-28: "I don't mind anyone
+  seeing the research notes"). The owner also accepts that an AI model chosen for the Radar summary reads these notes.
+  Fixtures stay synthetic and shape-only by default; research text is not copied into the repository.
 
 Unchanged:
 - **No writes** to the live vault except through the app's own write path (commands, receipts, trailers).
