@@ -1,4 +1,4 @@
-# Checkpoint — 2026-09-28 ~05:00 (Lead session `6f65db54`, Herdr agent `lead`, overnight autonomous run)
+# Checkpoint — 2026-09-28 ~05:45 (Lead session `6f65db54`, Herdr agent `lead`, overnight autonomous run)
 
 Read this first, then `docs/plan.md`, then `docs/orchestration.md` (routing, Herdr, Cloud, token + RAM rules).
 Priority and product decisions: the owner's vault note *Projects/Vault Companion/Vault Companion - Ready Backlog*
@@ -6,9 +6,9 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
 
 ## Deployed (verified)
 
-- `main` = `37fca45` (PR #38 Scout insights), Worker `vault-companion` **version `5d52c100`** at `https://app.karpov.dk`
+- `main` = `dd6e3e9` (PR #39 L Training log), Worker `vault-companion` **version `ea770cc2`** at `https://app.karpov.dk`
   (Workers Free, Cloudflare Access owner-only). Anonymous `/` and `/api/*` → 302 after the deploy.
-- Live since the owner's last phone use: C2 + S2a + C3 (#36), Scout insights v1 (#38). README rewritten (#37, docs).
+- Live since the owner's last phone use: C2 + S2a + C3 (#36), Scout insights v1 (#38), L Training log (#39). README (#37).
 - Deploy runbook: `rm -rf apps/web/dist && pnpm build` — **check the build succeeded** (Windows `EBUSY` on an icon
   `copyfile` recurs: retry the clean build), `wrangler deploy --dry-run`, then
   `cd apps/worker && pnpm exec wrangler deploy --domain "app.karpov.dk"`, then `curl` the anonymous 302.
@@ -18,9 +18,7 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
 
 ## Open work (exact next actions)
 
-1. **PR #39 (branch `agent/training`, clone `vault-companion-clones/training`) = L Training log.** Green locally on the
-   merged tree (check 1328, e2e 73/73). CodeRabbit full review auto-requested ~05:27 (rate limit 1/hour). Fix findings
-   with mutation-checked tests, merge, clean build, deploy, 302 check.
+1. Codex back 08:16: launch the leftovers (item 4) one PR each.
 2. Morning, owner phone tests: T (reload first), C2, S2a, C3, Scout insights, L. Owner confirms L's written row format
    (numbers without units, e.g. `| 2026-09-28 | 18:42 | Run | 5.2 | 28 | | | … |`) against the converted vault table —
    the Lead may not read `Health/` (outside ADR-0018); a one-function change if units are wanted.
