@@ -12,9 +12,10 @@ phone that is a stuck action after any reload during a save.
 ## Decision
 
 1. **Liveness lock.** While a tab has a claimed request in flight it holds an exclusive Web Lock named
-   `vc-claim:<claimId>` (acquired before the request leaves, released when the attempt settles). The browser releases a
-   lock when its page dies, so a held lock ⇔ a live request.
-2. **Reclaim.** When the queue loads its records, and before each flush, it asks `locks.query()` which
+   `vc-claim:<claimId>`, acquired before the claim is persisted and released only after the attempt's outcome is
+   persisted (so no other tab can reclaim it in between). The browser releases a lock when its page dies, so a held
+   lock ⇔ a live request.
+2. **Reclaim.** When the queue opens, and before each claim, it asks `locks.query()` which
    `vc-claim:*` locks are held. A record whose lease is still unexpired but whose `claimId` lock is **not** held is
    treated as unleased (same as today's expiry: `leaseUntil: 0, claimId: null`, persisted), so it is sent again
    (with the same bytes; `everSent` stays true) or can be retried/discarded.
