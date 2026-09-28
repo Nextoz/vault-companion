@@ -68,12 +68,13 @@ const ok = (i: number): Reply => ({ json: explanation(`Synthetic Paper ${i}`) })
 async function run(store: InMemoryStore, replies: Reply[], opts: { cron?: string; budget?: number; now?: string } = {}) {
   const gemini = fakeGemini(replies);
   const logs: LogRecord[] = [];
+  const before = store.calls.length; // per invocation, like the Worker's counting fetch
   await runExplainerJob(opts.cron ?? PRIMARY, {
     store,
     explainer: createGeminiExplainer({ apiKey: KEY, fetch: gemini.fetch }),
     now: () => new Date(opts.now ?? `${DATE}T04:30:05Z`),
     timeZone: 'Europe/Copenhagen',
-    subrequests: () => store.calls.length + gemini.calls.length,
+    subrequests: () => store.calls.length - before + gemini.calls.length,
     log: (r) => logs.push(r),
     ...(opts.budget !== undefined ? { budget: opts.budget } : {}),
   });
@@ -223,15 +224,17 @@ describe('research explainer job (ADR-0029)', () => {
 
   it('stops model calls before the subrequest budget cannot pay for the commit; the catch-up takes deferred papers first', async () => {
     const store = await InMemoryStore.create({ [BRIEF]: brief(3) });
-    // Reads so far: head, status, brief, listDir = 4. Each call must leave commitCost(notes + 2) = notes + 9.
-    const { gemini } = await run(store, [ok(1), ok(2), ok(3)], { budget: 16 });
+    // Reads so far: head, status, brief, listDir = 4. A call needs used + 1 + commitCost(notes + 2) = used + notes + 10 ≤ budget.
+    const { gemini } = await run(store, [{ text: 'not json' }, ok(2), ok(3)], { budget: 16 });
     expect(gemini.calls).toHaveLength(2);
     const first = await statusOf(store);
-    expect(first).toMatchObject({ runStatus: 'degraded', findings: 2, errors: 0, deferred: ['https://arxiv.org/abs/2601.00003'] });
-    expect(first.lastError).toBe('1 deferred to the next run (subrequest budget)');
-    const catchup = await run(store, [ok(3)], { cron: CATCHUP });
+    expect(first).toMatchObject({ runStatus: 'degraded', findings: 1, errors: 1, deferred: ['https://arxiv.org/abs/2601.00003'] });
+    expect(first.lastError).toBe('1 of 3 papers not explained (invalid model output); 1 deferred to the next run (subrequest budget)');
+    // Room for one call: the deferred paper 3 goes before the failed paper 1 (which is deferred in turn).
+    const catchup = await run(store, [ok(3)], { cron: CATCHUP, budget: 15 });
+    expect(catchup.gemini.calls).toHaveLength(1);
     expect(catchup.gemini.calls[0]!.body.contents[0]!.parts[0]!.text).toContain('2601.00003');
-    expect(await statusOf(store)).not.toHaveProperty('deferred');
+    expect(await statusOf(store)).toMatchObject({ findings: 1, deferred: ['https://arxiv.org/abs/2601.00001'] });
   });
 
   it('an unknown cron does nothing', async () => {

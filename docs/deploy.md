@@ -26,6 +26,8 @@ attempt, cold installation token, cold Access JWKS), real adapter with a countin
 | `UndoCompleteTask` (ADR-0013) | ≤ 10 per attempt, ≤ 3 attempts: **32** | — |
 | `GET /api/tasks` (review O1) | ≤ 4: **6** | 3.4–12.5 ms before network parsing |
 
+| Research explainer cron (ADR-0029) | one counted budget of **45** for GitHub + Gemini (`SUBREQUEST_BUDGET`); model calls stop while the commit is still paid for, the rest is deferred to the catch-up | fetch-bound (the paper is read by the model by URL, never parsed in the Worker) |
+
 **The Free plan suffices for subrequests.**
 
 **Owner decision (2026-09-26): Free.** The owner's list is ~16 KB / 39 tasks (est. 4–5 ms). After the first deploy,
@@ -141,6 +143,21 @@ in `apps/worker/src/index.ts`); the static shell is still served, behind Access.
 
 Afterwards **delete `secrets.json`**, or keep it only outside every repository (e.g. in your password manager). Store
 or delete the `.pem` files the same way.
+
+### Research explainer (ADR-0029): cron and Gemini key
+
+`wrangler.jsonc` schedules the job at `30 4 * * *` and `30 6 * * *` (UTC; daily run + catch-up). It needs one more
+secret, `GEMINI_API_KEY`, which is deliberately **not** in `secrets.required` or `secrets.json`: the API keeps serving
+without it, and the cron then logs `gemini-key-missing` and writes nothing. Add it after step 7:
+
+```sh
+pnpm exec wrangler secret put GEMINI_API_KEY
+```
+
+(It prompts for the value; never put it in a file in a repository.) Check a run with `pnpm exec wrangler tail` around
+04:30 UTC: one `cron:research-explainer` record per run, with only status, operation ID and commit SHA. A run can be
+triggered locally with `wrangler dev --test-scheduled` and `curl "http://localhost:8787/__scheduled?cron=30+4+*+*+*"`
+(against a sandbox vault only).
 
 ### Rotating a secret later
 
