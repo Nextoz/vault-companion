@@ -18,7 +18,9 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
    (owner, 2026-09-28: same usage pool, no credits, copy-paste/permission overhead; local workers only). Worker's open
    points: Gemini request/response shape written from memory (url_context + `responseJsonSchema` + `urlContextMetadata`,
    verify against current docs and one real call), 429 handling (QuotaFailure ⇒ next model, else one retry), CPU
-   unmeasured, `GEMINI_API_KEY` optional (missing ⇒ logs `gemini-key-missing`, writes nothing). Next: review (write targets `Research/Explained/*.md` create-only + `Automation/Scout Status/research-explainer.json`,
+   unmeasured, `GEMINI_API_KEY` optional (missing ⇒ logs `gemini-key-missing`, writes nothing). **Before review
+   (owner, 2026-09-28): add ADR-0029 Amendment 2** (carry-over ≤ 3 days, pending notes, blob-SHA-guarded replace,
+   `status: unavailable` on the last day) and **one real Gemini call** with the owner's key before deploy. Then: review (write targets `Research/Explained/*.md` create-only + `Automation/Scout Status/research-explainer.json`,
    Gemini client, cron), `pnpm check` + e2e, PR, one CodeRabbit review, merge; then set the Worker secret
    (`GEMINI_API_KEY` from the owner's Windows user env, piped, never printed — `wrangler secret put` deploys a version),
    clean build, deploy, 302 check, and watch the first cron run (04:30 UTC) on the Scouts page.
@@ -31,6 +33,8 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
 3. **Next product work (owner, 2026-09-28): the morning check.** The owner opens the app in the morning to see all
    scout results, the morning digest, research explanations, and tasks/actions. Part 2 = "This morning" section on
    Today (morning digest short answer, new `Research/Explained` notes, scout attention, "N new events", today's tasks).
+   **Shape (owner, 2026-09-28):** one tappable panel like the scout panels: collapsed = a short brief; expanded = all
+   morning reading — the morning Reading Brief itself plus today's explanations (pending ones shown as pending).
    Then **Research Radar** (owner chose option A + deterministic fallback; overview → highlights → depth + promote;
    research hub shapes: Reading Briefs `## Read today`/`## Read this week`, Daily Research Scout `## Most relevant items`,
    `Important Research Updates/`, `Research Intake/`, `AI Research Radar - Living Updates.md`). Brief and build these
