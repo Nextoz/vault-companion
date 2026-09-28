@@ -20,11 +20,9 @@ No `## Sessions` heading, no table, a different header, or two candidate tables 
 
 ## Written row (canonical format)
 
-`| 2026-09-28 | 18:42 | Run | 5.2 | 28 | | | Easy loop |` — Date and Time in Europe/Copenhagen from `when`; `Type`
-`Run` or `Gym`; numbers without units (Distance km with one decimal, Duration whole minutes, Weight kg with one
-decimal); `Split` one of `Bicep`, `Tricep`, `Legs` (Gym only); empty cells are one space. The note is one line: newlines
-become spaces, `|` is escaped as `\|`, leading/trailing space trimmed; the input note is ≤ 280 characters (the escaped cell may be longer). The formatter is one function,
-so the unit style can change in one place if the owner's table uses units.
+`| 2026-09-28 | 18:42 | Run | 5.2 km | 28 min | | | Easy loop |` — Date and Time in Europe/Copenhagen from `when`; `Type`
+`Run` or `Gym`; Distance as `<one decimal> km` (Run only; else empty), Duration as `<whole minutes> min`, Weight as `<one decimal> kg` (Gym only, when given; else empty); `Split` one of `Bicep`, `Tricep`, `Legs` (Gym only); empty cells are one space. The note is one line: newlines
+become spaces, `|` is escaped as `\|`, leading/trailing space trimmed; the input note is ≤ 280 characters (the escaped cell may be longer).
 
 ## Commands
 

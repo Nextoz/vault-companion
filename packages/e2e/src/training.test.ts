@@ -21,7 +21,7 @@ it('phone logs exactly one row; desktop pull preserves every other byte; Undo re
     expect(saved).toMatchObject({ receipt: { status: 'applied', effect: { op: 'logged' } } });
     if (!('receipt' in saved)) throw new Error('save failed');
     expect(await phone.send(target)).toMatchObject({ receipt: { status: 'already-applied' } });
-    const line = '| 2026-09-28 | 18:42 | Run | 5.2 | 28 | | | Easy \\| loop again |';
+    const line = '| 2026-09-28 | 18:42 | Run | 5.2 km | 28 min | | | Easy \\| loop again |';
     expect(desktop.sync().integrated).toBe('fast-forward');
     const bytes = readFileSync(join(desktop.dir, path));
     expect(bytes).toEqual(Buffer.from(fixture.replace('| 2026-09-25', line + '\r\n| 2026-09-25')));
