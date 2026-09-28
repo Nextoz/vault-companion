@@ -46,7 +46,7 @@ or taking ownership away from the vault.
 
 ### Offline work
 
-- Keep working offline; actions queue on the device and send exactly once when back online.
+- Keep working offline; actions queue on the device and are sent when back online; a retried send never applies an action twice.
 - See honest states: "On this device", "Saved to GitHub", and "Needs attention".
 - See when the desktop last synced in the vault status line.
 - Install the app as a PWA and receive an update banner.
@@ -64,7 +64,7 @@ flowchart LR
 - Every write is a minimal span splice with exact golden-diff tests.
 - Unsupported Markdown shapes are refused, never guessed.
 - Every command has an operation ID and a base revision.
-- Writes compare and swap on the blob SHA, carry commit trailers, and dedupe for exactly-once handling.
+- Writes compare and swap on the branch head, carry commit trailers, and are deduplicated, so each action takes effect exactly once.
 - Logs contain no task or note text.
 - Private vault content never enters this repository; fixtures are synthetic.
 
