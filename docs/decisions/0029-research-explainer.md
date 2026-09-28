@@ -43,6 +43,18 @@ on the pinned head (head-CAS), commit trailers, operation ID = a deterministic U
 (a re-run of the same day dedupes; new notes of a catch-up run get a `:catchup` suffix). Paths allowlist: only
 `Research/Explained/*.md` (create) and that one status file (create/update); `canWrite` enforces it.
 
+**Amendment (Lead, 2026-09-28, from the R1 worker's questions):**
+- *Multi-file commit.* The store gains one multi-file write (blobs → one tree → one commit → fast-forward on the pinned
+  head) in the interface and all three adapters, with golden tests. It is also required by the budget below: one
+  commit per file would cost ~5 GitHub calls each. Every path is checked by `canWrite` before any blob is sent.
+- *Dedupe without a client base.* The cron job has no client request, so "already ran today" is read from the status
+  record, which is written in the same commit as the notes (atomic). The operation ID stays deterministic
+  (`research-explainer:<date>`, catch-up `…:catchup`) and goes into the commit trailers. If the ScoutStatus schema has no
+  field for it, add an optional one; the Scouts page must keep parsing older records.
+- *Subrequest budget.* Workers Free allows 50 subrequests per invocation. One budget constant (≤ 45, leaving margin)
+  covers GitHub + Gemini calls. Gemini calls stop when the remaining budget cannot cover them plus the commit. Papers
+  that don't fit are recorded as deferred in the status record, and the 06:30 catch-up run takes them first.
+
 ## Out of scope (later)
 
 Part 2 "This morning" on Today (digest, explanations, scouts, events, tasks); explanations on demand; promote/"Start
