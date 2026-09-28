@@ -455,8 +455,16 @@ export const ScoutStatus = z.object({
   lastError: z.string().max(200).nullable(),
   latestOutput: z.string().max(500).nullable(),
   history: z
-    .array(z.object({ at: isoInstant, status: z.enum(['running', 'success', 'degraded', 'failed']), findings: nullableCount }))
+    .array(z.object({
+      at: isoInstant,
+      status: z.enum(['running', 'success', 'degraded', 'failed']),
+      findings: nullableCount,
+      /** ADR-0029 amendment: the run's operation ID, so an app-run job can dedupe a re-run. Optional (older records). */
+      operationId: z.string().regex(/^[0-9a-f-]{36}$/).optional(),
+    }))
     .max(30),
+  /** ADR-0029 amendment: paper URLs a run could not fit in its subrequest budget; the catch-up run takes them first. */
+  deferred: z.array(z.string().max(500)).max(5).optional(),
 });
 export type ScoutStatus = z.infer<typeof ScoutStatus>;
 
