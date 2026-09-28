@@ -122,6 +122,20 @@ export class MockApi {
     ],
   });
   readonly scoutOutputRequests: string[] = [];
+  scoutOutputs = new Map<string, string>([['learning', [
+    '# Learning findings',
+    '',
+    'Four synthetic opportunities.',
+    '',
+    '| Opportunity | Provider | When |',
+    '| --- | --- | --- |',
+    '| [Platform workshop](https://example.com/workshop) | Example Guild | Tuesday |',
+    '| Cloud meetup | Sample Community | Wednesday |',
+    '| Mentoring circle | Demo Network | Friday |',
+    '| Fourth listing | Example Org | Saturday |',
+    '',
+    '<script>alert(1)</script>',
+  ].join('\n')]]);
   /** Completion history (ADR-0021): done-today tasks plus these earlier items, served newest first. */
   olderHistory: HistoryItem[] = [
     { source: 'active-work', description: 'Garden plan: beds ready [[Garden Plan]]', doneDate: '2026-09-23', links: ['Garden Plan'],
@@ -146,8 +160,9 @@ export class MockApi {
       if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
       const id = route.request().headers()['x-vc-scout'] ?? '';
       this.scoutOutputRequests.push(id);
-      return this.#json(route, 200, LinkedNoteResponse.parse(id === 'learning'
-        ? { status: 'ok', revision: this.#revision, blobSha: 'b'.repeat(40), path: 'Discoveries/Learning.md', markdown: '# Learning findings\n\nFour synthetic opportunities.\n\n<script>alert(1)</script>' }
+      const markdown = this.scoutOutputs.get(id);
+      return this.#json(route, 200, LinkedNoteResponse.parse(markdown !== undefined
+        ? { status: 'ok', revision: this.#revision, blobSha: 'b'.repeat(40), path: `Discoveries/${id}.md`, markdown }
         : { status: 'refused', revision: this.#revision, code: 'not-found', message: 'No findings note yet.' }));
     });
     await on('**/api/session', (route) => this.#session(route));

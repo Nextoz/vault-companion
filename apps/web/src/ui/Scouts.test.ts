@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
 import { expect, it } from 'vitest';
-import { ScoutTime } from './Scouts.tsx';
+import { ScoutTime } from './ScoutTime.tsx';
 
 it('primary time text is friendly, with exact Copenhagen date and offset only in the title', () => {
   for (const [at, title] of [
