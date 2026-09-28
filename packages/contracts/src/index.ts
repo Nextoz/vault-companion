@@ -455,8 +455,28 @@ export const ScoutStatus = z.object({
   lastError: z.string().max(200).nullable(),
   latestOutput: z.string().max(500).nullable(),
   history: z
-    .array(z.object({ at: isoInstant, status: z.enum(['running', 'success', 'degraded', 'failed']), findings: nullableCount }))
+    .array(z.object({
+      at: isoInstant,
+      status: z.enum(['running', 'success', 'degraded', 'failed']),
+      findings: nullableCount,
+      /** ADR-0029 amendment: the run's operation ID, so an app-run job can dedupe a re-run. Optional (older records). */
+      operationId: z.string().regex(/^[0-9a-f-]{36}$/).optional(),
+    }))
     .max(30),
+  /**
+   * ADR-0029 amendment 2: papers picked but not yet explained (failed or deferred), retried first for 3 days. `path` is
+   * the pending note this job wrote and `blobSha` its content, so a note the owner edited is never replaced.
+   */
+  pending: z.array(z.object({
+    url: z.string().max(500),
+    title: z.string().max(300).nullable(),
+    why: z.string().max(500),
+    scoutNote: z.string().max(200),
+    firstSeen: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    path: z.string().max(400),
+    blobSha: z.string().regex(/^[0-9a-f]{40}$/),
+    lastReason: z.enum(['models-unavailable', 'invalid-json', 'url-unreadable', 'budget']),
+  })).max(40).optional(),
 });
 export type ScoutStatus = z.infer<typeof ScoutStatus>;
 

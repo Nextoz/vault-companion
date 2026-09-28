@@ -4,6 +4,9 @@ import type { VaultPath } from './store.ts';
 
 export const TODO_LIST_PATH = 'Tasks/To-Do List.md';
 export const INBOX_DIR = 'Inbox';
+/** ADR-0029 write targets of the daily research explainer. */
+export const EXPLAINED_DIR = 'Research/Explained';
+export const EXPLAINER_STATUS_PATH = `${SCOUT_STATUS_DIR}/research-explainer.json`;
 
 const DENIED_ROOTS = new Set(['.git', '.obsidian', '.trash', 'Tools', 'tmp', 'output']);
 // Case-folded: the owner's desktop (Windows) treats `TMP/` and `tmp/` as the same folder.
@@ -55,8 +58,18 @@ export function isInboxNotePath(raw: string): raw is VaultPath {
     !segments[1]!.startsWith('.');
 }
 
+/** ADR-0029: a Markdown note directly in `Research/Explained/` (no subfolder, not hidden). */
+export function isExplainedNotePath(path: string): boolean {
+  const segments = path.split('/');
+  return segments.length === 3 && `${segments[0]}/${segments[1]}` === EXPLAINED_DIR && parseVaultPath(path) === path &&
+    path.endsWith('.md') && !segments[2]!.startsWith('.');
+}
+
 export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
   if (isTriageDecisionPath(path)) return true;
+  if (path === EXPLAINER_STATUS_PATH) return true;
+  // Create; update only replaces this job's own pending note (blob-SHA checked by the job, ADR-0029 amendment 2).
+  if (isExplainedNotePath(path)) return true;
   if (path === TRAINING_PATH || path === TODO_LIST_PATH || path === 'Tasks/Active Work Now.md') return kind === 'update';
   if (kind === 'update') return isInboxNotePath(path);
   const segments = path.split('/');

@@ -13,8 +13,10 @@ Any change here is consequential: update the golden tests and record an ADR.
 | Active Work | `Tasks/Active Work Now.md` | read, capture, edit, review, exact Undo (ADR-0019) |
 | Training log | `Health/Training Log.md` | read, insert one session row, exact Undo; update only, never create (ADR-0025) |
 | Event triage | `Events/Triage/feed.json`, `applied.json`, `Decisions/YYYY-MM.jsonl` | read; create/append **only** decision JSONL, per [ADR-0024](decisions/0024-event-triage.md) |
+| Research explainer (cron, ADR-0029) | read today's `Research/Reading Briefs/Research Reading Brief - YYYY-MM-DD.md` and `Research/Daily Research Scout/Daily Research Scout - YYYY-MM-DD.md`, list `Research/Explained/`; write `Research/Explained/YYYY-MM-DD - <slug>.md` (directly in the folder, not hidden) | notes: **create**, skipped if that paper's slug already has a note on any date; **update only** to replace this job's own pending note while its blob SHA is unchanged (§4.7); all new notes + the status record in **one** commit (§4.7) |
+| Research explainer status | exactly `Automation/Scout Status/research-explainer.json` | create/update (ScoutStatus, ADR-0020; the only writable status file) |
 | Linked notes | resolved **server-side** from a wikilink in a current task or Active Work item line (`{taskLocator, linkIndex}`); Active Work requires an exact blob SHA and line match, with `linkIndex` 0; target under an allowlisted root: `Projects/`, `Tasks/`, `Inbox/` (owner decision D2 may widen) | read |
-| Never | `.git/`, `.obsidian/`, `.trash/`, `Tools/`, `tmp/`, `output/`, `..`, absolute paths, backslashes, `%`, control chars, non-`.md` — **except** exactly `Automation/Scout Status/<id>.json` (read, ADR-0020) and `Events/Triage/feed.json`, `Events/Triage/applied.json` (read) and `Events/Triage/Decisions/YYYY-MM.jsonl` (read, create/append; ADR-0024) | — |
+| Never | `.git/`, `.obsidian/`, `.trash/`, `Tools/`, `tmp/`, `output/`, `..`, absolute paths, backslashes, `%`, control chars, non-`.md` — **except** exactly `Automation/Scout Status/<id>.json` (read, ADR-0020; `research-explainer.json` also create/update, ADR-0029) and `Events/Triage/feed.json`, `Events/Triage/applied.json` (read) and `Events/Triage/Decisions/YYYY-MM.jsonl` (read, create/append; ADR-0024) | — |
 
 ### Event triage rows
 
@@ -189,6 +191,28 @@ Path `Inbox/<Title> - <YYYY-MM-DD>.md`, collision suffix `Inbox/<Title> - <YYYY-
   `source: vault-companion`, `tags: [inbox]` (block list), and `context` as a **double-quoted, escaped**
   YAML scalar when provided; blank line; the original text with `\r\n` and lone `\r` → `\n`, NUL rejected,
   trailing newline ensured. URLs untouched.
+
+### 4.7 Research explainer note (cron, ADR-0029)
+
+- Input: items (top-level list items with a link) under `## Read today` of today's brief; if none, under
+  `## Most relevant items` of today's scout note. First link per item, `http(s)` only, distinct, ≤ 5, note order;
+  pending papers (below) go first, oldest first. The rest of the item's line is the scout's "why".
+- Path: `Research/Explained/<Copenhagen date> - <slug>.md`; slug = link text (else URL host + path), NFKD → ASCII,
+  lowercase, `[a-z0-9-]`, ≤ 80 chars, never empty.
+- Content (LF): frontmatter `type: research-explained`, `created`, `source` and `scout_note` as double-quoted JSON-escaped
+  scalars, `model`, `status: complete`; `# <title>`; sections `## In plain words`, `## Key ideas`, `## Why it may matter
+  to you`, `## Glossary`, `## Try it`, `## How solid is it`, `## Source`. Model text only from zod-validated JSON, each
+  value on one line: control/bidi characters dropped, whitespace collapsed, `& < >` escaped, a leading block marker
+  backslash-escaped. Golden: `packages/domain/src/research-explainer.test.ts`.
+- Commit: one per run (multi-file head-CAS write), message `Vault Companion: research explainer`, trailers
+  `Vault-Companion-Job: research-explainer` and `Vault-Companion-Op: <UUIDv5 of research-explainer:<date>[:catchup]>`.
+  The status record's `history[].operationId` makes a re-run of the same slot a no-op.
+- Pending (ADR-0029 amendment 2): a picked paper with no explanation (models failed, unreadable, invalid output, or
+  over the run's subrequest/time limits) gets its note at once with `status: pending`, `model: ""`, `# <link text or
+  URL>`, the line `Explanation pending; retried automatically.` and `## Source` (link, scout's why). It is listed in
+  the status record's `pending` (with the note's blob SHA) and retried first for 3 days (first-seen day + 2). A retry
+  **replaces** the note only while its blob SHA is unchanged (checked at the commit's pinned base; an owner edit wins and
+  drops it from the list). On the 4th day it is rewritten once to `status: unavailable` with the last reason.
 
 ## 5. Refusal codes
 

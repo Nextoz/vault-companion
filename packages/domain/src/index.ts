@@ -13,3 +13,4 @@ export * from './triage.ts';
 export * from './triage-format.ts';
 
 export * from './training.ts';
+export * from './research-explainer.ts';
