@@ -59,3 +59,17 @@ on the pinned head (head-CAS), commit trailers, operation ID = a deterministic U
 
 Part 2 "This morning" on Today (digest, explanations, scouts, events, tasks); explanations on demand; promote/"Start
 experiment" button (will reuse the existing Active Work add); personalisation with private task data.
+
+**Amendment 2 (owner, 2026-09-28): carry-over and pending notes.**
+- *Carry-over.* A paper that is picked but not explained (all models failed, link not readable, or deferred by the
+  budget) is kept in the status record as pending (URL, scout's why line, source note, first-seen date). Each run takes
+  pending papers first, oldest first, within the same cap of 5 and the same budget, then today's picks. A paper is
+  dropped after its **3rd** day.
+- *Pending note.* Such a paper still gets its note at once, with `status: pending`: frontmatter as usual (`model` empty),
+  `## Source` (link, scout's why) and one line "Explanation pending; retried automatically." The owner always sees
+  every picked paper.
+- *Replacing a pending note* (the one exception to create-only): allowed only when the note's current blob SHA equals
+  the SHA this job recorded for it in the status record (CAS on blob SHA, rule 4) — so a note the owner has edited is
+  never overwritten. On the last day without success the note is rewritten once to `status: unavailable` with the
+  reason, in the same commit as the status record.
+- *Later (not now):* a second model provider/API key as a further fallback, decided after the first weeks of runs.

@@ -13,21 +13,28 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
   inside History (#42). Deploy runbook unchanged (clean build, check `sw.js`, dry run, deploy, 302).
 - The real triage feed does not yet carry `summary`/`checkins`/`clash.kind`: verify shapes when ## Open work (exact next actions)
 
-1. **R1 research explainer (ADR-0029, brief `docs/briefs/R1-research-explainer.md`)** — Claude Cloud session
-   `session_01DkecfJ8rFD2rk6NrQFXBoM`, branch `agent/explainer` (owner approved push). When its handoff ends
-   `R1 DONE`: clone, review (write targets `Research/Explained/*.md` create-only + `Automation/Scout Status/research-explainer.json`,
+1. **R1 research explainer (ADR-0029, brief `docs/briefs/R1-research-explainer.md`)** — **pushed**: branch
+   `agent/explainer` at `5d3e7af` (6 commits, 23 files, +1492). Cloud session done; **no more Claude Cloud sessions**
+   (owner, 2026-09-28: same usage pool, no credits, copy-paste/permission overhead; local workers only). Worker's open
+   points: Gemini request/response shape written from memory (url_context + `responseJsonSchema` + `urlContextMetadata`,
+   verify against current docs and one real call), 429 handling (QuotaFailure ⇒ next model, else one retry), CPU
+   unmeasured, `GEMINI_API_KEY` optional (missing ⇒ logs `gemini-key-missing`, writes nothing). **Before review
+   (owner, 2026-09-28): add ADR-0029 Amendment 2** (carry-over ≤ 3 days, pending notes, blob-SHA-guarded replace,
+   `status: unavailable` on the last day) and **one real Gemini call** with the owner's key before deploy. Then: review (write targets `Research/Explained/*.md` create-only + `Automation/Scout Status/research-explainer.json`,
    Gemini client, cron), `pnpm check` + e2e, PR, one CodeRabbit review, merge; then set the Worker secret
    (`GEMINI_API_KEY` from the owner's Windows user env, piped, never printed — `wrangler secret put` deploys a version),
    clean build, deploy, 302 check, and watch the first cron run (04:30 UTC) on the Scouts page.
 2. **PR #43 lease reclaim (ADR-0028)** — **merged 2026-09-28 (`7c5309e`)** after the CodeRabbit ADR fix, full check
-   (1355) and full e2e (77) on the merged tree. Clean build + dry run OK (14 assets, `sw.js`). **Deploy pending:** the
-   Lead's `wrangler deploy` was denied by the auto-mode classifier ("Production Deploy"); the owner deploys or allows it.
+   (1355) and full e2e (77) on the merged tree. **Deployed** by the owner: version `12692438`, anonymous 302 OK. The
+   Lead may now deploy: `.claude/settings.local.json` allows `pnpm exec wrangler deploy *` (owner, 2026-09-28).
    R1 session was blocked by its own classifier (remote repoint / "Data Exfiltration"); owner re-approved in-session.
    ADR-0029 amended (`1d0eac2`) with the worker's three design answers. Open bug **B1** (Danish comma in weight/distance:
    `type="number"` rejects `84,5`; fix = text input + `inputMode="decimal"` + comma→dot), batched with further bugs.
 3. **Next product work (owner, 2026-09-28): the morning check.** The owner opens the app in the morning to see all
    scout results, the morning digest, research explanations, and tasks/actions. Part 2 = "This morning" section on
    Today (morning digest short answer, new `Research/Explained` notes, scout attention, "N new events", today's tasks).
+   **Shape (owner, 2026-09-28):** one tappable panel like the scout panels: collapsed = a short brief; expanded = all
+   morning reading — the morning Reading Brief itself plus today's explanations (pending ones shown as pending).
    Then **Research Radar** (owner chose option A + deterministic fallback; overview → highlights → depth + promote;
    research hub shapes: Reading Briefs `## Read today`/`## Read this week`, Daily Research Scout `## Most relevant items`,
    `Important Research Updates/`, `Research Intake/`, `AI Research Radar - Living Updates.md`). Brief and build these
@@ -37,6 +44,19 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
 6. Engineering (no decision): R3 CPU via `wrangler tail`, Progress events > 2 months (triage decision window),
    `docs/learning-guide.md` (overdue after L, T2, P, R1), stale items in `docs/plan.md` (R7 and edit double-row were fixed
    in #34), close Dependabot #29.
+7. **Code tour for the owner (owner, 2026-09-28; start after the Wed 1 Oct 21:00 reset, Lead writes it).** The owner
+   understands the spec but wants to understand the implementation as a developer and DevOps engineer. Markdown in the repo,
+   `docs/code-tour/*.md`, with clickable `path:line` anchors (verified against the code, not the spec). First two chapters:
+   (a) **request lifecycle**: phone tap → offline queue (lease, claim lock) → Worker API boundary → Markdown span splice →
+   GitHub head-CAS commit with trailers → receipt/undo; (b) **DevOps**: monorepo/packages, build, CI, Cloudflare Worker +
+   Access, secrets, deploy runbook, service-worker updates, cron jobs. Each chapter: what runs where, the 5–8 files that
+   matter, one traced path, why it was built this way (link the ADR), self-check questions. Then refresh
+   `docs/learning-guide.md` to point at the tour instead of duplicating it. Later chapters: features since 25 Sep, testing.
+   Reader: the owner on a computer (VS Code), experienced engineer but **new to TypeScript**. So: chapter 0 is a short
+   "TypeScript you need for this repo" (only what the code uses: types/interfaces, Zod schemas as runtime checks,
+   discriminated unions, async/await, `#private` fields, `satisfies`/generics as met), each shown on a real line of this
+   repo; every chapter marks what to **read closely** vs **skim** vs **skip** (boilerplate, UI styling, test helpers), so
+   no time is wasted on unimportant code.
 
 ## Capacity (2026-09-28)
 
