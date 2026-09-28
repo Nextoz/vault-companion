@@ -1136,3 +1136,177 @@ describe('N5 — a command request that never settles', () => {
     timeoutSpy.mockRestore();
   });
 });
+
+describe("ADR-0028 — a dead tab's send lease is reclaimed at once (Web Locks liveness)", () => {
+  /**
+   * navigator.locks with `query`, shared by several tabs: FIFO per name. `kill()` drops a tab's held locks without its
+   * callbacks settling, as the browser does when a page dies mid-request.
+   */
+  function liveness() {
+    const tails = new Map<string, Promise<unknown>>();
+    const held = new Map<string, string>(); // lock name -> tab
+    let tabs = 0;
+    const tab = () => {
+      const id = String(++tabs);
+      const manager: LockManagerLike & { kill: () => void } = {
+        request<T>(name: string, fn: () => Promise<T>): Promise<T> {
+          const run = (tails.get(name) ?? Promise.resolve()).then(async () => {
+            held.set(name, id);
+            try {
+              return await fn();
+            } finally {
+              if (held.get(name) === id) held.delete(name);
+            }
+          });
+          tails.set(name, run.catch(() => undefined));
+          return run;
+        },
+        async query() {
+          return { held: [...held.keys()].map((name) => ({ name })) };
+        },
+        kill() {
+          for (const [name, owner] of held) if (owner === id) held.delete(name);
+        },
+      };
+      return manager;
+    };
+    const claimLocks = () => [...held.keys()].filter((name) => name.startsWith('vc-claim:'));
+    return { tab, claimLocks };
+  }
+
+  /** Tab A sends the note and never hears back; returns the bytes it sent. */
+  async function inFlight(a: Tab, envelope: Command) {
+    let sent = '';
+    a.send.mockImplementationOnce(async (body) => {
+      sent = body;
+      return new Promise<Response>(() => undefined);
+    });
+    await a.queue.enqueue(envelope, { accountKey: ACCOUNT_A, label: 'n' });
+    a.queue.setSession(ACCOUNT_A);
+    void a.queue.flush();
+    await vi.waitFor(() => expect(a.send).toHaveBeenCalledTimes(1));
+    return () => sent;
+  }
+
+  it('a page that died mid-request: its unexpired lease is reclaimed and the same bytes are sent again', async () => {
+    const fleet = liveness();
+    const aLocks = fleet.tab();
+    const a = await openTab({ locks: aLocks });
+    const envelope = captureNote(mint(), { text: 'synthetic' });
+    const sent = await inFlight(a, envelope);
+    expect(fleet.claimLocks()).toHaveLength(1);
+
+    aLocks.kill(); // the page reloads: its lock goes, its lease (60 s) stays in IndexedDB
+    clock += 1_000;
+    const b = await openTab({ locks: fleet.tab() });
+    expect(b.queue.getSnapshot().items[0]?.state).not.toBe('saving');
+    expect(await b.store.get(envelope.operationId)).toMatchObject({ everSent: true, leaseUntil: 0, claimId: null });
+
+    b.send.mockImplementation(async (body) => ok(body));
+    b.queue.setSession(ACCOUNT_A);
+    await b.queue.flush();
+    expect(b.send.mock.calls.map(([body]) => body)).toEqual([sent()]);
+    expect(await b.store.all()).toEqual([]);
+    expect(b.receipts).toHaveLength(1);
+  });
+
+  it('a live other tab: its lease is never reclaimed while its lock is held', async () => {
+    const fleet = liveness();
+    const a = await openTab({ locks: fleet.tab() });
+    const envelope = captureNote(mint(), { text: 'synthetic' });
+    await inFlight(a, envelope);
+
+    clock += 1_000;
+    const b = await openTab({ locks: fleet.tab() });
+    b.send.mockImplementation(async (body) => ok(body));
+    b.queue.setSession(ACCOUNT_A);
+    await b.queue.flush();
+    expect(b.send).not.toHaveBeenCalled();
+    expect(b.queue.getSnapshot().items[0]?.state).toBe('saving');
+    expect(await b.queue.discard(envelope.operationId)).toBe(false);
+  });
+
+  it("without locks.query, a dead tab's lease still waits for expiry", async () => {
+    const a = await openTab(); // sharedLocks(): no query
+    const envelope = captureNote(mint(), { text: 'synthetic' });
+    const sent = await inFlight(a, envelope);
+
+    clock += 1_000;
+    const b = await openTab();
+    b.send.mockImplementation(async (body) => ok(body));
+    b.queue.setSession(ACCOUNT_A);
+    await b.queue.flush();
+    expect(b.send).not.toHaveBeenCalled();
+
+    clock += LEASE_MS;
+    await b.queue.flush();
+    expect(b.send.mock.calls.map(([body]) => body)).toEqual([sent()]);
+  });
+
+  it('the claim lock is held while the request is out and released after success, refusal, network error and timeout', async () => {
+    const fleet = liveness();
+    const a = await openTab({ locks: fleet.tab() });
+    const outcomes: ((body: string) => Promise<Response>)[] = [
+      async (body) => ok(body),
+      async () => refusal('conflict:stale'),
+      async () => Promise.reject(new TypeError('Failed to fetch')),
+      async () => Promise.reject(new DOMException('The operation timed out.', 'TimeoutError')),
+    ];
+    const heldDuring: boolean[] = [];
+    a.send.mockImplementation(async (body) => {
+      const claims = fleet.claimLocks();
+      const records = await a.store.all();
+      heldDuring.push(claims.length === 1 && records.some((r) => claims[0] === `vc-claim:${r.claimId}`));
+      return outcomes[a.send.mock.calls.length - 1]!(body);
+    });
+    for (const text of ['one', 'two', 'three', 'four']) {
+      await a.queue.enqueue(captureNote(mint(), { text }), { accountKey: ACCOUNT_A, label: text });
+    }
+    a.queue.setSession(ACCOUNT_A);
+    await a.queue.flush();
+
+    expect(heldDuring).toEqual([true, true, true, true]);
+    expect(fleet.claimLocks()).toEqual([]);
+    const left = await a.store.all();
+    expect(left.map((r) => [r.state, r.lastError?.code, r.leaseUntil])).toEqual([
+      ['attention', 'conflict:stale', 0],
+      ['pending', 'network', 0],
+      ['pending', 'timeout', 0],
+    ]);
+  });
+
+  it('a resend of a command whose first attempt did land yields exactly one receipt (dedupe by operation ID)', async () => {
+    const fleet = liveness();
+    const applied = new Set<string>();
+    const server = (body: string) => {
+      const { operationId } = JSON.parse(body) as Command;
+      const status = applied.has(operationId) ? 'already-applied' : 'applied';
+      applied.add(operationId);
+      return json(200, receiptFor(body, { status }));
+    };
+    const aLocks = fleet.tab();
+    const a = await openTab({ locks: aLocks });
+    a.send.mockImplementationOnce(async (body) => {
+      server(body); // it lands in Git; the page dies before the answer arrives
+      return new Promise<Response>(() => undefined);
+    });
+    const envelope = captureNote(mint(), { text: 'synthetic' });
+    await a.queue.enqueue(envelope, { accountKey: ACCOUNT_A, label: 'n' });
+    a.queue.setSession(ACCOUNT_A);
+    void a.queue.flush();
+    await vi.waitFor(() => expect(a.send).toHaveBeenCalledTimes(1));
+    aLocks.kill();
+
+    const b = await openTab({ locks: fleet.tab() });
+    b.send.mockImplementation(async (body) => server(body));
+    b.queue.setSession(ACCOUNT_A);
+    await b.queue.flush();
+    await b.queue.flush();
+
+    expect(b.send).toHaveBeenCalledTimes(1);
+    expect(applied.size).toBe(1);
+    expect(b.receipts.map((r) => [r.operationId, r.status])).toEqual([[envelope.operationId, 'already-applied']]);
+    expect(await b.store.receipts()).toHaveLength(1);
+    expect(await b.store.all()).toEqual([]);
+  });
+});
