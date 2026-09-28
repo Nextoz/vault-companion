@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { waitForSettledRetry } from './settled-retry.ts';
 
 async function openSheet(page: Page) {
   await page.getByRole('button', { name: 'Add training', exact: true }).click();
@@ -67,6 +68,9 @@ test('offline save survives reload and dependent Undo waits for the receipt', as
   await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByTestId('action')).toContainText('Training');
   await expect.poll(() => api.bodies.length).toBeGreaterThan(0);
+  // Reload only after the failed attempt is stored and its send lease released (see settled-retry.ts);
+  // a reload mid-send leaves the action leased and the Refresh kick below would be skipped.
+  await waitForSettledRetry(page);
   await page.reload();
   await expect(page.getByTestId('action')).toContainText('Training');
   api.commandMode = 'hold';
