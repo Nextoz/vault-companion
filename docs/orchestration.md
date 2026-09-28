@@ -73,6 +73,17 @@ fact and consciously reroute; never silently substitute. The header alone does n
 launched while the quota is exhausted prints it and then fails at once ("usage limit … try again at"), so confirm real
 activity (exec/thinking lines) in the log.
 
+### Changing this policy
+
+Routing is expected to change (e.g. when DeepSeek is added). To add, remove or re-tier a backend, edit only:
+1. the routing table above (its row or the model it names);
+2. its operational entry under *Budget observations and alternative backends* (wrapper, quota, privacy limits);
+3. one line in `docs/decisions/0030-cost-aware-worker-model-routing.md` or a superseding ADR.
+
+A new backend enters the table only after its wrapper, spending cap and one small trial are verified. Nothing else
+names models: new briefs say "model per routing table", and the model lines in older dated briefs (`docs/briefs/`) are
+historical, never instructions.
+
 ## Sources of truth and vault access (owner, 2026-09-26; ADR-0018)
 
 - **Priority and product decisions:** the owner's vault note `Projects/Vault Companion/Vault Companion - Ready
@@ -89,8 +100,8 @@ output streamed in the pane and tee'd to the log, pane closes itself 60 s after 
 its last pane). Codex runs add `-c model_reasoning_summary=concise -c model_verbosity=low -c features.memories=false -c memories.use_memories=false -c memories.generate_memories=false` so reasoning summaries are visible.
 
 ```sh
-AGENT_STDIN=<clone>/.agent/brief.md bash tools/agent-pane.sh "astra-high · pr18" <clone> <clone>/.agent/run.log \
-  codex exec -m gpt-6-astra -c model_reasoning_effort=high -c model_reasoning_summary=concise -c model_verbosity=low -c features.memories=false -c memories.use_memories=false -c memories.generate_memories=false \
+AGENT_STDIN=<clone>/.agent/brief.md bash tools/agent-pane.sh "<model>-<effort> · <task>" <clone> <clone>/.agent/run.log \
+  codex exec -m <model from routing table> -c model_reasoning_effort=<effort> -c model_reasoning_summary=concise -c model_verbosity=low -c features.memories=false -c memories.use_memories=false -c memories.generate_memories=false \
   --sandbox workspace-write -C <clone> -
 ```
 
@@ -104,12 +115,6 @@ deleted once their PRs merge (they may contain such context); they are never com
 the finding, name files + line ranges, and never tell a bounded worker to "read docs/…" broadly. Workers follow the
 AGENTS.md token rules; the Lead runs the full check/e2e before merge. Use the routing table above and escalate only on
 evidence. Review briefs are packets too: the diff plus only the relevant ADR/invariant, not the whole repository.
-
-**Antigravity (agy 1.2.11):** `-p -` with a stdin brief sometimes starts with an empty prompt ("How can I help you
-today?"). Pass the prompt as text instead: `agy.exe -p "Read the file .agent/brief.md in the current directory and carry
-out that task exactly as written." --model gemini-3.8-flash-medium --dangerously-skip-permissions` (still via
-`AGENT_STDIN=… bash tools/agent-pane.sh`). First results: dup-row test good but fix removed an identity guard (held);
-O11 CSP smoke good and found a real Zod CSP violation (PR #23). Review its diffs like any worker's.
 
 Wait for completion with the log's last line (Codex: `tokens used`) rather than polling the pane.
 
@@ -165,8 +170,7 @@ the only record.
   it is set, or `/c/Dev/...` becomes `C:/c/Dev/...` (happened once; empty leftover dirs under `C:\c\` for the owner to delete).
 - `codex exec` writes its transcript to **stderr**; under Windows PowerShell 5, `2>&1 | Tee-Object` renders every line
   red as a NativeCommandError even when the run is healthy (owner saw an all-red pane, 2026-09-25). Check the log for
-  real `ERROR` lines instead of the colour. For new runs prefer
-  `cmd /c "codex exec … - < <prompt-file> > <log> 2>&1"` (plain text, UTF-8 log, no red wrapping).
+  real `ERROR` lines instead of the colour. New runs use `tools/agent-pane.sh` (see Visible agents), which avoids this.
 
 ## Claude Code Cloud workers (owner rules, 2026-09-25)
 
@@ -201,6 +205,7 @@ e2e locally before merging.
   `Created cloud session: … session_<id>` line from the pane.
   Launch **one at a time** and wait for the shell prompt to return before the next: text typed while `claude --cloud`
   provisions is queued as messages to that session (`herdr pane wait-output` also matches old screen text).
+
 ## Budget observations and alternative backends
 
 These are operational observations and fallback mechanics. They **do not override the current routing table above**.
@@ -233,9 +238,11 @@ back across its configured Flash-Lite/Flash models. One retry on transient 503/4
 Use only for bounded low-risk public-repo work (UI/CSS, straightforward TypeScript, tests, docs, mechanical refactors,
 simple bugs). Keep briefs idempotent because a model fallback can restart the brief against a partly edited clone.
 
-**Antigravity:** free-tier fallback for bounded low-risk public-repo tasks. The stdin-prompt path has previously opened
-with an empty prompt, so invoke it with the explicit instruction to read `.agent/brief.md`. Expect quota refusals and
-reroute instead of waiting. Review its diffs like any other worker.
+**Antigravity (agy 1.2.11):** free-tier fallback for bounded low-risk public-repo tasks. `-p -` with a stdin brief
+sometimes starts with an empty prompt, so pass the prompt as text (still via `tools/agent-pane.sh`):
+`agy.exe -p "Read the file .agent/brief.md in the current directory and carry out that task exactly as written." --model gemini-3.8-flash-medium --dangerously-skip-permissions`.
+Expect quota refusals and reroute instead of waiting. Review its diffs like any other worker's (an early fix of its
+removed an identity guard).
 
 **Local Qwen:** tiny deterministic work only, one at a time, and only with at least 5 GB free RAM. It is a budget
 fallback, not a reviewer for high-risk invariants.
