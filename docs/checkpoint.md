@@ -19,8 +19,12 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
    Gemini client, cron), `pnpm check` + e2e, PR, one CodeRabbit review, merge; then set the Worker secret
    (`GEMINI_API_KEY` from the owner's Windows user env, piped, never printed — `wrangler secret put` deploys a version),
    clean build, deploy, 302 check, and watch the first cron run (04:30 UTC) on the Scouts page.
-2. **PR #43 lease reclaim (ADR-0028, clone `vault-companion-clones/lease`)** — CodeRabbit requested ~16:15 (re-request if
-   rate-limited); before merge run full check + full e2e on the merged tree; then merge + deploy.
+2. **PR #43 lease reclaim (ADR-0028)** — **merged 2026-09-28 (`7c5309e`)** after the CodeRabbit ADR fix, full check
+   (1355) and full e2e (77) on the merged tree. Clean build + dry run OK (14 assets, `sw.js`). **Deploy pending:** the
+   Lead's `wrangler deploy` was denied by the auto-mode classifier ("Production Deploy"); the owner deploys or allows it.
+   R1 session was blocked by its own classifier (remote repoint / "Data Exfiltration"); owner re-approved in-session.
+   ADR-0029 amended (`1d0eac2`) with the worker's three design answers. Open bug **B1** (Danish comma in weight/distance:
+   `type="number"` rejects `84,5`; fix = text input + `inputMode="decimal"` + comma→dot), batched with further bugs.
 3. **Next product work (owner, 2026-09-28): the morning check.** The owner opens the app in the morning to see all
    scout results, the morning digest, research explanations, and tasks/actions. Part 2 = "This morning" section on
    Today (morning digest short answer, new `Research/Explained` notes, scout attention, "N new events", today's tasks).
