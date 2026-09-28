@@ -18,7 +18,7 @@ import { runExplainerJob } from './research-explainer.ts';
 const DATE = '2026-09-28';
 const PRIMARY = '30 4 * * *';
 const CATCHUP = '30 6 * * *';
-const KEY = 'SENTINEL-key-7f2a';
+const KEY = 'SENTINEL-key-7f2a'; // gitleaks:allow (synthetic)
 const WHY = 'SENTINEL-why-1c9e';
 const BRIEF = `Research/Reading Briefs/Research Reading Brief - ${DATE}.md`;
 const SCOUT = `Research/Daily Research Scout/Daily Research Scout - ${DATE}.md`;

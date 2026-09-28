@@ -1,0 +1,2 @@
+# Synthetic test key in the research-explainer scenario test (SENTINEL-key-7f2a), not a secret.
+2eacd52852a1a663b9182e8cc49366d5bf3e1b1b:apps/worker/src/research-explainer.test.ts:generic-api-key:20
