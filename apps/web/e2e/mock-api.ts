@@ -366,8 +366,8 @@ export class MockApi {
         return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'undone', lineText: '| synthetic session |' } };
       }
       case 'TriageDecide': {
-        const { eventId, decision, outcome, undoes } = command.payload;
-        this.triage.decisions.push({ decisionId: command.operationId, eventId, decision, outcome, undoes, at: command.occurredAt });
+        const { eventId, decision, outcome, undoes, card } = command.payload;
+        this.triage.decisions.push({ decisionId: command.operationId, eventId, decision, outcome, undoes, at: command.occurredAt, title: card.title, start: card.start });
         const path = `Events/Triage/Decisions/${copenhagenDay(command.occurredAt).slice(0, 7)}.jsonl`;
         return { ...base, path, effect: { kind: 'triage-decided', path, decisionId: command.operationId } };
       }
