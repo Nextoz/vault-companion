@@ -128,8 +128,7 @@ preview). Run e2e in one clone at a time, or check the port is free (Get-NetTCPC
   The dashboard also lists the owner's unrelated sessions and `ctrl+x` deletes the selected one — do not
   navigate it. To retire an agent, `herdr pane close <pane-id>` on a pane the Lead created, and start new
   agents in fresh panes.
-- Worker panes: `herdr pane split --pane <id> --direction down|right --cwd <worktree> --no-focus`, then
-  `agent start`; confirm the model from the startup banner (`Opus 5.5`) before prompting.
+- Interactive Claude worker panes use the documented worktree flow; confirm the model from the startup banner before prompting. Codex uses the non-interactive full-clone flow below, not this worktree flow.
 - Hand briefs/diffs over as files; reviewers reply with a one-line verdict and write details to a file.
 - **Codex in Herdr (Windows, codex-cli 0.154):** interactive `codex` first shows a *"Do you trust the contents of
   this directory?"* dialog that Herdr reports as `idle` (not `blocked`); a prompt sent then answers the dialog and
@@ -147,8 +146,7 @@ the only record.
   unresolved issues, failed QA, and **exact next actions**.
 - `docs/checkpoint.md` is overwritten (not appended) at stable points and before any long pause, compaction or
   usage-limit boundary: completed, remaining, risks, branches/worktrees, tests run + results, exact next action.
-- Commit at every stable checkpoint; never accumulate a large uncommitted tree. Workers commit on their branch
-  before being idle or retired; a worktree is removed only after its branch is merged or recorded as abandoned.
+- Commit at every stable checkpoint; never accumulate a large uncommitted tree. Workers with git-write access commit before being idle or retired. Codex cannot write `.git`, so the Lead reconciles and commits its edited clone plus handoff before retirement. Remove a worktree/clone only after its state is merged or recorded as abandoned.
 - Consequential decisions go into ADRs, not only into conversation.
 - If usage is about to run out: stop at a safe point, commit, update plan + checkpoint, leave no half-applied edit.
 
@@ -199,13 +197,6 @@ e2e locally before merging.
   `Created cloud session: … session_<id>` line from the pane.
   Launch **one at a time** and wait for the shell prompt to return before the next: text typed while `claude --cloud`
   provisions is queued as messages to that session (`herdr pane wait-output` also matches old screen text).
-- **Routing under Claude-token pressure (owner, 2026-09-25):** most implementation goes to Claude Code Cloud; small or
-  low-risk tasks to Codex GPT-6 Astra at effort `low` (`cmd /c "codex exec -m gpt-6-astra -c model_reasoning_effort=low …"`).
-  The local Lead stays lean: decompose, review, integrate.
-- **Local Qwen** (tiny deterministic tasks, one at a time): `qwen-agent` is installed and verified by the owner (npm
-  shim `qwen-agent.cmd`; a `pi`-based agent with read/bash/edit/write). Non-interactive: `cmd /c "qwen-agent -p
-  --no-session \"<prompt>\""` in a full clone. Only with **≥ 5 GB free RAM** (the 4B model needs ~3.4 GB).
-
 ## Budget observations and alternative backends
 
 These are operational observations and fallback mechanics. They **do not override the current routing table above**.
@@ -259,10 +250,11 @@ the shell can execute them. Write such text with file tools instead.
 
 ## Worker → Lead handoff (owner, 2026-09-25)
 
-Every implementation worker (Cloud, Astra, Qwen) commits a short branch-local `.agent/handoffs/<brief-name>.md` with:
+Every implementation worker writes a short `.agent/handoffs/<brief-name>.md` in its workspace with:
 1. **Completed** — what actually changed. 2. **Important discoveries** — unexpected technical/product/security
 findings, including outside the brief. 3. **Recommend** — fix now / follow-up / leave alone. 4. **Verification** —
-checks actually run and result. 5. **Commit** — SHA if available. Concise; not a review report. Launch prompts say so.
+checks actually run and result. 5. **Commit** — SHA if the backend can commit. Concise; not a review report. Backends
+with git-write access commit the handoff; Codex leaves it for the Lead to review and commit with the diff.
 
 Before merging, the Lead reads it and dispositions **every** meaningful discovery: fix now, concrete follow-up in
 `docs/plan.md`, or rejected with a reason (recorded in the PR comment). Worker-process commentary never goes into code
