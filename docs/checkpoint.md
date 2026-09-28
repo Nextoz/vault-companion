@@ -37,6 +37,14 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
 6. Engineering (no decision): R3 CPU via `wrangler tail`, Progress events > 2 months (triage decision window),
    `docs/learning-guide.md` (overdue after L, T2, P, R1), stale items in `docs/plan.md` (R7 and edit double-row were fixed
    in #34), close Dependabot #29.
+7. **Code tour for the owner (owner, 2026-09-28; start after the Wed 1 Oct 21:00 reset, Lead writes it).** The owner
+   understands the spec but wants to understand the implementation as a developer and DevOps engineer. Markdown in the repo,
+   `docs/code-tour/*.md`, with clickable `path:line` anchors (verified against the code, not the spec). First two chapters:
+   (a) **request lifecycle**: phone tap → offline queue (lease, claim lock) → Worker API boundary → Markdown span splice →
+   GitHub head-CAS commit with trailers → receipt/undo; (b) **DevOps**: monorepo/packages, build, CI, Cloudflare Worker +
+   Access, secrets, deploy runbook, service-worker updates, cron jobs. Each chapter: what runs where, the 5–8 files that
+   matter, one traced path, why it was built this way (link the ADR), self-check questions. Then refresh
+   `docs/learning-guide.md` to point at the tour instead of duplicating it. Later chapters: features since 25 Sep, testing.
 
 ## Capacity (2026-09-28)
 
