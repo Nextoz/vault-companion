@@ -44,6 +44,12 @@ or taking ownership away from the vault.
 - Swipe through suggested events and choose Go, Maybe, or Skip with a reason.
 - Append decisions to the vault; a desktop job adds Go events to the calendar.
 
+### Training
+
+- Log a run (distance, time) or a gym session (split, duration, optional body weight) in a few taps.
+- See all sessions newest first, with run pace computed; older rows keep whatever they have.
+- Each session is one row in the vault's training-log table; Undo removes exactly that row.
+
 ### Offline work
 
 - Keep working offline; actions queue on the device and are sent when back online; a retried send never applies an action twice.
