@@ -1,6 +1,6 @@
 import type { TrainingRow } from '@vault-companion/contracts';
 
-function numberWithUnit(value: string, unit: string): number | null {
+export function numberWithUnit(value: string, unit: string): number | null {
   const match = new RegExp(`^(\\d+(?:\\.\\d+)?)\\s*(?:${unit})?$`).exec(value.trim());
   return match ? Number(match[1]) : null;
 }

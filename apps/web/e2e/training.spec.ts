@@ -87,7 +87,7 @@ test('six complete tab labels fit 390 px without page overflow', async ({ page }
   await page.setViewportSize({ width: 390, height: 844 });
   const api = new MockApi(); await api.install(page); await page.goto('/');
   const nav = page.getByRole('navigation', { name: 'Views' });
-  await expect(nav.getByRole('button')).toHaveText(['Today', 'All', 'Notes', 'Training', 'Scouts', 'History']);
+  await expect(nav.getByRole('button')).toHaveText(['Today', 'All', 'Notes', 'Training', 'Scouts', 'Progress']);
   const bounds = await nav.evaluate((el) => {
     const bar = el.getBoundingClientRect();
     return { page: document.documentElement.scrollWidth, width: innerWidth, labels: [...el.querySelectorAll('button')].map((b) => {

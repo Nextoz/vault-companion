@@ -11,7 +11,7 @@ test('History: two days newest first; Reopen only for this device’s completion
   await expect.poll(() => api.applied.length).toBe(1);
   await expect(page.getByRole('region', { name: 'Done today' }).getByText('Saved to GitHub')).toBeVisible();
 
-  await page.getByRole('button', { name: 'History' }).click();
+  await page.getByRole('button', { name: 'Progress' }).click();
   const history = page.getByRole('region', { name: 'History', exact: true });
   await expect(history.getByRole('heading', { level: 2 })).toHaveText(['Thu 24 Sep', 'Wed 23 Sep']);
   const today = history.getByRole('region', { name: 'Thu 24 Sep' });

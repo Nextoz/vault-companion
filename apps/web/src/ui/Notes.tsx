@@ -50,7 +50,7 @@ export function Notes({ refreshKey, queue, items, accountKey, baseRevision }: {
   </section>;
 }
 
-function NoteScreen({ entry, refreshKey, queue, items, accountKey, baseRevision, onBack }: {
+export function NoteScreen({ entry, refreshKey, queue, items, accountKey, baseRevision, onBack }: {
   entry: Entry;
   refreshKey: number | null;
   queue: PendingQueue;

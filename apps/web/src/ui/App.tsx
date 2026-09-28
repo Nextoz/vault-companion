@@ -19,7 +19,7 @@ import { EditSheet } from './EditSheet.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
 import { VaultStatus } from './VaultStatus.tsx';
-import { History } from './History.tsx';
+import { Progress } from './Progress.tsx';
 import { Notes } from './Notes.tsx';
 import { Scouts } from './Scouts.tsx';
 import { Training } from './Training.tsx';
@@ -303,7 +303,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <button type="button" aria-pressed={tab === 'notes'} onClick={() => setTab('notes')}>Notes</button>
           <button type="button" aria-pressed={tab === 'training'} onClick={() => setTab('training')}>Training</button>
           <button type="button" aria-pressed={tab === 'scouts'} onClick={() => setTab('scouts')}>Scouts</button>
-          <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')}>History</button>
+          <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')}>Progress</button>
         </nav>
       </header>
 
@@ -377,8 +377,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
 
-        {tab === 'history' && !signedOut && <History key={`history:${accountKey}`} refreshKey={checkedAt} queued={snapshot.items}
-          accountKey={accountKey} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />}
+        {tab === 'history' && !signedOut && <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
+          accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />}
 
         {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} />}
 

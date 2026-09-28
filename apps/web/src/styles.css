@@ -725,3 +725,20 @@ textarea:focus-visible {
 .training-list p { margin: 4px 0; }
 .training-list summary { cursor: pointer; width: fit-content; padding: 6px; }
 .training-sheet input, .training-sheet select, .training-sheet textarea { min-width: 0; max-width: 100%; }
+/* Progress Wall (ADR-0027) */
+.progress h2 { font-size: 1rem; margin: 20px 0 6px; }
+.progress-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px 12px 8px; overflow-wrap: anywhere; }
+.progress-card h2 { margin-top: 10px; }
+.progress-summary { margin: 4px 0; font-size: 1.05rem; line-height: 1.4; }
+.progress-toggle { min-height: var(--tap); padding: 0; }
+.progress-earlier ul, .progress-evidence ul { list-style: none; margin: 0; padding: 0; }
+.progress-earlier > ul > li { border-bottom: 1px solid var(--line); }
+.progress-week { display: block; width: 100%; min-height: var(--tap); padding: 10px 0; border: none; background: transparent; color: inherit;
+  text-align: left; font: inherit; text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; cursor: pointer; }
+.progress-week::after { content: ' ▸'; color: var(--muted); }
+.progress-week[aria-expanded='true']::after { content: ' ▾'; }
+.progress-evidence { padding-bottom: 8px; overflow-wrap: anywhere; }
+.progress-evidence h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 10px 0 2px; }
+.progress-evidence li { padding: 4px 0; }
+.progress-note { min-height: var(--tap); padding: 0; font-size: inherit; text-align: left; }
+.progress .progress-days { margin-bottom: 0; }
