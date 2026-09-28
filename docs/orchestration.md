@@ -66,8 +66,12 @@ codex exec -m gpt-6-astra   -c model_reasoning_effort=medium …
 All Codex repo workers also disable memories:
 `-c features.memories=false -c memories.use_memories=false -c memories.generate_memories=false`.
 
+The Codex sandbox cannot reach the pnpm store: the Lead runs `pnpm install` in the clone **before** launching Codex.
+
 Verify `model:` and `reasoning effort:` in the log before substantial work. If a model is unavailable, record that
-fact and consciously reroute; never silently substitute.
+fact and consciously reroute; never silently substitute. The header alone does not prove the run started: a run
+launched while the quota is exhausted prints it and then fails at once ("usage limit … try again at"), so confirm real
+activity (exec/thinking lines) in the log.
 
 ## Sources of truth and vault access (owner, 2026-09-26; ADR-0018)
 
@@ -99,7 +103,7 @@ deleted once their PRs merge (they may contain such context); they are never com
 95–130k per review, mostly from whole-doc reads and repeated full `pnpm check` runs. Briefs are self-contained: quote
 the finding, name files + line ranges, and never tell a bounded worker to "read docs/…" broadly. Workers follow the
 AGENTS.md token rules; the Lead runs the full check/e2e before merge. Use the routing table above and escalate only on
-evidence.
+evidence. Review briefs are packets too: the diff plus only the relevant ADR/invariant, not the whole repository.
 
 **Antigravity (agy 1.2.11):** `-p -` with a stdin brief sometimes starts with an empty prompt ("How can I help you
 today?"). Pass the prompt as text instead: `agy.exe -p "Read the file .agent/brief.md in the current directory and carry
@@ -215,9 +219,10 @@ Sonnet by default, with Opus reserved for critical queue/write-core work.
 **Claude Code Cloud:** use for substantial bounded repo-contained work when it is the best available budget/capability
 fit. The detailed launch/push procedure above remains authoritative. Never send private vault content.
 
-**ChatGPT review fallback:** while Codex is unavailable, the owner may relay a bounded review packet to ChatGPT for a
-critical independent review. The account can inspect the GitHub repo, but the local Lead cannot invoke that chat
-session or its local test environment directly, so the packet remains the handoff boundary. Use only for the same
+**ChatGPT review fallback — temporary, only while Codex is out (drop it when Codex quota returns):** the owner may
+relay a bounded review packet to ChatGPT for a critical independent review. ChatGPT can read the public GitHub repo
+(owner-confirmed 2026-09-28), so the packet names the branch/PR, commit and file paths instead of pasting code; the
+local Lead cannot invoke that chat session or its test environment, so the packet remains the handoff boundary. Use only for the same
 critical cases that justify Astra-high, at most sparingly; public repo + synthetic data only, never private vault text.
 The Lead writes `.agent/review-packet-<topic>.md` and emits an `ACTION NEEDED:` line with the exact relay instruction.
 
