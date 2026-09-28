@@ -71,11 +71,20 @@ export function parseReadingItems(markdown: string, heading: string): ReadingIte
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
   const out: ReadingItem[] = [];
   let inSection = false;
-  let fence = false;
+  // CommonMark: a fence closes only with the same character, at least as long, and no info string.
+  let fence: { readonly ch: string; readonly len: number } | null = null;
   for (const line of lines) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      fence = !fence;
-      continue;
+    const f = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (f) {
+      const run = f[1]!;
+      if (!fence) {
+        fence = { ch: run[0]!, len: run.length };
+        continue;
+      }
+      if (run[0] === fence.ch && run.length >= fence.len && f[2]!.trim() === '') {
+        fence = null;
+        continue;
+      }
     }
     if (fence) continue;
     const h = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);

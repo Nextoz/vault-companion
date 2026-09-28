@@ -52,6 +52,10 @@ describe('parseReadingItems', () => {
     expect(parseReadingItems(BRIEF, 'Most relevant items').map((i) => i.url)).toEqual(['https://arxiv.org/abs/2601.00009']);
     expect(parseReadingItems(BRIEF, 'Missing')).toEqual([]);
   });
+  it('a fence closes only with the same character and at least the same length', () => {
+    const md = ['## Read today', '````', '~~~', '- [in code](https://arxiv.org/abs/2601.00097)', '```', '- [still code](https://arxiv.org/abs/2601.00096)', '````', '- [after](https://arxiv.org/abs/2601.00005)'].join('\n');
+    expect(parseReadingItems(md, 'Read today').map((i) => i.url)).toEqual(['https://arxiv.org/abs/2601.00005']);
+  });
   it('stops at five papers', () => {
     const md = ['## Read today', ...Array.from({ length: 7 }, (_, i) => `- https://arxiv.org/abs/2601.0000${i}`)].join('\n');
     expect(parseReadingItems(md, 'Read today')).toHaveLength(5);
