@@ -29,7 +29,10 @@ sets privacy rules.
 | D completion history | `docs/briefs/D-completion-history.md`, ADR-0021 | **done:** PR #32 merged (a0a616f; Claude Cloud worker + Lead symlink guard); CodeRabbit real review, 1 finding fixed; **deployed 73af3631**; owner phone test pending |
 | N notes in the app | `docs/briefs/N-notes-worker.md`, ADR-0022 | **done:** PR #33 merged (6d000f6; Claude Cloud worker); security-review fix (InboxNotePath parser differential); CI caught a real 5-tab overflow at 390 px, fixed; CodeRabbit clean; **deployed 3feaf6b6** |
 | T swipe triage for events, Part 2 | Ready Backlog T, ADR-0024 | **done:** PR #35 merged (5d9163e); CodeRabbit real review, 2 findings fixed (decisions serialized, never dropped; Never-row exceptions); **deployed 667e23c9**; owner phone test pending |
-| C2 + S2a + C3 (owner bugs, 2026-09-27) | Ready Backlog C2, S2a, C3 | **PR #36** (branch agent/c2) combines all three; individually tested; combined full check + WebKit pending (stopped by low RAM) |
+| C2 + S2a + C3 (owner bugs, 2026-09-27) | Ready Backlog C2, S2a, C3 | **done:** PR #36 merged (8a5ca2d); combined check 1240 tests + e2e 69/69; CodeRabbit 2 findings fixed (numeric calendar days, first-column label), stale C3 e2e assertion fixed; all mutation-checked; **deployed 0e34d79f**; owner phone test pending |
+| L training log | Ready Backlog L, ADR-0025 | building: Codex Astra high, branch agent/training (2026-09-28 night) |
+| Scout insights v1 (deterministic) | Ideas Backlog "Scout insights across all scouts"; owner chose "build a first version" 2026-09-27 | building: Codex Sol medium, branch agent/insights; web-only, no new server route |
+| README rewrite | owner request 2026-09-27 | building: Gemini CLI, branch agent/readme |
 
 **Done in milestone 3 (all merged, CI green):** #18 write budget + review fixes · #19 A · #20 single-flight token ·
 #21 ancestry without patches (ADR-0016) · #22 one read per app switch · #23 CSP smoke + zod jitless · #24
