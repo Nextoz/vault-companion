@@ -113,24 +113,31 @@ export const EditNotePayload = z.strictObject({
 });
 
 /** ADR-0024: one swipe decision, appended as one line to Events/Triage/Decisions/YYYY-MM.jsonl. */
-export const TriageDecision = z.enum(['go', 'maybe', 'skip', 'undo']);
+export const TriageDecision = z.enum(['go', 'maybe', 'skip', 'attended', 'undo']);
+export const TriageOutcome = z.enum(['worth', 'not-worth', 'missed']);
 export const TriageSkipReason = z.enum(['topic', 'too-far', 'bad-time', 'too-basic', 'busy']);
 export const TriageEventId = z.string().regex(/^[0-9a-f]{20}$/);
 export const TriageDecidePayload = z
   .strictObject({
     eventId: TriageEventId,
     decision: TriageDecision,
+    outcome: TriageOutcome.nullable().default(null),
     reason: TriageSkipReason.nullable(),
     undoes: z.uuid().nullable(),
     explore: z.boolean(),
     card: z.strictObject({
       title: z.string().max(500),
-      category: z.string().max(100),
-      sourceName: z.string().max(200),
-      aiScore: z.number().min(0).max(100),
+      category: z.string().max(100).nullable(),
+      sourceName: z.string().max(200).nullable(),
+      aiScore: z.number().min(0).max(100).nullable(),
       start: isoInstant,
     }),
   })
+  .refine((d) => (d.decision === 'attended') === (d.outcome !== null), 'outcome exactly on attended')
+  .refine((d) => d.decision !== 'attended' || (d.card.category === null && d.card.sourceName === null && d.card.aiScore === null), 'attended snapshot metadata is null')
+  .refine((d) => ['attended', 'undo'].includes(d.decision) || (d.card.category !== null && d.card.sourceName !== null && d.card.aiScore !== null), 'card decision snapshot metadata is present')
+  .refine((d) => d.decision !== 'undo' || [d.card.category, d.card.sourceName, d.card.aiScore].every((v) => v === null) ||
+    [d.card.category, d.card.sourceName, d.card.aiScore].every((v) => v !== null), 'undo snapshot metadata is consistently null or present')
   .refine((d) => d.reason === null || d.decision === 'skip', 'reason only on skip')
   .refine((d) => (d.decision === 'undo') === (d.undoes !== null), 'undoes exactly on undo');
 
@@ -535,6 +542,7 @@ export const TriageCard = z.object({
   rank: z.number().int(),
   explore: z.boolean(),
   resurfaced: z.boolean(),
+  summary: z.string().max(300).default(''),
   title: z.string().max(500),
   start: isoInstant,
   end: isoInstant.nullable(),
@@ -550,11 +558,14 @@ export const TriageCard = z.object({
   sourceUrl: z.url().max(2000),
   calendar: z.object({
     inCalendar: z.enum(['auto', 'own', 'go']).nullable(),
-    clash: z.object({ title: z.string().max(300), start: isoInstant, end: isoInstant }).nullable(),
+    clash: z.object({ title: z.string().max(300), start: isoInstant, end: isoInstant, kind: z.enum(['go', 'own']).default('own') }).nullable(),
     freeThatEvening: z.boolean(),
   }),
 });
 export type TriageCard = z.infer<typeof TriageCard>;
+
+export const TriageCheckin = z.object({ eventId: TriageEventId, title: z.string().max(300), start: isoInstant });
+export type TriageCheckin = z.infer<typeof TriageCheckin>;
 
 export const TriageResponse = z.strictObject({
   revision: commitSha,
@@ -562,11 +573,13 @@ export const TriageResponse = z.strictObject({
   feedState: z.enum(['ok', 'absent', 'unreadable']),
   generatedAt: isoInstant.nullable(),
   cards: z.array(TriageCard).max(500),
+  checkins: z.array(TriageCheckin).max(500).default([]),
   /** Cards dropped because they failed validation (shown as a small note, never fatal). */
   droppedCards: z.number().int().nonnegative(),
+  droppedCheckins: z.number().int().nonnegative().default(0),
   /** Decision lines of the current and previous month, file order. */
   decisions: z
-    .array(z.strictObject({ decisionId: z.uuid(), eventId: TriageEventId, decision: TriageDecision, undoes: z.uuid().nullable(), at: isoInstant }))
+    .array(z.strictObject({ decisionId: z.uuid(), eventId: TriageEventId, decision: TriageDecision, outcome: TriageOutcome.nullable().default(null), undoes: z.uuid().nullable(), at: isoInstant }))
     .max(5000),
   applied: z.record(z.string(), z.strictObject({ status: z.enum(['applied', 'failed', 'skipped']), at: isoInstant, message: z.string().max(300) })),
   appliedUpdatedAt: isoInstant.nullable(),

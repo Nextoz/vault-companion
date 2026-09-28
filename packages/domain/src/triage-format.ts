@@ -1,5 +1,5 @@
 // Pure JSON/JSONL kernel. Kept with domain because these formats use the shared triage contract.
-import { TriageCard, TriageDecidePayload, TriageResponse, type Command } from '@vault-companion/contracts';
+import { TriageCard, TriageCheckin, TriageDecidePayload, TriageResponse, type Command } from '@vault-companion/contracts';
 
 type Decide = Extract<Command, { type: 'TriageDecide' }>;
 export type DecisionLine = Decide['payload'] & { schemaVersion: 1; decisionId: string; at: string };
@@ -8,20 +8,27 @@ function json(text: string): unknown { try { return JSON.parse(text); } catch { 
 function object(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 
 export function parseTriageFeed(text: string | null) {
-  const empty = { generatedAt: null, cards: [] as TriageCard[], droppedCards: 0 };
+  const empty = { generatedAt: null, cards: [] as TriageCard[], checkins: [] as TriageCheckin[], droppedCards: 0, droppedCheckins: 0 };
   if (text === null) return { ...empty, feedState: 'absent' as const };
   const value = json(text);
   if (!object(value) || value.schemaVersion !== 1 || !instant.safeParse(value.generatedAt).success || !Array.isArray(value.cards)) {
     return { ...empty, feedState: 'unreadable' as const };
   }
   const cards: TriageCard[] = [];
+  const checkins: TriageCheckin[] = [];
   let droppedCards = 0;
+  let droppedCheckins = 0;
   for (const raw of value.cards) {
     const card = TriageCard.safeParse(raw);
     if (card.success && cards.length < 500) cards.push(card.data);
     else droppedCards++;
   }
-  return { feedState: 'ok' as const, generatedAt: value.generatedAt as string, cards, droppedCards };
+  for (const raw of Array.isArray(value.checkins) ? value.checkins : []) {
+    const checkin = TriageCheckin.safeParse(raw);
+    if (checkin.success && checkins.length < 500) checkins.push(checkin.data);
+    else droppedCheckins++;
+  }
+  return { feedState: 'ok' as const, generatedAt: value.generatedAt as string, cards, checkins, droppedCards, droppedCheckins };
 }
 
 export function parseTriageApplied(text: string | null): Pick<TriageResponse, 'applied' | 'appliedUpdatedAt'> {
@@ -44,7 +51,7 @@ export function parseDecisionLines(text: string | null): DecisionLine[] {
     const value = json(raw);
     if (!object(value) || value.schemaVersion !== 1) continue;
     const summary = TriageResponse.shape.decisions.element.strip().safeParse(value);
-    const payload = TriageDecidePayload.safeParse({ eventId: value.eventId, decision: value.decision, reason: value.reason,
+    const payload = TriageDecidePayload.safeParse({ eventId: value.eventId, decision: value.decision, outcome: value.outcome, reason: value.reason,
       undoes: value.undoes, explore: value.explore, card: value.card });
     if (summary.success && payload.success) lines.push({ schemaVersion: 1, ...payload.data, decisionId: summary.data.decisionId, at: summary.data.at });
   }
@@ -58,8 +65,11 @@ export function hasDecisionId(text: string | null, id: string): boolean {
 
 export function appendDecisionLine(text: string | null, line: DecisionLine): Uint8Array {
   const { title, category, sourceName, aiScore, start } = line.card;
-  const ordered = { schemaVersion: 1, decisionId: line.decisionId, eventId: line.eventId, decision: line.decision,
-    reason: line.reason, undoes: line.undoes, explore: line.explore, at: line.at, card: { title, category, sourceName, aiScore, start } };
+  const ordered = line.decision === 'attended'
+    ? { schemaVersion: 1, decisionId: line.decisionId, eventId: line.eventId, decision: line.decision, outcome: line.outcome,
+        reason: line.reason, undoes: line.undoes, explore: line.explore, at: line.at, card: { title, category, sourceName, aiScore, start } }
+    : { schemaVersion: 1, decisionId: line.decisionId, eventId: line.eventId, decision: line.decision,
+        reason: line.reason, undoes: line.undoes, explore: line.explore, at: line.at, card: { title, category, sourceName, aiScore, start } };
   const prefix = text ?? '';
   return new TextEncoder().encode(prefix + (prefix && !prefix.endsWith('\n') ? '\n' : '') + JSON.stringify(ordered) + '\n');
 }

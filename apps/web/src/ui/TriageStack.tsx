@@ -27,6 +27,8 @@ export function TriageStack({ cards, onDecide, onUndo, onDetails, disabled = fal
   const busy = useRef(false);
   const animationTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reasonTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const reasonInteracting = useRef(false);
+  const reasonExpired = useRef(false);
   const stage = useRef<HTMLDivElement>(null);
   const decideCallback = useRef(onDecide);
   useEffect(() => { decideCallback.current = onDecide; }, [onDecide]);
@@ -58,12 +60,17 @@ export function TriageStack({ cards, onDecide, onUndo, onDetails, disabled = fal
       decideCallback.current(choice.card.eventId, choice.decision, choice.reason);
     }
   }
+  function closeReasonWindow() {
+    if (reasonInteracting.current) reasonExpired.current = true;
+    else flushReason();
+  }
   function decide(decision: TriageDecision, vx = 0) {
     if (!card || busy.current || disabled) return;
     busy.current = true;
     active.current = null;
     setDragging(false);
     flushReason();
+    // A clash pre-selects "busy" (it does not lower the topic, vault-side); the owner can still pick another reason.
     const choice: Choice = { card, decision, reason: decision === 'skip' ? defaultSkipReason(card) : undefined, sent: false };
     pending.current = choice;
     const momentum = Math.max(1, Math.min(2, Math.abs(vx)));
@@ -80,7 +87,8 @@ export function TriageStack({ cards, onDecide, onUndo, onDetails, disabled = fal
       if (decision === 'skip') {
         pending.current = choice;
         setReasonOpen(true);
-        reasonTimer.current = setTimeout(flushReason, 2000);
+        reasonExpired.current = false;
+        reasonTimer.current = setTimeout(closeReasonWindow, 3000);
       } else {
         pending.current = null;
         choice.sent = true;
@@ -139,10 +147,11 @@ export function TriageStack({ cards, onDecide, onUndo, onDetails, disabled = fal
           tabIndex={next ? -1 : 0} onKeyDown={(event) => { if (!next && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onDetails?.(item.eventId); } }}
           onPointerDown={next ? undefined : down} onPointerMove={next ? undefined : move} onPointerUp={next ? undefined : end}
           onPointerCancel={(event) => end(event, true)} onLostPointerCapture={(event) => end(event, true)}>
+          <h2>{item.title}</h2>{item.summary && <p className="triage-summary">{item.summary}</p>}
           <div className="triage-datehead"><div className="triage-dateblock"><span>{date.dow}</span><strong>{date.dom}</strong><span>{date.mon}</span></div>
             <div><div className="triage-time">{timeInCopenhagen(item.start)}</div><p className="triage-where">{item.location}</p></div></div>
-          <h2>{item.title}</h2><p className="triage-why">{item.why}</p>
           <div className="triage-chips">{chipsFor(item).map((chip, i) => <span key={i} className={`triage-chip triage-${chip.tone}`}>{chip.label}</span>)}</div>
+          <p className="triage-why">{item.why}</p>
           {!next && <div aria-hidden="true"><span className="triage-stamp triage-go" style={{ opacity: fade(position.dx) }}>GO</span>
             <span className="triage-stamp triage-skip" style={{ opacity: fade(-position.dx) }}>SKIP</span>
             <span className="triage-stamp triage-maybe" style={{ opacity: Math.abs(position.dx) < 60 ? fade(-position.dy) : 0 }}>MAYBE</span></div>}
@@ -150,9 +159,11 @@ export function TriageStack({ cards, onDecide, onUndo, onDetails, disabled = fal
       })}
       {!card && <div className="triage-done"><strong>All caught up. Next scouts: tomorrow 06:50</strong></div>}
     </div>
-    {reasonOpen && last && <div className="triage-reasons" role="group" aria-label="Skip reason"><span>Why?</span>{reasons.map(([reason, label]) =>
+    {reasonOpen && last && <div className="triage-reasons" role="group" aria-label="Skip reason"
+      onPointerEnter={() => { reasonInteracting.current = true; }} onPointerLeave={() => { reasonInteracting.current = false; if (reasonExpired.current) flushReason(); }}
+      onPointerDown={() => { reasonInteracting.current = true; }} onPointerUp={() => { reasonInteracting.current = false; if (reasonExpired.current) reasonTimer.current = setTimeout(flushReason, 0); }}><span>Why?</span>{reasons.map(([reason, label]) =>
       <button key={reason} type="button" aria-pressed={last.reason === reason} onClick={() => {
-        if (pending.current) { pending.current.reason = reason; setLast({ ...pending.current }); }
+        if (pending.current) { pending.current.reason = reason; setLast({ ...pending.current }); flushReason(); }
       }}>{label}</button>)}</div>}
     {card && <div className="triage-actions">
       <button type="button" className="triage-skip" aria-label="Skip this event" disabled={leaving || disabled} onClick={() => decide('skip')}>Skip</button>

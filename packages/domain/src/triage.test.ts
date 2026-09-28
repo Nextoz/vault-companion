@@ -15,7 +15,7 @@ const card = { eventId: '0a1b2c3d4e5f60718293', rank: 1, explore: false, resurfa
 const NOW = '2026-09-30T22:30:00Z';
 const ID = '00000000-0000-4000-8000-000000000024';
 const payload = { eventId: card.eventId, decision: 'go' as const, reason: null, undoes: null, explore: false,
-  card: { title: card.title, category: card.category, sourceName: card.sourceName, aiScore: card.aiScore, start: card.start } };
+  outcome: null, card: { title: card.title, category: card.category, sourceName: card.sourceName, aiScore: card.aiScore, start: card.start } };
 const line: DecisionLine = { schemaVersion: 1, decisionId: ID, at: NOW, ...payload };
 const text = (bytes: Uint8Array) => new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes);
 const feed = (cards: unknown[] = [card]) => JSON.stringify({ schemaVersion: 1, generatedAt: NOW, cards });
@@ -32,6 +32,13 @@ describe('triage JSON kernel goldens', () => {
     expect(result.slice(0, before.length)).toEqual(before);
     expect(result).toEqual(new TextEncoder().encode((prefix ?? '') + (prefix && !prefix.endsWith('\n') ? '\n' : '') + golden));
   });
+  it('keeps existing skip bytes unchanged and puts attended outcome immediately after decision', () => {
+    const skip = text(appendDecisionLine(null, { ...line, decision: 'skip', reason: 'topic' }));
+    expect(skip).toBe(golden.replace('"decision":"go","reason":null', '"decision":"skip","reason":"topic"'));
+    const attended = text(appendDecisionLine(null, { ...line, decision: 'attended', outcome: 'worth', reason: null,
+      card: { title: card.title, category: null, sourceName: null, aiScore: null, start: card.start } }));
+    expect(attended).toBe('{"schemaVersion":1,"decisionId":"00000000-0000-4000-8000-000000000024","eventId":"0a1b2c3d4e5f60718293","decision":"attended","outcome":"worth","reason":null,"undoes":null,"explore":false,"at":"2026-09-30T22:30:00Z","card":{"title":"Evening talk on city gardens","category":null,"sourceName":null,"aiScore":null,"start":"2026-09-29T17:00:00+02:00"}}\n');
+  });
   it('skips malformed, wrong-schema and invalid decision lines', () => {
     expect(parseDecisionLines('bad\n{}\n' + golden + JSON.stringify({ ...line, decision: 'undo', undoes: null }) + '\n' + JSON.stringify({ ...line, schemaVersion: 2 }))).toEqual([line]);
   });
@@ -41,9 +48,28 @@ describe('triage JSON kernel goldens', () => {
       { ...card, registration: { state: 'closed', deadline: null } }, { ...card, aiScore: 101 }]));
     expect(parsed).toMatchObject({ feedState: 'ok', droppedCards: 2 });
     expect(parsed.cards).toHaveLength(3);
-    expect(parsed.cards[1]).toEqual(card);
+    expect(parsed.cards[1]).toEqual({ ...card, summary: '', calendar: { ...card.calendar, clash: { ...card.calendar.clash!, kind: 'own' } } });
     expect(parseTriageFeed(null).feedState).toBe('absent');
     for (const bad of ['{', '{}', feed().replace('"schemaVersion":1', '"schemaVersion":2')]) expect(parseTriageFeed(bad).feedState).toBe('unreadable');
+  });
+  it('defaults optional feed additions and drops malformed check-ins independently', () => {
+    const legacy = parseTriageFeed(feed());
+    expect(legacy).toMatchObject({ checkins: [], droppedCheckins: 0, cards: [{ summary: '', calendar: { clash: { kind: 'own' } } }] });
+    const valid = { eventId: card.eventId, title: 'Synthetic garden follow-up', start: card.start };
+    const parsed = parseTriageFeed(JSON.stringify({ schemaVersion: 1, generatedAt: NOW, cards: [{ ...card, summary: 'A concise synthetic summary.', calendar: { ...card.calendar, clash: { ...card.calendar.clash!, kind: 'go' } } }],
+      checkins: [valid, { ...valid, eventId: 'bad' }, { ...valid, title: 'x'.repeat(301) }] }));
+    expect(parsed).toMatchObject({ droppedCheckins: 2, checkins: [valid], cards: [{ summary: 'A concise synthetic summary.', calendar: { clash: { kind: 'go' } } }] });
+  });
+  it('accepts outcome only for attended and requires null attended snapshot metadata', () => {
+    const base = { ...command('a'.repeat(40)), payload };
+    expect(Command.safeParse({ ...base, payload: { ...payload, outcome: 'worth' } }).success).toBe(false);
+    expect(Command.safeParse({ ...base, payload: { ...payload, decision: 'attended', outcome: null,
+      card: { ...payload.card, category: null, sourceName: null, aiScore: null } } }).success).toBe(false);
+    expect(Command.safeParse({ ...base, payload: { ...payload, decision: 'attended', outcome: 'missed' } }).success).toBe(false);
+    expect(Command.safeParse({ ...base, payload: { ...payload, decision: 'attended', outcome: 'not-worth',
+      card: { ...payload.card, category: null, sourceName: null, aiScore: null } } }).success).toBe(true);
+    expect(Command.safeParse({ ...base, payload: { ...payload, decision: 'undo', outcome: null, undoes: ID,
+      card: { ...payload.card, category: null, sourceName: null, aiScore: null } } }).success).toBe(true);
   });
   it('tolerates bad applied entries without losing valid entries or updatedAt', () => {
     expect(parseTriageApplied(JSON.stringify({ schemaVersion: 1, updatedAt: NOW, decisions: {

@@ -102,7 +102,7 @@ export class MockApi {
   #revision = sha();
 
   triage: TriageResponse = { revision: 'a'.repeat(40), now: '2026-09-27T12:00:00Z', feedState: 'absent', generatedAt: null,
-    cards: [], droppedCards: 0, decisions: [], applied: {}, appliedUpdatedAt: null };
+    cards: [], checkins: [], droppedCards: 0, droppedCheckins: 0, decisions: [], applied: {}, appliedUpdatedAt: null };
 
   scouts: ScoutsResponse = ScoutsResponse.parse({
     revision: 'a'.repeat(40), now: '2026-09-27T08:50:02+02:00', scouts: [
@@ -366,8 +366,8 @@ export class MockApi {
         return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'undone', lineText: '| synthetic session |' } };
       }
       case 'TriageDecide': {
-        const { eventId, decision, undoes } = command.payload;
-        this.triage.decisions.push({ decisionId: command.operationId, eventId, decision, undoes, at: command.occurredAt });
+        const { eventId, decision, outcome, undoes } = command.payload;
+        this.triage.decisions.push({ decisionId: command.operationId, eventId, decision, outcome, undoes, at: command.occurredAt });
         const path = `Events/Triage/Decisions/${copenhagenDay(command.occurredAt).slice(0, 7)}.jsonl`;
         return { ...base, path, effect: { kind: 'triage-decided', path, decisionId: command.operationId } };
       }
