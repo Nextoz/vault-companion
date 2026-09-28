@@ -29,7 +29,7 @@ test('Today attention opens Scouts, panels and history lead to sanitised finding
   await expect(runs.last()).toHaveAttribute('aria-label', /27 Sep 2026.*success/);
   await expect(page.getByTestId('scout-findings')).toContainText('Four synthetic opportunities.');
   await expect(page.getByTestId('scout-findings').locator('script')).toHaveCount(0);
-  // One Insights preview (failed and stale scouts are never previewed) plus the opened detail view.
+  // One Insights preview plus the opened detail view (preview exclusions are covered in insights.spec.ts).
   expect(api.scoutOutputRequests).toEqual(['learning', 'learning']);
   api.scouts.scouts = api.scouts.scouts.filter((entry) => entry.state === 'ok' && entry.status.runStatus === 'success');
   const refreshed = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/scouts');

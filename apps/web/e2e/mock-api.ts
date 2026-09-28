@@ -122,6 +122,8 @@ export class MockApi {
     ],
   });
   readonly scoutOutputRequests: string[] = [];
+  /** A scout id mapped to a promise holds that output read open until it settles (slow-scout tests). */
+  readonly scoutOutputGates = new Map<string, Promise<void>>();
   scoutOutputs = new Map<string, string>([['learning', [
     '# Learning findings',
     '',
@@ -156,10 +158,11 @@ export class MockApi {
     await on('**/api/scouts', (route) => this.session === 'signed-out'
       ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, ScoutsResponse.parse(this.scouts)));
-    await on('**/api/scouts/output', (route) => {
+    await on('**/api/scouts/output', async (route) => {
       if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
       const id = route.request().headers()['x-vc-scout'] ?? '';
       this.scoutOutputRequests.push(id);
+      await this.scoutOutputGates.get(id);
       const markdown = this.scoutOutputs.get(id);
       return this.#json(route, 200, LinkedNoteResponse.parse(markdown !== undefined
         ? { status: 'ok', revision: this.#revision, blobSha: 'b'.repeat(40), path: `Discoveries/${id}.md`, markdown }

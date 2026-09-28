@@ -16,9 +16,20 @@ test('scout insights show totals, picks, states and bounded parallel previews at
       history: [{ at: `2026-09-${20 + index}T07:00:00+02:00`, status: 'success', findings: 1 }],
     },
   });
+  // Failed and stale scouts carry an output path, so the "never previewed" guard is really exercised.
+  const failed = api.scouts.scouts.find((entry) => entry.state === 'ok' && entry.status.scoutId === 'city-events');
+  if (failed?.state !== 'ok') throw new Error('missing fixture');
+  failed.status.latestOutput = 'Discoveries/City events.md';
+  api.scouts.scouts.push({ state: 'ok', file: 'stale.json', status: {
+    ...learning.status, scoutId: 'stale', displayName: 'Stale scout', findings: 0, latestOutput: 'Discoveries/Stale.md',
+    lastAttemptAt: '2026-09-20T07:00:00+02:00', lastSuccessAt: '2026-09-20T07:00:00+02:00',
+    history: [{ at: '2026-09-20T07:00:00+02:00', status: 'success', findings: 0 }],
+  } });
+  // One read that never settles must not hold the other cards at "Loading".
+  api.scoutOutputGates.set('extra-1', new Promise(() => {}));
   await api.install(page);
   await page.goto('/');
-  await page.getByRole('button', { name: '1 scouts need attention' }).click();
+  await page.getByRole('button', { name: '2 scouts need attention' }).click();
 
   const insights = page.locator('.insights');
   await expect(insights.getByRole('heading', { name: 'What your scouts found' })).toBeVisible();
@@ -36,9 +47,17 @@ test('scout insights show totals, picks, states and bounded parallel previews at
   const failedCard = insights.getByRole('article', { name: 'City events' });
   await expect(failedCard).toContainText('Failed');
   await expect(failedCard).not.toContainText('Loading findings');
-  await expect(insights.getByRole('article', { name: 'Extra scout 1' })).toContainText('Findings unavailable');
+  await expect(insights.getByRole('article', { name: 'Extra scout 1' })).toContainText('Loading findings');
+  await expect(insights.getByRole('article', { name: 'Extra scout 2' })).toContainText('Findings unavailable');
+  await expect(insights.getByRole('article', { name: 'Stale scout' })).toContainText('Stale');
   await expect(insights.getByRole('article', { name: 'Extra scout 6' })).toContainText('Open scout to see findings');
-  expect(api.scoutOutputRequests).toHaveLength(6);
+  // At most six scouts are previewed; a fresh scouts response retries only unavailable reads, never a success
+  // (learning) or one still in flight (extra-1).
+  expect(new Set(api.scoutOutputRequests).size).toBe(6);
+  expect(api.scoutOutputRequests.filter((id) => id === 'learning')).toHaveLength(1);
+  expect(api.scoutOutputRequests.filter((id) => id === 'extra-1')).toHaveLength(1);
+  expect(api.scoutOutputRequests).not.toContain('city-events');
+  expect(api.scoutOutputRequests).not.toContain('stale');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
   await learningCard.getByRole('button', { name: 'See all' }).click();

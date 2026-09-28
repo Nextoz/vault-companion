@@ -30,6 +30,10 @@ describe('topPicks', () => {
     ]);
   });
 
+  it('stops at the end of the first top-level list, never mixing in a later unrelated list', () => {
+    expect(topPicks('- First\n\nA paragraph.\n\n1. Unrelated later list').map((pick) => pick.text)).toEqual(['First']);
+  });
+
   it('returns no picks when neither a regular table nor a top-level list is usable', () => {
     expect(topPicks('# Empty\n\nA paragraph only.')).toEqual([]);
     expect(topPicks('- One', 0)).toEqual([]);

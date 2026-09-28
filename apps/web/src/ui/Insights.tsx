@@ -1,28 +1,17 @@
 import type { ScoutsResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
 import { getScoutOutput } from '../api.ts';
-import { findingsTrend, overview, topPicks, type InsightPick } from '../insights.ts';
+import { findingsTrend, overview } from '../insights.ts';
+import { createOutputLoader, type Output } from '../insight-outputs.ts';
 import { displayState } from '../scouts.ts';
 import { ScoutTime } from './ScoutTime.tsx';
 import './Insights.css';
 
 type ScoutEntry = Extract<ScoutsResponse['scouts'][number], { state: 'ok' }>;
-type Output = { state: 'loading' } | { state: 'ready'; picks: InsightPick[] } | { state: 'unavailable' };
-const outputBatches = new Map<string, Promise<Record<string, Output>>>();
-
-function loadOutputs(key: string, entries: readonly ScoutEntry[]): Promise<Record<string, Output>> {
-  const existing = outputBatches.get(key);
-  if (existing) return existing;
-  const batch = Promise.all(entries.map(async ({ status }) => {
-    const result = await getScoutOutput(status.scoutId);
-    const output: Output = result.kind === 'ok' && result.data.status === 'ok'
-      ? { state: 'ready', picks: topPicks(result.data.markdown) }
-      : { state: 'unavailable' };
-    return [status.scoutId, output] as const;
-  })).then((results) => Object.fromEntries(results));
-  outputBatches.set(key, batch);
-  return batch;
-}
+const loadOutput = createOutputLoader(async (scoutId) => {
+  const result = await getScoutOutput(scoutId);
+  return result.kind === 'ok' && result.data.status === 'ok' ? result.data.markdown : null;
+});
 
 export function Insights({ data, hidden, onSelect }: { data: ScoutsResponse; hidden: boolean; onSelect: (file: string) => void }) {
   const entries = data.scouts.filter((entry): entry is ScoutEntry => entry.state === 'ok');
@@ -34,7 +23,10 @@ export function Insights({ data, hidden, onSelect }: { data: ScoutsResponse; hid
     const candidates = data.scouts.filter((entry): entry is ScoutEntry => entry.state === 'ok')
       .filter(({ status }) => status.latestOutput && !['Failed', 'Stale'].includes(displayState(status, data.now))).slice(0, 6);
     setOutputs(Object.fromEntries(candidates.map(({ status }) => [status.scoutId, { state: 'loading' }])));
-    void loadOutputs(data.revision, candidates).then((loaded) => { if (live) setOutputs(loaded); });
+    // Each card updates when its own read settles: one slow scout never holds the others at "Loading".
+    for (const { status } of candidates) {
+      void loadOutput(data.revision, status.scoutId).then((output) => { if (live) setOutputs((prev) => ({ ...prev, [status.scoutId]: output })); });
+    }
     return () => { live = false; };
   }, [data]);
 

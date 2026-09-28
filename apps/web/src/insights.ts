@@ -72,7 +72,7 @@ export function topPicks(markdown: string, n = 3): InsightPick[] {
   let current: InsightPick | null = null;
   for (const token of tokens) {
     if (token.type === 'bullet_list_open' || token.type === 'ordered_list_open') listDepth++;
-    else if (token.type === 'bullet_list_close' || token.type === 'ordered_list_close') listDepth--;
+    else if (token.type === 'bullet_list_close' || token.type === 'ordered_list_close') { if (--listDepth === 0) break; }
     else if (token.type === 'list_item_open' && listDepth === 1) { itemDepth = token.level; current = { text: '', details: [] }; }
     else if (token.type === 'inline' && current && listDepth === 1 && token.level > itemDepth) {
       const text = plain(token);
