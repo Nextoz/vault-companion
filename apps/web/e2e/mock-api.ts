@@ -122,6 +122,22 @@ export class MockApi {
     ],
   });
   readonly scoutOutputRequests: string[] = [];
+  /** A scout id mapped to a promise holds that output read open until it settles (slow-scout tests). */
+  readonly scoutOutputGates = new Map<string, Promise<void>>();
+  scoutOutputs = new Map<string, string>([['learning', [
+    '# Learning findings',
+    '',
+    'Four synthetic opportunities.',
+    '',
+    '| Opportunity | Provider | When |',
+    '| --- | --- | --- |',
+    '| [Platform workshop](https://example.com/workshop) | Example Guild | Tuesday |',
+    '| Cloud meetup | Sample Community | Wednesday |',
+    '| Mentoring circle | Demo Network | Friday |',
+    '| Fourth listing | Example Org | Saturday |',
+    '',
+    '<script>alert(1)</script>',
+  ].join('\n')]]);
   /** Completion history (ADR-0021): done-today tasks plus these earlier items, served newest first. */
   olderHistory: HistoryItem[] = [
     { source: 'active-work', description: 'Garden plan: beds ready [[Garden Plan]]', doneDate: '2026-09-23', links: ['Garden Plan'],
@@ -142,12 +158,14 @@ export class MockApi {
     await on('**/api/scouts', (route) => this.session === 'signed-out'
       ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, ScoutsResponse.parse(this.scouts)));
-    await on('**/api/scouts/output', (route) => {
+    await on('**/api/scouts/output', async (route) => {
       if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
       const id = route.request().headers()['x-vc-scout'] ?? '';
       this.scoutOutputRequests.push(id);
-      return this.#json(route, 200, LinkedNoteResponse.parse(id === 'learning'
-        ? { status: 'ok', revision: this.#revision, blobSha: 'b'.repeat(40), path: 'Discoveries/Learning.md', markdown: '# Learning findings\n\nFour synthetic opportunities.\n\n<script>alert(1)</script>' }
+      await this.scoutOutputGates.get(id);
+      const markdown = this.scoutOutputs.get(id);
+      return this.#json(route, 200, LinkedNoteResponse.parse(markdown !== undefined
+        ? { status: 'ok', revision: this.#revision, blobSha: 'b'.repeat(40), path: `Discoveries/${id}.md`, markdown }
         : { status: 'refused', revision: this.#revision, code: 'not-found', message: 'No findings note yet.' }));
     });
     await on('**/api/session', (route) => this.#session(route));

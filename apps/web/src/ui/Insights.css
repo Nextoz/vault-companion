@@ -1,0 +1,26 @@
+.insights { min-width: 0; margin-block: 1rem 1.5rem; }
+.insights h2 { margin-bottom: .65rem; font-size: 1.25rem; }
+.insights-overview { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-width: 0; }
+.insights-overview p { display: flex; flex-wrap: wrap; gap: .25rem; margin: 0; min-width: 0; }
+.insights-overview p strong { margin-right: .35rem; }
+.insights-trend { display: flex; align-items: end; gap: 3px; width: 84px; height: 40px; flex: 0 0 84px; padding-block: 3px; }
+.insights-trend span { width: 9px; border-radius: 3px 3px 1px 1px; }
+.insights-bar { background: currentColor; opacity: .68; }
+.insights-bar-gap { height: 2px; background: currentColor; opacity: .2; }
+.insights-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: .75rem; margin-top: .85rem; }
+.insight-card { min-width: 0; padding: .85rem; border: 1px solid color-mix(in srgb, currentColor 18%, transparent); border-radius: .75rem; overflow-wrap: anywhere; }
+.insight-card header { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.insight-card h3, .insight-card p { margin-block: 0 .5rem; }
+.insight-card header strong { white-space: nowrap; font-size: .9rem; }
+.insight-card > small { display: block; margin-bottom: .4rem; opacity: .75; }
+.insight-card ol { margin: 0; padding-left: 1.35rem; }
+.insight-card li { padding-block: .15rem; }
+.insight-card li small { display: block; opacity: .75; }
+.insight-card a { display: inline-flex; align-items: center; min-height: 44px; }
+.insight-card button { min-height: 44px; margin-top: .55rem; padding-inline: .8rem; }
+.insight-state { font-weight: 650; }
+@media (max-width: 430px) {
+  .insights-overview { align-items: flex-end; }
+  .insights-trend { width: 70px; flex-basis: 70px; }
+  .insights-trend span { width: 7px; }
+}

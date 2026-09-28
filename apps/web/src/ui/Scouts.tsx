@@ -1,11 +1,9 @@
 import type { ScoutStatus, ScoutsResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
 import { getScoutOutput, getScouts, type Fetched } from '../api.ts';
-import { attentionCount, displayState, exactTime, relativeTime } from '../scouts.ts';
-
-export function ScoutTime({ at, now }: { at: string | null; now: string | number }) {
-  return <time dateTime={at ?? undefined} title={exactTime(at)}>{relativeTime(at, now)}</time>;
-}
+import { attentionCount, displayState, exactTime } from '../scouts.ts';
+import { Insights } from './Insights.tsx';
+import { ScoutTime } from './ScoutTime.tsx';
 
 const stateClass = (state: string) => `scout-state-${state.toLowerCase().replaceAll(' ', '-')}`;
 function Sparkline({ history }: { history: ScoutStatus['history'] }) {
@@ -65,6 +63,7 @@ export function Scouts({ page, onOpen, refreshKey }: { page: boolean; onOpen: ()
     <h1>Scouts</h1>
     {!data && <p role="status">{!result ? 'Loading scouts…' : result.kind === 'error' ? result.message : result.kind === 'signed-out' ? 'Sign in to view scouts.' : 'Scouts unavailable offline.'}</p>}
     {data?.scouts.length === 0 && <p>No status yet</p>}
+    {data && <Insights data={data} hidden={!!detail} onSelect={setSelected} />}
     {detail ? <div className="scout-detail">
       <button onClick={() => setSelected(null)}>Back to scouts</button>
       <h2>{detail.displayName}</h2>
@@ -92,4 +91,3 @@ export function Scouts({ page, onOpen, refreshKey }: { page: boolean; onOpen: ()
     })}</div>}
   </section>;
 }
-
