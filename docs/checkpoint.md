@@ -13,9 +13,12 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
   inside History (#42). Deploy runbook unchanged (clean build, check `sw.js`, dry run, deploy, 302).
 - The real triage feed does not yet carry `summary`/`checkins`/`clash.kind`: verify shapes when ## Open work (exact next actions)
 
-1. **R1 research explainer (ADR-0029, brief `docs/briefs/R1-research-explainer.md`)** — Claude Cloud session
-   `session_01DkecfJ8rFD2rk6NrQFXBoM`, branch `agent/explainer` (owner approved push). When its handoff ends
-   `R1 DONE`: clone, review (write targets `Research/Explained/*.md` create-only + `Automation/Scout Status/research-explainer.json`,
+1. **R1 research explainer (ADR-0029, brief `docs/briefs/R1-research-explainer.md`)** — **pushed**: branch
+   `agent/explainer` at `5d3e7af` (6 commits, 23 files, +1492). Cloud session done; **no more Claude Cloud sessions**
+   (owner, 2026-09-28: same usage pool, no credits, copy-paste/permission overhead; local workers only). Worker's open
+   points: Gemini request/response shape written from memory (url_context + `responseJsonSchema` + `urlContextMetadata`,
+   verify against current docs and one real call), 429 handling (QuotaFailure ⇒ next model, else one retry), CPU
+   unmeasured, `GEMINI_API_KEY` optional (missing ⇒ logs `gemini-key-missing`, writes nothing). Next: review (write targets `Research/Explained/*.md` create-only + `Automation/Scout Status/research-explainer.json`,
    Gemini client, cron), `pnpm check` + e2e, PR, one CodeRabbit review, merge; then set the Worker secret
    (`GEMINI_API_KEY` from the owner's Windows user env, piped, never printed — `wrangler secret put` deploys a version),
    clean build, deploy, 302 check, and watch the first cron run (04:30 UTC) on the Scouts page.
