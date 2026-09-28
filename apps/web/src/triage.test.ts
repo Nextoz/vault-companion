@@ -101,6 +101,16 @@ describe('feed derivation and API', () => {
       label: chosen.title, taskKey: 'triage', state: 'pending', everSent: false, error: null, receipt: null, acknowledged: false } satisfies QueueItem;
     expect(deriveTriage(read, [item], 'account').cards.find((c) => c.eventId === read.cards[1]!.eventId)?.calendar.clash?.kind).toBe('go');
   });
+  it('only tags overlap from the latest effective decision per event, not every past Go', () => {
+    const read = triageRead();
+    read.cards[0]!.start = '2026-10-03T16:00:00+02:00'; read.cards[0]!.end = '2026-10-03T18:00:00+02:00'; read.cards[0]!.title = 'Synthetic chosen event';
+    read.cards[1]!.start = '2026-10-03T17:00:00+02:00'; read.cards[1]!.end = '2026-10-03T19:00:00+02:00';
+    read.decisions = [
+      { decisionId: id(1), eventId: read.cards[0]!.eventId, decision: 'go', outcome: null, undoes: null, at: '2026-09-30T20:00:00Z' },
+      { decisionId: id(2), eventId: read.cards[0]!.eventId, decision: 'skip', outcome: null, undoes: null, at: '2026-09-30T21:00:00Z' },
+    ];
+    expect(deriveTriage(read).cards.find((c) => c.eventId === read.cards[1]!.eventId)?.calendar.clash).toBeNull();
+  });
   it('getTriage strips future top-level fields and sends no-store requests', async () => {
     const read = triageRead();
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...read, future: true })));

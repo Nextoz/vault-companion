@@ -43,6 +43,11 @@ export function Triage({ queue, items, accountKey, refreshKey, blocked }: {
         setError(null);
       } catch {
         history.current = history.current.filter((c) => c !== command);
+        if (command.payload.decision === 'attended') {
+          const { eventId } = command.payload;
+          setAnsweredCheckins((ids) => ids.filter((id) => id !== eventId));
+          setLastCheckin((id) => (id === eventId ? null : id));
+        }
         setError('The decision could not be saved. Please try again.');
         setStackVersion((v) => v + 1);
       } finally { setSaving(false); }

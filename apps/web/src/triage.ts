@@ -74,7 +74,7 @@ export function deriveTriage(read: TriageResponse, items: readonly QueueItem[] =
   const latest = new Map(effective.map((d) => [d.eventId, d]));
   const today = copenhagenDay(read.now);
   const remaining = Math.max(0, 10 - effective.filter((d) => d.decision !== 'attended' && copenhagenDay(d.at) === today).length);
-  const goCards = effective.filter((d) => d.decision === 'go').map((d) => read.cards.find((c) => c.eventId === d.eventId)).filter((c): c is TriageCard => !!c);
+  const goCards = [...latest.values()].filter((d) => d.decision === 'go').map((d) => read.cards.find((c) => c.eventId === d.eventId)).filter((c): c is TriageCard => !!c);
   const overlaps = (a: TriageCard, b: TriageCard) => Date.parse(a.start) < Date.parse(b.end ?? b.start) && Date.parse(b.start) < Date.parse(a.end ?? a.start);
   const cards = read.cards.filter((c) => !latest.has(c.eventId) && Date.parse(c.start) > Date.parse(read.now))
     .sort((a, b) => a.rank - b.rank).slice(0, remaining).map((card) => {

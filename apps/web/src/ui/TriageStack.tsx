@@ -27,7 +27,8 @@ export function TriageStack({ cards, onDecide, onUndo, onDetails, disabled = fal
   const busy = useRef(false);
   const animationTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reasonTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const reasonInteracting = useRef(false);
+  const reasonHovered = useRef(false);
+  const reasonPressed = useRef(false);
   const reasonExpired = useRef(false);
   const stage = useRef<HTMLDivElement>(null);
   const decideCallback = useRef(onDecide);
@@ -61,7 +62,7 @@ export function TriageStack({ cards, onDecide, onUndo, onDetails, disabled = fal
     }
   }
   function closeReasonWindow() {
-    if (reasonInteracting.current) reasonExpired.current = true;
+    if (reasonHovered.current || reasonPressed.current) reasonExpired.current = true;
     else flushReason();
   }
   function decide(decision: TriageDecision, vx = 0) {
@@ -160,8 +161,8 @@ export function TriageStack({ cards, onDecide, onUndo, onDetails, disabled = fal
       {!card && <div className="triage-done"><strong>All caught up. Next scouts: tomorrow 06:50</strong></div>}
     </div>
     {reasonOpen && last && <div className="triage-reasons" role="group" aria-label="Skip reason"
-      onPointerEnter={() => { reasonInteracting.current = true; }} onPointerLeave={() => { reasonInteracting.current = false; if (reasonExpired.current) flushReason(); }}
-      onPointerDown={() => { reasonInteracting.current = true; }} onPointerUp={() => { reasonInteracting.current = false; if (reasonExpired.current) reasonTimer.current = setTimeout(flushReason, 0); }}><span>Why?</span>{reasons.map(([reason, label]) =>
+      onPointerEnter={() => { reasonHovered.current = true; }} onPointerLeave={() => { reasonHovered.current = false; if (reasonExpired.current && !reasonPressed.current) flushReason(); }}
+      onPointerDown={() => { reasonPressed.current = true; }} onPointerUp={() => { reasonPressed.current = false; if (reasonExpired.current && !reasonHovered.current) reasonTimer.current = setTimeout(flushReason, 0); }}><span>Why?</span>{reasons.map(([reason, label]) =>
       <button key={reason} type="button" aria-pressed={last.reason === reason} onClick={() => {
         if (pending.current) { pending.current.reason = reason; setLast({ ...pending.current }); flushReason(); }
       }}>{label}</button>)}</div>}
