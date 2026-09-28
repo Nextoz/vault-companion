@@ -1,4 +1,4 @@
-# Checkpoint — 2026-09-28 ~16:15 (Lead session `6f65db54`, Herdr agent `lead`)
+# Checkpoint — 2026-09-28 ~17:00 (handover to a fresh Lead session; previous `6f65db54`)
 
 Read this first, then `docs/plan.md`, then `docs/orchestration.md` (routing, Herdr, Cloud, token + RAM rules).
 Priority and product decisions: the owner's vault note *Projects/Vault Companion/Vault Companion - Ready Backlog*
@@ -11,32 +11,38 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
 - `main` = `ea016bf` (PR #42 Progress Wall), Worker **version `d4403dcd`** at `https://app.karpov.dk`; anonymous → 302.
 - Live today: training units (#40), T2 triage check-ins/summary/overlap tags/reasons that stay (#41), Progress Wall
   inside History (#42). Deploy runbook unchanged (clean build, check `sw.js`, dry run, deploy, 302).
-- The real triage feed does not yet carry `summary`/`checkins`/`clash.kind`: verify shapes when it does.
+- The real triage feed does not yet carry `summary`/`checkins`/`clash.kind`: verify shapes when ## Open work (exact next actions)
 
-## Open work (exact next actions)
+1. **R1 research explainer (ADR-0029, brief `docs/briefs/R1-research-explainer.md`)** — Claude Cloud session
+   `session_01DkecfJ8rFD2rk6NrQFXBoM`, branch `agent/explainer` (owner approved push). When its handoff ends
+   `R1 DONE`: clone, review (write targets `Research/Explained/*.md` create-only + `Automation/Scout Status/research-explainer.json`,
+   Gemini client, cron), `pnpm check` + e2e, PR, one CodeRabbit review, merge; then set the Worker secret
+   (`GEMINI_API_KEY` from the owner's Windows user env, piped, never printed — `wrangler secret put` deploys a version),
+   clean build, deploy, 302 check, and watch the first cron run (04:30 UTC) on the Scouts page.
+2. **PR #43 lease reclaim (ADR-0028, clone `vault-companion-clones/lease`)** — CodeRabbit requested ~16:15 (re-request if
+   rate-limited); before merge run full check + full e2e on the merged tree; then merge + deploy.
+3. **Next product work (owner, 2026-09-28): the morning check.** The owner opens the app in the morning to see all
+   scout results, the morning digest, research explanations, and tasks/actions. Part 2 = "This morning" section on
+   Today (morning digest short answer, new `Research/Explained` notes, scout attention, "N new events", today's tasks).
+   Then **Research Radar** (owner chose option A + deterministic fallback; overview → highlights → depth + promote;
+   research hub shapes: Reading Briefs `## Read today`/`## Read this week`, Daily Research Scout `## Most relevant items`,
+   `Important Research Updates/`, `Research Intake/`, `AI Research Radar - Living Updates.md`). Brief and build these
+   after the Claude weekly reset (Wed 1 Oct 21:00) or with Codex/DeepSeek.
+4. Owner phone tests pending: training units, Progress, triage (reasons, overlap tag), Scout insights.
+5. Owner decisions open: AGENTS.md rule 4 wording (head-CAS instead of "CAS on blob SHA"), G3.
+6. Engineering (no decision): R3 CPU via `wrangler tail`, Progress events > 2 months (triage decision window),
+   `docs/learning-guide.md` (overdue after L, T2, P, R1), stale items in `docs/plan.md` (R7 and edit double-row were fixed
+   in #34), close Dependabot #29.
 
-1. **PR #43 (agent/lease, clone `vault-companion-clones/lease`) = ADR-0028 lease reclaim.** CodeRabbit requested ~16:15
-   (re-request if rate-limited). Before merge: full check + full e2e on the merged tree (last run had 2 timeouts while
-   the PC slept; both 6/6 on rerun).
-2. **Research Radar — owner chose option A + fallback (2026-09-28):** the research scout writes a structured
-   `radar.json` (topics + counts + 3–5 highlights with a one-line why) via one AI step; the app renders overview →
-   highlights → depth + promote; a deterministic fallback from the daily notes until then. Owner wants it to run
-   **independent of the PC** and a model fallback (Gemini → Codex/Claude): design options in the reply of 16:15
-   (Cloudflare Cron Trigger + Workers AI). Pending: owner OK to read `Research/Daily Research Scout/**` (ADR-0018
-   amendment) for the note shape.
-3. Owner phone tests: Training (units), Progress, triage (reasons, overlap tag), Scout insights.
-4. Owner decisions open: AGENTS.md rule 4 wording (head-CAS), G3.
-5. Engineering (no decision): R3 CPU via `wrangler tail` during owner use, Progress events > 2 months (server window),
-   `docs/learning-guide.md`, stale items in `docs/plan.md`, close Dependabot #29.
+## Capacity (2026-09-28)
 
-ing
+- **Claude pool** (Lead + local workers + Cloud + claude.ai share it): 5-hour window 84 % used at 17:07 (resets 18:10),
+  **weekly 72 %** (resets Wed 1 Oct 21:00). Until then: integration and bug fixes only; one Claude worker at a time.
+- **Codex:** weekly limit, back **Fri 3 Oct 21:29**. **Antigravity** (`agy`): back ~3 Oct, small jobs only.
+- **DeepSeek API from Wed 1 Oct** (owner): key as Windows user env `DEEPSEEK_API_KEY` with a spending cap; choose a
+  harness (opencode or Claude Code against DeepSeek's API), build a wrapper like `tools/gemini-worker.sh`, test on one
+  small task; route ordinary builds/fixes to it. Lead stays **Claude Opus 5.5** (owner).
+- **Gemini** via `tools/gemini-worker.sh` (Flash-Lite first) works for small jobs.
+- Owner wants a line starting **"ACTION NEEDED:"** whenever they must act; none ⇒ nothing to do.
 
-- No workers running. Codex: **weekly limit, out until 2026-10-03 21:29**. Use Claude Code Cloud (features), local Claude Code
-  workers (fixes/reviews), Gemini via tools/gemini-worker.sh (small jobs); ChatGPT relay only for critical reviews.
-- **Codex quota out until 2026-09-28 08:16** (hit during the L fix run; the Lead finished and verified the fixes).
-  Gemini CLI returned 503 twice tonight (README rerouted to Codex Terra). CodeRabbit: 1 full review/hour.
-- Codex sandbox cannot write `.git` (index.lock denied): workers leave changes uncommitted, the Lead commits.
-  Codex workers also cannot run `tsc -b` project references (TS6305): the Lead's full check catches type errors.
-- Owner's tools fixed 2026-09-27: Python 3.13 on user PATH, jq installed (new shells only).
-- RAM: one Playwright job at a time; `PW_PREVIEW_PORT=4191` for the Lead's runs.
-- Local-only files never committed: `.claude/`.
+
