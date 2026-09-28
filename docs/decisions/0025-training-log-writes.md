@@ -5,7 +5,7 @@ file). First app write under `Health/`. Amends vault-contract §1 (one new read/
 
 ## Table grammar
 
-The note has a `## Sessions` heading (compared after trimming). The **sessions table** is the first Markdown table
+The note has a `## Sessions` heading (compared after trimming). The **sessions table** is the only Markdown table
 after it, before the next `##` heading, with exactly this header (cells trimmed, case-sensitive):
 `| Date | Time | Type | Distance | Duration | Weight | Split | Note |` followed by a separator row.
 
@@ -23,7 +23,7 @@ No `## Sessions` heading, no table, a different header, or two candidate tables 
 `| 2026-09-28 | 18:42 | Run | 5.2 | 28 | | | Easy loop |` — Date and Time in Europe/Copenhagen from `when`; `Type`
 `Run` or `Gym`; numbers without units (Distance km with one decimal, Duration whole minutes, Weight kg with one
 decimal); `Split` one of `Bicep`, `Tricep`, `Legs` (Gym only); empty cells are one space. The note is one line: newlines
-become spaces, `|` is escaped as `\|`, leading/trailing space trimmed, ≤ 280 characters. The formatter is one function,
+become spaces, `|` is escaped as `\|`, leading/trailing space trimmed; the input note is ≤ 280 characters (the escaped cell may be longer). The formatter is one function,
 so the unit style can change in one place if the owner's table uses units.
 
 ## Commands

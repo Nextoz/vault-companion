@@ -1,7 +1,7 @@
 import type { TrainingResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
 import { getTraining, type Fetched } from '../api.ts';
-import { trainingSummary } from '../training.ts';
+import { trainingRowKeys, trainingSummary } from '../training.ts';
 
 export function Training({ refreshKey }: { refreshKey: number | null }) {
   const [res, setRes] = useState<Fetched<TrainingResponse> | null>(null);
@@ -11,6 +11,7 @@ export function Training({ refreshKey }: { refreshKey: number | null }) {
     return () => { live = false; };
   }, [refreshKey]);
   const read = res?.kind === 'ok' ? res.data : null;
+  const keys = read?.status === 'ok' ? trainingRowKeys(read.rows) : [];
   return <section className="group training" aria-label="Training sessions">
     <h2>Training</h2>
     {!res && <p className="muted">Loading training…</p>}
@@ -19,7 +20,7 @@ export function Training({ refreshKey }: { refreshKey: number | null }) {
     {read?.status === 'refused' && <p className="error">{read.message}</p>}
     {read?.status === 'ok' && <>
       {read.rows.length === 0 && <p className="muted">No sessions yet.</p>}
-      <ul className="training-list">{read.rows.map((row, i) => <li key={i} data-testid="training-row">
+      <ul className="training-list">{read.rows.map((row, i) => <li key={keys[i]} data-testid="training-row">
         <p className="muted small">{row.date}{row.time && ` · ${row.time}`}</p>
         <p><span aria-hidden="true">{row.type === 'Run' ? '🏃' : row.type === 'Gym' ? '🏋️' : '●'}</span> <strong>{row.type}</strong> {trainingSummary(row)}</p>
         {row.note && <details><summary aria-label="Show session note">📝</summary><p>{row.note}</p></details>}

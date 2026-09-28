@@ -18,6 +18,20 @@ export function trainingSummary(row: TrainingRow): string {
   return [row.split, unit(row.duration, 'min'), unit(row.weight, 'kg'), row.distance].filter(Boolean).join(' · ');
 }
 
+/**
+ * Stable React keys: row content plus its occurrence number, so a session prepended by a refresh never makes an
+ * existing row's element (e.g. an expanded note) show another session.
+ */
+export function trainingRowKeys(rows: readonly TrainingRow[]): string[] {
+  const seen = new Map<string, number>();
+  return rows.map((row) => {
+    const content = JSON.stringify([row.date, row.time, row.type, row.distance, row.duration, row.weight, row.split, row.note]);
+    const n = (seen.get(content) ?? 0) + 1;
+    seen.set(content, n);
+    return `${content}#${n}`;
+  });
+}
+
 /** datetime-local displays device-local time; the command always carries its explicit offset. */
 export function trainingLocalTime(now = new Date()): string {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
