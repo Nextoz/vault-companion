@@ -20,6 +20,7 @@ import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
 import { VaultStatus } from './VaultStatus.tsx';
 import { Progress } from './Progress.tsx';
+import { Morning } from './Morning.tsx';
 import { Notes } from './Notes.tsx';
 import { Scouts } from './Scouts.tsx';
 import { Training } from './Training.tsx';
@@ -387,6 +388,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
           accountKey={accountKey} baseRevision={revision} />}
 
+        {tab === 'today' && !signedOut && <Morning key={`morning:${accountKey}`} refreshKey={checkedAt} />}
         {(tab === 'today' || tab === 'scouts') && !signedOut && <Scouts key={`scouts:${accountKey}`} page={tab === 'scouts'} onOpen={() => setTab('scouts')} refreshKey={checkedAt} />}
 
         {tab === 'today' && !signedOut && <ActiveWorkCard key={accountKey} revision={tasks?.revision ?? null} queue={queue} accountKey={accountKey} onOpenLink={openNote} />}
