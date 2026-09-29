@@ -160,7 +160,7 @@ export class MockApi {
   /** Every EditNote the mock applied (path, blob it was based on, body). */
   readonly noteEdits: { path: string; blobSha: string; body: string }[] = [];
 
-  /** "This morning" (ADR-0029 Part 2): off by default (the panel then stays hidden); morning.spec sets SAMPLE_MORNING. */
+  /** "This morning" (ADR-0029 Part 2): empty by default (the panel then stays hidden); morning.spec sets SAMPLE_MORNING. */
   morning: MorningResponse | null = null;
 
   static readonly SAMPLE_MORNING: MorningResponse = MorningResponse.parse({
@@ -180,7 +180,7 @@ export class MockApi {
     const on = (glob: string, handle: (route: Route) => Promise<void>) =>
       target.route(glob, (route) => (this.network === 'down' ? route.abort('internetdisconnected') : handle(route)));
     await on('**/api/morning', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
-      : this.morning ? this.#json(route, 200, MorningResponse.parse(this.morning)) : route.fulfill({ status: 404, body: '' }));
+      : this.#json(route, 200, MorningResponse.parse(this.morning ?? { revision: 'a'.repeat(40), date: '2026-09-30', brief: null, explained: [] })));
     await on('**/api/scouts', (route) => this.session === 'signed-out'
       ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, ScoutsResponse.parse(this.scouts)));

@@ -48,6 +48,8 @@ export function Morning({ refreshKey }: { refreshKey: number | null }) {
   }, [open, render]);
   if (result?.kind !== 'ok') return null;
   const data = result.data;
+  // Nothing to read this morning (no brief yet, no explanations): no panel.
+  if (!data.brief && data.explained.length === 0) return null;
   const body = (note: LinkedNoteResponse) => {
     if (note.status !== 'ok') return <p className="muted small">{note.message}</p>;
     if (render === 'failed') return <p className="muted small">This note could not be displayed.</p>;

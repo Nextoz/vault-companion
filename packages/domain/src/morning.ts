@@ -30,9 +30,9 @@ async function read(deps: MorningServiceDeps): Promise<MorningResponse> {
     .filter((f) => !f.path.slice(EXPLAINED_DIR.length + 1).includes('/') && f.path.endsWith('.md') && days.has(f.path.slice(EXPLAINED_DIR.length + 1, EXPLAINED_DIR.length + 11)))
     .sort((a, b) => (a.path < b.path ? 1 : a.path > b.path ? -1 : 0))
     .slice(0, MAX_MORNING_EXPLAINED);
-  const notes: LinkedNoteResponse[] = [];
-  for (const f of explained) notes.push(await readResolvedNote(store, x, f));
-  return { revision: x, date, brief: brief ? await readResolvedNote(store, x, brief) : null, explained: notes };
+  // In parallel: every read is pinned to commit x, so order and consistency do not change (CodeRabbit #46).
+  const [briefNote, ...notes] = await Promise.all([brief ? readResolvedNote(store, x, brief) : null, ...explained.map((f) => readResolvedNote(store, x, f))]);
+  return { revision: x, date, brief: briefNote ?? null, explained: notes.filter((n): n is LinkedNoteResponse => n !== null) };
 }
 
 export function createMorningService(deps: MorningServiceDeps) {
