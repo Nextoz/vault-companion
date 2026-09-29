@@ -1,6 +1,7 @@
 # Current plan
 
 Lead: Claude Opus 5.5. Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint.md`.
+**Latest (2026-09-29): exact next actions are in `docs/checkpoint.md` "Exact next actions".**
 Updated 2026-09-26. **Goal now: the agreed first release (`docs/product-contract.md`) on the owner's phone.**
 Ambition beyond that stays the owner's choice, informed by observed use (milestone 3).
 
@@ -33,6 +34,15 @@ sets privacy rules.
 | L training log | Ready Backlog L, ADR-0025 | **done:** PR #39 merged (dd6e3e9); Codex Astra high; Astra adversarial review 1 High + 3 Medium + 1 Low fixed, CodeRabbit 3 fixed (stable row keys, ADR wording), all mutation-checked; flaky offline e2e fixed; check 1329 + e2e 73/73; **deployed ea770cc2**; owner phone test + unit-less row format confirmation pending |
 | Scout insights v1 (deterministic) | Ideas Backlog "Scout insights across all scouts"; owner chose "build a first version" 2026-09-27 | **done:** PR #38 merged (37fca45); Codex Sol + Lead type fixes; CodeRabbit 4 findings fixed (per-card previews, failed reads retried, first-list fallback, exclusion test), mutation-checked; **deployed 5d52c100**; owner live test pending |
 | README rewrite | owner request 2026-09-27 | **done:** PR #37 merged (Gemini 503 twice → Codex Terra; Lead verified claims; CodeRabbit 2 wording fixes) |
+| L units, T2 triage, Progress Wall | Ready Backlog L/T, ADR-0025/0024 | **done:** PRs #40, #41, #42 merged + deployed (`d4403dcd`); owner phone test pending |
+| Lease reclaim after reload | ADR-0028 | **done:** PR #43 merged (`7c5309e`), deployed `12692438` |
+| R1 research explainer (cron + Gemini) | ADR-0029 + amendments 1, 2 | **done:** PR #45 merged (`ae5d438`); Gemini verified live; `GEMINI_API_KEY` set; crons `30 4`/`30 6` UTC registered (needed the account workers.dev subdomain; script workers.dev verified off via API); **first live run 2026-09-30 04:30 UTC — not yet observed** |
+| B1 + B2 bugs, This morning (minimal) | Ready Backlog B1/B2; ADR-0029 Part 2 | **done:** PR #46 merged (`79129e4`), **deployed `df0a77a4`**; owner phone check after the first explainer run |
+| B3 insights "Picks from Yesterday" | owner phone 2026-09-29 | **open** (checkpoint item 2a2) |
+| SP app speed | Ready Backlog SP | **open:** measure first (planned for DeepSeek workers, 2026-09-30) |
+
+**Workers running at checkpoint (2026-09-29 evening): none.** Only the Lead (Herdr `lead`, pane `w4:p1`). No Claude
+Cloud sessions any more (owner: same usage pool, no credits).
 
 **Done in milestone 3 (all merged, CI green):** #18 write budget + review fixes · #19 A · #20 single-flight token ·
 #21 ancestry without patches (ADR-0016) · #22 one read per app switch · #23 CSP smoke + zod jitless · #24

@@ -1,17 +1,32 @@
-# Checkpoint — 2026-09-28 ~17:00 (handover to a fresh Lead session; previous `6f65db54`)
+# Checkpoint — 2026-09-29 evening (Lead session `1699a99c`, Herdr `lead`; stop at a safe point)
 
-Read this first, then `docs/plan.md`, then `docs/orchestration.md` (routing, Herdr, Cloud, token + RAM rules).
-Priority and product decisions: the owner's vault note *Projects/Vault Companion/Vault Companion - Ready Backlog*
-(read-only for the Lead, ADR-0018). Engineering status: `docs/plan.md` (Lead writes it).
+Read this first, then the owner's vault note *Projects/Vault Companion/Vault Companion - Ready Backlog* (read-only,
+ADR-0018; **always diff it against this file**, it changed 2026-09-29 15:36), then `docs/plan.md`, then
+`docs/orchestration.md`. Engineering status: `docs/plan.md`. No workers running; no Claude Cloud sessions (owner).
 
 ## Deployed (verified)
 
-- ## Deployed (verified)
+- `main` = PR #46 merge `79129e4` + docs; Worker **version `df0a77a4`** at `https://app.karpov.dk`; anonymous → 302.
+  Crons `30 4 * * *`, `30 6 * * *` registered; script workers.dev + previews off (verified via API). `GEMINI_API_KEY` set.
+- Deploy runbook: clean build (`rm -rf apps/web/dist apps/worker/dist`), `pnpm deploy:dry` (check `sw.js`), then in
+  `apps/worker`: `pnpm exec wrangler deploy --domain "app.karpov.dk"` (allowed by `.claude/settings.local.json`), 302.
+  `docs/deploy.md` step 8 "Domains & Routes" is stale (new dashboard); use the API check instead.
 
-- `main` = `ea016bf` (PR #42 Progress Wall), Worker **version `d4403dcd`** at `https://app.karpov.dk`; anonymous → 302.
-- Live today: training units (#40), T2 triage check-ins/summary/overlap tags/reasons that stay (#41), Progress Wall
-  inside History (#42). Deploy runbook unchanged (clean build, check `sw.js`, dry run, deploy, 302).
-- The real triage feed does not yet carry `summary`/`checkins`/`clash.kind`: verify shapes when ## Open work (exact next actions)
+## Exact next actions (2026-09-30)
+
+1. After 04:30 UTC (and the 06:30 UTC catch-up): check the first explainer run — `Research/Explained/` in the live vault
+   (read-only), the Scouts page entry "Research explainer", This morning panel; CPU via `wrangler tail`/observability.
+   If it failed, read the status record's `lastError` and the Worker logs first.
+2. Owner phone check of This morning, B1, B2 (owner will report).
+3. Bug batch: **B3** (item 2a2) + triage-applier "unreadable decision lines 1" (read-only diagnosis).
+4. **SP** app speed: measure per endpoint first, then Worker cache of file contents by commit. Owner gets DeepSeek + a
+   second API key on 2026-09-30: set up a DeepSeek worker wrapper (like `tools/gemini-worker.sh`), test on one small
+   task, then route SP step 1–2 and ordinary fixes to it. Claude weekly usage ~84 %, resets Wed 1 Oct 21:00.
+5. Re-review the Ideas Backlog (grew to ~74 KB today: Apple Health ingestion design, task↔action connections, graphs,
+   Live Dashboard/telemetry) for items refined enough to start; the owner ranks.
+6. After the reset: code tour (item 7), Research Radar, This morning polish.
+
+## Open work (details)
 
 1. **R1 research explainer (ADR-0029 + amendments 1, 2)** — **merged** as PR #45 (`ae5d438`; CodeRabbit 2 minor
    fixed; check 1409, e2e 77). **Deployed 2026-09-29: version `bd9ed7ad`** (302 OK), then `GEMINI_API_KEY` set as a
