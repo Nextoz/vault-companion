@@ -36,4 +36,7 @@ export const prefs = {
   /** Active Work card folded away on this device (expanded by default). */
   activeWorkCollapsed: () => read('vc.activeWorkCollapsed') === '1',
   setActiveWorkCollapsed: (collapsed: boolean) => write('vc.activeWorkCollapsed', collapsed ? '1' : '0'),
+  /** Actions list expanded on this device (collapsed by default: B2). */
+  actionsOpen: () => read('vc.actionsOpen') === '1',
+  setActionsOpen: (open: boolean) => write('vc.actionsOpen', open ? '1' : '0'),
 };

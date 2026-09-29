@@ -37,7 +37,7 @@ test('run and gym logging, newest-first list, notes, yesterday placement and exa
   await expect(sheet.getByLabel('Distance (km)')).toHaveCount(0);
   await sheet.getByLabel('When', { exact: true }).fill('2026-09-28T18:00');
   await sheet.getByLabel('Duration (min)').fill('60');
-  await sheet.getByLabel('Weight (kg, optional)').fill('82.4');
+  await sheet.getByLabel('Weight (kg, optional)').fill('82,4'); // B1: Danish comma
   await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(list.getByTestId('training-row')).toHaveCount(2);
   await expect(list.getByTestId('training-row').first()).toContainText('Bicep · 60 min · 82.4 kg');

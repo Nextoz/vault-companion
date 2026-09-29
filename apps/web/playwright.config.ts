@@ -26,6 +26,9 @@ export default defineConfig({
   use: {
     baseURL: previewUrl,
     trace: 'retain-on-failure',
+    // B2 collapses the Actions list by default; the specs read its rows, so they start expanded (actions.spec.ts
+    // checks the collapsed default with an empty storage state).
+    storageState: { cookies: [], origins: [{ origin: previewUrl, localStorage: [{ name: 'vc.actionsOpen', value: '1' }] }] },
   },
   projects: [
     {
