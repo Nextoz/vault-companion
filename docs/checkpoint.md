@@ -16,10 +16,11 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
 1. **R1 research explainer (ADR-0029 + amendments 1, 2)** — **merged** as PR #45 (`ae5d438`; CodeRabbit 2 minor
    fixed; check 1409, e2e 77). **Deployed 2026-09-29: version `bd9ed7ad`** (302 OK), then `GEMINI_API_KEY` set as a
    Worker secret (new version). Live Gemini verified 2026-09-28 (gemini-3.5-flash-lite read an arXiv PDF via url_context,
-   JSON validated by zod; evenings often 503). **Cron NOT registered:** Cloudflare refuses schedules until the account has
-   a workers.dev subdomain (owner: open Workers & Pages once in the dashboard; `workers_dev: false` keeps this Worker off
-   it). Then Lead re-runs the deploy (registers `30 4`/`30 6`), checks Domains & Routes still shows workers.dev
-   disabled, and watches the first run on the Scouts page. CPU per run: measure with `wrangler tail`.
+   JSON validated by zod; evenings often 503). **Crons registered 2026-09-29** after the owner opened Workers & Pages (creates the account workers.dev
+   subdomain; Cloudflare refuses schedules without it). Live version `3f5f38a9`, 302 OK. Verified via API: script
+   workers.dev `enabled:false`, previews `false`, `vault-companion.<sub>.workers.dev` → 404; schedules `30 4`, `30 6`. The
+   new dashboard has no "Domains & Routes" under Settings (docs/deploy.md step 8 is stale; the API check replaces it).
+   Next: first run 2026-09-30 04:30 UTC → check `Research/Explained/` + Scouts page. CPU per run: measure with `wrangler tail`.
    No more Claude Cloud sessions (owner). Dependabot #29 closed.
 2. **PR #43 lease reclaim (ADR-0028)** — **merged 2026-09-28 (`7c5309e`)** after the CodeRabbit ADR fix, full check
    (1355) and full e2e (77) on the merged tree. **Deployed** by the owner: version `12692438`, anonymous 302 OK. The
