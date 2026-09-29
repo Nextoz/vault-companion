@@ -28,6 +28,11 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
    R1 session was blocked by its own classifier (remote repoint / "Data Exfiltration"); owner re-approved in-session.
    ADR-0029 amended (`1d0eac2`) with the worker's three design answers. Open bug **B1** (Danish comma in weight/distance:
    `type="number"` rejects `84,5`; fix = text input + `inputMode="decimal"` + comma→dot), batched with further bugs.
+2a. **Done 2026-09-29: PR #46 merged (`79129e4`), deployed version `df0a77a4`** (302 OK, crons kept): B1 (decimal
+   comma), B2 (Actions line collapsed, on action tabs; attention shows everywhere), **This morning** minimal panel on
+   Today (`GET /api/morning`: day brief + 3-day explanations; hidden when empty). Next for the panel: owner phone check
+   after the first run 2026-09-30; later polish (scouts/digest/tasks per ADR-0029 Part 2). **SP** still open (tomorrow,
+   DeepSeek). Owner gets DeepSeek + another API key 2026-09-30; weekly Claude usage ~84% until Wed 1 Oct 21:00.
 2b. **From the Ready Backlog, missed in earlier checkpoints (re-read 2026-09-29):** bug batch **B1** (decimal/comma
    weight + distance) + **B2** (Actions list: collapsed by default everywhere, one line "Actions · N saved", error colour
    + "N needs attention" when something needs it; keep an Undo reachable for a logged training session, e.g. on the
