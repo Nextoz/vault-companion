@@ -1,6 +1,7 @@
 import type { CommandType, TasksResponse } from '@vault-companion/contracts';
 import { useState } from 'react';
 import { exportText, undoLogTraining, undoLogTrainingDraft } from '../commands.ts';
+import { prefs } from '../prefs.ts';
 import { knownNotApplied } from '../queue/classify.ts';
 import type { PendingQueue, QueueItem, ReadEvidence } from '../queue/queue.ts';
 import { StateChip } from './StateChip.tsx';
@@ -72,7 +73,10 @@ export function ActionsPanel({
   const [exporting, setExporting] = useState<QueueItem | null>(null);
   // A capture is discarded only from the dialog that shows its text: nothing typed is lost unseen.
   const [discarding, setDiscarding] = useState<QueueItem | null>(null);
+  // B2: one summary line by default; a problem is never hidden (the line names it in the error colour).
+  const [open, setOpen] = useState(prefs.actionsOpen);
   if (items.length === 0) return null;
+  const attention = items.filter((i) => i.state === 'attention').length;
   // Only acknowledged receipts may be cleared (the watermark the read on screen satisfies covers them, O1); the rest
   // still keep the screen honest (A9, G3-1).
   const saved = read
@@ -82,14 +86,21 @@ export function ActionsPanel({
   return (
     <section className="group actions" aria-label="Actions on this device">
       <h2>
-        Actions
-        {saved.length > 0 && (
+        <button type="button" className="link actions-toggle" aria-expanded={open} onClick={() => {
+          prefs.setActionsOpen(!open);
+          setOpen(!open);
+        }}>
+          Actions · {items.length}
+        </button>
+        {attention > 0 && <span className="error small"> · {attention} needs attention</span>}
+        {open && saved.length > 0 && (
           <button type="button" className="link" onClick={() => read && void queue.forgetSaved(saved.map((i) => i.operationId), read)}>
             Clear saved
           </button>
         )}
       </h2>
       {undoError && <p role="alert" className="error">{undoError}</p>}
+      {open && <>
       <ul className="action-list">
         {items.map((item) => (
           <li key={item.operationId} className="action" data-testid="action">
@@ -145,6 +156,7 @@ export function ActionsPanel({
         ))}
       </ul>
       <p className="muted small">Pending actions are kept on this device while possible.</p>
+      </>}
       {exporting && <ExportDialog text={exportText(exporting.envelope)} onClose={() => setExporting(null)} />}
       {discarding && (
         <ExportDialog

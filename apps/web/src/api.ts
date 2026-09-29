@@ -12,6 +12,7 @@ import {
   NoteReadResponse,
   NotesResponse,
   SessionResponse,
+  MorningResponse,
   ScoutsResponse,
   TasksResponse,
   TriageResponse,
@@ -61,6 +62,7 @@ export async function getJson<S extends z.ZodType>(url: string, schema: S, heade
 
 export const getSession = () => getJson('/api/session', SessionResponse);
 export const getScouts = () => getJson('/api/scouts', ScoutsResponse.strip());
+export const getMorning = () => getJson('/api/morning', MorningResponse.strip());
 export const getTriage = () => getJson('/api/triage', TriageResponse.strip());
 export const getScoutOutput = (id: string) => getJson('/api/scouts/output', LinkedNoteResponse, { 'X-VC-Scout': id });
 

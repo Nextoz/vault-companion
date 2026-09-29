@@ -480,6 +480,15 @@ export const ScoutStatus = z.object({
 });
 export type ScoutStatus = z.infer<typeof ScoutStatus>;
 
+/** "This morning" (ADR-0029 Part 2): the day's Reading Brief and the explanations of the last days, newest first. */
+export const MorningResponse = z.strictObject({
+  revision: commitSha,
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  brief: LinkedNoteResponse.nullable(),
+  explained: z.array(LinkedNoteResponse).max(10),
+});
+export type MorningResponse = z.infer<typeof MorningResponse>;
+
 export const ScoutsResponse = z.strictObject({
   revision: commitSha,
   /** Server time: staleness never depends on the phone clock. */

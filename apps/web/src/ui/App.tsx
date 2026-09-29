@@ -20,6 +20,7 @@ import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
 import { VaultStatus } from './VaultStatus.tsx';
 import { Progress } from './Progress.tsx';
+import { Morning } from './Morning.tsx';
 import { Notes } from './Notes.tsx';
 import { Scouts } from './Scouts.tsx';
 import { Training } from './Training.tsx';
@@ -38,6 +39,8 @@ const UNDO_WINDOW_MS = 8000;
 const STALE_REREADS = 3;
 /** Review O6: consecutive stale reads after which the device offers to reset its saved-actions history. */
 export const STALE_BEFORE_RESET = 3;
+
+const ACTION_TABS: ReadonlySet<string> = new Set(['today', 'all', 'notes', 'training', 'history']);
 
 export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: DraftStore; receipts: EventTarget }) {
   const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
@@ -385,6 +388,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
           accountKey={accountKey} baseRevision={revision} />}
 
+        {tab === 'today' && !signedOut && <Morning key={`morning:${accountKey}`} refreshKey={checkedAt} />}
         {(tab === 'today' || tab === 'scouts') && !signedOut && <Scouts key={`scouts:${accountKey}`} page={tab === 'scouts'} onOpen={() => setTab('scouts')} refreshKey={checkedAt} />}
 
         {tab === 'today' && !signedOut && <ActiveWorkCard key={accountKey} revision={tasks?.revision ?? null} queue={queue} accountKey={accountKey} onOpenLink={openNote} />}
@@ -421,7 +425,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} empty="No open tasks." />
           ))}
 
-        {!needsAttention && (
+        {/* B2: on the tabs where actions are taken; an action needing attention shows on every tab (above). */}
+        {!needsAttention && ACTION_TABS.has(tab) && (
           <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
       </main>

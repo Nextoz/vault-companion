@@ -35,6 +35,8 @@ const actions = (page: Page) => region(page, 'Actions on this device').getByTest
 const appCommits = (stack: RealStack) => stack.commits().filter((c) => c.operationId !== '');
 
 async function load(page: Page, stack: RealStack, first: string): Promise<void> {
+  // B2: the Actions list is collapsed by default; these checks read its rows (own origin, so not the config's storage).
+  await page.addInitScript(() => localStorage.setItem('vc.actionsOpen', '1'));
   await page.goto(stack.origin);
   await expect(region(page, 'Today').getByText(first)).toBeVisible();
 }

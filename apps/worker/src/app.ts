@@ -8,6 +8,7 @@ import {
   NOTE_HEADER,
   MAX_KNOWN,
   ScoutStatus,
+  type MorningResponse,
   type ScoutsResponse,
   type ActiveWorkResponse,
   type TrainingResponse,
@@ -37,6 +38,8 @@ export interface Services {
   readActiveWork?(): Promise<ActiveWorkResponse | ApiError>;
   readTriage?(): Promise<TriageResponse | ApiError>;
   readScouts?(): Promise<ScoutsResponse | ApiError>;
+  /** "This morning" (ADR-0029 Part 2). Optional: without it the route answers 404. */
+  readMorning?(): Promise<MorningResponse | ApiError>;
   /** Completion history (ADR-0021). Optional: without it the route answers 404. */
   readHistory?(): Promise<HistoryResponse | ApiError>;
   readScoutOutput?(scoutId: string): Promise<LinkedNoteResponse | ApiError>;
@@ -76,7 +79,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -184,6 +187,20 @@ export function createApp(deps: AppDeps) {
   // Completion history (ADR-0021): read-only, no request input. Logs carry no task text.
   app.get('/api/history', async (c) => {
     const read = deps.services.readHistory;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // "This morning": fixed read-only paths, no request input. Logs carry neither note text nor paths.
+  app.get('/api/morning', async (c) => {
+    const read = deps.services.readMorning;
     if (!read) return c.json(err('invalid', 'not found'), 404);
     const result = await read();
     const meta = c.get('logMeta');

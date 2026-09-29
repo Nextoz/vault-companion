@@ -5,6 +5,15 @@ import type { PendingQueue } from '../queue/queue.ts';
 import { isoWithOffset } from '../time.ts';
 import { trainingLocalTime } from '../training.ts';
 
+/**
+ * B1: a kilo or kilometre value with at most one decimal, typed with a dot or a Danish comma (`84.5`, `84,5`).
+ * Anything else is NaN, so the schema refuses it and Save stays disabled. A number input rejects the comma outright.
+ */
+export function parseDecimal(text: string): number {
+  const t = text.trim();
+  return /^\d{1,3}(?:[.,]\d)?$/.test(t) ? Number(t.replace(',', '.')) : Number.NaN;
+}
+
 export function TrainingSheet({ queue, accountKey, baseRevision, onClose }: {
   queue: PendingQueue; accountKey: string | null; baseRevision: string | null; onClose: () => void;
 }) {
@@ -20,7 +29,7 @@ export function TrainingSheet({ queue, accountKey, baseRevision, onClose }: {
   const guard = useRef(false);
   const date = new Date(when);
   const parsed = TrainingSession.safeParse({ type, when: Number.isFinite(date.getTime()) ? isoWithOffset(date) : '', duration: Number(duration), note,
-    ...(type === 'Run' ? { distance: Number(distance) } : { split, ...(weight === '' ? {} : { weight: Number(weight) }) }) });
+    ...(type === 'Run' ? { distance: parseDecimal(distance) } : { split, ...(weight === '' ? {} : { weight: parseDecimal(weight) }) }) });
   const save = async () => {
     if (!parsed.success || !accountKey || !baseRevision || guard.current) return;
     guard.current = true; setSaving(true); setError(null);
@@ -37,9 +46,9 @@ export function TrainingSheet({ queue, accountKey, baseRevision, onClose }: {
       {(['Gym', 'Run'] as const).map((t) => <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)}>{t}</button>)}
     </div>
     <label>When<input type="datetime-local" required value={when} onChange={(e) => setWhen(e.target.value)} /></label>
-    {type === 'Run' ? <label>Distance (km)<input type="number" inputMode="decimal" required min="0.1" max="100" step="0.1" value={distance} onChange={(e) => setDistance(e.target.value)} /></label> : <>
+    {type === 'Run' ? <label>Distance (km)<input type="text" inputMode="decimal" required value={distance} onChange={(e) => setDistance(e.target.value)} /></label> : <>
       <label>Split<select value={split} onChange={(e) => setSplit(e.target.value as typeof split)}>{['Bicep', 'Tricep', 'Legs'].map((s) => <option key={s}>{s}</option>)}</select></label>
-      <label>Weight (kg, optional)<input type="number" inputMode="decimal" min="30" max="250" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} /></label>
+      <label>Weight (kg, optional)<input type="text" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} /></label>
     </>}
     <label>Duration (min)<input type="number" inputMode="numeric" required min="1" max="600" step="1" value={duration} onChange={(e) => setDuration(e.target.value)} /></label>
     <label>Note (optional)<textarea maxLength={280} rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></label>
