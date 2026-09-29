@@ -28,6 +28,12 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
    R1 session was blocked by its own classifier (remote repoint / "Data Exfiltration"); owner re-approved in-session.
    ADR-0029 amended (`1d0eac2`) with the worker's three design answers. Open bug **B1** (Danish comma in weight/distance:
    `type="number"` rejects `84,5`; fix = text input + `inputMode="decimal"` + comma→dot), batched with further bugs.
+2b. **From the Ready Backlog, missed in earlier checkpoints (re-read 2026-09-29):** bug batch **B1** (decimal/comma
+   weight + distance) + **B2** (Actions list: collapsed by default everywhere, one line "Actions · N saved", error colour
+   + "N needs attention" when something needs it; keep an Undo reachable for a logged training session, e.g. on the
+   Training tab; ~31 e2e expect it visible, so expand first; owner 2026-09-29: maybe not on every tab). **SP - App speed**
+   (measure per endpoint first → cache file contents by commit in the Worker (Cache API) → later show-last-copy (ADR) and
+   prefetch). Rule: always re-read the Ready Backlog note at resume, not only this checkpoint.
 3. **Next product work (owner, 2026-09-28): the morning check.** The owner opens the app in the morning to see all
    scout results, the morning digest, research explanations, and tasks/actions. Part 2 = "This morning" section on
    Today (morning digest short answer, new `Research/Explained` notes, scout attention, "N new events", today's tasks).
