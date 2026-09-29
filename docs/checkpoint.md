@@ -33,6 +33,12 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
    Today (`GET /api/morning`: day brief + 3-day explanations; hidden when empty). Next for the panel: owner phone check
    after the first run 2026-09-30; later polish (scouts/digest/tasks per ADR-0029 Part 2). **SP** still open (tomorrow,
    DeepSeek). Owner gets DeepSeek + another API key 2026-09-30; weekly Claude usage ~84% until Wed 1 Oct 21:00.
+2a2. **B3 (owner phone, 2026-09-29), next bug batch:** Scout insights card says "Picks from Yesterday" for scouts whose
+   run today was `degraded` (daily-research, copenhagen-events): `successfulRuns()` in `apps/web/src/insights.ts` counts
+   only `success`, so label + findings count come from the last clean run while the picks are today's latestOutput.
+   Fix: a degraded run with findings (or `lastSuccessAt`) counts as a run with results; show the reason ("Today 06:31 ·
+   5 sources failed"); also word "Degraded" as "Ran with problems". Also check triage-applier "unreadable decision
+   lines 1" (vault side, read-only). (Not yet committed: classifier outage 2026-09-29.)
 2b. **From the Ready Backlog, missed in earlier checkpoints (re-read 2026-09-29):** bug batch **B1** (decimal/comma
    weight + distance) + **B2** (Actions list: collapsed by default everywhere, one line "Actions · N saved", error colour
    + "N needs attention" when something needs it; keep an Undo reachable for a logged training session, e.g. on the
