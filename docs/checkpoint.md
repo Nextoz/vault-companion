@@ -13,21 +13,14 @@ Priority and product decisions: the owner's vault note *Projects/Vault Companion
   inside History (#42). Deploy runbook unchanged (clean build, check `sw.js`, dry run, deploy, 302).
 - The real triage feed does not yet carry `summary`/`checkins`/`clash.kind`: verify shapes when ## Open work (exact next actions)
 
-1. **R1 research explainer (ADR-0029, brief `docs/briefs/R1-research-explainer.md`)** — **pushed**: branch
-   `agent/explainer` at `5d3e7af` (6 commits, 23 files, +1492). Cloud session done; **no more Claude Cloud sessions**
-   (owner, 2026-09-28: same usage pool, no credits, copy-paste/permission overhead; local workers only). Worker's open
-   points: Gemini request/response shape written from memory (url_context + `responseJsonSchema` + `urlContextMetadata`,
-   verify against current docs and one real call), 429 handling (QuotaFailure ⇒ next model, else one retry), CPU
-   unmeasured, `GEMINI_API_KEY` optional (missing ⇒ logs `gemini-key-missing`, writes nothing). **Before review
-   (owner, 2026-09-28): add ADR-0029 Amendment 2** (carry-over ≤ 3 days, pending notes, blob-SHA-guarded replace,
-   `status: unavailable` on the last day) and **one real Gemini call** with the owner's key before deploy.
-   **Status 2026-09-28 evening:** reviewed + amendment 2 built (`9296f1b`, 10-min model time budget added: Cron wall
-   limit 15 min); **PR #45** open; `pnpm check` 1408 + e2e 77 green; review worktree `../vault-companion-clones/explainer`.
-   Live Gemini: all 3 chain models exist on the key, but every call got 503 "high demand" (format never 400); one plain
-   url_context call returned 200. Deploy only after one real call succeeds. Then: review (write targets `Research/Explained/*.md` create-only + `Automation/Scout Status/research-explainer.json`,
-   Gemini client, cron), `pnpm check` + e2e, PR, one CodeRabbit review, merge; then set the Worker secret
-   (`GEMINI_API_KEY` from the owner's Windows user env, piped, never printed — `wrangler secret put` deploys a version),
-   clean build, deploy, 302 check, and watch the first cron run (04:30 UTC) on the Scouts page.
+1. **R1 research explainer (ADR-0029 + amendments 1, 2)** — **merged** as PR #45 (`ae5d438`; CodeRabbit 2 minor
+   fixed; check 1409, e2e 77). **Deployed 2026-09-29: version `bd9ed7ad`** (302 OK), then `GEMINI_API_KEY` set as a
+   Worker secret (new version). Live Gemini verified 2026-09-28 (gemini-3.5-flash-lite read an arXiv PDF via url_context,
+   JSON validated by zod; evenings often 503). **Cron NOT registered:** Cloudflare refuses schedules until the account has
+   a workers.dev subdomain (owner: open Workers & Pages once in the dashboard; `workers_dev: false` keeps this Worker off
+   it). Then Lead re-runs the deploy (registers `30 4`/`30 6`), checks Domains & Routes still shows workers.dev
+   disabled, and watches the first run on the Scouts page. CPU per run: measure with `wrangler tail`.
+   No more Claude Cloud sessions (owner). Dependabot #29 closed.
 2. **PR #43 lease reclaim (ADR-0028)** — **merged 2026-09-28 (`7c5309e`)** after the CodeRabbit ADR fix, full check
    (1355) and full e2e (77) on the merged tree. **Deployed** by the owner: version `12692438`, anonymous 302 OK. The
    Lead may now deploy: `.claude/settings.local.json` allows `pnpm exec wrangler deploy *` (owner, 2026-09-28).
