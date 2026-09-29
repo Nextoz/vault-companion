@@ -4,6 +4,7 @@ import { MockApi } from './mock-api.ts';
 test('This morning: one line on Today, expands to the brief and the explanations at phone width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const api = new MockApi();
+  api.morning = MockApi.SAMPLE_MORNING;
   await api.install(page);
   await page.goto('/');
   const panel = page.getByRole('region', { name: 'This morning', exact: true });

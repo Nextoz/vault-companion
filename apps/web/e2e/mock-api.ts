@@ -160,8 +160,10 @@ export class MockApi {
   /** Every EditNote the mock applied (path, blob it was based on, body). */
   readonly noteEdits: { path: string; blobSha: string; body: string }[] = [];
 
-  /** "This morning" (ADR-0029 Part 2): synthetic brief and explanations. */
-  morning: MorningResponse | null = MorningResponse.parse({
+  /** "This morning" (ADR-0029 Part 2): off by default (the panel then stays hidden); morning.spec sets SAMPLE_MORNING. */
+  morning: MorningResponse | null = null;
+
+  static readonly SAMPLE_MORNING: MorningResponse = MorningResponse.parse({
     revision: 'a'.repeat(40), date: '2026-09-30',
     brief: { status: 'ok', revision: 'a'.repeat(40), path: 'Research/Reading Briefs/Research Reading Brief - 2026-09-30.md', blobSha: 'e'.repeat(40),
       markdown: lines('# Research Reading Brief - 2026-09-30', '', '## Read today', '', '- [Synthetic Sparse Routing](https://arxiv.org/abs/2601.00001) - cheaper inference') },
