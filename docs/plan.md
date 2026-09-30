@@ -23,6 +23,17 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
+- 12:28 checkpoint: B3 handoff/diff reviewed; independent targeted **19/19** plus typecheck pass. Fix before merge:
+  unknown-count degraded run backed only by yesterday's success must not be dated at today's attempt; matching
+  incomplete history must not suppress known current count. `.agent/B3-correction.md` queued for one Flash correction.
+  Jev says redo .99; Lead agrees focused correction, no model escalation. Existing `noSuccess` naming cleanup deferred;
+  state colors use shared styles, no new CSS change required. Neither bug is accepted/shipped yet.
+- RR1 dispatched Pro high in `w5:pN`, clone `C:/Dev/vault-companion-clones/rr1-radar`, branch `agent/rr1-radar`,
+  base `d542b4d`. Contract in clone `.agent/brief.md`: ranking/read model, component, new append-only decision log,
+  exact retry/CAS/Undo regression oracles, ADR-0032. **Hold + independent Claude review**; mounting Scouts waits
+  for B4 integration, no concurrent Scouts edits. RR2 desktop job not in scope. Latest balance **$9.54**, reported
+  aggregate spend $0.45 since resume, concurrent attribution unknown. Active slots H2/SP1/RR1; bugs next.
+
 - 12:20 checkpoint: PR #47 merged as `6080433`; update-3 follow-up PR **#48** open, Ubuntu/Windows CI green,
   CodeRabbit review requested once and pending. Local full check **1415 tests** and e2e **79/79** passed for #47.
 - B4 handoff reviewed: independent component **7/7** and iPhone-WebKit Scouts browser **3/3** pass. Memoized
@@ -119,10 +130,11 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 |---|---|---|---|
 | H1 core guards/gates | **STOPPED at quota, incomplete**, no handoff; partial work preserved; no new OpenAI Codex work | former `w5:p4` | `C:\Dev\vault-companion-clones\h1-harness`; `agent/h1-harness`, base `8ce1d57`; tracked and untracked edits |
 | DeepSeek smoke | **Completed PASS**; deepseek-flash high; pane closed itself normally | former `w5:p5` | `C:\Dev\vault-companion-clones\deepseek-smoke`; inherited `docs/continuous-lead-20260930` at `5fc6a94`; no code edits |
-| B3 degraded insights | **RUNNING restarted**; DeepSeek Flash high, unsandboxed tool activity verified | `w5:pE` | `C:\Dev\vault-companion-clones\b3-degraded`; `agent/b3-degraded` at `5fc6a94`; handoff `.agent/handoffs/B3.md`, log `.agent/unsandboxed.log` |
+| B3 degraded insights | **Handoff reviewed, focused correction queued**, targeted checks pass, unaccepted | former `w5:pE` | `C:\Dev\vault-companion-clones\b3-degraded`; `agent/b3-degraded` at `5fc6a94`; handoff `.agent/handoffs/B3.md`, log `.agent/unsandboxed.log` |
 | B4 compact Scouts | **Handoff reviewed, correction queued**, targeted checks pass, not accepted | former `w5:pF` | `C:\Dev\vault-companion-clones\b4-compact`; `agent/b4-compact` at `5fc6a94`; handoff `.agent/handoffs/B4.md`, log `.agent/unsandboxed.log` |
 | H2 non-hook launcher/profiles/watcher | **RUNNING**; DeepSeek Pro high (`deepseek-v4-pro`), unsandboxed tool activity verified | `w5:pH` | `C:/Dev/vault-companion-clones/h2-launcher`; `agent/h2-launcher`, base `bc5a853`; handoff `.agent/handoffs/H2.md`, log `.agent/pro.log`; hold PR |
 | SP1 read-latency measurement | **RUNNING**, DeepSeek Flash high, tool activity verified | `w5:pK` | `C:/Dev/vault-companion-clones/sp1-measure`; `agent/sp1-measure`, base `8a0ca36`; handoff `.agent/handoffs/SP1.md` |
+| RR1 Radar page/decisions | **RUNNING**, DeepSeek Pro high, hold required | `w5:pN` | `C:/Dev/vault-companion-clones/rr1-radar`; `agent/rr1-radar`, base `d542b4d`; handoff `.agent/handoffs/RR1.md` |
 
 - H1 log: `C:\Dev\vault-companion-clones\h1-harness\.agent\run.log`; session
   `01a0f0ab-4cde-7d12-9726-3ad8bd566a6a`. Expected report `.agent/handoffs/H1-harness-core.md`.
