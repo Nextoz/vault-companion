@@ -1,4 +1,36 @@
-# Checkpoint — 2026-09-30 12:37 Europe/Copenhagen
+# Checkpoint — 2026-09-30 12:58 Europe/Copenhagen
+
+## Latest delta — supersedes worker/PR states below
+
+- PR #48 merged `f4e7cc760afe69072a9003d478f815cf54b89ec1`: Ubuntu/Windows and CodeRabbit checks green
+  at 3504037. Bot review request aborted on changing head; no actual review findings. Per normal rules this is
+  not a merge gate. Main clean at merge before this documentation delta. PR #47 already merged and verified.
+- H2 original handoff read/full production diff reviewed. Unaccepted: strict MCP not actually passed, worker
+  default/profile mismatch, actual CLI event/parser mismatch, wake lacks submit, acceptance ignores exits/trusted
+  evidence. Real tiny DeepSeek schema canary failed (missing JSON schema type); no-schema canary succeeded and
+  proved agent_message/text event format. No live Claude/hook canary. One bounded Pro correction active w5:pS,
+  same h2-launcher clone; packet .agent/correction.md, handoff .agent/handoffs/H2-correction.md. Hold remains.
+- BUGS Flash handoff read, changed spans reviewed. Claims 40/40 and typecheck; not independently accepted.
+  B4 wording and SP1 packaging/report corrections look sound. B3 introduces regression: today's null degraded
+  history hides yesterday's known3. Lead reproduced via Node; original evidence exclusion violated. Also raw
+  timestamp keys do not reconcile offset-equivalent instants. Escalated to Pro w5:pT, same b3-b4-fixes clone,
+  .agent/pro-correction.md; handoff .agent/handoffs/BUGS-Pro.md. No acceptance or combined check/e2e yet.
+- Active slots: H2 Pro correction, RR1 Pro implementation w5:pN, BUGS Pro correction. Independent files;
+  three maximum respected. H1 partial remains preserved/unaccepted, no new OpenAI work. Recover H non-hook
+  core on Pro when next slot frees; queue then SP2 contract review, remaining bugs. RR1 scope request absent.
+- Jev completed-run checks: H2 redo .74 / verification .08; BUGS redo .77 / verification .14. Lead agrees both
+  unaccepted on concrete counterexamples, not on probabilities alone. Raw .agent/jev/{H2,BUGS}-run.json.
+  Reasoning escalations now 1 (B3 Flash→Pro). Historical fallback B3/B4 are not Jev-picked; first picked SP1
+  still correction-required 1/first5, accepted0; disable active routing if second picked run needs redo/escalation.
+- DeepSeek balance **$8.47** at 12:56, aggregate reported spend **$1.52** since $9.99. Concurrent attribution
+  and sub-cent costs unknown. $3 stop unchanged. No private log/repo text, vault write or production deployment.
+- Watcher .agent/watch-resume.ps1 now watches only H2-correction, BUGS-Pro, RR1 handoff/scope-request;
+  consumed original handoffs excluded. Next: handoff-first review; BUGS pass→merge latest main into clone,
+  full pnpm check and single web e2e, ordinary PR/review/CI. H2/RR1 floor PRs hold for independent Claude.
+
+---
+
+# Prior checkpoint — 2026-09-30 12:37 Europe/Copenhagen
 
 This section supersedes the historical 07:20 checkpoint below. Lead Codex budget mode expires Thu
 2026-10-01 21:00 Copenhagen / 19:00 UTC; start no new OpenAI Codex workers.

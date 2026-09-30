@@ -23,6 +23,13 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
+- 12:58: PR #48 merged `f4e7cc7`, CI green; #47 already merged. H2 handoff failed Lead contract review;
+  one Pro correction active w5:pS. BUGS Flash correction handoff read; B4/SP1 changes look sound, B3 null
+  history regression reproduced by Lead. Escalated to Pro w5:pT, same clone; unaccepted pending review/full
+  check/e2e. RR1 Pro w5:pN remains active. H non-hook recovery next free slot, no new OpenAI Codex work.
+  Balance **$8.47**, aggregate reported spend **$1.52**; stop new dispatch below $3. Jev H2 redo .74,
+  BUGS redo .77; Lead agrees from concrete failures. One reasoning escalation, first picked SP1 redo1/first5.
+  Latest resume instructions/evidence in checkpoint; consumed H2/BUGS handoffs excluded from watcher.
 - 12:37 checkpoint: SP1 handoff/new files reviewed; independent synthetic benchmark **10/10** and typecheck pass.
   Production/phone latency still unmeasured. Test-discovery packaging and one inconsistent report comparison
   require focused correction; Lead defers mutable-head TTL recommendation, no cache implementation started.
