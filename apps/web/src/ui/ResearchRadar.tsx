@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getRadar, getRadarNote, postRadarDecision, type Fetched } from '../api.ts';
 import { createNoteRenderer } from '../note/render.ts';
 import { classify } from '../queue/classify.ts';
-import { isoWithOffset } from '../time.ts';
+import { dateIn, isoWithOffset } from '../time.ts';
 import './ResearchRadar.css';
 
 export type RadarSaveStatus = 'pending' | 'saving' | 'saved' | 'failure';
@@ -37,6 +37,14 @@ export interface RadarCardView extends RadarPaper {
 export interface RadarDecisionView extends RadarDecisionLine {
   saveStatus: RadarSaveStatus | null;
   intent: RadarIntent | null;
+  /** Durable server decisions are undoable only while their file month is the current or previous month. */
+  undoable: boolean;
+}
+
+function previousMonth(month: string): string {
+  const year = Number(month.slice(0, 4));
+  const index = Number(month.slice(5, 7)) - 1;
+  return index === 0 ? `${year - 1}-12` : `${year}-${String(index).padStart(2, '0')}`;
 }
 
 export function radarDecisionCommand(
@@ -121,6 +129,13 @@ export function deriveRadar(
   savingIds: ReadonlySet<string>,
 ): RadarView {
   const serverIds = new Set(read.decisions.map((line) => line.decisionId));
+  const serverMonthById = new Map(read.decisions.map((line) => [line.decisionId, line.month]));
+  const currentMonth = dateIn(read.now, 'Europe/Copenhagen').slice(0, 7);
+  const previous = previousMonth(currentMonth);
+  const undoableFor = (line: RadarDecisionLine): boolean => {
+    const month = serverMonthById.get(line.decisionId);
+    return month === undefined || month === currentMonth || month === previous;
+  };
   const localIntents = intents.filter((intent) => !serverIds.has(intent.command.operationId));
   const lines = [...read.decisions, ...localIntents.map((intent) => lineFromCommand(intent.command))];
   const state = effectiveRadarDecisions(lines);
@@ -148,6 +163,7 @@ export function deriveRadar(
       ...latest,
       saveStatus: intentStatus(keepId, latest.decision, read, intents, savingIds),
       intent: intentByDecision.get(latest.decisionId) ?? null,
+      undoable: undoableFor(latest),
     });
   }
 
@@ -160,6 +176,7 @@ export function deriveRadar(
       ...line,
       saveStatus: intentStatus(line.decisionId, line.decision, read, intents, savingIds),
       intent,
+      undoable: true,
     });
   }
   decisionViews.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
@@ -507,7 +524,7 @@ export function ResearchRadar({ accountKey, refreshKey, blocked }: {
                   {line.decision === 'keep' && line.saveStatus === 'failure' && <span className="error">Library save failed</span>}
                   {line.intent?.error && <span className="error">{line.intent.error}</span>}
                   {line.intent && !savingIds.has(line.decisionId) && <button type="button" onClick={() => retryIntent(line.intent!)}>Retry</button>}
-                  {line.decision !== 'undo' && <button type="button" disabled={blocked || !accountKey || savingIds.has(line.decisionId)} onClick={() => undoDecision(line)}>Undo</button>}
+                  {line.decision !== 'undo' && line.undoable && <button type="button" disabled={blocked || !accountKey || savingIds.has(line.decisionId)} onClick={() => undoDecision(line)}>Undo</button>}
                 </li>
               ))}
             </ul>

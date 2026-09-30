@@ -313,6 +313,7 @@ export interface ResearchRadarServiceDeps {
 
 interface ReadNote {
   readonly path: string;
+  readonly blobSha: string;
   readonly markdown: string;
 }
 
@@ -323,7 +324,8 @@ async function readAllowedNote(store: VaultStore, x: string, listed: ListedFile)
   try {
     file = await store.readFile(path, x);
   } catch (e) {
-    if (e instanceof FileTooLarge) throw e;
+    // An oversized source note is an unreadable note, not a whole-Radar outage (review 7 finding 4).
+    if (e instanceof FileTooLarge) return null;
     throw e;
   }
   if (!file || file.blobSha !== listed.blobSha || file.bytes.length > MAX_NOTE_BYTES) return null;
@@ -333,7 +335,7 @@ async function readAllowedNote(store: VaultStore, x: string, listed: ListedFile)
   } catch {
     return null;
   }
-  return { path: listed.path, markdown };
+  return { path: listed.path, blobSha: file.blobSha, markdown };
 }
 
 export interface RadarDecisionHistory {
@@ -431,7 +433,49 @@ function direct(files: readonly ListedFile[], dir: string): ListedFile[] {
   return files.filter((f) => f.path.startsWith(`${dir}/`) && f.path.slice(dir.length + 1).indexOf('/') === -1 && f.path.endsWith('.md'));
 }
 
-export async function buildResearchRadar(deps: ResearchRadarServiceDeps): Promise<RadarResponse> {
+/**
+ * Aggregate intake-note reads per Radar request (scout + brief + important + explained). Together with head, five
+ * directory listings, up to 25 monthly decision logs and `applied.json`, this keeps one read at ≤ 48 GitHub
+ * subrequests, leaving headroom for the inherited Access/token request (review 7 finding 5).
+ */
+export const RADAR_NOTE_READ_BUDGET = 16;
+
+interface ReadNotesOutcome {
+  readonly notes: ReadNote[];
+  /** Files that were attempted but could not be read (encoding, size guard, missing/mismatched blob). */
+  readonly unreadable: number;
+  /** Files never attempted because the aggregate note budget was exhausted. */
+  readonly capped: number;
+}
+
+/** Reads listed source notes in deterministic path order until the shared budget is exhausted. */
+async function readBoundedNotes(
+  store: VaultStore,
+  x: string,
+  files: readonly ListedFile[],
+  budget: { remaining: number },
+): Promise<ReadNotesOutcome> {
+  const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  const notes: ReadNote[] = [];
+  let unreadable = 0;
+  let capped = 0;
+  for (const listed of sorted) {
+    if (budget.remaining <= 0) { capped += 1; continue; }
+    budget.remaining -= 1;
+    const note = await readAllowedNote(store, x, listed);
+    if (note) notes.push(note);
+    else unreadable += 1;
+  }
+  return { notes, unreadable, capped };
+}
+
+interface ResearchRadarRead {
+  readonly response: RadarResponse;
+  /** Every allowlisted note read for the response, by path, so a note open never re-reads or re-builds. */
+  readonly notesByPath: ReadonlyMap<string, ReadNote>;
+}
+
+async function loadResearchRadar(deps: ResearchRadarServiceDeps): Promise<ResearchRadarRead> {
   const now = deps.now();
   const date = userDate(now, DEFAULT_USER_TIME_ZONE);
   const window = new Set(sevenDays(date));
@@ -456,14 +500,21 @@ export async function buildResearchRadar(deps: ResearchRadarServiceDeps): Promis
   const importantListed = direct(importantFiles, IMPORTANT_DIR);
   const explainedListed = direct(explainedFiles, RADAR_EXPLAINED_DIR);
 
-  const scoutNotes = (await Promise.all(scoutListed.map((f) => readAllowedNote(deps.store, x, f)))).filter((n): n is ReadNote => n !== null);
-  const briefNotes = (await Promise.all(briefListed.map((f) => readAllowedNote(deps.store, x, f)))).filter((n): n is ReadNote => n !== null);
-  const importantNotes = (await Promise.all(importantListed.map((f) => readAllowedNote(deps.store, x, f)))).filter((n): n is ReadNote => n !== null);
-  const explainedNotes = (await Promise.all(explainedListed.map((f) => readAllowedNote(deps.store, x, f)))).filter((n): n is ReadNote => n !== null);
-  const scoutUnreadable = scoutListed.length - scoutNotes.length;
-  const briefUnreadable = briefListed.length - briefNotes.length;
-  const importantUnreadable = importantListed.length - importantNotes.length;
-  const explainedUnreadable = explainedListed.length - explainedNotes.length;
+  const budget = { remaining: RADAR_NOTE_READ_BUDGET };
+  const scoutRead = await readBoundedNotes(deps.store, x, scoutListed, budget);
+  const briefRead = await readBoundedNotes(deps.store, x, briefListed, budget);
+  const importantRead = await readBoundedNotes(deps.store, x, importantListed, budget);
+  const explainedRead = await readBoundedNotes(deps.store, x, explainedListed, budget);
+  const scoutNotes = scoutRead.notes;
+  const briefNotes = briefRead.notes;
+  const importantNotes = importantRead.notes;
+  const explainedNotes = explainedRead.notes;
+  const notesByPath = new Map<string, ReadNote>();
+  for (const note of [...scoutNotes, ...briefNotes, ...importantNotes, ...explainedNotes]) notesByPath.set(note.path, note);
+  const scoutUnreadable = scoutRead.unreadable + scoutRead.capped;
+  const briefUnreadable = briefRead.unreadable + briefRead.capped;
+  const importantUnreadable = importantRead.unreadable + importantRead.capped;
+  const explainedUnreadable = explainedRead.unreadable + explainedRead.capped;
   const scoutDegraded = scoutUnreadable + scoutNotes.filter((note) => scoutHealthDegraded(parseRadarFrontmatter(note.markdown))).length;
 
   const candidates: RadarCandidate[] = [];
@@ -527,7 +578,11 @@ export async function buildResearchRadar(deps: ResearchRadarServiceDeps): Promis
 
   const currentMonth = userDate(now, DEFAULT_USER_TIME_ZONE).slice(0, 7);
   const decisionHistory = await readRadarDecisionHistory(deps.store, x, radarFiles, currentMonth);
-  const decisions = decisionHistory.lines;
+  const monthByDecisionId = new Map<string, string>();
+  for (const entry of decisionHistory.months) {
+    for (const line of entry.lines) monthByDecisionId.set(line.decisionId, entry.month);
+  }
+  const decisions = decisionHistory.lines.map((line) => ({ ...line, month: monthByDecisionId.get(line.decisionId)! }));
   const state = effectiveRadarDecisions(decisions);
 
   const merged = mergeRadarCandidates(candidates);
@@ -567,16 +622,27 @@ export async function buildResearchRadar(deps: ResearchRadarServiceDeps): Promis
     importantUpdates: sourceState(importantListed.length, candidates.filter((c) => c.intake === 'important').length, importantUnreadable),
     explained: sourceState(explainedListed.length, explanationByPaper.size, explainedUnreadable),
   };
+  const sourceReads = {
+    dailyScout: scoutRead,
+    readingBriefs: briefRead,
+    importantUpdates: importantRead,
+    explained: explainedRead,
+  } as const;
   for (const [name, value] of Object.entries(sources)) {
     const windowed = name === 'dailyScout' || name === 'readingBriefs';
     const notesPhrase = windowed ? 'notes in the last seven days' : 'notes';
     const noun = name === 'explained' ? { singular: 'explanation', plural: 'explanations' } : { singular: 'paper', plural: 'papers' };
-    if (value.state === 'absent') warnings.push(`${name} has no readable ${notesPhrase}.`);
+    const read = sourceReads[name as keyof typeof sourceReads];
+    if (read.capped > 0) {
+      const attempted = read.notes.length + read.unreadable;
+      const total = attempted + read.capped;
+      warnings.push(`${name} read only ${attempted} of ${total} ${noun.plural} before the read budget; partial coverage.`);
+    } else if (value.state === 'absent') warnings.push(`${name} has no readable ${notesPhrase}.`);
     else if (value.state === 'degraded' && value.count === 0) warnings.push(`${name} has ${notesPhrase}, but no ${noun.plural} could be read.`);
     else if (value.state === 'degraded') warnings.push(`${name} is degraded, so only ${value.count} ${value.count === 1 ? noun.singular : noun.plural} could be read.`);
   }
 
-  return {
+  const response: RadarResponse = {
     revision: x,
     now: now.toISOString(),
     sources,
@@ -587,6 +653,11 @@ export async function buildResearchRadar(deps: ResearchRadarServiceDeps): Promis
     appliedUpdatedAt: parsedApplied.appliedUpdatedAt,
     warnings,
   };
+  return { response, notesByPath };
+}
+
+export async function buildResearchRadar(deps: ResearchRadarServiceDeps): Promise<RadarResponse> {
+  return (await loadResearchRadar(deps)).response;
 }
 
 export function createResearchRadarService(deps: ResearchRadarServiceDeps) {
@@ -596,7 +667,7 @@ export function createResearchRadarService(deps: ResearchRadarServiceDeps) {
   return {
     async readResearchRadar(): Promise<RadarResponse | ApiError> {
       try {
-        return await buildResearchRadar(deps);
+        return (await loadResearchRadar(deps)).response;
       } catch (e) {
         if (e instanceof RadarAppliedUnreadableError) {
           return { code: 'invalid', message: 'Research Radar state is unreadable on this device', retryable: false };
@@ -615,7 +686,7 @@ export function createResearchRadarService(deps: ResearchRadarServiceDeps) {
         return { code: 'invalid', message: 'invalid paper ID', retryable: false };
       }
       try {
-        const response = await buildResearchRadar(deps);
+        const { response, notesByPath } = await loadResearchRadar(deps);
         const paper = response.papers.find((p) => p.paperId === paperId);
         if (!paper || (paper.read.kind !== 'note' && paper.read.kind !== 'explanation')) {
           return refused(response.revision, 'missing', 'this paper has no readable Radar note');
@@ -624,16 +695,9 @@ export function createResearchRadarService(deps: ResearchRadarServiceDeps) {
         if (!path || !canReadRadarSource(path)) {
           return refused(response.revision, 'missing', 'this paper has no readable Radar note');
         }
-        const file = await deps.store.readFile(path, response.revision);
-        if (!file) return refused(response.revision, 'missing', 'the Radar note no longer exists at this revision');
-        if (file.bytes.length > MAX_NOTE_BYTES) return refused(response.revision, 'too-large', 'the Radar note is too large to read');
-        let markdown: string;
-        try {
-          markdown = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(file.bytes);
-        } catch {
-          return refused(response.revision, 'encoding', 'the Radar note is not valid UTF-8');
-        }
-        return { status: 'ok', revision: response.revision, path: paper.read.path, blobSha: file.blobSha, markdown };
+        const note = notesByPath.get(paper.read.path);
+        if (!note) return refused(response.revision, 'missing', 'the Radar note no longer exists at this revision');
+        return { status: 'ok', revision: response.revision, path: paper.read.path, blobSha: note.blobSha, markdown: note.markdown };
       } catch (e) {
         if (e instanceof RadarAppliedUnreadableError) {
           return { code: 'invalid', message: 'Research Radar state is unreadable on this device', retryable: false };

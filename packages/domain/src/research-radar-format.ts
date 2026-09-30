@@ -1,6 +1,7 @@
 // Pure Research Radar JSON/URL kernels (ADR-0032). No HTTP, React or GitHub code.
 import { RadarAppliedEntry, RadarDecisionLine, effectiveRadarDecisions } from '@vault-companion/contracts';
 import { isResearchLibraryPath } from './paths.ts';
+import { z } from 'zod';
 
 export { effectiveRadarDecisions };
 export type { RadarDecisionState } from '@vault-companion/contracts';
@@ -240,7 +241,8 @@ export interface ParsedRadarApplied {
 /** Desktop-owned `Radar/applied.json` is unreadable when its envelope or timestamp is not a valid Radar state. */
 export class RadarAppliedUnreadableError extends Error {}
 
-const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+/** Same strict ISO instant schema as `RadarAppliedEntry.at`: rejects impossible dates like 2026-02-30. */
+const RADAR_APPLIED_UPDATED_AT = z.iso.datetime({ offset: true });
 
 /** Desktop-owned `Radar/applied.json`; applied entries need a safe Library path, failed entries may have none. */
 export function parseRadarApplied(text: string | null): ParsedRadarApplied {
@@ -251,7 +253,7 @@ export function parseRadarApplied(text: string | null): ParsedRadarApplied {
     throw new RadarAppliedUnreadableError('Radar applied state is not a valid Radar JSON object');
   }
   const updatedAt = value.updatedAt;
-  if (updatedAt !== null && updatedAt !== undefined && (typeof updatedAt !== 'string' || !ISO_INSTANT.test(updatedAt) || Number.isNaN(Date.parse(updatedAt)))) {
+  if (updatedAt !== null && updatedAt !== undefined && (typeof updatedAt !== 'string' || !RADAR_APPLIED_UPDATED_AT.safeParse(updatedAt).success)) {
     throw new RadarAppliedUnreadableError('Radar applied state has an invalid updatedAt timestamp');
   }
   const applied: Record<string, RadarAppliedEntry> = {};

@@ -272,4 +272,31 @@ describe('executeRadarDecide', () => {
     const receipt = ok(await run(raw));
     expect(receipt.path).toBe('Research/Radar/Decisions/2026-10.jsonl');
   });
+
+  it('appends a backdated client timestamp to the server current month, preserving at', async () => {
+    store = await InMemoryStore.create({ 'Research/Radar/Decisions/2026-10.jsonl': new TextDecoder().decode(appendRadarDecisionLine(null, {
+      schemaVersion: 1, decisionId: '77777777-7777-4777-8777-777777777777', paperId: '0123456789abcdef0123', decision: 'keep', undoes: null, at: '2026-10-01T09:00:00+02:00', card: { title: 'Existing', source: 'https://example.com/existing-oct', topic: 'AI' },
+    })) });
+    svc = createCommandService({ store, now: () => new Date('2026-10-01T10:00:00Z'), timeZone: 'Europe/Copenhagen' });
+    base = store.headCommit;
+    const { raw } = await make({ occurredAt: '2026-09-30T23:00:00+02:00' });
+    const receipt = ok(await run(raw));
+    expect(receipt.path).toBe('Research/Radar/Decisions/2026-10.jsonl');
+    expect(store.text('Research/Radar/Decisions/2026-10.jsonl')).toContain('"at":"2026-09-30T23:00:00+02:00"');
+  });
+
+  it('dedupes a retry that lands after the server month has changed', async () => {
+    let serverNow = new Date('2026-09-30T12:00:00Z');
+    store = await InMemoryStore.create({ 'Research/Radar/Decisions/2026-09.jsonl': '' });
+    svc = createCommandService({ store, now: () => serverNow, timeZone: 'Europe/Copenhagen' });
+    base = store.headCommit;
+    const { raw } = await make({ occurredAt: '2026-09-30T14:00:00+02:00' });
+    const first = ok(await run(raw));
+    expect(first).toMatchObject({ status: 'applied', path: 'Research/Radar/Decisions/2026-09.jsonl' });
+    serverNow = new Date('2026-10-01T10:00:00Z');
+    const retry = ok(await run(raw));
+    expect(retry).toMatchObject({ status: 'already-applied', commitSha: first.commitSha });
+    expect(store.text('Research/Radar/Decisions/2026-09.jsonl')!.trim().split('\n')).toHaveLength(1);
+    expect(store.text('Research/Radar/Decisions/2026-10.jsonl')).toBeNull();
+  });
 });

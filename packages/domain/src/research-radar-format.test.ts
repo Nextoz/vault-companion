@@ -131,6 +131,18 @@ describe('parseRadarApplied', () => {
     expect(() => parseRadarApplied(JSON.stringify({ schemaVersion: 1, updatedAt: 'yesterday', decisions: {} }))).toThrow();
   });
 
+  it('rejects impossible updatedAt dates and accepts valid offset instants', () => {
+    expect(() => parseRadarApplied(JSON.stringify({ schemaVersion: 1, updatedAt: '2026-02-30T10:00:00Z', decisions: {} }))).toThrow();
+    expect(() => parseRadarApplied(JSON.stringify({ schemaVersion: 1, updatedAt: '2026-02-30T10:00:00+01:00', decisions: {} }))).toThrow();
+    expect(parseRadarApplied(JSON.stringify({ schemaVersion: 1, updatedAt: '2026-02-28T23:59:59+05:30', decisions: {} })).appliedUpdatedAt).toBe('2026-02-28T23:59:59+05:30');
+    expect(parseRadarApplied(JSON.stringify({ schemaVersion: 1, updatedAt: '2026-09-30T16:00:00.123Z', decisions: {} })).appliedUpdatedAt).toBe('2026-09-30T16:00:00.123Z');
+  });
+
+  it('keeps a missing or null updatedAt as an empty applied state', () => {
+    expect(parseRadarApplied(JSON.stringify({ schemaVersion: 1, decisions: {} })).appliedUpdatedAt).toBeNull();
+    expect(parseRadarApplied(JSON.stringify({ schemaVersion: 1, updatedAt: null, decisions: {} })).appliedUpdatedAt).toBeNull();
+  });
+
   it('never claims applied without a safe Library path, but failed may omit one', () => {
     const id = '11111111-1111-4111-8111-111111111111';
     const badApplied = parseRadarApplied(JSON.stringify({ schemaVersion: 1, updatedAt: '2026-09-30T16:00:00+02:00', decisions: { [id]: { status: 'applied', at: '2026-09-30T15:00:00+02:00', message: '', libraryPath: null } } }));

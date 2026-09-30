@@ -694,6 +694,13 @@ export const RadarDecisionLine = z.strictObject({
 });
 export type RadarDecisionLine = z.infer<typeof RadarDecisionLine>;
 
+/** Radar decision line as served by the read model, carrying the validated monthly log it was read from. */
+export const RadarDecisionLineWithMonth = RadarDecisionLine.extend({
+  /** The `YYYY-MM` decision log the line came from; never the client `at` timestamp. */
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+});
+export type RadarDecisionLineWithMonth = z.infer<typeof RadarDecisionLineWithMonth>;
+
 /** Replayed Radar decision state. Authoritative append order wins, never device timestamps. */
 export interface RadarDecisionState {
   readonly removed: ReadonlySet<string>;
@@ -779,7 +786,7 @@ export const RadarResponse = z.strictObject({
   /** The three deterministically ranked, still-eligible papers. */
   papers: z.array(RadarPaper).max(3),
   topics: z.array(RadarTopicCount).max(20),
-  decisions: z.array(RadarDecisionLine).max(5000),
+  decisions: z.array(RadarDecisionLineWithMonth).max(5000),
   applied: z.record(z.string(), RadarAppliedEntry),
   appliedUpdatedAt: isoInstant.nullable(),
   warnings: z.array(radarText(300, 0)).max(10),

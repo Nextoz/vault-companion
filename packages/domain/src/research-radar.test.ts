@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RadarResponse } from '@vault-companion/contracts';
-import { buildResearchRadar, mergeRadarCandidates, parseRadarItems, radarDecisionPath, radarTopics, rankRadarCandidates, type RadarCandidate } from './research-radar.ts';
+import { buildResearchRadar, createResearchRadarService, mergeRadarCandidates, parseRadarItems, radarDecisionPath, radarTopics, rankRadarCandidates, type RadarCandidate } from './research-radar.ts';
 import { appendRadarDecisionLine, radarPaperId } from './research-radar-format.ts';
+import { FileTooLarge, StoreUnavailable } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 const SCOUT_DIR = 'Research/Daily Research Scout';
@@ -346,5 +347,70 @@ tags:
   it('does not turn malformed decision JSONL into a successful empty read', async () => {
     const store = await InMemoryStore.create({ 'Research/Radar/Decisions/2026-09.jsonl': 'not-json\n' });
     await expect(buildResearchRadar({ store, now: () => NOW, timeZone: TZ })).rejects.toThrow();
+  });
+
+  it('carries the validated file month on decisions, not the client at timestamp', async () => {
+    const url = 'https://example.com/file-month';
+    const paperId = (await radarPaperId(url))!;
+    const log = encodeDecision({ schemaVersion: 1, decisionId: '11111111-1111-4111-8111-111111111111', paperId, decision: 'remove', undoes: null, at: '2026-09-01T10:00:00Z', card: { title: 'File month', source: url, topic: 'AI' } });
+    const out = await build({ 'Research/Radar/Decisions/2026-08.jsonl': log }, new Date('2026-10-03T10:00:00Z'));
+    expect(out.decisions[0]).toMatchObject({ month: '2026-08', at: '2026-09-01T10:00:00Z' });
+  });
+
+  it('degrades an oversized source note instead of failing the whole Radar read', async () => {
+    const store = await InMemoryStore.create({
+      [`${SCOUT_DIR}/Daily Research Scout - 2026-09-29.md`]: scout('2026-09-29', 'Readable', 'https://example.com/readable', 80),
+      [`${SCOUT_DIR}/Daily Research Scout - 2026-09-28.md`]: scout('2026-09-28', 'Oversized', 'https://example.com/oversized', 99),
+    });
+    const original = store.readFile.bind(store);
+    const spy = vi.spyOn(store, 'readFile').mockImplementation(async (p, at) => {
+      if ((p as string) === `${SCOUT_DIR}/Daily Research Scout - 2026-09-28.md`) throw new FileTooLarge('file exceeds 1 MB');
+      return original(p, at);
+    });
+    try {
+      const out = await buildResearchRadar({ store, now: () => NOW, timeZone: TZ });
+      expect(out.papers.map((p) => p.sourceUrl)).toEqual(['https://example.com/readable']);
+      expect(out.sources.dailyScout).toEqual({ state: 'degraded', count: 1 });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('still surfaces a real store outage from a source read', async () => {
+    const store = await InMemoryStore.create({
+      [`${SCOUT_DIR}/Daily Research Scout - 2026-09-29.md`]: scout('2026-09-29', 'Readable', 'https://example.com/readable', 80),
+    });
+    const spy = vi.spyOn(store, 'readFile').mockRejectedValue(new StoreUnavailable('down'));
+    try {
+      const service = createResearchRadarService({ store, now: () => NOW, timeZone: TZ });
+      await expect(service.readResearchRadar()).resolves.toMatchObject({ code: 'upstream-unavailable', retryable: true });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('caps large Important/Explained directories and reports honest partial coverage', async () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 40; i += 1) files[`${IMPORTANT_DIR}/Note ${String(i).padStart(2, '0')}.md`] = important('2026-09-29', `Note ${i}`, `https://example.com/imp-${i}`);
+    for (let i = 0; i < 40; i += 1) files[`${EXPLAINED_DIR}/Expl ${String(i).padStart(2, '0')}.md`] = explained(`https://example.com/exp-${i}`);
+    const store = await InMemoryStore.create(files);
+    const out = await buildResearchRadar({ store, now: () => NOW, timeZone: TZ });
+    expect(out.sources.importantUpdates).toEqual({ state: 'degraded', count: 16 });
+    expect(out.sources.explained).toEqual({ state: 'degraded', count: 0 });
+    expect(out.warnings.join(' ')).toContain('importantUpdates read only 16 of 40 papers before the read budget');
+    expect(out.warnings.join(' ')).toContain('explained read only 0 of 40 explanations before the read budget');
+  });
+
+  it('selects the same capped sources regardless of listing order', async () => {
+    const mapping = Array.from({ length: 30 }, (_, i) => [`${IMPORTANT_DIR}/Note ${String(i).padStart(2, '0')}.md`, `https://example.com/imp-${i}`] as const);
+    const makeStore = (reverse: boolean) => {
+      const files: Record<string, string> = {};
+      const entries = reverse ? [...mapping].reverse() : mapping;
+      for (const [path, url] of entries) files[path] = important('2026-09-29', path.slice(IMPORTANT_DIR.length + 1), url);
+      return InMemoryStore.create(files);
+    };
+    const a = await buildResearchRadar({ store: await makeStore(false), now: () => NOW, timeZone: TZ });
+    const b = await buildResearchRadar({ store: await makeStore(true), now: () => NOW, timeZone: TZ });
+    expect(a.papers.map((p) => p.sourceUrl)).toEqual(b.papers.map((p) => p.sourceUrl));
   });
 });

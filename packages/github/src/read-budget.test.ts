@@ -1,6 +1,6 @@
 // Review O1: one task read costs ≤ 5 GitHub store requests whatever the number of `known` commits (ref, the task list,
 // ≤ 2 single-page compares, one metadata read), where it used to cost one compare per commit. Recorded response shapes, fake network.
-import { createCommandService } from '@vault-companion/domain';
+import { createCommandService, createResearchRadarService } from '@vault-companion/domain';
 import { describe, expect, it } from 'vitest';
 import { GitHubContentsStore } from './contents-store.ts';
 
@@ -62,5 +62,66 @@ describe('task read request budget (review O1)', () => {
     expect(calls.length).toBeLessThanOrEqual(5);
     expect(calls.filter((c) => c.startsWith('GET /git/commits/'))).toEqual([`GET /git/commits/${r.revision}`]);
     expect(calls.length).toBe(3 + calls.filter((c) => c.startsWith('GET /compare/')).length);
+  });
+});
+
+describe('Research Radar read request budget (review 7 finding 5)', () => {
+  it('cold read with 25 monthly logs and large Important/Explained directories stays ≤ 50 GitHub requests', async () => {
+    const X = hex(1);
+    const calls: string[] = [];
+    const blob = 'b'.repeat(40);
+    const months: string[] = [];
+    const cursor = new Date('2026-09-01T00:00:00Z');
+    for (let i = 0; i < 25; i += 1) {
+      months.push(cursor.toISOString().slice(0, 7));
+      cursor.setUTCMonth(cursor.getUTCMonth() - 1);
+    }
+    const decisionFiles = new Map<string, string>();
+    months.forEach((month, i) => {
+      const decisionId = `00000000-0000-4000-8000-${(i + 1).toString(16).padStart(12, '0')}`;
+      decisionFiles.set(`Research/Radar/Decisions/${month}.jsonl`, JSON.stringify({
+        schemaVersion: 1, decisionId, paperId: '0'.repeat(20), decision: 'remove', undoes: null, at: `${month}-01T10:00:00Z`,
+        card: { title: 'Synthetic', source: 'https://example.com/paper', topic: 'AI' },
+      }) + '\n');
+    });
+    const important = (i: number) => `---\ntitle: Imp ${i}\ncreated: 2026-09-23\nstatus: active\nsource: https://example.com/imp-${i}\ntags:\n  - ai\n---\n## Curation decision\n- Synthetic\n`;
+    const explained = (i: number) => `---\nsource: https://example.com/exp-${i}\ntags:\n  - ai\n---\n# Explanation\nSynthetic\n`;
+    const applied = '{"schemaVersion":1,"updatedAt":"2026-09-24T10:00:00Z","decisions":{}}';
+
+    const fetch = (async (url: string, init: RequestInit) => {
+      const u = url.replace('https://api.github.com/repos/o/r', '');
+      calls.push(`${init.method ?? 'GET'} ${u}`);
+      if (u === '/git/ref/heads/main') return json(200, { object: { sha: X } });
+      if (u.startsWith('/git/trees/')) {
+        const refPart = u.slice('/git/trees/'.length).split('?')[0]!;
+        const dir = decodeURIComponent(refPart.slice(refPart.indexOf(':') + 1));
+        const entries = (names: string[]) => names.map((name) => ({ path: name, mode: '100644', type: 'blob', sha: blob }));
+        if (dir === 'Research/Daily Research Scout' || dir === 'Research/Reading Briefs') return json(200, { sha: '6'.repeat(40), truncated: false, tree: [] });
+        if (dir === 'Research/Important Research Updates') return json(200, { sha: '6'.repeat(40), truncated: false, tree: entries(Array.from({ length: 40 }, (_, i) => `Note ${String(i).padStart(2, '0')}.md`)) });
+        if (dir === 'Research/Explained') return json(200, { sha: '6'.repeat(40), truncated: false, tree: entries(Array.from({ length: 40 }, (_, i) => `Expl ${String(i).padStart(2, '0')}.md`)) });
+        if (dir === 'Research/Radar/Decisions') return json(200, { sha: '6'.repeat(40), truncated: false, tree: entries(months.map((m) => `${m}.jsonl`)) });
+        return json(404, { message: 'Not Found' });
+      }
+      if (u.startsWith('/contents/')) {
+        const path = decodeURIComponent(u.slice('/contents/'.length).split('?')[0]!);
+        let content: string;
+        if (path === 'Research/Radar/applied.json') content = applied;
+        else if (decisionFiles.has(path)) content = decisionFiles.get(path)!;
+        else if (path.startsWith('Research/Important Research Updates/')) content = important(Number(path.replace(/\D/g, '')) || 0);
+        else if (path.startsWith('Research/Explained/')) content = explained(Number(path.replace(/\D/g, '')) || 0);
+        else return json(404, { message: 'Not Found' });
+        return json(200, { type: 'file', sha: blob, size: new TextEncoder().encode(content).byteLength, encoding: 'base64', content: btoa(content) });
+      }
+      return json(500, { unexpected: u });
+    }) as unknown as typeof globalThis.fetch;
+
+    const store = new GitHubContentsStore({ owner: 'o', repo: 'r', token: async () => 't', fetch });
+    const service = createResearchRadarService({ store, now: () => NOW, timeZone: 'Europe/Copenhagen' });
+    const result = await service.readResearchRadar();
+    if ('code' in result) throw new Error(result.code);
+    expect(calls.length).toBeLessThanOrEqual(50);
+    expect(result.sources.importantUpdates).toEqual({ state: 'degraded', count: 16 });
+    expect(result.sources.explained).toEqual({ state: 'degraded', count: 0 });
+    expect(result.warnings.join(' ')).toContain('partial coverage');
   });
 });

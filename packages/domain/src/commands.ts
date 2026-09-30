@@ -648,7 +648,7 @@ export function createCommandService(deps: CommandServiceDeps) {
       if (!skew.ok) return apiError('clock-skew', 'the device clock is ahead; check the time settings');
       let r;
       try {
-        r = await executeWrite(deps.store, { operationId: cmd.operationId, baseRevision: cmd.baseRevision, payloadHash: await payloadHash(raw) }, researchRadarDecidePlan(cmd));
+        r = await executeWrite(deps.store, { operationId: cmd.operationId, baseRevision: cmd.baseRevision, payloadHash: await payloadHash(raw) }, researchRadarDecidePlan(cmd, deps.now()));
       } catch (e) {
         if (e instanceof md.KernelInvariantError) return apiError('refused:structure', 'a safety check refused this change; nothing was written');
         throw e;

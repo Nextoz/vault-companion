@@ -52,6 +52,7 @@ const decision = (over: Partial<RadarResponse['decisions'][number]> = {}): Radar
   decision: 'keep',
   undoes: null,
   at: '2026-09-30T10:00:00Z',
+  month: '2026-09',
   card: { title: 'Paper 1', source: 'https://example.com/paper-1', topic: 'rl' },
   ...over,
 });
@@ -590,5 +591,36 @@ describe('deriveRadar Keep save status', () => {
     };
     const view = deriveRadar(response([], [keepLine]), [intent], new Set([OP]));
     expect(view.decisions[0]!.saveStatus).toBe('saving');
+  });
+});
+
+describe('deriveRadar Undo eligibility', () => {
+  it('marks only current and previous server file months as undoable', () => {
+    const current = deriveRadar(response([], [decision({ month: '2026-09' })]), [], new Set());
+    const previous = deriveRadar(response([], [decision({ decisionId: '33333333-3333-4333-8333-333333333333', month: '2026-08' })]), [], new Set());
+    const old = deriveRadar(response([], [decision({ decisionId: '44444444-4444-4444-8444-444444444444', month: '2026-06' })]), [], new Set());
+    expect(current.decisions[0]!.undoable).toBe(true);
+    expect(previous.decisions[0]!.undoable).toBe(true);
+    expect(old.decisions[0]!.undoable).toBe(false);
+  });
+
+  it('uses the server file month, not the client at timestamp, for eligibility', () => {
+    const backdatedCurrent = decision({ decisionId: '55555555-5555-4555-8555-555555555555', at: '2026-09-01T10:00:00Z', month: '2026-09' });
+    const view = deriveRadar(response([], [backdatedCurrent]), [], new Set());
+    expect(view.decisions[0]!.undoable).toBe(true);
+  });
+
+  it('keeps the history row but hides Undo for an ineligible old decision', async () => {
+    const old = decision({ decisionId: '66666666-6666-4666-8666-666666666666', decision: 'remove', month: '2026-06' });
+    vi.mocked(getRadar).mockResolvedValue({ kind: 'ok', data: response([], [old]) });
+    const root = createRoot(document.getElementById('root')!);
+    await act(async () => {
+      root.render(createElement(ResearchRadar, { accountKey: 'account', refreshKey: null, blocked: false }));
+      await Promise.resolve(); await Promise.resolve();
+    });
+    await open();
+    expect(document.querySelector('[data-testid="radar-decision"]')).not.toBeNull();
+    expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Undo')).toBe(false);
+    await act(async () => root.unmount());
   });
 });

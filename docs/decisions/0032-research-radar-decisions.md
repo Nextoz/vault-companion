@@ -30,6 +30,8 @@ remain desktop-owned.
 - Decision history is read from at most the current Copenhagen month plus the preceding 24 monthly logs (25 months).
   Older, future or malformed monthly log filenames, more than 5000 lines, listed-but-missing/blob-mismatched logs, invalid UTF-8, malformed
   JSONL, duplicate IDs and invalid Undo targets are a typed unreadable/refused state, never an invented absence.
+- Intake-note reads share one aggregate budget; large Important/Explained directories are capped deterministically and reported as
+  degraded partial coverage, never silently treated as an exhaustive ranking.
 
 ## Writes
 
@@ -41,7 +43,8 @@ remain desktop-owned.
   `paperId` is 20 hex and must hash from `card.source`; `undoes` is present exactly on `undo` and must name an earlier
   non-undo line in the same or immediately previous monthly log, and must name the same `paperId`. The current and
   previous files must already be valid JSONL; malformed, duplicate-ID, duplicate-target or foreign/cross-paper Undo
-  logs are refused rather than appended over. The write appends only the current month and never alters the prior file.
+  logs are refused rather than appended over. The write appends only the **server's current Copenhagen month** (derived
+  from server time, not the client `occurredAt`) and never alters the prior file; the appended line keeps the client `at`.
 - The write reuses the existing operation-ID, base-revision, head-CAS, commit-trailer and dedupe-before-write executor.
   A retry of the same operation writes nothing more; two same-month writers both land; stale base/head re-plans against
   the newer head; a moved blob is never overwritten on a guess.
