@@ -14,6 +14,11 @@ temporary exceptions belong in `docs/plan.md`, not here.
 - **Lead role:** planning, decomposition, delegation, integration and acceptance, not implementation. Delegate
   according to the routing table to Herdr workers through `tools/agent-pane.sh`.
 - **Token economy:** read diffs, handoffs and gate verdicts rather than whole files.
+- **Turn pacing (owner, 2026-09-30):** never wait or poll inside a Lead turn. End with
+  `WAITING: <what>` and let the watcher resume the Lead with `WAKE: <event>`. Read worker handoffs, not logs; if a
+  log is required for launch verification or diagnosis, read at most its last 20 lines. The Lead does not read
+  source files while coordinating; use `git diff --stat` and delegate source inspection. Save Jev responses to
+  files and expose only their answer fields to the Lead.
 - **Acceptance:** evidence only. Use the harness gates once H exists; until then use the current handoff and
   check rules. A worker's completion claim is not acceptance.
 - **Shipping:** PR → CodeRabbit → merge → deploy using the normal runbook. Never merge a PR with the `hold`

@@ -1,8 +1,8 @@
-# Checkpoint — 2026-09-30 06:59 Europe/Copenhagen
+# Checkpoint — 2026-09-30 07:20 Europe/Copenhagen
 
-Owner requested an immediate checkpoint. Running workers were left untouched. Follow CLAUDE.md / orchestration
-resume procedure, then this file's exact next actions. Current Lead: Codex gpt-6-astra, temporary appointment and
-expiry in docs/plan.md (2026-10-01 21:00 Copenhagen / 19:00 UTC). No Claude usage before handover.
+Follow CLAUDE.md / orchestration resume procedure, then this file's exact next actions. Current Lead: Codex
+gpt-6-astra in `CODEX LOW` budget mode; temporary appointment and budget mode expire 2026-10-01 21:00 Copenhagen
+/ 19:00 UTC. No Claude usage before handover. Start no new Codex worker while `CODEX LOW` is active.
 
 ## Completed and evidence
 
@@ -17,6 +17,11 @@ expiry in docs/plan.md (2026-10-01 21:00 Copenhagen / 19:00 UTC). No Claude usag
   exact ready response, 5211 transcript tokens. DeepSeek is provisional under owner update 2.
 - Prepared independent B3 and B4 briefs/clones; dependency installs succeeded. Neither worker launched yet.
 - Isolated Codex/DeepSeek homes and caches under C:/Dev; never write outside C:/Dev. Vault remains read-only.
+- Recorded the owner's Codex budget mode in plan and the no-wait/no-poll, handoff-only, 20-log-line, diff-stat and
+  Jev-answer-only token rules in orchestration. Outside-floor work routes to DeepSeek; floor work is one Astra
+  medium worker maximum, with Astra-high held for the Claude Lead after reset.
+- PR #47 remote head 5fc6a94: ubuntu/windows CI and CodeRabbit passed. CodeRabbit's single stale-snapshot wording
+  finding is fixed locally; do not request a repeat review. Local checkpoint 610699d plus this update still need push.
 
 ## Running and prepared workers (do not redispatch)
 
@@ -24,19 +29,21 @@ expiry in docs/plan.md (2026-10-01 21:00 Copenhagen / 19:00 UTC). No Claude usag
 |---|---|---|---|
 | H1 | RUNNING, gpt-6-astra medium, real implementation activity, no final handoff yet | w5:p4 in Agents w5:t2 | C:/Dev/vault-companion-clones/h1-harness; agent/h1-harness, base 8ce1d57 |
 | Smoke | Completed PASS; pane self-closed normally | former w5:p5 | C:/Dev/vault-companion-clones/deepseek-smoke; base 5fc6a94 |
-| B3 | Prepared only; DeepSeek Flash selected by fallback | none | C:/Dev/vault-companion-clones/b3-degraded; agent/b3-degraded at 5fc6a94 |
-| B4 | Prepared only; Jev selected Codex Luna medium, queued for Codex slot | none | C:/Dev/vault-companion-clones/b4-compact; agent/b4-compact at 5fc6a94 |
+| B3 | RUNNING; DeepSeek Flash high, real activity verified | w5:pA | C:/Dev/vault-companion-clones/b3-degraded; agent/b3-degraded at 5fc6a94 |
+| B4 | RUNNING; DeepSeek Flash high, real activity verified | w5:pB | C:/Dev/vault-companion-clones/b4-compact; agent/b4-compact at 5fc6a94 |
 
 H1 log: C:/Dev/vault-companion-clones/h1-harness/.agent/run.log.
 H1 session: 01a0f0ab-4cde-7d12-9726-3ad8bd566a6a. Handoff expected .agent/handoffs/H1-harness-core.md.
-Non-interactive worker is absent from herdr agent list but present in pane inventory; do not mistake that for done.
-Lead is w5:p1. Existing w5:p2 and w5:p3 were not created/altered by this Lead. No new watcher launched yet.
+Non-interactive workers are absent from herdr agent list but present in pane inventory; do not mistake that for
+done. B3/B4 initial panes w5:p7/w5:p8 exited before source work because `CODEX_HOME` was not propagated; retries
+inject it in the worker command and are the runs above. Lead is w5:p2. Do not wait or poll; watcher wake is expected.
 
 ## Jev and spend accounting (required every checkpoint)
 
-- Picks followed: 1 decision (B4), queued but not executed. Completed Jev-picked implementation runs: 0/first 5.
-- Picks overruled/fallback: 1 (B3). Jev Luna top probability .41 < .60; ordinary .98, ambiguous .20.
-  Lead chose authorized DeepSeek Flash canary. B4 Luna .68, ordinary 1.00, ambiguous .20 -> follow at medium.
+- Historical picks followed: 0 executed. Completed Jev-picked implementation runs: 0/first 5.
+- Historical picks overruled/fallback: 2 (B3 and B4) because the owner's later DeepSeek-only budget routing
+  superseded Codex choices. A new DeepSeek-only Jev call failed once with provider 403/no provider; no retry.
+  Earlier saved answer fields ranked Flash above Pro for both, so the Lead selected Flash as unavailable-Jev fallback.
 - Escalated runs: 0. High-risk downgrade suggestions: none. H1 uses deterministic high-risk floor, not Jev routing.
 - Smoke Jev run check: close probability .99, completed .80, verification .49, scope .84, silent failure .20,
   unsupported claims .38. Lead accepts only the observed one-word smoke, no implementation claim.
@@ -49,22 +56,18 @@ Lead is w5:p1. Existing w5:p2 and w5:p3 were not created/altered by this Lead. N
 
 ## Exact next actions
 
-1. Inspect H1 log/handoff before any new Codex dispatch. Wait inside the active turn for workers; background jobs
-   do not wake Codex. One Codex worker maximum; Lead is the only Astra-high job. Do not stop the current worker.
-2. Launch prepared B3 via tools/agent-pane.sh with DeepSeek home under C:/Dev and AGENT_USER_ENV=DEEPSEEK_API_KEY;
-   record balance before/after and pane ID immediately. Smoke allows up to two DeepSeek plus one Codex, with disjoint
-   files and low-risk only. B3 edits insights data/UI; B4 edits Scouts layout/CSS/tests. B4 waits for the Codex slot
-   because its qualifying Jev pick was Luna. Don't override that pick just to fill a DeepSeek slot.
+1. On `WAKE`, read the named worker handoff, not its log. Use `git diff --stat`; do not read source directly.
+   H1 stays untouched until its handoff exists. Start no new Codex worker while `CODEX LOW` remains active.
+2. B3/B4 are running in disjoint clones. On each handoff, run Jev Use 1 if Jev is available; otherwise record the
+   provider blocker once and perform the Lead evidence verdict. Record DeepSeek balance after both finish.
 3. H1 completion: read diff/handoff, run Jev Use 1, disposition discoveries. One focused correction if needed;
    then escalation rule. Full Lead check and e2e before acceptance. Build H2 separately per high-risk floor.
    H hook/gate PR MUST have hold and await independent Claude review; live hook canary deferred to Claude.
-4. PR #47 (https://github.com/Nextoz/vault-companion/pull/47): CI ubuntu/windows and CodeRabbit pending at checkpoint.
-   Requested one full review already (issuecomment-5904387559). Read findings; no repeat request/rate-limit polling.
-   Final checkpoint commit is local unless pushed after this checkpoint. Recheck hold/owner comments before merge.
+4. PR #47 (https://github.com/Nextoz/vault-companion/pull/47): push checkpoint 610699d plus the current owner-rule
+   update. CI and CodeRabbit passed at old head; do not repeat-request CodeRabbit. Recheck hold/owner comments before merge.
 5. Continue Ready order; park underspecified work under Waiting for Evgeny, print ACTION NEEDED and take next.
    H risk floor is deliberately owner TODO; main required-check rule remains an ADR proposal, no server mutation.
-6. Before ending later for CI/CodeRabbit/owner, establish a watcher that sends WAKE to Lead; old wait-for-work.sh
-   only prints/exits and does not wake Codex. End with WAITING. This immediate checkpoint supersedes waiting now.
+6. Never wait or poll inside the Lead turn. End with `WAITING: H1/B3/B4 handoff`; the watcher sends `WAKE:`.
 7. At 2026-10-01 21:00 Copenhagen finish a safe step, checkpoint/commit, print HANDOVER TO CLAUDE READY.
 
 ## Production and open evidence preserved
