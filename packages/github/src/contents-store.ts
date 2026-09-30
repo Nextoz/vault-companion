@@ -172,7 +172,9 @@ export class GitHubContentsStore implements VaultStore {
       `${this.contentsPath(path)}?ref=${atCommit}`,
     );
     if (!item) return null;
-    if (item.type !== 'file') return null;
+    if (typeof item.type !== 'string') throw new StoreUnavailable('malformed Contents type');
+    if (item.type === 'dir' || item.type === 'symlink' || item.type === 'submodule') return null;
+    if (item.type !== 'file') throw new StoreUnavailable('malformed Contents type');
     const { sha, size, encoding, content } = item;
     if (typeof sha !== 'string' || !IMMUTABLE_COMMIT.test(sha)) throw new StoreUnavailable('malformed Contents blob SHA');
     if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) throw new StoreUnavailable('malformed Contents size');

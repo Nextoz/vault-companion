@@ -5,10 +5,9 @@ No domain/API/auth/write/head/tree changes, no TTL, no configs/harness/CI, no li
 
 ## Result
 
-`pnpm exec vitest run packages/github/src/read-cache.test.ts packages/github/src/contents-store.test.ts packages/github/src/read-budget.test.ts --reporter=dot`
-passes 3 files / 51 tests. Fail-before evidence: the two Lead regressions failed first (160 valid reads → 32 nulls;
-missing blob SHA poisoned the cache), after which the read-cache file passed 23/23. `pnpm typecheck` and targeted
-`pnpm exec eslint` on the two touched files pass. No full `pnpm check`/e2e was run (Lead owns that).
+`pnpm exec vitest run packages/github/src/read-cache.test.ts packages/github/src/contents-store.test.ts packages/github/src/read-budget.test.ts packages/github/src/undo-budget.test.ts packages/github/src/write-budget.test.ts apps/worker/test/sp-read-latency.test.ts --reporter=dot`
+passes 6 files / 88 tests after the SP2 independent repair. `pnpm typecheck` (tsc -b) and targeted `pnpm exec eslint`
+on the touched files pass. No full `pnpm check`/e2e was run (Lead owns that).
 
 ## Implementation
 
@@ -17,8 +16,10 @@ missing blob SHA poisoned the cache), after which the read-cache file passed 23/
 - Cache key is exactly `${commitSha}\0${path}`. Lookup/single-flight happen only for `/^[0-9a-f]{40}$/` commits;
   non-SHA refs are fetched afresh and never cached. `guardPath(path)` runs before any lookup.
 - A single-flight retains its fetched result and returns a separate byte copy to every joining caller, so eviction of
-  that key by later insertions cannot turn a successful fetch into `null`. `null` is only true absence (404/non-file).
-- Only settled `type === 'file'` answers with a valid 40-hex `sha`, safe non-negative integer `size` within 1 MiB,
+  that key by later insertions cannot turn a successful fetch into `null`. `null` is only true absence: a 404, or an
+  explicit supported non-file type (`dir`/`symlink`/`submodule`).
+- A missing, non-string, or unknown `type` fails typed (`StoreUnavailable`) instead of being treated as absence. Only
+  settled `type === 'file'` answers with a valid 40-hex `sha`, safe non-negative integer `size` within 1 MiB,
   `encoding: 'base64'`, valid base64 whose decoded length is within 1 MiB and equals the declared `size` are cached.
   Malformed metadata/encoding/base64 and inconsistent sizes fail typed (`StoreUnavailable`) and stay uncached; any
   over-limit path fails `FileTooLarge`. Encoded length is bounded before decoding. `head()` is untouched and still
@@ -40,16 +41,19 @@ missing blob SHA poisoned the cache), after which the read-cache file passed 23/
 - Failed concurrent single-flight then retry: 2 Contents GETs (one shared failure, one retry).
 - 129 distinct entries then re-read the first: 130 Contents GETs (entry-count eviction). 8 × 1 MiB entries plus one
   1-byte entry then re-read the first big entry: 10 Contents GETs (byte-budget eviction).
-- 160 concurrent distinct valid reads: 160 Contents GETs, 0 nulls. Gated single-flight joiners whose key is evicted by
-  128 other insertions still return their fetched bytes. 404/absence twice: 2 GETs. Each malformed response + recovery:
-  2 GETs.
+- 160 concurrent distinct valid reads: 160 Contents GETs, 0 nulls. Gated single-flight joiners still return their
+  fetched bytes after 128 insertions fill the cache before settlement (the flight retains the result independently of
+  cache residency). 404/absence twice: 2 GETs. Each malformed response + recovery: 2 GETs.
+- Pending-map overflow: 32 unresolved distinct reads held, then two independent fallback requests for one extra path:
+  34 Contents GETs total, all valid, then all settle.
 
 No production/phone latency is claimed; these are request counts from a deterministic fake `fetch`.
 
 ## Safety and limits
 
-- Memory lifetime is the store instance (which may be request-scoped), not a guaranteed isolate lifetime; there is no
-  cross-request/global cache expansion. Nothing is persisted to disk and private bytes are never logged.
+- Memory lifetime is the store instance. Production composition caches the app, and therefore one store, per env at
+  module scope (`apps/worker/src/index.ts:57,138`), so the bounded cache spans requests within one isolate; it is never
+  global and is never shared across auth identities/envs. Nothing is persisted to disk and private bytes are never logged.
 - Unsafe paths still throw before any cache lookup or fetch. Private-byte isolation is enforced per store instance and
   per caller copy.
 

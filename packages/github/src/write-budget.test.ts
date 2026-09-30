@@ -64,7 +64,7 @@ async function fakeGitHub(o: Options) {
     if (u.startsWith('/contents/Tasks/')) {
       const text = o.appliedAs && u.endsWith(`ref=${X}`) ? o.appliedAs.bytes : TODO;
       const sha = await gitBlobSha(new TextEncoder().encode(text));
-      return json(200, { type: 'file', sha, size: text.length, encoding: 'base64', content: btoa(String.fromCharCode(...new TextEncoder().encode(text))) });
+      return json(200, { type: 'file', sha, size: new TextEncoder().encode(text).byteLength, encoding: 'base64', content: btoa(String.fromCharCode(...new TextEncoder().encode(text))) });
     }
     if (u.startsWith('/contents/')) return json(200, { type: 'file', sha: '5'.repeat(40), size: 2, encoding: 'base64', content: btoa('x\n') });
     if (/^\/git\/trees\/[0-9a-f]{40}:Tasks$/.test(u)) return json(200, { sha: '6'.repeat(40), truncated: false, tree: [{ path: 'To-Do List.md', mode: '100644', type: 'blob' }] });

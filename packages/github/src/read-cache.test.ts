@@ -43,6 +43,13 @@ describe('read cache (SP2)', () => {
     await expect(s.readFile(PATH, SHA('a'))).rejects.toBeInstanceOf(StoreUnavailable);
   });
 
+  it('treats a directory Contents answer as confirmed absence and never caches it', async () => {
+    const { s, calls } = store(() => json(200, { type: 'dir', sha: SHA('b'), size: 0, encoding: 'base64', content: '' }));
+    expect(await s.readFile(PATH, SHA('a'))).toBeNull();
+    expect(await s.readFile(PATH, SHA('a'))).toBeNull();
+    expect(contentCalls(calls)).toBe(2);
+  });
+
   it('Lead review: valid concurrent files remain present even when settlement evicts their cache entries', async () => {
     const { s, calls } = store(() => fileResponse('present'));
     const files = await Promise.all(Array.from({ length: 160 }, (_, i) =>
@@ -263,7 +270,7 @@ describe('read cache (SP2)', () => {
     expect(contentCalls(calls)).toBe(10);
   });
 
-  it('single-flight joiners keep their fetched bytes when other insertions evict the key first', async () => {
+  it('single-flight joiners keep their fetched bytes when 128 insertions fill the cache before settlement', async () => {
     let resolve!: (r: Response) => void;
     const gate = new Promise<Response>((r) => {
       resolve = r;
@@ -286,6 +293,40 @@ describe('read cache (SP2)', () => {
     expect(f1!.bytes).not.toBe(f2!.bytes);
   });
 
+  it('pending map overflow: 32 unresolved distinct reads fall back to independent requests and all settle valid', async () => {
+    const held = Array.from({ length: 32 }, (_, i) => `Inbox/Held ${i}.md` as VaultPath);
+    const gates = new Map<string, Promise<Response>>();
+    const resolvers = new Map<string, (response: Response) => void>();
+    for (const p of held) {
+      const gate = new Promise<Response>((resolve) => {
+        resolvers.set(p, resolve);
+      });
+      gates.set(p, gate);
+    }
+
+    const extra = 'Inbox/Extra.md' as VaultPath;
+    let extraGets = 0;
+    const { s, calls } = store((url) => {
+      const p = decodeURIComponent(url.split('/contents/')[1]!.split('?ref=')[0]!);
+      if (gates.has(p)) return gates.get(p)!;
+      extraGets += 1;
+      return fileResponse('extra');
+    });
+
+    const heldReads = held.map((p) => s.readFile(p, SHA('a')));
+    const extra1 = s.readFile(extra, SHA('a'));
+    const extra2 = s.readFile(extra, SHA('a'));
+
+    for (const p of held) resolvers.get(p)!(fileResponse(`held ${p}`));
+    const results = await Promise.all([...heldReads, extra1, extra2]);
+
+    expect(results.filter((file) => file === null)).toHaveLength(0);
+    expect(decode(results[32]!.bytes)).toBe('extra');
+    expect(decode(results[33]!.bytes)).toBe('extra');
+    expect(extraGets).toBe(2);
+    expect(contentCalls(calls)).toBe(34);
+  });
+
   it('retries a confirmed absence with a fresh GET and never caches null', async () => {
     let contentGets = 0;
     const { s, calls } = store((url) => {
@@ -302,6 +343,8 @@ describe('read cache (SP2)', () => {
   it.each([
     ['missing blob SHA', { type: 'file', size: 3, encoding: 'base64', content: btoa('bad') }, StoreUnavailable],
     ['non-hex blob SHA', { type: 'file', sha: SHA('z'), size: 3, encoding: 'base64', content: btoa('bad') }, StoreUnavailable],
+    ['non-string type', { type: 7, sha: SHA('b'), size: 3, encoding: 'base64', content: btoa('bad') }, StoreUnavailable],
+    ['unknown type', { type: 'unsupported', sha: SHA('b'), size: 3, encoding: 'base64', content: btoa('bad') }, StoreUnavailable],
     ['negative size', { type: 'file', sha: SHA('b'), size: -1, encoding: 'base64', content: btoa('bad') }, StoreUnavailable],
     ['fractional size', { type: 'file', sha: SHA('b'), size: 3.5, encoding: 'base64', content: btoa('bad') }, StoreUnavailable],
     ['non-base64 encoding', { type: 'file', sha: SHA('b'), size: 3, encoding: 'none', content: btoa('bad') }, StoreUnavailable],
