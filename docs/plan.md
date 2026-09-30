@@ -23,6 +23,12 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
+- 13:39: PR **#49 merged2e0db23** after Lead review/full1447tests+80browser tests and green current CI.
+  CodeRabbit no real review; incorrect `review` command failed, future one request must be `full review`.
+  Not deployed/phone-accepted (owner G2). H2 correction independently56tests/typecheck passes but actual CLI,
+  MCP-home and receipt failures reproduced; held draft **#50**, no activation or additional blind Pro retry.
+  H1/RR1 Pro active; SP2 immutable revision read cache now Pro **w5:p0**, bounded oracle/hold, no head TTL/write
+  changes. Balance **$6.88**, reported spend$3.11, max3/$3stop unchanged. Checkpoint has exact resume/blockers.
 - 13:23: B3 Pro correction reviewed; B3/B4/SP1 batch independently FULL check **103files/1447tests** and
   single FULL browser suite **80/80** pass. Ordinary PR **#49** open, current-head CI/review pending; no H/RR
   floor changes included. One CodeRabbit request after final checkpoint push. RR1 correction now Pro **w5:pY**;

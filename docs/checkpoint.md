@@ -1,4 +1,37 @@
-# Checkpoint — 2026-09-30 13:23 Europe/Copenhagen
+# Checkpoint — 2026-09-30 13:39 Europe/Copenhagen
+
+## Latest delta — PR49 merged / H2 parked / SP2 dispatched
+
+- PR **#49 merged** `2e0db236264a9f1d48351622b8753a9bc08e7a82`, current94e7d82 Ubuntu/Windows green,
+  no hold/review threads or unanswered owner comments. Local103files/1447tests +80browser tests already passed.
+  CodeRabbit produced no real review: automatic skip(<10stars), incorrect `review` command failed. No repeat
+  request; record limitation. FUTURE final-head requests must use `@coderabbitai full review` per orchestration.
+  Main reconciled with non-destructive merge, local checkpoint ancestry preserved. Production NOT deployed;
+  deploy runbook G2 remains owner gate; phone acceptance unobserved. Do not claim shipped.
+- H2 correction handoff read; production sources/profiles/docs reviewed, remaining test review partial.
+  Independent56 targeted tools tests +tsc-b PASS. Still unaccepted: installed0.159.2 resume rejects generated
+  --sandbox/-C; synthetic named-MCP home bypasses guard; inconsistent receipt with exit1/non-SHA binding accepted;
+  real watcher adapter swallows errors into empty state. Stream/output-trust and wake acknowledgement gaps remain.
+  Details h2-launcher/.agent/review-blockers.md. One proper Pro correction exhausted; no blind repeat.
+- H2 preserved bdfc195, merged current main082df7d (stale plan/checkpoint conflicts resolved to canonical incoming
+  main only). Draft **PR #50** https://github.com/Nextoz/vault-companion/pull/50 has **hold**. Created missing hold
+  label to fulfill owner floor rule. No activation/merge; H1 coupling, normal tools discovery, full verification,
+  independent Claude review/live hook canary deferred. Review packet in PR body; not self-certified by56tests.
+- H2 Jev Use1 strong-review1.00 / verification .07. Lead agrees independent escalation on reproduced failures,
+  not another same-tier retry; raw .agent/jev/H2-correction-run.json. Routing kill-switch stats unchanged.
+- Freed slot SP2 on Pro **w5:p0** (actual opaque pane ID), clone sp2-read-cache / agent/sp2-read-cache base2e0db23,
+  .agent/brief.md; .agent/run.log; handoff .agent/handoffs/SP2.md. Acceptance-oracle contract bounds revision/path
+  cache <=128entries/8MiB, pending<=32, copy bytes, instance isolation, failed/absent results uncached; fresh head
+  untouched. No TTL/write-path changes, no claimed production latency. Floor hold/Claude gate applies.
+- Active3: H1 recovery w5:pW, RR1 correction w5:pY, SP2 w5:p0. Independent files. H2 stopped/parked, BUGS merged.
+  DeepSeek **$7.10** pre-SP2 → **$6.98** at13:37 → **$6.88** at13:39; aggregate reported spend **$3.11** since9.99,
+  concurrent attribution unknown. Stop NEW dispatch below3. No OpenAI implementation, vault write or deployment.
+- Watcher now excludes consumed H2/BUGS/RR1-original and PR49; watches H1/RR1-correction/SP2 handoffs, PR50
+  current CI/review (always retain hold). Next wake handoff-first review, Jev/evidence disposition, balance update.
+
+---
+
+# Prior checkpoint — 2026-09-30 13:23 Europe/Copenhagen
 
 ## Latest delta — bug batch verified, PR49 open
 
