@@ -38,6 +38,17 @@ export interface GitHubStoreOptions {
 const MAX_CONTENT_BYTES = 1024 * 1024;
 /** Entries kept per in-memory cache (keys are immutable commit SHAs; a full cache is simply dropped). */
 const CACHE_LIMIT = 256;
+/** Read-cache bounds: at most this many settled files and this many resident decoded bytes per store instance. */
+const READ_CACHE_ENTRY_LIMIT = 128;
+const READ_CACHE_BYTES_LIMIT = 8 * 1024 * 1024;
+/** Concurrent identical immutable reads are single-flighted while this many distinct reads are already in flight. */
+const READ_PENDING_LIMIT = 32;
+const IMMUTABLE_COMMIT = /^[0-9a-f]{40}$/;
+
+interface CachedFile {
+  readonly blobSha: string;
+  readonly bytes: Uint8Array;
+}
 
 interface TreeEntry {
   readonly path: string;
@@ -59,6 +70,15 @@ export class GitHubContentsStore implements VaultStore {
    * answers are kept (entries, or confirmed absence); failures always throw afresh.
    */
   private readonly listings = new Map<string, TreeEntry[] | null>();
+  /**
+   * Settled Contents reads for immutable (commit SHA, path) keys. Bytes are stored as a private copy; callers always
+   * receive another copy, so mutating a returned array cannot affect the cache or any other caller. Bounded by entry
+   * count and decoded-byte budget; oldest-first eviction.
+   */
+  private readonly readCache = new Map<string, CachedFile>();
+  private readCacheBytes = 0;
+  /** Single-flight promises for identical immutable reads currently in progress; removed once settled. */
+  private readonly pendingReads = new Map<string, Promise<void>>();
 
   constructor(private readonly opts: GitHubStoreOptions) {
     this.branch = opts.branch ?? 'main';
@@ -111,7 +131,42 @@ export class GitHubContentsStore implements VaultStore {
   }
 
   async readFile(path: VaultPath, atCommit: string): Promise<StoredFile | null> {
+    // Path safety precedes any cache lookup: a caller can never make the cache leak bytes for an unsafe path.
     guardPath(path);
+    const immutable = IMMUTABLE_COMMIT.test(atCommit);
+    const key = `${atCommit}\0${path}`;
+    if (immutable) {
+      const cached = this.readCache.get(key);
+      if (cached) return { blobSha: cached.blobSha, bytes: cached.bytes.slice(), commitSha: atCommit };
+    }
+    if (immutable && this.pendingReads.has(key)) {
+      await this.pendingReads.get(key);
+      const cached = this.readCache.get(key);
+      return cached ? { blobSha: cached.blobSha, bytes: cached.bytes.slice(), commitSha: atCommit } : null;
+    }
+    // Non-SHA refs are never cached or single-flighted; a full in-flight table falls back to an uncached read.
+    if (!immutable || this.pendingReads.size >= READ_PENDING_LIMIT) {
+      const file = await this.fetchRead(path, atCommit);
+      if (immutable && file) this.storeRead(key, file);
+      return file;
+    }
+    // Identical immutable reads share one fetch; each caller still receives its own byte copy after settlement.
+    let flight = this.pendingReads.get(key);
+    if (!flight) {
+      flight = this.fetchAndCacheRead(key, path, atCommit).finally(() => this.pendingReads.delete(key));
+      this.pendingReads.set(key, flight);
+    }
+    await flight;
+    const cached = this.readCache.get(key);
+    return cached ? { blobSha: cached.blobSha, bytes: cached.bytes.slice(), commitSha: atCommit } : null;
+  }
+
+  private async fetchAndCacheRead(key: string, path: VaultPath, atCommit: string): Promise<void> {
+    const file = await this.fetchRead(path, atCommit);
+    if (file) this.storeRead(key, file);
+  }
+
+  private async fetchRead(path: VaultPath, atCommit: string): Promise<StoredFile | null> {
     const item = await this.getJson<{ type: string; sha: string; size: number; content?: string; encoding?: string }>(
       `${this.contentsPath(path)}?ref=${atCommit}`,
     );
@@ -121,6 +176,21 @@ export class GitHubContentsStore implements VaultStore {
     // Phase 0: base64 arrives with embedded '\n' every 60 chars.
     const bytes = base64ToBytes(item.content.replace(/\s/g, ''));
     return { blobSha: item.sha, bytes, commitSha: atCommit };
+  }
+
+  private storeRead(key: string, file: StoredFile): void {
+    const size = file.bytes.byteLength;
+    // A single oversized entry is never resident: bypass storage rather than churning the bounded cache.
+    if (size > READ_CACHE_BYTES_LIMIT || this.readCache.has(key)) return;
+    while (this.readCache.size >= READ_CACHE_ENTRY_LIMIT || this.readCacheBytes + size > READ_CACHE_BYTES_LIMIT) {
+      const oldest = this.readCache.entries().next();
+      if (oldest.done) break;
+      const [oldKey, old] = oldest.value;
+      this.readCache.delete(oldKey);
+      this.readCacheBytes -= old.bytes.byteLength;
+    }
+    this.readCache.set(key, { blobSha: file.blobSha, bytes: file.bytes.slice() });
+    this.readCacheBytes += size;
   }
 
   async listDir(dir: string, atCommit: string): Promise<readonly string[]> {
