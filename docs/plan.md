@@ -23,6 +23,20 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
+- 12:20 checkpoint: PR #47 merged as `6080433`; update-3 follow-up PR **#48** open, Ubuntu/Windows CI green,
+  CodeRabbit review requested once and pending. Local full check **1415 tests** and e2e **79/79** passed for #47.
+- B4 handoff reviewed: independent component **7/7** and iPhone-WebKit Scouts browser **3/3** pass. Memoized
+  Insights filtering accepted. Before bug-batch acceptance, fix Running counted as 'with problems' and unknown
+  findings announced as 'no findings'; focused correction packet `.agent/B4-correction.md` queued, not launched.
+  No escalation/redo; batch still unaccepted until correction, B3 integration and full combined verification.
+- SP1 measurement dispatched on Flash high in `w5:pK`, clone `C:/Dev/vault-companion-clones/sp1-measure`,
+  branch `agent/sp1-measure`, base `8a0ca36`; tool activity verified. Jev tier Flash .79, ordinary risk .68,
+  ambiguity .28: pick followed (1 active picked run). Active slots: B3, H2, SP1. Next dispatch RR1, then remaining bugs.
+- Latest balance **$9.71** at 12:20 Copenhagen (resume $9.99; aggregate reported spend $0.28;
+  concurrent per-run attribution unknown). Jev B4 advice strong-review .56, verification .14; Lead retains
+  unaccepted verdict pending focused correction/combined checks. No floor downgrade. Interim watcher rearmed
+  for B3/H2/SP1 handoffs and PR #48 checks; B4's consumed handoff excluded to prevent repeated wake.
+
 - Resume at 11:58 Copenhagen: clean documentation branch `bc5a853`; PR #47 CI green on Ubuntu/Windows,
   real CodeRabbit review completed and its stale-snapshot finding fixed. B3/B4 panes closed without tool activity,
   code changes or handoffs; restarted in the same clones on Flash with the original briefs plus failure context.
@@ -106,8 +120,9 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 | H1 core guards/gates | **STOPPED at quota, incomplete**, no handoff; partial work preserved; no new OpenAI Codex work | former `w5:p4` | `C:\Dev\vault-companion-clones\h1-harness`; `agent/h1-harness`, base `8ce1d57`; tracked and untracked edits |
 | DeepSeek smoke | **Completed PASS**; deepseek-flash high; pane closed itself normally | former `w5:p5` | `C:\Dev\vault-companion-clones\deepseek-smoke`; inherited `docs/continuous-lead-20260930` at `5fc6a94`; no code edits |
 | B3 degraded insights | **RUNNING restarted**; DeepSeek Flash high, unsandboxed tool activity verified | `w5:pE` | `C:\Dev\vault-companion-clones\b3-degraded`; `agent/b3-degraded` at `5fc6a94`; handoff `.agent/handoffs/B3.md`, log `.agent/unsandboxed.log` |
-| B4 compact Scouts | **RUNNING restarted**; DeepSeek Flash high, unsandboxed tool activity verified | `w5:pF` | `C:\Dev\vault-companion-clones\b4-compact`; `agent/b4-compact` at `5fc6a94`; handoff `.agent/handoffs/B4.md`, log `.agent/unsandboxed.log` |
+| B4 compact Scouts | **Handoff reviewed, correction queued**, targeted checks pass, not accepted | former `w5:pF` | `C:\Dev\vault-companion-clones\b4-compact`; `agent/b4-compact` at `5fc6a94`; handoff `.agent/handoffs/B4.md`, log `.agent/unsandboxed.log` |
 | H2 non-hook launcher/profiles/watcher | **RUNNING**; DeepSeek Pro high (`deepseek-v4-pro`), unsandboxed tool activity verified | `w5:pH` | `C:/Dev/vault-companion-clones/h2-launcher`; `agent/h2-launcher`, base `bc5a853`; handoff `.agent/handoffs/H2.md`, log `.agent/pro.log`; hold PR |
+| SP1 read-latency measurement | **RUNNING**, DeepSeek Flash high, tool activity verified | `w5:pK` | `C:/Dev/vault-companion-clones/sp1-measure`; `agent/sp1-measure`, base `8a0ca36`; handoff `.agent/handoffs/SP1.md` |
 
 - H1 log: `C:\Dev\vault-companion-clones\h1-harness\.agent\run.log`; session
   `01a0f0ab-4cde-7d12-9726-3ad8bd566a6a`. Expected report `.agent/handoffs/H1-harness-core.md`.
