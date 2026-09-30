@@ -6,18 +6,23 @@ No domain/API/auth/write/head/tree changes, no TTL, no configs/harness/CI, no li
 ## Result
 
 `pnpm exec vitest run packages/github/src/read-cache.test.ts packages/github/src/contents-store.test.ts packages/github/src/read-budget.test.ts --reporter=dot`
-passes 3 files / 38 tests. `pnpm typecheck` and targeted `pnpm exec eslint` on the two touched files pass. No full
-`pnpm check`/e2e was run (Lead owns that).
+passes 3 files / 51 tests. Fail-before evidence: the two Lead regressions failed first (160 valid reads → 32 nulls;
+missing blob SHA poisoned the cache), after which the read-cache file passed 23/23. `pnpm typecheck` and targeted
+`pnpm exec eslint` on the two touched files pass. No full `pnpm check`/e2e was run (Lead owns that).
 
 ## Implementation
 
 - `GitHubContentsStore` now has three private fields: `readCache` (`Map<key, CachedFile>`), `readCacheBytes`, and
-  `pendingReads` (`Map<key, Promise<void>>`). All are per store instance; no module/global shared bytes.
+  `pendingReads` (`Map<key, Promise<StoredFile | null>>`). All are per store instance; no module/global shared bytes.
 - Cache key is exactly `${commitSha}\0${path}`. Lookup/single-flight happen only for `/^[0-9a-f]{40}$/` commits;
   non-SHA refs are fetched afresh and never cached. `guardPath(path)` runs before any lookup.
-- Only settled `type === 'file'`, base64, under `MAX_CONTENT_BYTES` answers are cached. `null`/404, directories,
-  errors, malformed shapes, and oversized answers are never cached. `head()` is untouched and still fetches the ref
-  every call.
+- A single-flight retains its fetched result and returns a separate byte copy to every joining caller, so eviction of
+  that key by later insertions cannot turn a successful fetch into `null`. `null` is only true absence (404/non-file).
+- Only settled `type === 'file'` answers with a valid 40-hex `sha`, safe non-negative integer `size` within 1 MiB,
+  `encoding: 'base64'`, valid base64 whose decoded length is within 1 MiB and equals the declared `size` are cached.
+  Malformed metadata/encoding/base64 and inconsistent sizes fail typed (`StoreUnavailable`) and stay uncached; any
+  over-limit path fails `FileTooLarge`. Encoded length is bounded before decoding. `head()` is untouched and still
+  fetches the ref every call.
 - Bytes are copied into the cache (`Uint8Array.slice()`) and every caller receives another `slice()`, so mutating any
   returned array cannot affect the cache or other/later/concurrent callers. `blobSha`/`commitSha` are preserved.
 - Bounds: <=128 entries and <=8 MiB resident decoded bytes; insertion evicts oldest-first while over either limit, and
@@ -34,14 +39,17 @@ passes 3 files / 38 tests. `pnpm typecheck` and targeted `pnpm exec eslint` on t
 - 404 → 503 → oversized → valid → cache hit: 4 Contents GETs for the four non-cached attempts, then 0 for the hit.
 - Failed concurrent single-flight then retry: 2 Contents GETs (one shared failure, one retry).
 - 129 distinct entries then re-read the first: 130 Contents GETs (entry-count eviction). 8 × 1 MiB entries plus one
-  small entry then re-read the first big entry: 10 Contents GETs (byte-budget eviction).
+  1-byte entry then re-read the first big entry: 10 Contents GETs (byte-budget eviction).
+- 160 concurrent distinct valid reads: 160 Contents GETs, 0 nulls. Gated single-flight joiners whose key is evicted by
+  128 other insertions still return their fetched bytes. 404/absence twice: 2 GETs. Each malformed response + recovery:
+  2 GETs.
 
 No production/phone latency is claimed; these are request counts from a deterministic fake `fetch`.
 
 ## Safety and limits
 
-- Memory lifetime is one isolate: the cache and pending map live for the store instance and are reclaimed with it.
-  Nothing is persisted to disk and private bytes are never logged.
+- Memory lifetime is the store instance (which may be request-scoped), not a guaranteed isolate lifetime; there is no
+  cross-request/global cache expansion. Nothing is persisted to disk and private bytes are never logged.
 - Unsafe paths still throw before any cache lookup or fetch. Private-byte isolation is enforced per store instance and
   per caller copy.
 

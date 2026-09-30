@@ -38,6 +38,11 @@ const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 const contentCalls = (calls: { url: string }[]) => calls.filter((c) => c.url.includes('/contents/')).length;
 
 describe('read cache (SP2)', () => {
+  it('Lead review: a malformed 200 response without file type is not confirmed absence', async () => {
+    const { s } = store(() => json(200, { sha: SHA('b'), size: 3, encoding: 'base64', content: btoa('bad') }));
+    await expect(s.readFile(PATH, SHA('a'))).rejects.toBeInstanceOf(StoreUnavailable);
+  });
+
   it('Lead review: valid concurrent files remain present even when settlement evicts their cache entries', async () => {
     const { s, calls } = store(() => fileResponse('present'));
     const files = await Promise.all(Array.from({ length: 160 }, (_, i) =>
@@ -92,7 +97,7 @@ describe('read cache (SP2)', () => {
       }
       if (u.startsWith('/contents/')) {
         contents.push(u);
-        return fileResponse(u.includes(`ref=${SHA('a')}`) ? 'old' : 'new', SHA('x'));
+        return fileResponse(u.includes(`ref=${SHA('a')}`) ? 'old' : 'new', SHA('c'));
       }
       return json(404, {});
     });
@@ -246,7 +251,7 @@ describe('read cache (SP2)', () => {
     const { s, calls } = store((url) => {
       const p = decodeURIComponent(url.split('/contents/')[1]!.split('?ref=')[0]!);
       counts.set(p, (counts.get(p) ?? 0) + 1);
-      return fileResponse(big);
+      return fileResponse(p === 'Inbox/Small.md' ? 'x' : big);
     });
 
     for (let i = 0; i < 8; i += 1) await s.readFile(`Inbox/Big ${i}.md` as VaultPath, SHA('a'));
@@ -256,5 +261,72 @@ describe('read cache (SP2)', () => {
     await s.readFile('Inbox/Big 0.md' as VaultPath, SHA('a'));
     expect(counts.get('Inbox/Big 0.md')).toBe(2);
     expect(contentCalls(calls)).toBe(10);
+  });
+
+  it('single-flight joiners keep their fetched bytes when other insertions evict the key first', async () => {
+    let resolve!: (r: Response) => void;
+    const gate = new Promise<Response>((r) => {
+      resolve = r;
+    });
+    const { s } = store((url) => {
+      if (url.includes('/contents/Tasks/To-Do%20List.md')) return gate;
+      return fileResponse('filler');
+    });
+
+    const p1 = s.readFile(PATH, SHA('a'));
+    const p2 = s.readFile(PATH, SHA('a'));
+    for (let i = 0; i < 128; i += 1) await s.readFile(`Inbox/Filler ${i}.md` as VaultPath, SHA('a'));
+
+    resolve(fileResponse('present'));
+    const [f1, f2] = await Promise.all([p1, p2]);
+    expect(f1).not.toBeNull();
+    expect(f2).not.toBeNull();
+    expect(decode(f1!.bytes)).toBe('present');
+    expect(decode(f2!.bytes)).toBe('present');
+    expect(f1!.bytes).not.toBe(f2!.bytes);
+  });
+
+  it('retries a confirmed absence with a fresh GET and never caches null', async () => {
+    let contentGets = 0;
+    const { s, calls } = store((url) => {
+      if (url.includes('/contents/')) contentGets += 1;
+      return json(404, {});
+    });
+
+    expect(await s.readFile(PATH, SHA('a'))).toBeNull();
+    expect(await s.readFile(PATH, SHA('a'))).toBeNull();
+    expect(contentGets).toBe(2);
+    expect(contentCalls(calls)).toBe(2);
+  });
+
+  it.each([
+    ['missing blob SHA', { type: 'file', size: 3, encoding: 'base64', content: btoa('bad') }, StoreUnavailable],
+    ['non-hex blob SHA', { type: 'file', sha: SHA('z'), size: 3, encoding: 'base64', content: btoa('bad') }, StoreUnavailable],
+    ['negative size', { type: 'file', sha: SHA('b'), size: -1, encoding: 'base64', content: btoa('bad') }, StoreUnavailable],
+    ['fractional size', { type: 'file', sha: SHA('b'), size: 3.5, encoding: 'base64', content: btoa('bad') }, StoreUnavailable],
+    ['non-base64 encoding', { type: 'file', sha: SHA('b'), size: 3, encoding: 'none', content: btoa('bad') }, StoreUnavailable],
+    ['non-string content', { type: 'file', sha: SHA('b'), size: 3, encoding: 'base64', content: 123 }, StoreUnavailable],
+    ['invalid base64', { type: 'file', sha: SHA('b'), size: 3, encoding: 'base64', content: '***' }, StoreUnavailable],
+    ['inconsistent size', { type: 'file', sha: SHA('b'), size: 3, encoding: 'base64', content: btoa('four') }, StoreUnavailable],
+  ])('rejects %s and recovers with a fresh GET', async (_label, body, errorType) => {
+    let n = 0;
+    const { s, calls } = store(() => (n++ === 0 ? json(200, body) : fileResponse('ok')));
+
+    await expect(s.readFile(PATH, SHA('a'))).rejects.toBeInstanceOf(errorType);
+    const recovered = await s.readFile(PATH, SHA('a'));
+    expect(decode(recovered!.bytes)).toBe('ok');
+    expect(contentCalls(calls)).toBe(2);
+  });
+
+  it('refuses base64 whose decoded bytes exceed 1 MiB before treating it as a file', async () => {
+    const { s } = store(() => json(200, {
+      type: 'file',
+      sha: SHA('b'),
+      size: 1024 * 1024,
+      encoding: 'base64',
+      content: 'A'.repeat(Math.ceil((1024 * 1024 + 1) / 3) * 4),
+    }));
+
+    await expect(s.readFile(PATH, SHA('a'))).rejects.toBeInstanceOf(FileTooLarge);
   });
 });
