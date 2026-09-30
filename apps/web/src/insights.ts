@@ -87,13 +87,48 @@ export function topPicks(markdown: string, n = 3): InsightPick[] {
   return picks;
 }
 
-function successfulRuns(status: ScoutStatus) {
-  const runs = status.history.filter((run) => run.status === 'success');
-  if (status.runStatus === 'success' && status.lastSuccessAt &&
-      !runs.some((run) => run.at === status.lastSuccessAt)) {
-    runs.push({ at: status.lastSuccessAt, status: 'success', findings: status.findings });
+type ResultRun = { at: string; findings: number | null };
+
+/**
+ * Runs whose results belong on the insights cards: every `success` and evidence-bearing `degraded` entry in
+ * history, plus the current run when it carries evidence. A known count (including 0) stays tied to the attempt
+ * that produced it, while a degraded run with an unknown count is dated by its last success, so an old success
+ * still proves old results instead of a newer unknown attempt. Instants are reconciled across offset spellings,
+ * and at one instant a known count always wins, so unknown history can never suppress a known result. Fresh
+ * objects, so callers can sort without mutating the input status.
+ */
+function resultRuns(status: ScoutStatus): ResultRun[] {
+  const byAt = new Map<number, ResultRun>();
+  const add = (at: string, findings: number | null) => {
+    const instant = Date.parse(at);
+    if (!Number.isFinite(instant)) return;
+    const existing = byAt.get(instant);
+    if (!existing || (existing.findings === null && findings !== null)) byAt.set(instant, { at, findings });
+  };
+  for (const run of status.history) {
+    if (run.status === 'success' || (run.status === 'degraded' && run.findings !== null)) add(run.at, run.findings);
   }
-  return runs;
+  if (status.runStatus === 'success' && status.lastSuccessAt) {
+    add(status.lastSuccessAt, status.findings);
+  } else if (status.runStatus === 'degraded') {
+    if (status.findings !== null) {
+      const at = status.lastAttemptAt ?? status.lastSuccessAt;
+      if (at) add(at, status.findings);
+    } else if (status.lastSuccessAt) {
+      add(status.lastSuccessAt, null);
+    }
+  }
+  return [...byAt.values()];
+}
+
+/** A bounded, single-line reason for a degraded card: failed sources first, otherwise the last error. */
+export function degradedReason(status: ScoutStatus): string | null {
+  const sources = status.sources;
+  const failed = sources ? Math.max(0, sources.configured - sources.successful) : 0;
+  if (sources && failed > 0) return `${failed} source${failed === 1 ? '' : 's'} failed`;
+  const error = status.lastError?.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!error) return null;
+  return error.length > 160 ? `${error.slice(0, 159)}…` : error;
 }
 
 export function findingsTrend(statuses: readonly ScoutStatus[], now: string | number, days = 7): TrendDay[] {
@@ -107,8 +142,8 @@ export function findingsTrend(statuses: readonly ScoutStatus[], now: string | nu
   });
   const totals = new Map(keys.map((key) => [key, [] as number[]]));
   for (const status of statuses) {
-    const latest = new Map<string, (typeof status.history)[number]>();
-    for (const run of successfulRuns(status)) {
+    const latest = new Map<string, ResultRun>();
+    for (const run of resultRuns(status)) {
       const key = dayKey(run.at);
       if (key && totals.has(key) && (!latest.has(key) || Date.parse(run.at) > Date.parse(latest.get(key)!.at))) latest.set(key, run);
     }
@@ -123,7 +158,7 @@ export function overview(statuses: readonly ScoutStatus[]) {
   const noSuccess: string[] = [];
   const byScout = new Map<string, { findings: number; at: string }>();
   for (const status of statuses) {
-    const run = successfulRuns(status).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
+    const run = resultRuns(status).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
     if (!run || run.findings === null) { noSuccess.push(status.scoutId); continue; }
     totalFindings += run.findings;
     byScout.set(status.scoutId, { findings: run.findings, at: run.at });
