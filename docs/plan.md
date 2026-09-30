@@ -8,7 +8,7 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Temporary Lead operating constraints (owner, 2026-09-30)
 
-- No Claude usage: no Claude workers or Claude Cloud. One worker at a time shares Codex quota with the Lead.
+- No Claude usage: no Claude workers or Claude Cloud. One Codex worker at a time shares Codex quota with the Lead.
   The Lead counts as the Astra-high job; never launch an Astra-high worker concurrently.
 - Delegate implementation through `tools/agent-pane.sh` per the routing table; Lead plans, decomposes, integrates
   and accepts. Wait inside the turn for workers; background completion does not wake this Lead. Use the shell's
@@ -28,7 +28,33 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
   sequential Astra-medium workers. Contract: `docs/briefs/H1-harness-core.md`.
   Acceptance: five required hook/gate eval fixtures plus failure cases, targeted checks, Lead full check/e2e;
   held PR and deferred independent review/canary mean H is not accepted or shipped yet.
-- H Part 2 / DeepSeek graduation waits for Part 1 acceptance and its cost/isolation evidence; no backend change yet.
+- H Part 2 / DeepSeek smoke may start now under owner update 2 below; formal graduation still needs B3 evidence.
+
+## Owner update 2 — provisional parallel backend and Jev (2026-09-30)
+
+- Re-read current Harness Brief Parts 2 and 3. Smoke-test Codex 0.159.2 with a one-word DeepSeek response before
+  dispatching real work. Verify provider/model/no MCP; measure balance before/after via the authorized balance API.
+- After smoke PASS, DeepSeek is provisional: at most two DeepSeek workers plus one Codex worker, isolated clones,
+  independent files, low-risk public/synthetic tasks only. Flash by default; Pro for ordinary Sol-medium scope.
+  One Playwright job at a time. Below $3 balance, stop DeepSeek dispatch and emit `ACTION NEEDED:`.
+- Until H is accepted, current checks/handoff plus Lead diff review apply; recheck the canary through H when available.
+  Formal routing-table graduation waits for the B3 canary; no change to the permanent routing table yet.
+- Jev Use 2 chooses low-risk workers only: obey tier when top probability >=0.60, integrity risk ordinary,
+  and ambiguous probability <0.5. Otherwise Lead chooses and logs why. Always include unresolved as a choice.
+- The deterministic floor takes precedence: auth/identity/account binding, writes/persistence/concurrency,
+  security/privacy/new write targets, and CI/harness/hooks use the high-risk table. Log Jev advice but do not obey
+  a lower pick. This includes H's non-hook harness code. Keep its files separate from low-risk product work.
+- Every worker run gets Jev Use 1 (completion, verification, scope, silent failure, unsupported claims, disposition)
+  recorded next to the Lead verdict. Only public filtered packets go to the authorized `Tools/jev.ps1` invocation.
+  Responses live in gitignored `.agent/jev/`; receipts record agreement and rationale.
+- If two of the first five Jev-picked runs need escalation/redo, disable active Jev routing, revert to shadow and
+  tell the owner. At every checkpoint report followed/overruled picks, escalated runs, DeepSeek spend, and any
+  proposed high-risk downgrade. Use unknown when evidence is missing; never invent a zero cost.
+- Initial split: H1 guards/gates and H2 launcher/watcher remain sequential Codex work; B3 insights calculation
+  can run independently on DeepSeek after smoke/Jev; select a second low-risk task only after confirming no shared
+  files. No private vault material is sent to workers or Jev.
+- Accounting at this checkpoint: Jev picks followed 0, overruled 0; worker runs escalated 0;
+  DeepSeek spend $0 (no run launched yet). Smoke and routing calls pending.
 
 ## Waiting for Evgeny
 
