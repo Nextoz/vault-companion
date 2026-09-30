@@ -1,7 +1,42 @@
 # Current plan
 
-Lead: Claude Opus 5.5. Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint.md`.
-**Latest (2026-09-29): exact next actions are in `docs/checkpoint.md` "Exact next actions".**
+Lead: **Codex gpt-6-astra, temporary owner exception (2026-09-30)**, replacing Claude Opus while the Claude budget is low.
+**Expires Thursday 2026-10-01 21:00 Europe/Copenhagen (19:00 UTC).** Finish the current safe step, checkpoint,
+commit, and print `HANDOVER TO CLAUDE READY`; Claude Opus resumes the normal Lead role.
+Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint.md`.
+**Latest (2026-09-30): continuous mode; select work from the live Ready table, top to bottom, plus batched bugs.**
+
+## Temporary Lead operating constraints (owner, 2026-09-30)
+
+- No Claude usage: no Claude workers or Claude Cloud. One worker at a time shares Codex quota with the Lead.
+  The Lead counts as the Astra-high job; never launch an Astra-high worker concurrently.
+- Delegate implementation through `tools/agent-pane.sh` per the routing table; Lead plans, decomposes, integrates
+  and accepts. Wait inside the turn for workers; background completion does not wake this Lead. Use the shell's
+  longest supported wait and repeat on timeout. For CI, CodeRabbit or owner input, checkpoint and end with
+  `WAITING: <what>`; a watcher pane sends `WAKE: <event>`.
+- For Astra routing rows and H hook/gate code, open a PR with `hold`; do not merge. Independent Claude Lead review
+  waits until the reset. Ordinary work follows normal PR/CodeRabbit/merge/deploy rules.
+- Live vault remains read-only per ADR-0018; no hook enforces it yet. Never write outside `C:\Dev`.
+- Build and test H's Claude hooks using piped-JSON fixtures; defer the live hooks-fire canary to the Claude Lead.
+
+## Current execution (2026-09-30)
+
+- Resume: clean `main` at `947570d`; Herdr `lead` is `w5:p1`, no other agents, no open PRs. Resume `pnpm check`
+  passed: lint, typecheck, 101 files / 1415 tests. Historical worker/quota/queue statements below are superseded here.
+- Ready Backlog re-read read-only: H first, then SP, RR, B3+B4. Never select work from the Ideas Backlog.
+- H Part 1 is ready for engineering implementation; H1 core guards/gates first, H2 launch profiles/watcher next,
+  sequential Astra-medium workers. Contract: `docs/briefs/H1-harness-core.md`.
+  Acceptance: five required hook/gate eval fixtures plus failure cases, targeted checks, Lead full check/e2e;
+  held PR and deferred independent review/canary mean H is not accepted or shipped yet.
+- H Part 2 / DeepSeek graduation waits for Part 1 acceptance and its cost/isolation evidence; no backend change yet.
+
+## Waiting for Evgeny
+
+- H risk floor: fill the deliberately owner-owned TODO in the forthcoming `docs/harness.md`; existing high-risk
+  routing and the temporary hold rule apply meanwhile.
+- H server-side required checks: review the forthcoming ADR proposal for protecting `main` while preserving
+  checkpoint commits; only the owner changes the GitHub ruleset.
+- Existing phone checks remain pending; no new phone feature has shipped in this session.
 Updated 2026-09-26. **Goal now: the agreed first release (`docs/product-contract.md`) on the owner's phone.**
 Ambition beyond that stays the owner's choice, informed by observed use (milestone 3).
 
