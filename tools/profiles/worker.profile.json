@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "codexHome": "C:/Dev/tools/vault-companion-codex-home",
+  "sandbox": "workspace-write",
+  "unsandboxedOverrideAllowed": true,
+  "memories": false,
+  "mcp": false,
+  "webSearch": "disabled",
+  "approvalPolicy": "never",
+  "handoffSchema": "tools/profiles/handoff.schema.json",
+  "defaultModel": "deepseek-flash",
+  "models": {
+    "flash": "deepseek-flash",
+    "pro": "deepseek-v4-pro"
+  }
+}

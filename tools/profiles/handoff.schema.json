@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Worker handoff (metadata/public-only)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "completed", "verification"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "completed": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "maxLength": 500 }
+    },
+    "discoveries": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["finding", "disposition"],
+        "properties": {
+          "finding": { "type": "string", "maxLength": 500 },
+          "disposition": { "type": "string", "enum": ["fix-now", "follow-up", "leave-alone"] }
+        }
+      }
+    },
+    "verification": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check", "result"],
+        "properties": {
+          "check": { "type": "string", "maxLength": 200 },
+          "result": { "type": "string", "enum": ["passed", "failed", "not-run"] }
+        }
+      }
+    },
+    "unsupported": {
+      "type": "array",
+      "maxItems": 10,
+      "items": { "type": "string", "maxLength": 200 }
+    }
+  }
+}

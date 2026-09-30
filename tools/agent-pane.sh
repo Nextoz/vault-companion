@@ -6,6 +6,11 @@
 #   e.g. bash tools/agent-pane.sh "astra-high · pr18" C:/Dev/vault-companion-clones/pr18 C:/…/review.log \
 #          codex exec -m gpt-6-astra -c model_reasoning_effort=high -c model_reasoning_summary=detailed … - < brief.md
 #
+#   Codex repo workers run through the trusted launcher instead (JSON events, verifier, receipts).
+#   Use the coordinator's ABSOLUTE script paths, never the worker clone's relative paths:
+#   bash /c/Dev/vault-companion/tools/agent-pane.sh "deepseek-flash-high · <task>" <clone> <clone>/.agent/run.log \
+#          node /c/Dev/vault-companion/tools/worker-launch.mjs --clone <clone> --envelope <envelope> --provider deepseek --model deepseek-flash --effort high
+#
 # Set AGENT_STDIN=<file> to feed a brief on stdin. Prints the new pane ID. Requires HERDR_ENV=1 (run from inside Herdr).
 set -euo pipefail
 [ "${HERDR_ENV:-}" = 1 ] || { echo "not inside Herdr" >&2; exit 2; }

@@ -1,0 +1,25 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+# Minimal isolated Codex home for repo workers. No MCP servers, no memories, no ChatGPT login.
+# Provider/model/effort are passed explicitly by tools/worker-launch.mjs on the command line.
+
+model_provider = "deepseek"
+model = "deepseek-flash"
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+web_search = "disabled"
+
+[features]
+memories = false
+
+[memories]
+generate_memories = false
+use_memories = false
+
+[sandbox_workspace_write]
+network_access = false
+
+[model_providers.deepseek]
+name = "DeepSeek"
+base_url = "https://api.deepseek.com"
+env_key = "DEEPSEEK_API_KEY"
+wire_api = "responses"
