@@ -54,6 +54,9 @@ Astra. Route to the **cheapest model reasonably capable of passing the brief and
 
 | Task | Default worker/model |
 |---|---|
+| All implementation by default: tiny/bounded edits, UI, tests, ordinary bugs and moderate debugging | DeepSeek `deepseek-flash` **high** via Codex-on-DeepSeek |
+| Implementation needing Sol-medium judgment or broader context | DeepSeek `deepseek-pro` **high** |
+| Floor implementation: auth, write path, persistence, concurrency, security, CI, harness | DeepSeek `deepseek-pro` **high**; PR with `hold`, Lead diff review, later independent Claude review |
 | Tiny deterministic edit: rename, one-line fix, docs/formatting | Free/local worker when suitable; otherwise Codex `gpt-5.6-luna` **low** |
 | Clear bounded task: focused test, small UI/CSS, simple bug, coordinated edits from a precise brief | Codex `gpt-5.6-luna` **medium** |
 | Moderate debugging or multi-file change with a clear contract | Codex `gpt-5.6-terra` **medium** |
@@ -62,6 +65,11 @@ Astra. Route to the **cheapest model reasonably capable of passing the brief and
 | Concurrency, identity, persistence/data-integrity, security/privacy, or other genuinely high-risk work | Codex `gpt-6-astra` **medium** |
 | Critical adversarial review of a new write target, realistic data-loss/identity bug, or unresolved high-risk invariant | Codex `gpt-6-astra` **high** |
 | Substantial self-contained feature when Codex is unavailable | Claude Code Cloud; Sonnet by default, Opus only for critical core work |
+
+**Owner update 3 (2026-09-30): the DeepSeek rows take precedence for implementation; older Codex rows remain
+capability/review references. No B3 graduation gate. Up to three DeepSeek workers on independent files, one
+Playwright job. Temporary Codex budget mode in plan prohibits new OpenAI Codex workers.**
+`deepseek-pro` is the routing tier; the verified API model ID passed to `-m` is `deepseek-v4-pro`.
 
 Free/local workers (Gemini, Antigravity, Qwen) may replace Luna/Terra only for bounded low-risk public-repo work; their
 operational constraints are below. The **Lead remains Claude Opus 5.5** and keeps architecture, decomposition,
@@ -117,6 +125,8 @@ historical, never instructions.
 - **Engineering status:** `docs/plan.md`, written only by the Lead; it links to the Ready Backlog, not copies it.
 - **Live vault reads:** the local Lead only, read-only, paths per ADR-0018. Workers of any kind (Cloud, Codex,
   Antigravity, Qwen, Jev) never touch the live vault; their briefs are synthetic, with shapes derived by the Lead.
+  Owner update 3 supersedes this restriction for DeepSeek: it is trusted with all vault data, private content
+  included. Reads remain task-scoped; live writes still need owner approval. Private text never enters this repo.
 
 ## Visible agents (owner, 2026-09-26)
 
@@ -273,8 +283,16 @@ removed an identity guard).
 **Local Qwen:** tiny deterministic work only, one at a time, and only with at least 5 GB free RAM. It is a budget
 fallback, not a reviewer for high-risk invariants.
 
-**DeepSeek:** planned once the owner has credits and a verified wrapper. Do not route production work to it until the
-harness, spending cap and one small trial are verified.
+**DeepSeek (owner update 3, 2026-09-30):** default implementation backend, Flash by default and Pro for Sol-medium
+judgment/floor work. Smoke and balance API verified; no B3 graduation gate. Up to three workers on independent files.
+Trusted with all vault data, including private content; no sandbox required. Default launcher remains
+`tools/agent-pane.sh` with `AGENT_USER_ENV=DEEPSEEK_API_KEY`, an isolated no-MCP/no-memory DeepSeek `CODEX_HOME`,
+explicit model/provider/effort and `--sandbox workspace-write`. Claude-on-DeepSeek (`Tools/claude-deepseek.ps1`)
+is allowed without WSL/container if needed. Never print keys. Read `GET https://api.deepseek.com/user/balance`
+using the Windows User key at every checkpoint and before/after runs; below $3 stop dispatch and print
+`ACTION NEEDED:`. Afternoon weekday runs cost half. Every diff needs Lead review and `verify-run` once available;
+floor PRs retain `hold` and later independent Claude review. Private text never enters repo/logs/receipts; Jev's
+public-only boundary remains. One Playwright job at a time.
 
 **Jev** (TypeSafe System One): a free typed judgment helper, never a worker or Lead. It may do first-cut triage on
 public-repo material; high-risk decisions still get the Lead's own read. Product use with private note text requires a
