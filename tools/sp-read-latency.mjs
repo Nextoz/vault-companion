@@ -73,18 +73,52 @@ function treeFor(blobs, dir, recursive) {
   for (const name of dirs) entries.push({ path: name, mode: '040000', type: 'tree', sha: sha40(`dir:${prefix}${name}`) });
   return entries;
 }
+/**
+ * Real timer (default): awaits the injected delay with `setTimeout` and reports the ms it handed to it.
+ */
+export function createRealClock() {
+  let awaited = 0;
+  return {
+    kind: 'real',
+    awaitedMs: () => awaited,
+    async sleep(ms) {
+      if (!(ms > 0)) return;
+      awaited += ms;
+      await new Promise((resolve) => setTimeout(resolve, ms));
+    },
+  };
+}
+
+/**
+ * Deterministic virtual timer: never waits on the wall clock. `awaitedMs` accumulates only the delays
+ * that were really passed through `sleep`, so an injected delay that is removed or bypassed shows up
+ * as 0 instead of as an unpredictable wall-time delta.
+ */
+export function createVirtualClock() {
+  let awaited = 0;
+  return {
+    kind: 'virtual',
+    awaitedMs: () => awaited,
+    sleep(ms) {
+      if (ms > 0) awaited += ms;
+      return Promise.resolve();
+    },
+  };
+}
 
 /**
  * Fake GitHub REST API: serves refs/trees/contents for one synthetic commit and counts every call by
  * kind. `delays` (ms) are injected before each kind's response; `faults` (consumed once, in order)
  * force a status or a malformed body so tests can prove honest failure.
+ *
+ * The injected `clock` performs the wait. Every request records the ms the clock *actually* awaited
+ * (`awaitedMs`), so a test can prove an injected delay belongs to a call without trusting wall time.
  */
-export function createFakeGitHub({ files = SYNTHETIC_VAULT, delays = {}, faults = [] } = {}) {
+export function createFakeGitHub({ files = SYNTHETIC_VAULT, delays = {}, faults = [], clock = createRealClock() } = {}) {
   const blobs = new Map(Object.entries(files).map(([path, content]) => [path, { content, sha: blobShaFor(path, content) }]));
   const pendingFaults = [...faults];
   const requests = [];
   const delayFor = (kind) => (Number.isFinite(delays[kind]) ? delays[kind] : 0);
-  const sleep = (ms) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
 
   function classify(pathname) {
     if (/^\/app\/installations\/[^/]+\/access_tokens$/.test(pathname)) return 'token';
@@ -99,11 +133,14 @@ export function createFakeGitHub({ files = SYNTHETIC_VAULT, delays = {}, faults 
     const method = String(init?.method ?? (typeof input === 'object' ? input.method : 'GET') ?? 'GET').toUpperCase();
     const kind = classify(url.pathname);
     const delayMs = delayFor(kind);
-    requests.push({ kind, method, path: url.pathname, delayMs });
+    const request = { kind, method, path: url.pathname, delayMs, awaitedMs: 0 };
+    requests.push(request);
 
     const faultAt = pendingFaults.findIndex((f) => f.kind === kind);
     const fault = faultAt >= 0 ? pendingFaults.splice(faultAt, 1)[0] : null;
-    await sleep(delayMs);
+    const awaitedFrom = clock.awaitedMs();
+    await clock.sleep(delayMs);
+    request.awaitedMs = clock.awaitedMs() - awaitedFrom;
 
     if (fault?.mode === 'status500') return jsonResponse({ message: 'synthetic upstream failure' }, 500);
     if (fault?.mode === 'status404') return notFound();
@@ -199,9 +236,9 @@ export function benchEnv(access) {
 }
 
 /** Build the real production app with a fake GitHub API behind it. Fresh per call: cold caches. */
-export async function createBenchHarness({ files = SYNTHETIC_VAULT, delays = {}, faults = [] } = {}) {
+export async function createBenchHarness({ files = SYNTHETIC_VAULT, delays = {}, faults = [], clock } = {}) {
   const access = createSyntheticAccess();
-  const fake = createFakeGitHub({ files, delays, faults });
+  const fake = createFakeGitHub({ files, delays, faults, clock });
   const previousFetch = globalThis.fetch;
   globalThis.fetch = fake.fetch;
   let app;
@@ -242,6 +279,14 @@ export function countKinds(requests) {
   return counts;
 }
 
+/** Await hook: the ms the injected clock really awaited per request kind (0 if a delay was bypassed). */
+export function awaitedSummary(requests) {
+  const awaited = Object.fromEntries(REQUEST_KINDS.map((kind) => [kind, 0]));
+  for (const request of requests) awaited[request.kind] += request.awaitedMs ?? 0;
+  awaited.total = REQUEST_KINDS.reduce((sum, kind) => sum + awaited[kind], 0);
+  return awaited;
+}
+
 /** The delay budget the injected delays add up to for a given request-count snapshot. */
 export function attributeMs(counts, delays) {
   return REQUEST_KINDS.reduce((sum, kind) => sum + counts[kind] * (Number.isFinite(delays[kind]) ? delays[kind] : 0), 0);
@@ -256,28 +301,39 @@ export const median = (values) => {
 /**
  * Cold = the first request against a brand new app/store (token, head and tree caches all empty).
  * Repeat = the next `samples` requests against that same app (caches warm, per-call counts shown).
+ *
+ * `ms`/`medianMs` are always real `performance.now()` wall times and are reported as observations.
+ * `awaited*` comes from the injected clock and is the deterministic oracle: under `createVirtualClock`
+ * it is exact, and it is 0 if the per-kind delay was never actually awaited.
+ *
+ * Pass `clock` as a clock instance or a factory (e.g. `createVirtualClock`); a factory gets a fresh
+ * clock per scenario so awaited totals stay isolated.
  */
-export async function runLatencyBenchmark({ delays = {}, samples = 3, files = SYNTHETIC_VAULT } = {}) {
+export async function runLatencyBenchmark({ delays = {}, samples = 3, files = SYNTHETIC_VAULT, clock } = {}) {
   const rows = [];
   for (const scenario of SCENARIOS) {
-    const harness = await createBenchHarness({ files, delays });
+    const harness = await createBenchHarness({ files, delays, clock: typeof clock === 'function' ? clock() : clock });
 
     const coldFrom = harness.fake.requests.length;
     const coldStart = performance.now();
     const coldRes = await harness.request(scenario);
     const coldMs = performance.now() - coldStart;
     const coldBody = await coldRes.json().catch(() => null);
-    const coldCounts = countKinds(harness.fake.requests.slice(coldFrom));
+    const coldRequests = harness.fake.requests.slice(coldFrom);
+    const coldCounts = countKinds(coldRequests);
 
     const samplesMs = [];
     const countsAllCalls = [];
+    const awaitedAllCalls = [];
     for (let i = 0; i < samples; i++) {
       const from = harness.fake.requests.length;
       const start = performance.now();
       const res = await harness.request(scenario);
       samplesMs.push(performance.now() - start);
       await res.json().catch(() => null);
-      countsAllCalls.push(countKinds(harness.fake.requests.slice(from)));
+      const callRequests = harness.fake.requests.slice(from);
+      countsAllCalls.push(countKinds(callRequests));
+      awaitedAllCalls.push(awaitedSummary(callRequests));
     }
 
     rows.push({
@@ -288,6 +344,7 @@ export async function runLatencyBenchmark({ delays = {}, samples = 3, files = SY
         status: coldRes.status,
         counts: coldCounts,
         attributedMs: attributeMs(coldCounts, delays),
+        awaited: awaitedSummary(coldRequests),
         body: coldBody,
       },
       repeat: {
@@ -296,6 +353,9 @@ export async function runLatencyBenchmark({ delays = {}, samples = 3, files = SY
         countsPerCall: countsAllCalls[0],
         countsAllCalls,
         attributedMs: attributeMs(countsAllCalls[0], delays),
+        awaitedPerCall: awaitedAllCalls[0],
+        awaitedAllCalls,
+        awaitedMedianMs: median(awaitedAllCalls.map((awaited) => awaited.total)),
       },
     });
   }

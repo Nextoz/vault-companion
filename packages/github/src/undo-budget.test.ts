@@ -74,7 +74,7 @@ function fakeGitHub(
     if (m === 'GET' && u.startsWith('/contents/')) {
       const ref = new URL(`https://h${u}`).searchParams.get('ref');
       const text = ref === k.parent ? ORIGINAL : k.done; // C and X hold the completed list
-      return json(200, { type: 'file', sha: await gitBlobSha(new TextEncoder().encode(text)), size: text.length, encoding: 'base64', content: b64(text) });
+      return json(200, { type: 'file', sha: await gitBlobSha(new TextEncoder().encode(text)), size: new TextEncoder().encode(text).byteLength, encoding: 'base64', content: b64(text) });
     }
     if (m === 'GET' && u.startsWith('/git/trees/')) return json(200, { truncated: false, tree: [{ path: 'To-Do List.md', mode: '100644', type: 'blob' }] });
     if (m === 'POST' && u === '/git/blobs') {

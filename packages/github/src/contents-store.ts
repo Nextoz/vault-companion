@@ -36,8 +36,21 @@ export interface GitHubStoreOptions {
 }
 
 const MAX_CONTENT_BYTES = 1024 * 1024;
+/** Longest standard base64 string that can still decode to `MAX_CONTENT_BYTES` bytes. */
+const MAX_BASE64_BYTES = Math.ceil(MAX_CONTENT_BYTES / 3) * 4;
 /** Entries kept per in-memory cache (keys are immutable commit SHAs; a full cache is simply dropped). */
 const CACHE_LIMIT = 256;
+/** Read-cache bounds: at most this many settled files and this many resident decoded bytes per store instance. */
+const READ_CACHE_ENTRY_LIMIT = 128;
+const READ_CACHE_BYTES_LIMIT = 8 * 1024 * 1024;
+/** Concurrent identical immutable reads are single-flighted while this many distinct reads are already in flight. */
+const READ_PENDING_LIMIT = 32;
+const IMMUTABLE_COMMIT = /^[0-9a-f]{40}$/;
+
+interface CachedFile {
+  readonly blobSha: string;
+  readonly bytes: Uint8Array;
+}
 
 interface TreeEntry {
   readonly path: string;
@@ -59,6 +72,15 @@ export class GitHubContentsStore implements VaultStore {
    * answers are kept (entries, or confirmed absence); failures always throw afresh.
    */
   private readonly listings = new Map<string, TreeEntry[] | null>();
+  /**
+   * Settled Contents reads for immutable (commit SHA, path) keys. Bytes are stored as a private copy; callers always
+   * receive another copy, so mutating a returned array cannot affect the cache or any other caller. Bounded by entry
+   * count and decoded-byte budget; oldest-first eviction.
+   */
+  private readonly readCache = new Map<string, CachedFile>();
+  private readCacheBytes = 0;
+  /** Single-flight promises for identical immutable reads currently in progress; removed once settled. */
+  private readonly pendingReads = new Map<string, Promise<StoredFile | null>>();
 
   constructor(private readonly opts: GitHubStoreOptions) {
     this.branch = opts.branch ?? 'main';
@@ -111,16 +133,87 @@ export class GitHubContentsStore implements VaultStore {
   }
 
   async readFile(path: VaultPath, atCommit: string): Promise<StoredFile | null> {
+    // Path safety precedes any cache lookup: a caller can never make the cache leak bytes for an unsafe path.
     guardPath(path);
-    const item = await this.getJson<{ type: string; sha: string; size: number; content?: string; encoding?: string }>(
+    const immutable = IMMUTABLE_COMMIT.test(atCommit);
+    const key = `${atCommit}\0${path}`;
+    if (immutable) {
+      const cached = this.readCache.get(key);
+      if (cached) return copyStored(cached, atCommit);
+    }
+    if (immutable && this.pendingReads.has(key)) {
+      const file = await this.pendingReads.get(key)!;
+      return file ? copyStored(file, atCommit) : null;
+    }
+    // Non-SHA refs are never cached or single-flighted; a full in-flight table falls back to an uncached read.
+    if (!immutable || this.pendingReads.size >= READ_PENDING_LIMIT) {
+      const file = await this.fetchRead(path, atCommit);
+      if (immutable && file) this.storeRead(key, file);
+      return file;
+    }
+    // Identical immutable reads share one fetch; each caller still receives its own byte copy after settlement.
+    let flight = this.pendingReads.get(key);
+    if (!flight) {
+      flight = this.fetchAndCacheRead(key, path, atCommit).finally(() => this.pendingReads.delete(key));
+      this.pendingReads.set(key, flight);
+    }
+    const file = await flight;
+    return file ? copyStored(file, atCommit) : null;
+  }
+
+  private async fetchAndCacheRead(key: string, path: VaultPath, atCommit: string): Promise<StoredFile | null> {
+    const file = await this.fetchRead(path, atCommit);
+    if (file) this.storeRead(key, file);
+    return file;
+  }
+
+  private async fetchRead(path: VaultPath, atCommit: string): Promise<StoredFile | null> {
+    const item = await this.getJson<{ type?: unknown; sha?: unknown; size?: unknown; content?: unknown; encoding?: unknown }>(
       `${this.contentsPath(path)}?ref=${atCommit}`,
     );
     if (!item) return null;
-    if (item.type !== 'file') return null;
-    if (item.size > MAX_CONTENT_BYTES || item.encoding !== 'base64' || item.content === undefined) throw new FileTooLarge('file exceeds 1 MB');
+    if (typeof item.type !== 'string') throw new StoreUnavailable('malformed Contents type');
+    if (item.type === 'dir' || item.type === 'symlink' || item.type === 'submodule') return null;
+    if (item.type !== 'file') throw new StoreUnavailable('malformed Contents type');
+    const { sha, size, encoding, content } = item;
+    if (typeof sha !== 'string' || !IMMUTABLE_COMMIT.test(sha)) throw new StoreUnavailable('malformed Contents blob SHA');
+    if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) throw new StoreUnavailable('malformed Contents size');
+    if (size > MAX_CONTENT_BYTES) throw new FileTooLarge('file exceeds 1 MB');
+    if (encoding !== 'base64') throw new StoreUnavailable('malformed Contents encoding');
+    if (typeof content !== 'string') throw new StoreUnavailable('malformed Contents content');
+    // Reject a dishonest oversized encoded payload before decoding/allocating its bytes. The real API only adds a
+    // newline every 60 base64 characters, so that is the only whitespace allowance kept beyond the byte bound.
+    if (content.length > MAX_BASE64_BYTES + Math.ceil(MAX_BASE64_BYTES / 60) + 1) throw new FileTooLarge('file exceeds 1 MB');
     // Phase 0: base64 arrives with embedded '\n' every 60 chars.
-    const bytes = base64ToBytes(item.content.replace(/\s/g, ''));
-    return { blobSha: item.sha, bytes, commitSha: atCommit };
+    const compact = content.replace(/\s/g, '');
+    if (compact.length > MAX_BASE64_BYTES) throw new FileTooLarge('file exceeds 1 MB');
+    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(compact)) {
+      throw new StoreUnavailable('malformed Contents base64');
+    }
+    let bytes: Uint8Array;
+    try {
+      bytes = base64ToBytes(compact);
+    } catch {
+      throw new StoreUnavailable('malformed Contents base64');
+    }
+    if (bytes.byteLength > MAX_CONTENT_BYTES) throw new FileTooLarge('file exceeds 1 MB');
+    if (bytes.byteLength !== size) throw new StoreUnavailable('Contents size does not match decoded bytes');
+    return { blobSha: sha, bytes, commitSha: atCommit };
+  }
+
+  private storeRead(key: string, file: StoredFile): void {
+    const size = file.bytes.byteLength;
+    // A single oversized entry is never resident: bypass storage rather than churning the bounded cache.
+    if (size > READ_CACHE_BYTES_LIMIT || this.readCache.has(key)) return;
+    while (this.readCache.size >= READ_CACHE_ENTRY_LIMIT || this.readCacheBytes + size > READ_CACHE_BYTES_LIMIT) {
+      const oldest = this.readCache.entries().next();
+      if (oldest.done) break;
+      const [oldKey, old] = oldest.value;
+      this.readCache.delete(oldKey);
+      this.readCacheBytes -= old.bytes.byteLength;
+    }
+    this.readCache.set(key, { blobSha: file.blobSha, bytes: file.bytes.slice() });
+    this.readCacheBytes += size;
   }
 
   async listDir(dir: string, atCommit: string): Promise<readonly string[]> {
@@ -331,6 +424,10 @@ function base64ToBytes(b64: string): Uint8Array {
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
+}
+
+function copyStored(file: { blobSha: string; bytes: Uint8Array }, atCommit: string): StoredFile {
+  return { blobSha: file.blobSha, bytes: file.bytes.slice(), commitSha: atCommit };
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

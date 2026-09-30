@@ -20,7 +20,7 @@ function fakeGitHub() {
     if (u === '/git/ref/heads/main') return json(200, { object: { sha: x } });
     if (u === `/git/commits/${x}`) return json(200, { committer: { date: NOW.toISOString() }, message: 'desktop sync' });
     if (u.startsWith('/contents/')) {
-      return json(200, { type: 'file', sha: '2'.repeat(40), size: TODO.length, encoding: 'base64', content: btoa(TODO) });
+      return json(200, { type: 'file', sha: '2'.repeat(40), size: new TextEncoder().encode(TODO).byteLength, encoding: 'base64', content: btoa(TODO) });
     }
     const m = /^\/compare\/([0-9a-f]{40})\.\.\.([0-9a-f]{40})\?per_page=250&page=1$/.exec(u);
     if (m) {

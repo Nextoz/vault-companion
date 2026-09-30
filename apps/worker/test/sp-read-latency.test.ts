@@ -1,4 +1,5 @@
 // SP1 read-latency benchmark assertions (synthetic only; harness in tools/sp-read-latency.mjs).
+// Delay attribution is asserted through the harness's injected clock/await hook, not wall-clock intervals.
 //
 // The test lives under apps/worker/test so the shared vitest.config.ts `test.include`
 // (`apps/*/test/**/*.test.ts`) discovers it through the normal command with no config change.
@@ -12,7 +13,11 @@ import {
   TrainingResponse,
 } from '../../../packages/contracts/src/index.ts';
 import {
+  API_BASE,
+  BRANCH,
   createBenchHarness,
+  createFakeGitHub,
+  createVirtualClock,
   runLatencyBenchmark,
   rowFor,
   toMarkdown,
@@ -63,32 +68,88 @@ describe('SP1: the benchmark invokes the production read composition', () => {
   });
 });
 
-describe('SP1: injected GitHub delays change the measured attribution', () => {
-  it('adds roughly the injected head delay to a repeated notes read, with unchanged request counts', async () => {
-    const base = await runLatencyBenchmark({ delays: { head: 5 }, samples: 3 });
-    const slow = await runLatencyBenchmark({ delays: { head: 65 }, samples: 3 });
+describe('SP1: injected GitHub delays are attributed deterministically', () => {
+  it('awaits the injected head delay on every repeated notes read, with unchanged request counts', async () => {
+    // The virtual clock makes the await hook exact; assertions never ride on wall-clock scheduling.
+    const base = await runLatencyBenchmark({ delays: { head: 5 }, samples: 3, clock: createVirtualClock });
+    const slow = await runLatencyBenchmark({ delays: { head: 65 }, samples: 3, clock: createVirtualClock });
 
-    const delta = rowFor(slow, 'notes-list').repeat.medianMs - rowFor(base, 'notes-list').repeat.medianMs;
-    expect(delta).toBeGreaterThan(40);
-    expect(delta).toBeLessThan(90);
+    const baseList = rowFor(base, 'notes-list')!;
+    const slowList = rowFor(slow, 'notes-list')!;
+
     // Time, not extra calls: the injected delay changes nothing about what is requested.
-    expect(rowFor(slow, 'notes-list').repeat.countsPerCall).toEqual(rowFor(base, 'notes-list').repeat.countsPerCall);
+    expect(baseList.repeat.countsPerCall).toMatchObject({ token: 0, head: 1, tree: 0, blob: 0 });
+    expect(slowList.repeat.countsPerCall).toEqual(baseList.repeat.countsPerCall);
+
+    // Oracle: the await hook rises by exactly the injected head delta on every repeat call, and is 0
+    // for every other request kind. A removed or bypassed head delay drops `head` to 0 and fails here.
+    expect(baseList.repeat.awaitedPerCall).toEqual({ token: 0, head: 5, tree: 0, blob: 0, other: 0, total: 5 });
+    expect(slowList.repeat.awaitedPerCall).toEqual({ token: 0, head: 65, tree: 0, blob: 0, other: 0, total: 65 });
+    expect(slowList.repeat.awaitedPerCall.head - baseList.repeat.awaitedPerCall.head).toBe(60);
+    for (const awaited of slowList.repeat.awaitedAllCalls) expect(awaited).toMatchObject({ head: 65, total: 65 });
+    for (const awaited of baseList.repeat.awaitedAllCalls) expect(awaited).toMatchObject({ head: 5, total: 5 });
+
+    // Wall time is still measured for the report, but only as an observation, never the assertion.
+    expect(slowList.repeat.medianMs).toBeGreaterThanOrEqual(0);
+    expect(baseList.repeat.medianMs).toBeGreaterThanOrEqual(0);
   });
 
-  it('charges a blob delay to the note read and not to the list', async () => {
-    const base = await runLatencyBenchmark({ delays: { head: 5 }, samples: 3 });
-    const blobSlow = await runLatencyBenchmark({ delays: { head: 5, blob: 65 }, samples: 3 });
+  it('a repeat note read is served from the immutable cache, so an injected blob delay is never awaited', async () => {
+    const base = await runLatencyBenchmark({ delays: { head: 5 }, samples: 3, clock: createVirtualClock });
+    const blobSlow = await runLatencyBenchmark({ delays: { head: 5, blob: 65 }, samples: 3, clock: createVirtualClock });
 
-    const readDelta = rowFor(blobSlow, 'note-read').repeat.medianMs - rowFor(base, 'note-read').repeat.medianMs;
-    const listDelta = rowFor(blobSlow, 'notes-list').repeat.medianMs - rowFor(base, 'notes-list').repeat.medianMs;
-    expect(readDelta).toBeGreaterThan(40);
-    expect(readDelta).toBeLessThan(90);
-    expect(Math.abs(listDelta)).toBeLessThan(30);
+    const baseRead = rowFor(base, 'note-read')!;
+    const slowRead = rowFor(blobSlow, 'note-read')!;
+    const baseList = rowFor(base, 'notes-list')!;
+    const slowList = rowFor(blobSlow, 'notes-list')!;
+
+    expect(baseRead.cold.counts).toMatchObject({ token: 1, head: 1, tree: 1, blob: 1 });
+    // Cold really awaited the injected blob delay; the repeat did not, because the blob is cached.
+    expect(slowRead.cold.awaited).toMatchObject({ head: 5, blob: 65 });
+    expect(baseRead.repeat.countsPerCall).toMatchObject({ token: 0, head: 1, tree: 0, blob: 0 });
+    expect(baseRead.repeat.awaitedPerCall).toMatchObject({ head: 5, blob: 0 });
+    expect(slowRead.repeat.countsPerCall).toEqual(baseRead.repeat.countsPerCall);
+    expect(slowRead.repeat.awaitedPerCall).toEqual(baseRead.repeat.awaitedPerCall);
+    expect(slowList.repeat.countsPerCall).toEqual(baseList.repeat.countsPerCall);
+    expect(slowList.repeat.awaitedPerCall).toEqual(baseList.repeat.awaitedPerCall);
+  });
+
+  it('the oracle observes the head delay only because the fake API really awaits it', async () => {
+    const clock = createVirtualClock();
+    const fake = createFakeGitHub({ delays: { head: 65 }, clock });
+    await fake.fetch(`${API_BASE}/git/ref/heads/${BRANCH}`);
+
+    expect(fake.requests).toHaveLength(1);
+    // awaitedMs must equal the injected delay; if the wait is removed or bypassed it becomes 0 and fails.
+    expect(fake.requests[0]).toMatchObject({ kind: 'head', delayMs: 65, awaitedMs: 65 });
+    expect(clock.awaitedMs()).toBe(65);
   });
 });
 
+it('Lead oracle: no HTTP answer is returned before the injected delay promise settles', async () => {
+  let release!: () => void;
+  let elapsed = 0;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const clock = {
+    awaitedMs: () => elapsed,
+    sleep: async (ms: number) => { await gate; elapsed += ms; },
+  };
+  const fake = createFakeGitHub({ delays: { head: 65 }, clock });
+  let answered = false;
+  const request = fake.fetch(`${API_BASE}/git/ref/heads/${BRANCH}`).then((response: Response) => {
+    answered = true;
+    return response;
+  });
+  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+  const answeredBeforeRelease = answered;
+  release();
+  await request;
+  expect(answeredBeforeRelease).toBe(false);
+  expect(fake.requests[0]).toMatchObject({ kind: 'head', awaitedMs: 65 });
+});
+
 describe('SP1: repeat reads issue real API requests', () => {
-  it('pays one head lookup per read and reads a blob only when a note is opened', async () => {
+  it('pays one head lookup per action and serves repeat immutable blob reads from the cache', async () => {
     const result = await runLatencyBenchmark({ delays: ZERO, samples: 3 });
 
     const list = rowFor(result, 'notes-list')!;
@@ -101,11 +162,21 @@ describe('SP1: repeat reads issue real API requests', () => {
 
     const read = rowFor(result, 'note-read')!;
     expect(read.cold.counts).toMatchObject({ token: 1, head: 1, tree: 1, blob: 1 });
-    expect(read.repeat.countsPerCall).toMatchObject({ token: 0, head: 1, tree: 0, blob: 1 });
+    expect(read.repeat.countsPerCall).toMatchObject({ token: 0, head: 1, tree: 0, blob: 0 });
 
     const work = rowFor(result, 'active-work')!;
     expect(work.cold.counts).toMatchObject({ head: 1, tree: 1, blob: 1 });
-    expect(work.repeat.countsPerCall).toMatchObject({ head: 1, tree: 0, blob: 1 });
+    expect(work.repeat.countsPerCall).toMatchObject({ head: 1, tree: 0, blob: 0 });
+  });
+
+  it('keeps fetching the head on every note read, and refetches a different note path', async () => {
+    const harness = await createBenchHarness({ delays: ZERO });
+
+    for (let i = 0; i < 2; i += 1) await (await harness.request(NOTE_READ)).json();
+    await (await harness.request({ path: '/api/notes/read', note: 'Inbox/Beta note - 2026-09-24.md' })).json();
+
+    expect(harness.fake.requests.filter((r) => r.kind === 'head')).toHaveLength(3);
+    expect(harness.fake.requests.filter((r) => r.kind === 'blob')).toHaveLength(2);
   });
 });
 
