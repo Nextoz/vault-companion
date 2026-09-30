@@ -1,4 +1,35 @@
-# Checkpoint — 2026-09-30 13:39 Europe/Copenhagen
+# Checkpoint — 2026-09-30 13:57 Europe/Copenhagen
+
+## Latest delta — H1 verified, correction dispatched / PR50 review read
+
+- H1 recovery handoff read; non-hook production scanner/verifier/gate and documentation reviewed, test review
+  partial. Independent focused **2files/54tests + pnpm typecheck PASS**. Hooks/settings remain preserved,
+  not activated or accepted. No full check/browser job run for H1; held floor/independent Claude gate unchanged.
+- Classification helper reproduced hidden src/build and arbitrary *.log exclusions, plus dependency exclusion.
+  Constant path names are not coordinator attestation. HEAD/index changes restored in worktree can evade policy
+  inspection (source review; CLI regression still required). Windows fixture global TEMP requirement breaks
+  normal CI portability. Stale graduation wording also needs update3 alignment. H1 NOT accepted.
+- One bounded Pro correction now **w5:p12**, original h1-harness clone, .agent/correction.md / correction.log;
+  handoff .agent/handoffs/H1-correction.md. Remove name-only exclusions; exact trusted pre-worker baseline or
+  honest fail-closed integration blocker, per-state inspection and portable temp fixtures. No hook/H2/CI edits.
+  After this correction, unresolved issues require evidence review/escalation, not blind repeat Pro.
+- H1 Jev Use1 strong-review .58, verification .13, silent-failure .70, completed .16, before independent checks.
+  Lead agrees independent floor review remains; concrete reproduced gaps justify the one focused correction.
+  Raw .agent/jev/H1-recovery-run.json; routing statistics unchanged (SP1 one affected first-picked run).
+- PR **#50** head082df7d Ubuntu/Windows CI SUCCESS; actual CodeRabbit full review completed, **9 actionable
+  inline comments** read and checked against source. Valid: handoff .md/.json mismatch, floating MCP packages,
+  reused home drift, string buffering, ineffective UTF8 split test, empty correction prompt, stream UTF8 decoding,
+  untrusted envelope test fixture, swallowed API failure. Dispositions saved h2-launcher/.agent/review-blockers.md.
+  No findings fixed/resolved, no repeat request. Hold/draft retained; green CI does not resolve safety gaps.
+- Active3 independent Pro workers: **H1 w5:p12, RR1 w5:pY, SP2 w5:p0**. H2 parked pending independent review;
+  B3/B4/SP1 merged PR49, not deployed/phone-accepted. No new OpenAI implementation or vault/production writes.
+- DeepSeek **$6.88** prior checkpoint → **$6.56** at13:47 → **$6.35** at13:55; aggregate reported spend
+  **$3.64** since9.99, concurrent attribution unknown. Stop NEW dispatch below$3. Watcher consumes H1 recovery
+  and PR50 completion; now only H1-correction/RR1-correction/SP2 handoffs. Next WAKE: handoff first, review/verify.
+
+---
+
+# Prior checkpoint — 2026-09-30 13:39 Europe/Copenhagen
 
 ## Latest delta — PR49 merged / H2 parked / SP2 dispatched
 

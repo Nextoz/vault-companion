@@ -23,6 +23,11 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
+- 13:57: H1 recovery independently **54tests/typecheck PASS**, but scanner exclusions/state inspection and
+  Windows fixture portability block acceptance. One bounded Pro correction **w5:p12**; hooks untouched.
+  RR1 w5:pY and SP2 w5:p0 remain active, max3. PR50 current CI green, actual CodeRabbit9 findings read/source
+  checked and retained for independent escalation; H2 remains held/unactivated, no blind second Pro retry.
+  Balance **$6.35**, reported spend$3.64; checkpoint holds exact evidence and handoff paths. No deployment.
 - 13:39: PR **#49 merged2e0db23** after Lead review/full1447tests+80browser tests and green current CI.
   CodeRabbit no real review; incorrect `review` command failed, future one request must be `full review`.
   Not deployed/phone-accepted (owner G2). H2 correction independently56tests/typecheck passes but actual CLI,
