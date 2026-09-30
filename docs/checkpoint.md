@@ -1,4 +1,35 @@
-# Checkpoint — 2026-09-30 12:58 Europe/Copenhagen
+# Checkpoint — 2026-09-30 13:15 Europe/Copenhagen
+
+## Latest delta — RR1 handoff / H non-hook recovery
+
+- RR1 original handoff and scope request read (request says satisfied inside envelope; no extra edit authority
+  needed). All new production modules plus tracked diff reviewed; test review partial, acceptance blocked.
+  Independent targeted7 files/85 tests and pnpm typecheck PASS. Targeted eslint FAIL unused tagBlock at
+  research-radar.ts:80. No full check/browser job or independent floor review yet.
+- Concrete RR1 failures: real command service accepts paperB Undo targeting paperA (second write); replay
+  remove1/remove2/undo1 erases later remove2. Read JSX always source URL, not explanation/intake note (tests
+  only assert data-read-kind). Month-boundary Undo only current log; generic source/ref query identity stripping
+  merges distinct URLs. Handoff mounts Today, but product lives Scouts. LocalStorage retry/Undo/account fencing
+  and applied-schema honesty require negative tests. New production code reviewed, not accepted.
+- One bounded Pro correction packet prepared, NOT launched: rr1-radar/.agent/correction.md; same allowed
+  envelope, .agent/handoffs/RR1-correction.md. Add trusted paperId-resolved read route, not client-named path;
+  no widening existing linked-note roots. Correct Undo/month-boundary/replay, Read, retry and canonicalization;
+  preserve golden/CAS/dedupe/privacy. RR1 hold and independent Claude/owner deployment gates unchanged.
+- Freed slot dispatched H1 priority non-hook recovery on Pro w5:pW in original h1-harness clone. Original
+  partial code preserved; packet .agent/recovery.md; handoff .agent/handoffs/H1-recovery.md. No hook/settings
+  edits or Claude canary; bounded coordinator-owned baseline scanner required, no clone-ignore bypass.
+  H2 correction w5:pS and BUGS correction w5:pT continue; three workers maximum. RR1 correction next free slot.
+- RR1 Jev Use1 redo .70 / verification .08; Lead agrees on reproduced failures. Raw .agent/jev/RR1-run.json.
+  Floor deterministic Pro, not a new Jev-picked run. Routing stats unchanged: SP1 first picked run needs correction;
+  one reasoning escalation B3. No further same-tier retries after one proper correction without evidence review.
+- DeepSeek balance **$7.54** at13:15, aggregate reported spend **$2.45** since$9.99; concurrent attribution
+  unknown. Stop NEW dispatch below$3. No vault writes, private fixtures, external deployment or new OpenAI work.
+- Watcher excludes consumed RR1 handoff and satisfied scope request; watches H1 recovery, H2 correction,
+  BUGS-Pro and queued RR1-correction. Next wake: review named handoff before accepting; keep H1/H2/RR1 held.
+
+---
+
+# Prior checkpoint — 2026-09-30 12:58 Europe/Copenhagen
 
 ## Latest delta — supersedes worker/PR states below
 

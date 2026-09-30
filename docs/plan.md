@@ -23,6 +23,12 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
+- 13:15: RR1 handoff/production diff reviewed; independent **85/85** tests + typecheck pass, targeted lint fails
+  unused variable. Foreign-paper Undo and subsequent-decision replay bugs reproduced; Read ignores note target,
+  mount targets wrong tab. RR1 unaccepted; one Pro correction queued in clone .agent/correction.md (not launched).
+  Free slot used for priority H1 non-hook recovery **w5:pW**, original partial clone preserved; hooks untouched.
+  H2/BUGS Pro corrections remain active; RR1 correction next free slot. Balance **$7.54**, reported spend$2.45;
+  Jev RR1 redo .70/verification .08, Lead agrees from evidence. All floor review/deploy gates remain.
 - 12:58: PR #48 merged `f4e7cc7`, CI green; #47 already merged. H2 handoff failed Lead contract review;
   one Pro correction active w5:pS. BUGS Flash correction handoff read; B4/SP1 changes look sound, B3 null
   history regression reproduced by Lead. Escalated to Pro w5:pT, same clone; unaccepted pending review/full
