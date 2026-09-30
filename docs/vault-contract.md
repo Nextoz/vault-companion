@@ -13,6 +13,7 @@ Any change here is consequential: update the golden tests and record an ADR.
 | Active Work | `Tasks/Active Work Now.md` | read, capture, edit, review, exact Undo (ADR-0019) |
 | Training log | `Health/Training Log.md` | read, insert one session row, exact Undo; update only, never create (ADR-0025) |
 | Event triage | `Events/Triage/feed.json`, `applied.json`, `Decisions/YYYY-MM.jsonl` | read; create/append **only** decision JSONL, per [ADR-0024](decisions/0024-event-triage.md) |
+| Research Radar | `Research/Daily Research Scout/*.md`, `Research/Reading Briefs/*.md`, `Research/Important Research Updates/*.md`, `Research/Explained/*.md`, `Research/Radar/Decisions/YYYY-MM.jsonl`, `Research/Radar/applied.json` | read; create/append **only** the decision JSONL, per [ADR-0032](decisions/0032-research-radar-decisions.md) |
 | Research explainer (cron, ADR-0029) | read today's `Research/Reading Briefs/Research Reading Brief - YYYY-MM-DD.md` and `Research/Daily Research Scout/Daily Research Scout - YYYY-MM-DD.md`, list `Research/Explained/`; write `Research/Explained/YYYY-MM-DD - <slug>.md` (directly in the folder, not hidden) | notes: **create**, skipped if that paper's slug already has a note on any date; **update only** to replace this job's own pending note while its blob SHA is unchanged (§4.7); all new notes + the status record in **one** commit (§4.7) |
 | Research explainer status | exactly `Automation/Scout Status/research-explainer.json` | create/update (ScoutStatus, ADR-0020; the only writable status file) |
 | Linked notes | resolved **server-side** from a wikilink in a current task or Active Work item line (`{taskLocator, linkIndex}`); Active Work requires an exact blob SHA and line match, with `linkIndex` 0; target under an allowlisted root: `Projects/`, `Tasks/`, `Inbox/` (owner decision D2 may widen) | read |
@@ -213,6 +214,24 @@ Path `Inbox/<Title> - <YYYY-MM-DD>.md`, collision suffix `Inbox/<Title> - <YYYY-
   the status record's `pending` (with the note's blob SHA) and retried first for 3 days (first-seen day + 2). A retry
   **replaces** the note only while its blob SHA is unchanged (checked at the commit's pinned base; an owner edit wins and
   drops it from the list). On the 4th day it is rewritten once to `status: unavailable` with the last reason.
+
+### 4.8 Research Radar decisions (ADR-0032)
+
+- Reads: only direct `.md` files in the four research folders listed in §1, the monthly Radar decision file, and
+  `Research/Radar/applied.json`. `paperId` is the first 20 hex chars of SHA-256 of the canonical HTTP(S) source URL;
+  arXiv `abs`/`pdf`/`export.arxiv.org` forms are one identity. `www.` and generic `source`/`ref` query params are
+  preserved because they may identify different content; only unambiguous tracking params are dropped. Note reads are
+  resolved server-side from `paperId`, never from a client-named path.
+- Decision file: `Research/Radar/Decisions/YYYY-MM.jsonl` (Copenhagen month). Each append is exactly
+  `{"schemaVersion":1,"decisionId","paperId","decision":"remove|keep|undo","undoes":null|<UUID>,"at","card":{"title","source","topic"}}`
+  followed by one `\n`; existing bytes are preserved. The file must already be valid JSONL with unique, correctly
+  targeted decision IDs; malformed/duplicate/foreign/cross-paper Undo files are refused. An Undo may name an earlier
+  same-paper decision in the current or immediately previous monthly log, and appends only the current month.
+- Same write machinery as commands: operation ID, base revision, head-CAS, blob-SHA precondition, commit trailers, and
+  dedupe-before-write. Retries append nothing more; Undo is a new line and never rewrites old history.
+- Desktop owns `Research/Radar/applied.json` and `Research/Library`; a Keep stays pending until the desktop records
+  `applied` or `failed` for that decision ID. `updatedAt` must be a valid ISO instant, and an `applied` entry must have
+  a valid non-null Library path under `Research/Library/`; a `failed` entry may omit that path.
 
 ## 5. Refusal codes
 

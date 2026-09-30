@@ -141,6 +141,41 @@ export const TriageDecidePayload = z
   .refine((d) => d.reason === null || d.decision === 'skip', 'reason only on skip')
   .refine((d) => (d.decision === 'undo') === (d.undoes !== null), 'undoes exactly on undo');
 
+// ---- Research Radar (ADR-0032): read model + append-only remove/keep/undo decisions ----
+
+/** Canonical paper identity: the first 20 SHA-256 hex chars of the canonical http(s) source URL. */
+export const RadarPaperId = z.string().regex(/^[0-9a-f]{20}$/);
+/** No control/separator characters in displayed Radar text. */
+const radarText = (max: number, min = 1) => z.string().min(min).max(max)
+  .refine((s) => !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(s), 'must not contain control or separator characters');
+export const RadarSourceUrl = z.string().max(2000).refine((s) => {
+  if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(s)) return false;
+  try {
+    const u = new URL(s);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}, 'must be an http(s) URL');
+export const RadarDecision = z.enum(['remove', 'keep', 'undo']);
+export type RadarDecision = z.infer<typeof RadarDecision>;
+export const RadarCard = z.strictObject({
+  title: radarText(500),
+  source: RadarSourceUrl,
+  topic: radarText(100),
+});
+export type RadarCard = z.infer<typeof RadarCard>;
+
+export const RadarDecidePayload = z
+  .strictObject({
+    paperId: RadarPaperId,
+    decision: RadarDecision,
+    undoes: z.uuid().nullable().default(null),
+    card: RadarCard,
+  })
+  .refine((d) => (d.decision === 'undo') === (d.undoes !== null), 'undoes exactly on undo');
+export type RadarDecidePayload = z.infer<typeof RadarDecidePayload>;
+
 export const CaptureNotePayload = z.strictObject({
   text: z.string().min(1).max(50_000),
   context: Context.optional(),
@@ -155,6 +190,9 @@ const envelope = <T extends string, P extends z.ZodType>(type: T, payload: P) =>
     baseRevision: commitSha,
     payload,
   });
+
+export const ResearchRadarDecideCommand = envelope('ResearchRadarDecide', RadarDecidePayload);
+export type ResearchRadarDecideCommand = z.infer<typeof ResearchRadarDecideCommand>;
 
 export const CompleteTaskCommand = envelope('CompleteTask', CompleteTaskPayload);
 export type CompleteTaskCommand = z.infer<typeof CompleteTaskCommand>;
@@ -216,6 +254,7 @@ export const CaptureNoteEffect = z.strictObject({ kind: z.literal('note-captured
 export const EditEffect = z.strictObject({ kind: z.literal('edited'), beforeLineText: singleLine, afterLineText: singleLine });
 export const NoteEditedEffect = z.strictObject({ kind: z.literal('note-edited'), path: InboxNotePath });
 export const TriageDecidedEffect = z.strictObject({ kind: z.literal('triage-decided'), path: z.string().regex(/^Events\/Triage\/Decisions\/\d{4}-\d{2}\.jsonl$/), decisionId: z.uuid() });
+export const ResearchRadarDecidedEffect = z.strictObject({ kind: z.literal('research-radar-decided'), path: z.string().regex(/^Research\/Radar\/Decisions\/\d{4}-\d{2}\.jsonl$/), decisionId: z.uuid() });
 export const ActiveWorkEffect = z.strictObject({
   kind: z.literal('active-work'),
   op: z.enum(['captured', 'edited', 'keep', 'done', 'park', 'drop', 'undone']),
@@ -223,7 +262,7 @@ export const ActiveWorkEffect = z.strictObject({
   afterLineText: singleLine.nullable(),
 });
 export const TrainingEffect = z.strictObject({ kind: z.literal('training'), op: z.enum(['logged', 'undone']), lineText: singleLine });
-export const Effect = z.discriminatedUnion('kind', [TrainingEffect, CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect]);
+export const Effect = z.discriminatedUnion('kind', [TrainingEffect, CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect, ResearchRadarDecidedEffect]);
 export type Effect = z.infer<typeof Effect>;
 
 export const Receipt = z.strictObject({
@@ -616,6 +655,169 @@ export const TriageResponse = z.strictObject({
   appliedUpdatedAt: isoInstant.nullable(),
 });
 export type TriageResponse = z.infer<typeof TriageResponse>;
+
+// ---- Research Radar read model (ADR-0032) ----
+
+export const RADAR_DECISIONS_DIR = 'Research/Radar/Decisions';
+export const RADAR_APPLIED_PATH = 'Research/Radar/applied.json';
+
+/** What the Read action prefers: the owner's own note, else the source link. */
+export const RadarReadTarget = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('explanation'), path: z.string().min(1).max(512) }),
+  z.strictObject({ kind: z.literal('note'), path: z.string().min(1).max(512) }),
+  z.strictObject({ kind: z.literal('source'), url: RadarSourceUrl }),
+]);
+export type RadarReadTarget = z.infer<typeof RadarReadTarget>;
+
+export const RadarPaper = z.strictObject({
+  paperId: RadarPaperId,
+  rank: z.number().int().positive(),
+  title: radarText(500),
+  why: radarText(500, 0),
+  topic: radarText(100),
+  sourceUrl: RadarSourceUrl,
+  sourceDate: z.iso.date(),
+  badges: z.array(z.enum(['important', 'explained'])).max(2),
+  read: RadarReadTarget,
+});
+export type RadarPaper = z.infer<typeof RadarPaper>;
+
+export const RadarTopicCount = z.strictObject({ topic: radarText(100), count: z.number().int().nonnegative() });
+export const RadarDecisionLine = z.strictObject({
+  schemaVersion: z.literal(1),
+  decisionId: z.uuid(),
+  paperId: RadarPaperId,
+  decision: RadarDecision,
+  undoes: z.uuid().nullable(),
+  at: isoInstant,
+  card: RadarCard,
+});
+export type RadarDecisionLine = z.infer<typeof RadarDecisionLine>;
+
+/** Replayed Radar decision state. Authoritative append order wins, never device timestamps. */
+export interface RadarDecisionState {
+  readonly removed: ReadonlySet<string>;
+  readonly kept: ReadonlySet<string>;
+  /** For each currently kept paper, the decision ID whose applied record owns its save status. */
+  readonly keepDecisionByPaper: ReadonlyMap<string, string>;
+  /** Latest surviving remove/keep decision per paper, in authoritative append order. */
+  readonly latestByPaper: ReadonlyMap<string, RadarDecisionLine>;
+}
+
+/**
+ * Replays Remove/Keep/Undo in the order the lines were appended. Undo cancels exactly its named, earlier, same-paper
+ * decision; it never erases decisions appended after that target. Unknown, future, duplicate or cross-paper Undo
+ * targets are ignored by the reader (the writer refuses them).
+ */
+export function effectiveRadarDecisions(lines: readonly RadarDecisionLine[]): RadarDecisionState {
+  interface DecisionEvent {
+    readonly line: RadarDecisionLine;
+    readonly index: number;
+    active: boolean;
+  }
+  const byId = new Map<string, DecisionEvent>();
+  const byPaper = new Map<string, DecisionEvent[]>();
+  for (const [index, line] of lines.entries()) {
+    if (line.decision === 'undo') {
+      byId.set(line.decisionId, { line, index, active: false });
+      continue;
+    }
+    const event: DecisionEvent = { line, index, active: true };
+    byId.set(line.decisionId, event);
+    const events = byPaper.get(line.paperId) ?? [];
+    events.push(event);
+    byPaper.set(line.paperId, events);
+  }
+  for (const [index, line] of lines.entries()) {
+    if (line.decision !== 'undo' || line.undoes === null) continue;
+    const target = byId.get(line.undoes);
+    if (!target || target.line.decision === 'undo' || target.index >= index || target.line.paperId !== line.paperId) continue;
+    target.active = false;
+  }
+  const removed = new Set<string>();
+  const kept = new Set<string>();
+  const keepDecisionByPaper = new Map<string, string>();
+  const latestByPaper = new Map<string, RadarDecisionLine>();
+  for (const [paperId, events] of byPaper) {
+    let latest: DecisionEvent | null = null;
+    for (const event of events) if (event.active) latest = event;
+    if (!latest) continue;
+    latestByPaper.set(paperId, latest.line);
+    if (latest.line.decision === 'remove') removed.add(paperId);
+    else {
+      kept.add(paperId);
+      keepDecisionByPaper.set(paperId, latest.line.decisionId);
+    }
+  }
+  return { removed, kept, keepDecisionByPaper, latestByPaper };
+}
+
+export const RadarAppliedEntry = z.strictObject({
+  status: z.enum(['applied', 'failed']),
+  at: isoInstant,
+  message: radarText(300, 0),
+  /** Only accepted when it is a safe path under `Research/Library/` (ADR-0032). */
+  libraryPath: z.string().max(512).nullable(),
+});
+export type RadarAppliedEntry = z.infer<typeof RadarAppliedEntry>;
+
+const RadarSourceState = z.strictObject({
+  state: z.enum(['ok', 'absent', 'degraded']),
+  /** Usable items found in the seven-day window. */
+  count: z.number().int().nonnegative(),
+});
+
+export const RadarResponse = z.strictObject({
+  revision: commitSha,
+  now: isoInstant,
+  sources: z.strictObject({
+    dailyScout: RadarSourceState,
+    readingBriefs: RadarSourceState,
+    importantUpdates: RadarSourceState,
+    explained: RadarSourceState,
+  }),
+  /** The three deterministically ranked, still-eligible papers. */
+  papers: z.array(RadarPaper).max(3),
+  topics: z.array(RadarTopicCount).max(20),
+  decisions: z.array(RadarDecisionLine).max(5000),
+  applied: z.record(z.string(), RadarAppliedEntry),
+  appliedUpdatedAt: isoInstant.nullable(),
+  warnings: z.array(radarText(300, 0)).max(10),
+});
+export type RadarResponse = z.infer<typeof RadarResponse>;
+
+/** Server-side Radar note read header: the client sends a paper ID, never a note path. */
+export const RADAR_PAPER_HEADER = 'X-VC-Paper';
+
+export const RadarNoteRefusalCode = z.enum([
+  /** The paper has no readable explanation/intake note (including when only a source link exists). */
+  'missing',
+  /** The allowlisted note is larger than the 1 MB guard. */
+  'too-large',
+  /** The allowlisted note is not valid UTF-8. */
+  'encoding',
+]);
+export type RadarNoteRefusalCode = z.infer<typeof RadarNoteRefusalCode>;
+
+export const RadarNoteResponse = z.discriminatedUnion('status', [
+  z.strictObject({
+    status: z.literal('ok'),
+    /** Commit X the read was pinned to. */
+    revision: commitSha,
+    /** The server-resolved allowlisted note path, returned for display only; never accepted as client input. */
+    path: z.string().min(1).max(512),
+    blobSha,
+    /** Raw Markdown. The client renders it through the same safe note renderer as linked notes. */
+    markdown: z.string().max(MAX_NOTE_BYTES),
+  }),
+  z.strictObject({
+    status: z.literal('refused'),
+    revision: commitSha,
+    code: RadarNoteRefusalCode,
+    message: z.string(),
+  }),
+]);
+export type RadarNoteResponse = z.infer<typeof RadarNoteResponse>;
 
 /** Only sessions and unknown table lines, never the surrounding health note. */
 export const TrainingRow = z.strictObject({ date: z.iso.date(), time: z.string(), type: z.string(), distance: z.string(), duration: z.string(), weight: z.string(), split: z.string(), note: z.string() });

@@ -8,6 +8,9 @@ import {
   LINKED_NOTE_HEADER,
   NOTE_HEADER,
   MAX_KNOWN,
+  RADAR_PAPER_HEADER,
+  RadarPaperId,
+  ResearchRadarDecideCommand,
   ScoutStatus,
   type MarketTickerResponse,
   type MorningResponse,
@@ -23,6 +26,9 @@ import {
   type NoteReadResponse,
   type NotesResponse,
   type Receipt,
+  type RadarNoteResponse,
+  type RadarResponse,
+  type ResearchRadarDecideCommand as ResearchRadarDecideCommandType,
   type TasksResponse,
   type TriageResponse,
 } from '@vault-companion/contracts';
@@ -34,6 +40,8 @@ export interface Services {
   readTasks(known: readonly string[]): Promise<TasksResponse | ApiError>;
   /** `command` is schema-valid; `raw` is the exact parsed body used for the payload hash. */
   execute(command: Command, raw: unknown): Promise<Receipt | ApiError>;
+  /** Research Radar decision writer (ADR-0032). Optional: without it the route answers 404. */
+  executeRadarDecide?(command: ResearchRadarDecideCommandType, raw: unknown): Promise<Receipt | ApiError>;
   /** Read-only linked note (P4-A). Optional: without it the route answers 404. */
   readLinkedNote?(req: LinkedNoteRequest): Promise<LinkedNoteResponse | ApiError>;
   /** Active Work Now card. Optional: without it the route answers 404. */
@@ -52,6 +60,10 @@ export interface Services {
   /** Dashboard (DASH1). Optional: without them the routes answer 404. */
   readDashboard?(range: DashboardRange): Promise<DashboardResponse | ApiError>;
   readMarketTicker?(): Promise<MarketTickerResponse | ApiError>;
+  /** Research Radar (ADR-0032). Optional: without it the route answers 404. */
+  readResearchRadar?(): Promise<RadarResponse | ApiError>;
+  /** Server-side Radar note read (ADR-0032). The client sends a paper ID, never a path. */
+  readRadarNote?(paperId: string): Promise<RadarNoteResponse | ApiError>;
 }
 
 export interface AppDeps {
@@ -85,7 +97,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | DashboardResponse | MarketTickerResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -174,6 +186,36 @@ export function createApp(deps: AppDeps) {
       return c.json(result, statusFor(result.code) as 400);
     }
     if (result.status === 'refused') meta.errorCode = `training:${result.code}`;
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  app.get('/api/radar', async (c) => {
+    const read = deps.services.readResearchRadar;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    if (isApiError(result)) {
+      c.get('logMeta').errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    c.get('logMeta').commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Radar note read: the paper ID rides in a header, never in the URL; the service resolves it server-side from the
+  // allowlisted research folders at a pinned revision. No note text or path is logged.
+  app.get('/api/radar/read', async (c) => {
+    const read = deps.services.readRadarNote;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const paperId = RadarPaperId.safeParse(c.req.header(RADAR_PAPER_HEADER));
+    if (!paperId.success) return c.json(err('invalid', 'invalid paper ID'), 400);
+    const result = await read(paperId.data);
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    if (result.status === 'refused') meta.errorCode = `radar-note:${result.code}`;
     meta.commitSha = result.revision;
     return c.json(result);
   });
@@ -344,6 +386,46 @@ export function createApp(deps: AppDeps) {
     }
     return c.json(result);
   });
+
+  // Radar decisions ride their own command type and endpoint; the write uses the same origin/account/body guards.
+  app.post('/api/radar/decisions', async (c) => {
+    if (c.req.header('Origin') !== deps.appOrigin || c.req.header('X-VC-Request') !== '1') {
+      return c.json(err('forbidden', 'request origin not allowed'), 403);
+    }
+    if (!(c.req.header('Content-Type') ?? '').toLowerCase().startsWith('application/json')) {
+      return c.json(err('forbidden', 'JSON required'), 403);
+    }
+    if (c.req.header('X-VC-Account') !== c.get('identity').accountKey) {
+      return c.json(err('account-mismatch', 'this action was saved under a different sign-in'), 409);
+    }
+    const decide = deps.services.executeRadarDecide;
+    if (!decide) return c.json(err('invalid', 'not found'), 404);
+    const text = await c.req.text();
+    if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return c.json(err('invalid', 'body too large'), 400);
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      return c.json(err('invalid', 'body is not JSON'), 400);
+    }
+    const parsed = ResearchRadarDecideCommand.safeParse(raw);
+    if (!parsed.success) {
+      const fields = [...new Set(parsed.error.issues.map((i) => i.path.join('.') || '(root)'))].join(', ');
+      return c.json(err('invalid', `invalid command: ${fields}`), 400);
+    }
+    const meta = c.get('logMeta');
+    meta.commandType = parsed.data.type;
+    meta.operationId = parsed.data.operationId;
+    const result = await decide(parsed.data, raw);
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json({ ...result, operationId: parsed.data.operationId }, statusFor(result.code) as 400);
+    }
+    meta.pathHash = await hashPath(result.path);
+    meta.commitSha = result.commitSha;
+    return c.json(result);
+  });
+
   app.notFound((c) => c.json(err('invalid', 'not found'), 404));
   app.onError((e, c) => {
     const meta = c.get('logMeta');

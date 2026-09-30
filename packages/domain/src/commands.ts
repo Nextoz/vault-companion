@@ -1,6 +1,6 @@
 // Application services: one WritePlan per command type (docs/commands.md) and the task read model.
 // Pure orchestration over the VaultStore port and the Markdown kernel; no HTTP, no GitHub.
-import { TRAINING_PATH, ACTIVE_WORK_PATH, MAX_KNOWN, MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type TasksResponse, type TaskView } from '@vault-companion/contracts';
+import { TRAINING_PATH, ACTIVE_WORK_PATH, MAX_KNOWN, MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type ResearchRadarDecideCommand, type TasksResponse, type TaskView } from '@vault-companion/contracts';
 import * as md from '@vault-companion/vault-markdown';
 import { executeWrite, findInOnePage, replayOnParent, type Planned, type Refused, type WritePlan } from './execute.ts';
 import { MAX_NOTE_BYTES } from '@vault-companion/contracts';
@@ -8,6 +8,7 @@ import { appendDecisionLine, hasDecisionId, parseDecisionLines, type DecisionLin
 import { readTriageText, TRIAGE_DIR, triageDecisionPath } from './triage.ts';
 import { canWrite, INBOX_DIR, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 import { payloadHash } from './payload-hash.ts';
+import { researchRadarDecidePlan } from './research-radar-command.ts';
 import { FileTooLarge, gitBlobSha, TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type CommitInfo, type VaultPath, type VaultStore } from './store.ts';
 import { checkOccurredAt, userDate } from './time.ts';
 
@@ -626,6 +627,29 @@ export function createCommandService(deps: CommandServiceDeps) {
         r = await executeWrite(deps.store, { operationId: cmd.operationId, baseRevision: cmd.baseRevision, payloadHash: await payloadHash(raw) }, planFor(cmd, raw, deps));
       } catch (e) {
         // A kernel post-condition failed: a bug, never a write. Retrying the same input cannot help.
+        if (e instanceof md.KernelInvariantError) return apiError('refused:structure', 'a safety check refused this change; nothing was written');
+        throw e;
+      }
+      if (!r.ok) return apiError(r.code, r.message, r.retryable);
+      return {
+        operationId: cmd.operationId,
+        status: r.status,
+        path: r.path,
+        commitSha: r.commitSha,
+        blobSha: r.blobSha,
+        effect: r.effect,
+        ...(skew.backdated ? { flags: ['backdated' as const] } : {}),
+      };
+    },
+
+    /** ADR-0032 Radar decisions use the same executor/CAS/trailers, on their own wire command type. */
+    async executeRadarDecide(cmd: ResearchRadarDecideCommand, raw: unknown): Promise<Receipt | ApiError> {
+      const skew = checkOccurredAt(cmd.occurredAt, deps.now());
+      if (!skew.ok) return apiError('clock-skew', 'the device clock is ahead; check the time settings');
+      let r;
+      try {
+        r = await executeWrite(deps.store, { operationId: cmd.operationId, baseRevision: cmd.baseRevision, payloadHash: await payloadHash(raw) }, researchRadarDecidePlan(cmd));
+      } catch (e) {
         if (e instanceof md.KernelInvariantError) return apiError('refused:structure', 'a safety check refused this change; nothing was written');
         throw e;
       }

@@ -1,6 +1,6 @@
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
-import { createTrainingService, createActiveWorkService, createCommandService, createHistoryService, createLinkedNoteService, createMorningService, createNotesService, createScoutService, createTriageService, DEFAULT_USER_TIME_ZONE } from '@vault-companion/domain';
+import { createTrainingService, createActiveWorkService, createCommandService, createHistoryService, createLinkedNoteService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, DEFAULT_USER_TIME_ZONE } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createApp } from './app.ts';
@@ -88,6 +88,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...createActiveWorkService({ store }),
     ...createTrainingService({ store }),
     ...createTriageService({ store }),
+    ...createResearchRadarService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createScoutService({ store }),
     ...createMorningService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createHistoryService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),

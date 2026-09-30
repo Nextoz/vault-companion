@@ -32,7 +32,7 @@ const response = (scouts: unknown[]) => ScoutsResponse.parse({ revision: 'a'.rep
 const render = async (scouts: unknown[], onOpen: () => void = () => {}) => {
   vi.mocked(getScouts).mockResolvedValue({ kind: 'ok', data: response(scouts) });
   const root = createRoot(document.getElementById('root')!);
-  await act(async () => { root.render(createElement(Scouts, { page: true, onOpen, refreshKey: 0 })); });
+  await act(async () => { root.render(createElement(Scouts, { page: true, onOpen, refreshKey: 0, accountKey: null, blocked: false })); });
   return root;
 };
 const row = (part: string) =>

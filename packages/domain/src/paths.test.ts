@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canReadLinkedNote, canWrite, EXPLAINER_STATUS_PATH, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
+import { canReadLinkedNote, canReadRadarSource, canWrite, EXPLAINER_STATUS_PATH, isInboxNotePath, isRadarDecisionPath, isResearchLibraryPath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 
 describe('parseVaultPath', () => {
   it.each([
@@ -125,5 +125,43 @@ describe('ADR-0029 research explainer write scope', () => {
     expect(w('Automation/Scout Status/city-events.json', 'create')).toBe(false);
     expect(w('Automation/Scout Status/city-events.json', 'update')).toBe(false);
     expect(w('Automation/Scout Status/research-explainer.md', 'create')).toBe(false);
+  });
+});
+
+describe('ADR-0032 Research Radar path scope', () => {
+  it('writes only the monthly decisions JSONL, never applied.json or Library', () => {
+    expect(canWrite(parseVaultPath('Research/Radar/Decisions/2026-09.jsonl')!, 'create')).toBe(true);
+    expect(canWrite(parseVaultPath('Research/Radar/Decisions/2026-09.jsonl')!, 'update')).toBe(true);
+    expect(canWrite(parseVaultPath('Research/Radar/applied.json')!, 'create')).toBe(false);
+    expect(canWrite(parseVaultPath('Research/Radar/applied.json')!, 'update')).toBe(false);
+    expect(parseVaultPath('Research/Radar/Decisions/2026-13.jsonl')).toBeNull();
+    expect(parseVaultPath('Research/Radar/Decisions/sub/2026-09.jsonl')).toBeNull();
+    expect(isRadarDecisionPath('Research/Radar/Decisions/../2026-09.jsonl')).toBe(false);
+  });
+
+  it('reads exactly the four research note folders plus Radar JSON files', () => {
+    for (const p of [
+      'Research/Daily Research Scout/Daily Research Scout - 2026-09-29.md',
+      'Research/Reading Briefs/Research Reading Brief - 2026-09-29.md',
+      'Research/Important Research Updates/Paper.md',
+      'Research/Explained/Explanation.md',
+      'Research/Radar/Decisions/2026-09.jsonl',
+      'Research/Radar/applied.json',
+    ]) expect(canReadRadarSource(p), p).toBe(true);
+    for (const p of [
+      'Research/Daily Research Scout/sub/note.md',
+      'Research/Daily Research Scout/.hidden.md',
+      'Research/Other/Paper.md',
+      'Research/Radar/Decisions/2026-09.md',
+      'Inbox/Paper.md',
+    ]) expect(canReadRadarSource(p), p).toBe(false);
+  });
+
+  it('accepts only safe Research/Library applied paths', () => {
+    expect(isResearchLibraryPath('Research/Library/Paper.md')).toBe(true);
+    expect(isResearchLibraryPath('Research/Library/Topic/Paper.md')).toBe(true);
+    for (const p of ['Research/Library/../Paper.md', 'Research/Library/.hidden.md', 'Inbox/Paper.md', 'Research/Library/Paper.txt']) {
+      expect(isResearchLibraryPath(p), p).toBe(false);
+    }
   });
 });
