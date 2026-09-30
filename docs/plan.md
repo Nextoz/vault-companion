@@ -23,6 +23,10 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
+- 14:08: SP2 whole diff reviewed; independent **38tests/typecheck/lint PASS**, new edge cases **2/2 FAIL**:
+  eviction turns valid concurrent reads into null, malformed missing blob SHA poisons cache. One bounded Pro
+  correction **w5:p15**, candidate3f6551c preserved; unaccepted/floor hold. H1 correction continues, H2/RR1
+  parked for independent review. Balance **$6.21**, spend$3.78; no production/phone performance claim.
 - 14:03: RR1 correction independently **123tests/typecheck PASS** but new production regressions **2/2 FAIL**:
   duplicate Undo accepted; legitimate previous-month Undo blocks next-month writes. Candidate/failing tests
   preserved locally, unaccepted/unmounted; one correction exhausted, independent evidence escalation next.

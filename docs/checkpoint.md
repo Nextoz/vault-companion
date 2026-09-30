@@ -1,4 +1,27 @@
-# Checkpoint — 2026-09-30 14:03 Europe/Copenhagen
+# Checkpoint — 2026-09-30 14:08 Europe/Copenhagen
+
+## Latest delta — SP2 reviewed, correction dispatched
+
+- SP2 handoff read; entire production diff/new tests/report reviewed. Independent **3files/38tests, pnpm
+  typecheck and targeted eslint PASS**. No full check/browser/phone; held independent Claude gate unchanged.
+- Added executable production-adapter edge cases using acceptance-oracle contract; **2/2 FAIL**:160 concurrent
+  valid reads yield32 nulls because pending consumers consult an already-evicted cache; missing blob SHA response
+  cached, suppressing valid recovery fetch. Both unskipped in read-cache.test.ts. SP2 NOT accepted.
+- Initial candidate/failing tests preserved local **3f6551c**, no push/PR. One bounded Pro correction now
+  **w5:p15**, same sp2-read-cache clone, .agent/correction.md / correction.log; handoff SP2-correction.md.
+  Flight returns copied fetched result independently of residency; validate regular-file metadata/decoded bounds,
+  malformed recovery tests and honest byte-budget/instance-lifetime report. No head/auth/write/global/TTL changes.
+  After one correction, unresolved -> independent evidence escalation, not blind repeats.
+- SP2 Jev Use1 redo .90 / verification .17 / silent-failure .78; Lead agrees from two reproduced failures.
+  Raw .agent/jev/SP2-run.json. Deterministic Pro floor, not additional Jev-picked failure; routing stats unchanged.
+- Active2 independent Pro workers: **H1 correction w5:p12, SP2 correction w5:p15**. H2/RR1 remain unaccepted/
+  parked for independent review. Consumed SP2 handoff excluded from watcher; next H1/SP2 corrections handoff-first.
+- DeepSeek **$6.23** at14:06 → **$6.21** at14:08; aggregate reported spend **$3.78** since9.99, concurrent
+  attribution unknown. Stop NEW dispatch below$3. No new OpenAI work, live-vault write or production deployment.
+
+---
+
+# Prior checkpoint — 2026-09-30 14:03 Europe/Copenhagen
 
 ## Latest delta — RR1 correction verified but rejected
 
