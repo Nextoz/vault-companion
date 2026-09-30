@@ -1,6 +1,6 @@
 # Current plan
 
-Lead: **Codex gpt-6-astra, temporary owner exception (2026-09-30)**, replacing Claude Opus while the Claude budget is low.
+Lead: **Codex gpt-6-astra, temporary owner exception and Codex budget mode (2026-09-30)**, replacing Claude Opus while the Claude budget is low.
 **Expires Thursday 2026-10-01 21:00 Europe/Copenhagen (19:00 UTC).** Finish the current safe step, checkpoint,
 commit, and print `HANDOVER TO CLAUDE READY`; Claude Opus resumes the normal Lead role.
 Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint.md`.
@@ -8,11 +8,13 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Temporary Lead operating constraints (owner, 2026-09-30)
 
-- No Claude usage: no Claude workers or Claude Cloud. One worker at a time shares Codex quota with the Lead.
-  The Lead counts as the Astra-high job; never launch an Astra-high worker concurrently.
+**Owner update 3 below supersedes the older provisional, privacy and floor-routing limits in this file.**
+
+- No Claude-plan workers or Claude Cloud. Claude-on-DeepSeek is allowed by update 3. **Codex budget mode expires
+  Thursday 2026-10-01 21:00 Europe/Copenhagen (19:00 UTC).** Start no new OpenAI Codex workers;
+  preserve H1's partial work after its quota exit. DeepSeek handles new implementation, including Pro floor work.
 - Delegate implementation through `tools/agent-pane.sh` per the routing table; Lead plans, decomposes, integrates
-  and accepts. Wait inside the turn for workers; background completion does not wake this Lead. Use the shell's
-  longest supported wait and repeat on timeout. For CI, CodeRabbit or owner input, checkpoint and end with
+  and accepts. Never wait or poll inside the Lead turn. For workers, CI, CodeRabbit or owner input, checkpoint and end with
   `WAITING: <what>`; a watcher pane sends `WAKE: <event>`.
 - For Astra routing rows and H hook/gate code, open a PR with `hold`; do not merge. Independent Claude Lead review
   waits until the reset. Ordinary work follows normal PR/CodeRabbit/merge/deploy rules.
@@ -21,14 +23,182 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
-- Resume: clean `main` at `947570d`; Herdr `lead` is `w5:p1`, no other agents, no open PRs. Resume `pnpm check`
-  passed: lint, typecheck, 101 files / 1415 tests. Historical worker/quota/queue statements below are superseded here.
+- 14:08: SP2 whole diff reviewed; independent **38tests/typecheck/lint PASS**, new edge cases **2/2 FAIL**:
+  eviction turns valid concurrent reads into null, malformed missing blob SHA poisons cache. One bounded Pro
+  correction **w5:p15**, candidate3f6551c preserved; unaccepted/floor hold. H1 correction continues, H2/RR1
+  parked for independent review. Balance **$6.21**, spend$3.78; no production/phone performance claim.
+- 14:03: RR1 correction independently **123tests/typecheck PASS** but new production regressions **2/2 FAIL**:
+  duplicate Undo accepted; legitimate previous-month Undo blocks next-month writes. Candidate/failing tests
+  preserved locally, unaccepted/unmounted; one correction exhausted, independent evidence escalation next.
+  H1/SP2 remain active; H2 held50. Balance **$6.29**, spend$3.70. Checkpoint has evidence and next actions.
+- 13:57: H1 recovery independently **54tests/typecheck PASS**, but scanner exclusions/state inspection and
+  Windows fixture portability block acceptance. One bounded Pro correction **w5:p12**; hooks untouched.
+  RR1 w5:pY and SP2 w5:p0 remain active, max3. PR50 current CI green, actual CodeRabbit9 findings read/source
+  checked and retained for independent escalation; H2 remains held/unactivated, no blind second Pro retry.
+  Balance **$6.35**, reported spend$3.64; checkpoint holds exact evidence and handoff paths. No deployment.
+- 13:39: PR **#49 merged2e0db23** after Lead review/full1447tests+80browser tests and green current CI.
+  CodeRabbit no real review; incorrect `review` command failed, future one request must be `full review`.
+  Not deployed/phone-accepted (owner G2). H2 correction independently56tests/typecheck passes but actual CLI,
+  MCP-home and receipt failures reproduced; held draft **#50**, no activation or additional blind Pro retry.
+  H1/RR1 Pro active; SP2 immutable revision read cache now Pro **w5:p0**, bounded oracle/hold, no head TTL/write
+  changes. Balance **$6.88**, reported spend$3.11, max3/$3stop unchanged. Checkpoint has exact resume/blockers.
+- 13:23: B3 Pro correction reviewed; B3/B4/SP1 batch independently FULL check **103files/1447tests** and
+  single FULL browser suite **80/80** pass. Ordinary PR **#49** open, current-head CI/review pending; no H/RR
+  floor changes included. One CodeRabbit request after final checkpoint push. RR1 correction now Pro **w5:pY**;
+  H1 recovery/H2 correction active, three workers. Balance **$7.25**, reported spend$2.74. Phone/deploy unverified.
+- 13:15: RR1 handoff/production diff reviewed; independent **85/85** tests + typecheck pass, targeted lint fails
+  unused variable. Foreign-paper Undo and subsequent-decision replay bugs reproduced; Read ignores note target,
+  mount targets wrong tab. RR1 unaccepted; one Pro correction queued in clone .agent/correction.md (not launched).
+  Free slot used for priority H1 non-hook recovery **w5:pW**, original partial clone preserved; hooks untouched.
+  H2/BUGS Pro corrections remain active; RR1 correction next free slot. Balance **$7.54**, reported spend$2.45;
+  Jev RR1 redo .70/verification .08, Lead agrees from evidence. All floor review/deploy gates remain.
+- 12:58: PR #48 merged `f4e7cc7`, CI green; #47 already merged. H2 handoff failed Lead contract review;
+  one Pro correction active w5:pS. BUGS Flash correction handoff read; B4/SP1 changes look sound, B3 null
+  history regression reproduced by Lead. Escalated to Pro w5:pT, same clone; unaccepted pending review/full
+  check/e2e. RR1 Pro w5:pN remains active. H non-hook recovery next free slot, no new OpenAI Codex work.
+  Balance **$8.47**, aggregate reported spend **$1.52**; stop new dispatch below $3. Jev H2 redo .74,
+  BUGS redo .77; Lead agrees from concrete failures. One reasoning escalation, first picked SP1 redo1/first5.
+  Latest resume instructions/evidence in checkpoint; consumed H2/BUGS handoffs excluded from watcher.
+- 12:37 checkpoint: SP1 handoff/new files reviewed; independent synthetic benchmark **10/10** and typecheck pass.
+  Production/phone latency still unmeasured. Test-discovery packaging and one inconsistent report comparison
+  require focused correction; Lead defers mutable-head TTL recommendation, no cache implementation started.
+- Reviewed B3/B4/SP1 candidates preserved locally: `c420882`, `38621cd`, `3ed9c47`. Cherry-picked into
+  `C:/Dev/vault-companion-clones/b3-b4-fixes`, branch `agent/b3-b4-fixes`, base main `6080433`, candidate head
+  `7050d3a`. Flash high correction worker **w5:pQ** active with disjoint files from H2/RR1; handoff
+  `.agent/handoffs/BUGS.md`. It fixes B3/B4 edge cases and moves SP1 tests into normal apps/worker/test discovery
+  without shared config edits. Full combined check/e2e remains required before the ordinary batch PR.
+- Balance **$9.22** at 12:37; aggregate reported spend **$0.77**, concurrent per-run attribution unknown.
+  Jev SP1 redo .83 / scope .82 / verification .30; Lead agrees limited packaging/report correction. First picked
+  run has finished its initial attempt, accepted 0, correction required 1/first 5, reasoning escalations 0.
+  Count this conservatively toward the routing kill switch; a second affected picked run disables active Jev routing.
+
+- 12:28 checkpoint: B3 handoff/diff reviewed; independent targeted **19/19** plus typecheck pass. Fix before merge:
+  unknown-count degraded run backed only by yesterday's success must not be dated at today's attempt; matching
+  incomplete history must not suppress known current count. `.agent/B3-correction.md` queued for one Flash correction.
+  Jev says redo .99; Lead agrees focused correction, no model escalation. Existing `noSuccess` naming cleanup deferred;
+  state colors use shared styles, no new CSS change required. Neither bug is accepted/shipped yet.
+- RR1 dispatched Pro high in `w5:pN`, clone `C:/Dev/vault-companion-clones/rr1-radar`, branch `agent/rr1-radar`,
+  base `d542b4d`. Contract in clone `.agent/brief.md`: ranking/read model, component, new append-only decision log,
+  exact retry/CAS/Undo regression oracles, ADR-0032. **Hold + independent Claude review**; mounting Scouts waits
+  for B4 integration, no concurrent Scouts edits. RR2 desktop job not in scope. Latest balance **$9.54**, reported
+  aggregate spend $0.45 since resume, concurrent attribution unknown. Active slots H2/SP1/RR1; bugs next.
+
+- 12:20 checkpoint: PR #47 merged as `6080433`; update-3 follow-up PR **#48** open, Ubuntu/Windows CI green,
+  CodeRabbit review requested once and pending. Local full check **1415 tests** and e2e **79/79** passed for #47.
+- B4 handoff reviewed: independent component **7/7** and iPhone-WebKit Scouts browser **3/3** pass. Memoized
+  Insights filtering accepted. Before bug-batch acceptance, fix Running counted as 'with problems' and unknown
+  findings announced as 'no findings'; focused correction packet `.agent/B4-correction.md` queued, not launched.
+  No escalation/redo; batch still unaccepted until correction, B3 integration and full combined verification.
+- SP1 measurement dispatched on Flash high in `w5:pK`, clone `C:/Dev/vault-companion-clones/sp1-measure`,
+  branch `agent/sp1-measure`, base `8a0ca36`; tool activity verified. Jev tier Flash .79, ordinary risk .68,
+  ambiguity .28: pick followed (1 active picked run). Active slots: B3, H2, SP1. Next dispatch RR1, then remaining bugs.
+- Latest balance **$9.71** at 12:20 Copenhagen (resume $9.99; aggregate reported spend $0.28;
+  concurrent per-run attribution unknown). Jev B4 advice strong-review .56, verification .14; Lead retains
+  unaccepted verdict pending focused correction/combined checks. No floor downgrade. Interim watcher rearmed
+  for B3/H2/SP1 handoffs and PR #48 checks; B4's consumed handoff excluded to prevent repeated wake.
+
+- Resume at 11:58 Copenhagen: clean documentation branch `bc5a853`; PR #47 CI green on Ubuntu/Windows,
+  real CodeRabbit review completed and its stale-snapshot finding fixed. B3/B4 panes closed without tool activity,
+  code changes or handoffs; restarted in the same clones on Flash with the original briefs plus failure context.
+  H1 stopped at the Codex usage limit, leaving partial tracked and untracked harness work, no handoff. Preserve it;
+  start no new Codex work. H non-hook implementation goes to Pro, then SP measurement, RR1, remaining bugs.
+- Restart launch evidence: Windows workspace-write sandbox repeatedly failed with
+  `orchestrator_helper_incomplete`; stopped those attempts. Unsandboxed Flash B3/B4 now execute tools in
+  `w5:pE`/`w5:pF`. H2 launcher/profiles/watcher dispatched to Pro (`deepseek-v4-pro`) in `w5:pH`, clone
+  `C:/Dev/vault-companion-clones/h2-launcher`, branch `agent/h2-launcher`, original base `bc5a853`.
+  Pro tier alias `deepseek-pro` is not an API model ID; initial alias launch refused before implementation.
+  These three tasks have disjoint allowed files. H2 handoff: `.agent/handoffs/H2.md`; held PR required.
+
+- Pre-PR resume snapshot: clean `main` at `947570d`; the prior Herdr Lead was `w5:p1`, with no other agents or open
+  PRs. Resume `pnpm check` passed: lint, typecheck, 101 files / 1415 tests. Refresh the resume SHA and PR state after
+  PR #47 merges; historical worker/quota/queue statements below are superseded here.
 - Ready Backlog re-read read-only: H first, then SP, RR, B3+B4. Never select work from the Ideas Backlog.
-- H Part 1 is ready for engineering implementation; H1 core guards/gates first, H2 launch profiles/watcher next,
-  sequential Astra-medium workers. Contract: `docs/briefs/H1-harness-core.md`.
+- H Part 1 is ready for engineering implementation; H1 core guards/gates stopped incomplete, H2 launch
+  profiles/watcher now on DeepSeek Pro. H1 contract: `docs/briefs/H1-harness-core.md`.
   Acceptance: five required hook/gate eval fixtures plus failure cases, targeted checks, Lead full check/e2e;
   held PR and deferred independent review/canary mean H is not accepted or shipped yet.
-- H Part 2 / DeepSeek graduation waits for Part 1 acceptance and its cost/isolation evidence; no backend change yet.
+- DeepSeek smoke passed; update 3 removes the formal B3 graduation gate.
+
+## Owner update 3 — default DeepSeek backend (2026-09-30)
+
+- DeepSeek is the default for **all implementation**, with no B3 graduation gate. Up to **3 DeepSeek workers**
+  may run on independent files: Flash by default; Pro where Sol-medium would be chosen and for floor work.
+- DeepSeek is trusted with **all vault data, including private content**. This supersedes the DeepSeek-only
+  public/synthetic restriction; private text still never enters this repository, fixtures, logs or receipts.
+  Live vault writes still require owner approval; Jev still receives public filtered packets only.
+- No sandbox required. Default: Codex-on-DeepSeek with `--sandbox workspace-write`, isolated home/no MCP/memories;
+  `Tools/claude-deepseek.ps1` is allowed if needed without WSL/container. This uses DeepSeek balance, not Codex quota.
+- Floor work (auth, write path, persistence, concurrency, security, CI, harness) may go to Pro, with a **hold** PR,
+  Lead diff review and later independent Claude review. Hook canary remains deferred; do not merge held work.
+- Every diff gets Lead review; `verify-run` applies once available. Keep the **$3 stop**, **one Playwright job**,
+  and **Codex budget mode until Thu 2026-10-01 21:00 Copenhagen**. No new OpenAI Codex workers.
+- Balance at resume, 2026-09-30 11:58 Copenhagen: **$9.99**, API precision; reported change since smoke $0.00,
+  sub-cent cost unknown. Record balance at every checkpoint. Weekday afternoon runs cost half.
+
+## Owner update 2 — historical provisional rules and Jev (2026-09-30)
+
+- Re-read current Harness Brief Parts 2 and 3. Smoke-test Codex 0.159.2 with a one-word DeepSeek response before
+  dispatching real work. Verify provider/model/no MCP; measure balance before/after via the authorized balance API.
+- After smoke PASS, DeepSeek is provisional: at most two DeepSeek workers plus one Codex worker, isolated clones,
+  independent files, low-risk public/synthetic tasks only. Flash by default; Pro for ordinary Sol-medium scope.
+  One Playwright job at a time. Below $3 balance, stop DeepSeek dispatch and emit `ACTION NEEDED:`.
+- Until H is accepted, current checks/handoff plus Lead diff review apply; recheck the canary through H when available.
+  Formal routing-table graduation waits for the B3 canary; no change to the permanent routing table yet.
+- Jev Use 2 chooses low-risk workers only: obey tier when top probability >=0.60, integrity risk ordinary,
+  and ambiguous probability <0.5. Otherwise Lead chooses and logs why. Always include unresolved as a choice.
+- The deterministic floor takes precedence: auth/identity/account binding, writes/persistence/concurrency,
+  security/privacy/new write targets, and CI/harness/hooks use the high-risk table. Log Jev advice but do not obey
+  a lower pick. This includes H's non-hook harness code. Keep its files separate from low-risk product work.
+- Every worker run gets Jev Use 1 (completion, verification, scope, silent failure, unsupported claims, disposition)
+  recorded next to the Lead verdict. Only public filtered packets go to the authorized `Tools/jev.ps1` invocation.
+  Responses live in gitignored `.agent/jev/`; receipts record agreement and rationale.
+- If two of the first five Jev-picked runs need escalation/redo, disable active Jev routing, revert to shadow and
+  tell the owner. At every checkpoint report followed/overruled picks, escalated runs, DeepSeek spend, and any
+  proposed high-risk downgrade. Use unknown when evidence is missing; never invent a zero cost.
+- Initial split: leave the running H1 guards/gates worker untouched. H2 launcher/watcher is floor work and is held
+  while `CODEX LOW` is active. B3 insights and B4 compact Scouts are independent outside-floor work; re-run Jev
+  with only DeepSeek Flash/Pro candidates and keep up to two DeepSeek workers busy. No private vault material is
+  sent to workers or Jev.
+- Accounting at 2026-09-30 06:59 Copenhagen: Jev picks followed **1 decision queued (B4, not run)**,
+  overruled/fallback **1 (B3)**; completed Jev-picked implementation runs **0**; escalated runs **0**.
+  DeepSeek balance before/after smoke **$9.99 → $9.99**, reported spend **$0.00** at API precision;
+  sub-cent cost unknown. No implementation run on DeepSeek yet. No high-risk downgrade proposed.
+- Smoke PASS: Codex 0.159.2, `deepseek-flash`, provider `deepseek`, effort high, no MCP startup, exact `ready` reply;
+  5,211 transcript tokens. DeepSeek is now **provisional**, not formally added to routing. Jev Use 1 says close
+  (probability .99); Lead agrees for this one-word smoke only (verification score .49 is retained in raw evidence).
+- Historical pre-budget picks: B3 chose Codex Luna with top probability .41 and fell back to DeepSeek Flash;
+  B4 chose Codex Luna .68. The owner's later budget-mode routing superseded both picks. A DeepSeek-only Jev re-ask
+  failed with provider 403 (`no_providers_available`); no retry. In the saved earlier answers Flash ranked above Pro
+  for both tasks, so the Lead used Flash as the explicit unavailable-Jev fallback.
+- Jev responses and synthetic packets: `.agent/jev/{B3,B4}-routing.json`, `smoke-run.json`, and accompanying state/
+  question files (gitignored through local `.git/info/exclude`). Clone briefs are `.agent/brief.md`.
+
+## Delegated agents — resume 2026-09-30 afternoon Copenhagen
+
+| Task | State / model | Herdr pane | Clone / branch / base |
+|---|---|---|---|
+| H1 core guards/gates | **STOPPED at quota, incomplete**, no handoff; partial work preserved; no new OpenAI Codex work | former `w5:p4` | `C:\Dev\vault-companion-clones\h1-harness`; `agent/h1-harness`, base `8ce1d57`; tracked and untracked edits |
+| DeepSeek smoke | **Completed PASS**; deepseek-flash high; pane closed itself normally | former `w5:p5` | `C:\Dev\vault-companion-clones\deepseek-smoke`; inherited `docs/continuous-lead-20260930` at `5fc6a94`; no code edits |
+| B3 degraded insights | **Handoff reviewed, focused correction queued**, targeted checks pass, unaccepted | former `w5:pE` | `C:\Dev\vault-companion-clones\b3-degraded`; `agent/b3-degraded` at `5fc6a94`; handoff `.agent/handoffs/B3.md`, log `.agent/unsandboxed.log` |
+| B4 compact Scouts | **Handoff reviewed, correction queued**, targeted checks pass, not accepted | former `w5:pF` | `C:\Dev\vault-companion-clones\b4-compact`; `agent/b4-compact` at `5fc6a94`; handoff `.agent/handoffs/B4.md`, log `.agent/unsandboxed.log` |
+| H2 non-hook launcher/profiles/watcher | **RUNNING**; DeepSeek Pro high (`deepseek-v4-pro`), unsandboxed tool activity verified | `w5:pH` | `C:/Dev/vault-companion-clones/h2-launcher`; `agent/h2-launcher`, base `bc5a853`; handoff `.agent/handoffs/H2.md`, log `.agent/pro.log`; hold PR |
+| SP1 read-latency measurement | **Handoff reviewed**, independent tests pass; packaging/report correction in batch | former `w5:pK` | `C:/Dev/vault-companion-clones/sp1-measure`; candidate `3ed9c47`; handoff `.agent/handoffs/SP1.md` |
+| RR1 Radar page/decisions | **RUNNING**, DeepSeek Pro high, hold required | `w5:pN` | `C:/Dev/vault-companion-clones/rr1-radar`; `agent/rr1-radar`, base `d542b4d`; handoff `.agent/handoffs/RR1.md` |
+| B3/B4/SP1 focused corrections | **RUNNING**, Flash high, tool activity verified | `w5:pQ` | `C:/Dev/vault-companion-clones/b3-b4-fixes`; `agent/b3-b4-fixes`, candidate head `7050d3a`; handoff `.agent/handoffs/BUGS.md` |
+
+- H1 log: `C:\Dev\vault-companion-clones\h1-harness\.agent\run.log`; session
+  `01a0f0ab-4cde-7d12-9726-3ad8bd566a6a`. Expected report `.agent/handoffs/H1-harness-core.md`.
+  Non-interactive workers do not appear in `herdr agent list`; pane + log are authoritative evidence of this run.
+- B3/B4 first launch panes `w5:p7`/`w5:p8` exited before source work because the wrapper did not propagate the
+  DeepSeek `CODEX_HOME`; retries inject it in the worker command. Do not count the failed starts as worker runs.
+- Isolated homes under `C:\Dev\tools\vault-companion-codex-home` and `vault-companion-deepseek-home`; no MCP/memories.
+  TEMP/TMP/TMPDIR `C:\Dev\tmp\vault-companion`; pnpm store `C:\Dev\tmp\pnpm-store`; npm cache `C:\Dev\tmp\npm-cache`.
+  Never print/commit auth or keys. Existing DeepSeek config was copied to C:\Dev to honor the write boundary.
+- Documentation PR **#47** at remote head `5fc6a94`: ubuntu/windows CI and CodeRabbit passed. CodeRabbit's one
+  actionable stale-snapshot wording finding is fixed locally above; no repeat review request. Local branch also
+  contains checkpoint `610699d` and the current owner-rule updates, not yet pushed at this line's timestamp.
+- Owner requested this immediate checkpoint; all running workers are left untouched. No watcher was launched by
+  this Lead yet. Other existing panes `w5:p2`/`w5:p3` are not this Lead's workers and were not altered.
 
 ## Waiting for Evgeny
 

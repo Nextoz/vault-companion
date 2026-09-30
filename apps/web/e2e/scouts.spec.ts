@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
 
-test('Today attention opens Scouts, panels and history lead to sanitised findings at phone width', async ({ page }) => {
+test('Today attention opens Scouts, compact rows and history lead to sanitised findings at phone width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const api = new MockApi();
   await api.install(page);
@@ -10,12 +10,14 @@ test('Today attention opens Scouts, panels and history lead to sanitised finding
   const scouts = page.getByRole('region', { name: 'Scouts', exact: true });
   const failed = scouts.getByRole('button', { name: /City events/ });
   const healthy = scouts.getByRole('button', { name: /Learning opportunities/ });
+  await expect(scouts.getByTestId('scout-summary')).toHaveText('1 ok · 2 with problems');
   await expect(failed).toContainText('Failed');
-  await expect(failed).toContainText('Last attempt Today 06:50');
+  await expect(failed).toContainText('Last run Today 06:50');
   await expect(failed).toContainText('— findings');
   await expect(healthy).toContainText('Healthy');
   await expect(healthy).toContainText('4 findings');
-  await expect(healthy).toContainText('Sources 3/3');
+  // The sparkline and source/AI chips moved into the detail view, so the list stays compact.
+  await expect(scouts.locator('.scout-list')).not.toContainText('Sources');
   await expect(scouts.getByRole('button', { name: /unreadable.json/ })).toContainText('No status yet');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await failed.click();
@@ -27,6 +29,9 @@ test('Today attention opens Scouts, panels and history lead to sanitised finding
   await expect(runs).toHaveCount(2);
   await expect(runs.first()).toHaveAttribute('aria-label', /26 Sep 2026.*degraded/);
   await expect(runs.last()).toHaveAttribute('aria-label', /27 Sep 2026.*success/);
+  await expect(scouts.locator('.scout-detail .scout-sparkline')).toHaveCount(1);
+  await expect(scouts.locator('.scout-detail .scout-chips')).toContainText('Sources 3/3');
+  await expect(scouts.locator('.scout-detail .scout-chips')).toContainText('AI healthy');
   await expect(page.getByTestId('scout-findings')).toContainText('Four synthetic opportunities.');
   await expect(page.getByTestId('scout-findings').locator('script')).toHaveCount(0);
   // One Insights preview plus the opened detail view (preview exclusions are covered in insights.spec.ts).
@@ -55,8 +60,8 @@ test('five-column offers become labelled cards at 390px with relative freshness'
   await page.goto('/');
   await page.getByRole('button', { name: '2 scouts need attention' }).click();
   const panel = page.getByRole('button', { name: /Learning opportunities/ });
-  await expect(panel).toContainText('Last attempt 12 min ago');
-  await expect(panel).toContainText('Last success Yesterday 06:51');
+  await expect(panel).toContainText('Failed');
+  await expect(panel).toContainText('Last run 12 min ago');
   await panel.click();
   const detail = page.locator('.scout-detail');
   await expect(detail.locator('dd').nth(0)).toHaveText('Yesterday 06:51');
@@ -83,4 +88,27 @@ test('five-column offers become labelled cards at 390px with relative freshness'
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.setViewportSize({ width: 1024, height: 844 });
   await expect(cards.first()).toHaveCSS('display', 'table-row');
+});
+
+test('a failing calendar sync is one attention line, not a health row, and opens its error detail', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const api = new MockApi();
+  const learning = api.scouts.scouts.find((entry) => entry.state === 'ok' && entry.status.scoutId === 'learning');
+  if (learning?.state !== 'ok') throw new Error('missing fixture');
+  // Identified by scoutId, so the display name here is deliberately different from the line the app writes.
+  api.scouts.scouts.push({ state: 'ok', file: 'triage.json', status: {
+    ...learning.status, scoutId: 'triage-applier', displayName: 'Triage applier', runStatus: 'failed',
+    lastSuccessAt: null, findings: null, latestOutput: null, lastError: 'calendar sync could not reach the vault',
+  } });
+  await api.install(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: '2 scouts need attention' }).click();
+  const scouts = page.getByRole('region', { name: 'Scouts', exact: true });
+  await expect(scouts.getByRole('button', { name: /Triage applier/ })).toHaveCount(0);
+  await expect(scouts.getByTestId('scout-summary')).toHaveText('1 ok · 3 with problems');
+  const attention = scouts.getByRole('button', { name: /Calendar sync failed/ });
+  await expect(attention).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await attention.click();
+  await expect(scouts.locator('.scout-detail')).toContainText('calendar sync could not reach the vault');
 });

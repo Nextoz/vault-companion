@@ -1,7 +1,7 @@
 import type { ScoutsResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
 import { getScoutOutput } from '../api.ts';
-import { findingsTrend, overview } from '../insights.ts';
+import { degradedReason, findingsTrend, overview } from '../insights.ts';
 import { createOutputLoader, type Output } from '../insight-outputs.ts';
 import { displayState } from '../scouts.ts';
 import { ScoutTime } from './ScoutTime.tsx';
@@ -36,7 +36,7 @@ export function Insights({ data, hidden, onSelect }: { data: ScoutsResponse; hid
     <h2 id="insights-heading">What your scouts found</h2>
     <div className="insights-overview">
       <p><strong>{summary.totalFindings} findings</strong><span>Latest <ScoutTime at={summary.latestSuccessAt} now={data.now} /></span>
-        {!!summary.noSuccess.length && <span> · {summary.noSuccess.length} without a successful run</span>}</p>
+        {!!summary.noSuccess.length && <span> · {summary.noSuccess.length} without usable findings</span>}</p>
       <div className="insights-trend" role="img" aria-label={trendLabel}>
         {trend.map((day) => <span key={day.date} className={day.findings === null ? 'insights-bar-gap' : 'insights-bar'}
           style={day.findings === null ? undefined : { height: `${Math.max(8, day.findings / max * 100)}%` }} />)}
@@ -45,14 +45,16 @@ export function Insights({ data, hidden, onSelect }: { data: ScoutsResponse; hid
     <div className="insights-cards">
       {entries.map(({ file, status }) => {
         const state = displayState(status, data.now);
-        const successful = summary.byScout.get(status.scoutId);
+        const latest = summary.byScout.get(status.scoutId);
         const output = outputs[status.scoutId];
         const suppressPicks = state === 'Failed' || state === 'Stale';
+        const reason = state === 'Degraded' ? degradedReason(status) : null;
         const headingId = `insight-${status.scoutId}`;
         return <article className="insight-card" key={file} aria-labelledby={headingId}>
-          <header><h3 id={headingId}>{status.displayName}</h3><strong>{successful ? `${successful.findings} findings` : 'No successful run'}</strong></header>
+          <header><h3 id={headingId}>{status.displayName}</h3><strong>{latest ? `${latest.findings} findings` : 'No usable findings'}</strong></header>
           {suppressPicks ? <p className={`insight-state scout-state-${state.toLowerCase()}`}>{state}</p> : <>
-            {successful && <small>Picks from <ScoutTime at={successful.at} now={data.now} /></small>}
+            {state === 'Degraded' && <p className="insight-state scout-state-degraded">Ran with problems{reason ? ` — ${reason}` : ''}</p>}
+            {latest && <small>Picks from <ScoutTime at={latest.at} now={data.now} /></small>}
             {output?.state === 'loading' && <p role="status">Loading findings…</p>}
             {output?.state === 'unavailable' && <p>Findings unavailable</p>}
             {output?.state === 'ready' && (output.picks.length ? <ol>{output.picks.map((pick, index) => <li key={index}>

@@ -1,6 +1,6 @@
 import type { ScoutStatus } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
-import { findingsTrend, overview, topPicks } from './insights.ts';
+import { degradedReason, findingsTrend, overview, topPicks } from './insights.ts';
 
 const status = (scoutId: string, extra: Partial<ScoutStatus> = {}): ScoutStatus => ({
   schemaVersion: 1, scoutId, displayName: scoutId, schedule: 'daily', expectedEveryHours: 24,
@@ -78,5 +78,145 @@ describe('overview', () => {
     expect(result.latestSuccessAt).toBe('2026-09-27T07:00:00+02:00');
     expect(result.noSuccess).toEqual(['failed']);
     expect(result.byScout.has('failed')).toBe(false);
+  });
+});
+
+describe('degraded runs count as results (B3)', () => {
+  it('dates a degraded run with today\'s findings as today, not the older clean run', () => {
+    const scout = status('daily-research', {
+      lastAttemptAt: '2026-09-30T06:31:00+02:00',
+      lastSuccessAt: '2026-09-29T07:00:00+02:00',
+      runStatus: 'degraded',
+      findings: 5,
+      history: [{ at: '2026-09-29T07:00:00+02:00', status: 'success', findings: 3 }],
+    });
+    const result = overview([scout]);
+    expect(result.totalFindings).toBe(5);
+    expect(result.latestSuccessAt).toBe('2026-09-30T06:31:00+02:00');
+    expect(result.byScout.get('daily-research')).toEqual({ findings: 5, at: '2026-09-30T06:31:00+02:00' });
+    expect(result.noSuccess).toEqual([]);
+    // The direct regression guard: a success-only `resultRuns` would report 3 yesterday instead.
+    expect(findingsTrend([scout], '2026-09-30T12:00:00+02:00', 2)).toEqual([
+      { date: '2026-09-29', findings: 3 },
+      { date: '2026-09-30', findings: 5 },
+    ]);
+  });
+
+  it('keeps a degraded zero honest as 0 rather than unknown', () => {
+    const scout = status('quiet', { lastAttemptAt: '2026-09-30T06:00:00+02:00', runStatus: 'degraded', findings: 0 });
+    expect(overview([scout]).byScout.get('quiet')).toEqual({ findings: 0, at: '2026-09-30T06:00:00+02:00' });
+    expect(findingsTrend([scout], '2026-09-30T12:00:00+02:00', 1)).toEqual([{ date: '2026-09-30', findings: 0 }]);
+  });
+
+  it('fabricates nothing for failed, running, or evidence-free degraded runs', () => {
+    const failed = status('failed', { lastAttemptAt: '2026-09-30T06:00:00+02:00', runStatus: 'failed', findings: 9 });
+    const running = status('running', { lastAttemptAt: '2026-09-30T06:00:00+02:00', runStatus: 'running', findings: 4 });
+    const empty = status('empty', { lastAttemptAt: '2026-09-30T06:00:00+02:00', runStatus: 'degraded', findings: null });
+    const result = overview([failed, running, empty]);
+    expect(result.totalFindings).toBe(0);
+    expect(result.latestSuccessAt).toBeNull();
+    expect(result.noSuccess.sort()).toEqual(['empty', 'failed', 'running']);
+    expect(result.byScout.size).toBe(0);
+    expect(findingsTrend([failed, running, empty], '2026-09-30T12:00:00+02:00', 1))
+      .toEqual([{ date: '2026-09-30', findings: null }]);
+  });
+
+  it('picks the latest run of each day from mixed, unordered history', () => {
+    const scout = status('mixed', { history: [
+      { at: '2026-09-29T20:00:00Z', status: 'degraded', findings: 7 },
+      { at: '2026-09-29T08:00:00Z', status: 'success', findings: 3 },
+      { at: '2026-09-30T06:00:00Z', status: 'degraded', findings: 1 },
+      { at: '2026-09-30T09:00:00Z', status: 'failed', findings: 99 },
+    ] });
+    expect(overview([scout]).byScout.get('mixed')).toEqual({ findings: 1, at: '2026-09-30T06:00:00Z' });
+    expect(findingsTrend([scout], '2026-09-30T12:00:00+02:00', 2)).toEqual([
+      { date: '2026-09-29', findings: 7 },
+      { date: '2026-09-30', findings: 1 },
+    ]);
+  });
+
+  it('falls back to lastSuccessAt as the run timestamp when an attempt time is missing', () => {
+    const scout = status('late', { runStatus: 'degraded', findings: 3, lastSuccessAt: '2026-09-30T06:00:00+02:00' });
+    expect(overview([scout]).byScout.get('late')).toEqual({ findings: 3, at: '2026-09-30T06:00:00+02:00' });
+  });
+
+  it('dates an unknown degraded run by the old success, never the newer attempt', () => {
+    const scout = status('daily-research', {
+      lastAttemptAt: '2026-09-30T06:31:00+02:00',
+      lastSuccessAt: '2026-09-29T07:00:00+02:00',
+      runStatus: 'degraded',
+      findings: null,
+      history: [{ at: '2026-09-29T07:00:00+02:00', status: 'success', findings: 3 }],
+    });
+    const result = overview([scout]);
+    // Old success proves old results: the known count stays at its success time and the newer unknown attempt is
+    // not promoted to a result run, so it can neither re-date nor suppress that count.
+    expect(result.byScout.get('daily-research')).toEqual({ findings: 3, at: '2026-09-29T07:00:00+02:00' });
+    expect(result.latestSuccessAt).toBe('2026-09-29T07:00:00+02:00');
+    expect(result.noSuccess).toEqual([]);
+    expect(findingsTrend([scout], '2026-09-30T12:00:00+02:00', 2)).toEqual([
+      { date: '2026-09-29', findings: 3 },
+      { date: '2026-09-30', findings: null },
+    ]);
+  });
+
+  it('ignores an evidence-free degraded history entry that would re-date a known success', () => {
+    const scout = status('daily-research', {
+      lastAttemptAt: '2026-09-30T06:31:00+02:00',
+      lastSuccessAt: '2026-09-29T07:00:00+02:00',
+      runStatus: 'degraded',
+      findings: null,
+      history: [
+        { at: '2026-09-29T07:00:00+02:00', status: 'success', findings: 3 },
+        { at: '2026-09-30T06:31:00+02:00', status: 'degraded', findings: null },
+      ],
+    });
+    const result = overview([scout]);
+    expect(result.byScout.get('daily-research')).toEqual({ findings: 3, at: '2026-09-29T07:00:00+02:00' });
+    expect(result.latestSuccessAt).toBe('2026-09-29T07:00:00+02:00');
+    expect(result.noSuccess).toEqual([]);
+    expect(findingsTrend([scout], '2026-09-30T12:00:00+02:00', 2)).toEqual([
+      { date: '2026-09-29', findings: 3 },
+      { date: '2026-09-30', findings: null },
+    ]);
+  });
+
+  it('keeps a known current count when unknown degraded history shares its instant', () => {
+    const at = '2026-09-30T06:31:00+02:00';
+    const sameInstant = '2026-09-30T04:31:00Z';
+    const scout = status('reconciled', {
+      lastAttemptAt: at, lastSuccessAt: '2026-09-29T07:00:00+02:00', runStatus: 'degraded', findings: 5,
+      history: [{ at: sameInstant, status: 'degraded', findings: null }],
+    });
+    expect(overview([scout]).byScout.get('reconciled')).toEqual({ findings: 5, at });
+    expect(findingsTrend([scout], '2026-09-30T12:00:00+02:00', 1)).toEqual([{ date: '2026-09-30', findings: 5 }]);
+  });
+
+  it('never mutates the input statuses', () => {
+    const scout = status('stable', {
+      lastAttemptAt: '2026-09-30T06:00:00+02:00', runStatus: 'degraded', findings: 2,
+      history: [{ at: '2026-09-29T06:00:00+02:00', status: 'success', findings: 1 }],
+    });
+    const before = JSON.stringify(scout);
+    overview([scout]);
+    findingsTrend([scout], '2026-09-30T12:00:00+02:00');
+    expect(JSON.stringify(scout)).toBe(before);
+  });
+});
+
+describe('degradedReason', () => {
+  it('prefers the failed-source count over the last error', () => {
+    expect(degradedReason(status('s', { sources: { configured: 8, successful: 3 }, lastError: 'raw' })))
+      .toBe('5 sources failed');
+    expect(degradedReason(status('s', { sources: { configured: 2, successful: 1 } }))).toBe('1 source failed');
+    expect(degradedReason(status('s', { sources: { configured: 3, successful: 3 }, lastError: 'raw' }))).toBe('raw');
+  });
+
+  it('flattens the last error to one bounded plain line', () => {
+    expect(degradedReason(status('s', { lastError: 'boom\nsecond\tline  ' }))).toBe('boom second line');
+    const long = degradedReason(status('s', { lastError: 'x'.repeat(400) }))!;
+    expect(long.length).toBeLessThanOrEqual(160);
+    expect(long.endsWith('\u2026')).toBe(true);
+    expect(degradedReason(status('s'))).toBeNull();
   });
 });
