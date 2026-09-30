@@ -1,4 +1,69 @@
-# Checkpoint — 2026-09-30 07:20 Europe/Copenhagen
+# Checkpoint — 2026-09-30 12:10 Europe/Copenhagen
+
+This section supersedes the historical 07:20 checkpoint below. Lead Codex budget mode expires Thu
+2026-10-01 21:00 Copenhagen / 19:00 UTC; start no new OpenAI Codex workers.
+
+## Completed and evidence (resume)
+
+- Read repository contracts, plan/checkpoint/orchestration and the live Ready Backlog/Harness update 3,
+  read-only. Queue H non-hook → SP measurement → RR1 → remaining bugs; never Ideas.
+- PR #47 merged as `608043367b9b7c80500f132caa0e3e21c6f7a624` at 12:09 Copenhagen. Real CodeRabbit review's
+  one stale-snapshot finding fixed; no hold/unanswered owner comment. Ubuntu/Windows CI green at `bc5a853`.
+  Local full check PASS: 101 files/1415 tests; single e2e job PASS: 79/79.
+- Update 3 committed in plan, routing table/operational entry and ADR-0030. DeepSeek default for all implementation,
+  trusted with private data, three independent workers; Flash default, Pro for Sol-medium/floor. Pro API ID
+  `deepseek-v4-pro`. Floor PRs retain hold, Lead review and later independent Claude review; live hook canary deferred.
+- Default remains Codex-on-DeepSeek workspace-write. This resume found `orchestrator_helper_incomplete` before
+  shell creation; stopped retries and used update-3-authorized unsandboxed launches successfully. No MCP/memories,
+  key output, private repo/log text, vault writes or deployment. Claude-on-DeepSeek allowed if needed.
+
+## Workers (resume) — handoff first, no duplicate dispatch
+
+| Task | State / pane | Clone / evidence |
+|---|---|---|
+| H1 | STOPPED at Codex quota, former w5:p4 absent, no handoff | C:/Dev/vault-companion-clones/h1-harness; agent/h1-harness base 8ce1d57; partial tracked/untracked core preserved |
+| B3 | RUNNING restarted Flash high, w5:pE; shell activity verified | C:/Dev/vault-companion-clones/b3-degraded; base 5fc6a94; .agent/unsandboxed.log; handoff .agent/handoffs/B3.md |
+| B4 | RUNNING restarted Flash high, w5:pF; shell activity verified | C:/Dev/vault-companion-clones/b4-compact; base 5fc6a94; .agent/unsandboxed.log; handoff .agent/handoffs/B4.md |
+| H2 | RUNNING Pro high, w5:pH; shell activity verified; hold required | C:/Dev/vault-companion-clones/h2-launcher; agent/h2-launcher base bc5a853; .agent/pro.log; handoff .agent/handoffs/H2.md |
+
+B3/B4 original panes pA/pB closed after opening prose, no code/handoff. Sandboxed retry panes pC/pD failed shell
+creation and were interrupted. Same clones/briefs plus failure context. H2 alias `deepseek-pro` launch refused,
+corrected to API ID. These are tooling restarts, not reasoning escalation. Three active tasks own disjoint files;
+H2 may read partial H1 interfaces but may not edit that clone. No H1 acceptance or new OpenAI Codex work.
+
+## Jev and balance (resume)
+
+- DeepSeek 11:58 **$9.99** → 12:10 **$9.89**, reported aggregate change **$0.10**. Concurrent per-run attribution
+  unknown; sub-cent cost unknown. Stop new dispatch below $3. Afternoon weekday runs cost half.
+- Historical Jev picks followed 0 executed, overruled/fallback 2 (B3/B4 budget override), completed picked runs
+  0/first 5, reasoning escalations 0. H2 Pro uses floor; no proposed downgrade.
+- Jev is available again. Public failed-process check: unresolved probability .60, completed .07, verification .06,
+  scope .40, silent failure .69, unsupported claims .42. Lead agrees stopped attempts incomplete/unaccepted;
+  implementation correctness unknown. Raw .agent/jev/resume-failed-{state.md,run.json}. Individual completion
+  checks still required. Jev remains public-only/advisory. Kill switch unchanged (2/first 5 need redo/escalation).
+
+## Exact next actions (resume)
+
+1. On WAKE read named handoff, diff stat then full diff; disposition all discoveries. Run individual Jev Use 1,
+   independently verify, record balance. Scope scan must include untracked files. Never accept prose alone.
+2. Integrate B3/B4 as one bug-batch PR after Lead review, full check and one e2e; CodeRabbit per normal rules.
+3. Review H2 non-hook work, then couple to H1 only once partial core is finished/reviewed. H1 is incomplete,
+   preserve it; any later recovery routes Pro, never new OpenAI Codex. Keep H held for later independent Claude
+   review/live hook canary. Risk-floor TODO owner-owned; GitHub required-check rule stays a proposal.
+4. Fill freed slot with SP1 measurement (.agent/SP-brief.md), then RR1, remaining bugs. Re-read Ready before
+   selection, Jev low-risk routing if available, max three independent workers, one Playwright job. SP1 measurements
+   only; synthetic timings are not production/phone timings. H2 is current priority work.
+5. Finish follow-up update-3 documentation PR, CI/review. #47 is already merged; no deployment needed for docs.
+6. Arm .agent/watch-resume.ps1 through visible wrapper before yielding; exact handoffs wake Lead w5:p2.
+   Do not wait/poll inside Lead turn. H2 implements durable watcher signals. At expiry checkpoint/commit and
+   print HANDOVER TO CLAUDE READY.
+
+Production unchanged: last deploy PR #46, 79129e4 / df0a77a4; no first-explainer observation this turn.
+Phone checks, CPU measurement and triage unreadable-lines diagnosis remain open. No new shipped claim.
+
+---
+
+# Historical checkpoint — 2026-09-30 07:20 Europe/Copenhagen
 
 Follow CLAUDE.md / orchestration resume procedure, then this file's exact next actions. Current Lead: Codex
 gpt-6-astra in `CODEX LOW` budget mode; temporary appointment and budget mode expire 2026-10-01 21:00 Copenhagen
