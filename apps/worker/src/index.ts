@@ -4,6 +4,8 @@ import { createTrainingService, createActiveWorkService, createCommandService, c
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createApp } from './app.ts';
+import { createDashboardService } from './dashboard.ts';
+import { createMarketSource } from './market.ts';
 import { createAccessVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
 import type { LogRecord } from './log.ts';
@@ -66,7 +68,7 @@ function isValidTimeZone(zone: string): boolean {
 }
 
 /** Production composition. `keys` is injectable so tests can prove the real wiring with a local JWKS (review R10). */
-export function createProductionApp(env: Env, keys?: JWTVerifyGetKey) {
+export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis)) {
   const teamDomain = env.ACCESS_TEAM_DOMAIN.replace(/\/$/, '');
   const verify = createAccessVerifier({
     keys: keys ?? createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`)),
@@ -90,6 +92,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey) {
     ...createMorningService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createHistoryService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createNotesService({ store }),
+    ...createDashboardService({ market: createMarketSource({ fetch: fetchImpl, now: () => Date.now() }), now: () => new Date() }),
   };
   return createApp({ verify, appOrigin: env.APP_ORIGIN, services, log });
 }

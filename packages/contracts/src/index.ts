@@ -626,3 +626,4 @@ export const TrainingResponse = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('refused'), revision: commitSha, code: ErrorCode, message: z.string() }),
 ]);
 export type TrainingResponse = z.infer<typeof TrainingResponse>;
+export * from './dashboard.ts';

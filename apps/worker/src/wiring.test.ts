@@ -177,7 +177,8 @@ describe('production composition (review R10)', () => {
   it('accepts a valid Access token via the real verifier wiring and derives the account key', async () => {
     const kp = await generateKeyPair('RS256', { extractable: true });
     const keys = createLocalJWKSet({ keys: [{ ...(await exportJWK(kp.publicKey)), kid: 'k', alg: 'RS256' }] });
-    const app = createProductionApp(env, keys);
+    // A stub fetch keeps the composed market source off the live provider: this proves wiring, not the provider.
+    const app = createProductionApp(env, keys, async () => new Response(JSON.stringify({ price: '60000', time: '2026-09-30T12:00:00Z' }), { status: 200 }));
     const token = await new SignJWT({ email: 'owner@example.com' })
       .setProtectedHeader({ alg: 'RS256', kid: 'k' })
       .setIssuer('https://team.cloudflareaccess.com')
@@ -212,6 +213,12 @@ describe('production composition (review R10)', () => {
     expect(noteRead.status).toBe(400); // Wired; requires the note header.
     const scoutOutput = await app.fetch(new Request(`${ORIGIN}/api/scouts/output`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
     expect(scoutOutput.status).toBe(400); // Wired; requires the scout ID header.
+    // Dashboard (DASH1) is composed: it answers through the real service, never an unwired 404.
+    const dashboard = await app.fetch(new Request(`${ORIGIN}/api/dashboard?range=1W`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
+    expect(dashboard.status).toBe(200);
+    expect(dashboard.headers.get('Cache-Control')).toBe('no-store');
+    const dashboardTicker = await app.fetch(new Request(`${ORIGIN}/api/dashboard/ticker`, { headers: { 'Cf-Access-Jwt-Assertion': token } }));
+    expect(dashboardTicker.status).toBe(200);
     const other = await new SignJWT({ email: 'owner@example.com' })
       .setProtectedHeader({ alg: 'RS256', kid: 'k' })
       .setIssuer('https://team.cloudflareaccess.com')
