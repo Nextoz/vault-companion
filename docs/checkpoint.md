@@ -1,102 +1,84 @@
-# Checkpoint — 2026-09-29 evening (Lead session `1699a99c`, Herdr `lead`; stop at a safe point)
+# Checkpoint — 2026-09-30 07:20 Europe/Copenhagen
 
-Read this first, then the owner's vault note *Projects/Vault Companion/Vault Companion - Ready Backlog* (read-only,
-ADR-0018; **always diff it against this file**, it changed 2026-09-29 15:36), then `docs/plan.md`, then
-`docs/orchestration.md`. Engineering status: `docs/plan.md`. No workers running; no Claude Cloud sessions (owner).
+Follow CLAUDE.md / orchestration resume procedure, then this file's exact next actions. Current Lead: Codex
+gpt-6-astra in `CODEX LOW` budget mode; temporary appointment and budget mode expire 2026-10-01 21:00 Copenhagen
+/ 19:00 UTC. No Claude usage before handover. Start no new Codex worker while `CODEX LOW` is active.
 
-## Deployed (verified)
+## Completed and evidence
 
-- `main` = PR #46 merge `79129e4` + docs; Worker **version `df0a77a4`** at `https://app.karpov.dk`; anonymous → 302.
-  Crons `30 4 * * *`, `30 6 * * *` registered; script workers.dev + previews off (verified via API). `GEMINI_API_KEY` set.
-- Deploy runbook: clean build (`rm -rf apps/web/dist apps/worker/dist`), `pnpm deploy:dry` (check `sw.js`), then in
-  `apps/worker`: `pnpm exec wrangler deploy --domain "app.karpov.dk"` (allowed by `.claude/settings.local.json`), 302.
-  `docs/deploy.md` step 8 "Domains & Routes" is stale (new dashboard); use the API check instead.
+- Read AGENTS.md, CLAUDE.md, orchestration and prior checkpoint/plan. Reconciled clean main at 947570d.
+- Resume `pnpm check` PASS: lint, typecheck, 101 files / 1415 tests. No e2e run this session yet.
+- Read Ready Backlog and Harness Brief in authorized live-vault scope, read-only. Queue: H, SP, RR, B3+B4.
+  Never use Ideas Backlog as a build queue. Re-read updated Harness Parts 2/3 after owner update 2.
+- Recorded durable continuous rules in orchestration; temporary appointment/constraints and owner update 2 in plan.
+  Committed 8ce1d57 and 5fc6a94; documentation PR #47 open. No application change merged/deployed.
+- H1 bounded acceptance packet: docs/briefs/H1-harness-core.md. H2 launcher/profiles/watcher remains to brief.
+- DeepSeek one-word smoke PASS: Codex 0.159.2, model deepseek-flash, provider deepseek, effort high, no MCP startup,
+  exact ready response, 5211 transcript tokens. DeepSeek is provisional under owner update 2.
+- Prepared independent B3 and B4 briefs/clones; dependency installs succeeded. Neither worker launched yet.
+- Isolated Codex/DeepSeek homes and caches under C:/Dev; never write outside C:/Dev. Vault remains read-only.
+- Recorded the owner's Codex budget mode in plan and the no-wait/no-poll, handoff-only, 20-log-line, diff-stat and
+  Jev-answer-only token rules in orchestration. Outside-floor work routes to DeepSeek; floor work is one Astra
+  medium worker maximum, with Astra-high held for the Claude Lead after reset.
+- PR #47 remote head 5fc6a94: ubuntu/windows CI and CodeRabbit passed. CodeRabbit's single stale-snapshot wording
+  finding is fixed locally; do not request a repeat review. Local checkpoint 610699d plus this update still need push.
 
-## Exact next actions (2026-09-30)
+## Running and prepared workers (do not redispatch)
 
-1. After 04:30 UTC (and the 06:30 UTC catch-up): check the first explainer run — `Research/Explained/` in the live vault
-   (read-only), the Scouts page entry "Research explainer", This morning panel; CPU via `wrangler tail`/observability.
-   If it failed, read the status record's `lastError` and the Worker logs first.
-2. Owner phone check of This morning, B1, B2 (owner will report).
-3. Bug batch: **B3** (item 2a2) + triage-applier "unreadable decision lines 1" (read-only diagnosis).
-4. **SP** app speed: measure per endpoint first, then Worker cache of file contents by commit. Owner gets DeepSeek + a
-   second API key on 2026-09-30: set up a DeepSeek worker wrapper (like `tools/gemini-worker.sh`), test on one small
-   task, then route SP step 1–2 and ordinary fixes to it. Claude weekly usage ~84 %, resets Wed 1 Oct 21:00.
-5. Re-review the Ideas Backlog (grew to ~74 KB today: Apple Health ingestion design, task↔action connections, graphs,
-   Live Dashboard/telemetry) for items refined enough to start; the owner ranks.
-6. After the reset: code tour (item 7), Research Radar, This morning polish.
+| Task | State | Pane | Clone / branch |
+|---|---|---|---|
+| H1 | RUNNING, gpt-6-astra medium, real implementation activity, no final handoff yet | w5:p4 in Agents w5:t2 | C:/Dev/vault-companion-clones/h1-harness; agent/h1-harness, base 8ce1d57 |
+| Smoke | Completed PASS; pane self-closed normally | former w5:p5 | C:/Dev/vault-companion-clones/deepseek-smoke; base 5fc6a94 |
+| B3 | RUNNING; DeepSeek Flash high, real activity verified | w5:pA | C:/Dev/vault-companion-clones/b3-degraded; agent/b3-degraded at 5fc6a94 |
+| B4 | RUNNING; DeepSeek Flash high, real activity verified | w5:pB | C:/Dev/vault-companion-clones/b4-compact; agent/b4-compact at 5fc6a94 |
 
-## Open work (details)
+H1 log: C:/Dev/vault-companion-clones/h1-harness/.agent/run.log.
+H1 session: 01a0f0ab-4cde-7d12-9726-3ad8bd566a6a. Handoff expected .agent/handoffs/H1-harness-core.md.
+Non-interactive workers are absent from herdr agent list but present in pane inventory; do not mistake that for
+done. B3/B4 initial panes w5:p7/w5:p8 exited before source work because `CODEX_HOME` was not propagated; retries
+inject it in the worker command and are the runs above. Lead is w5:p2. Do not wait or poll; watcher wake is expected.
 
-1. **R1 research explainer (ADR-0029 + amendments 1, 2)** — **merged** as PR #45 (`ae5d438`; CodeRabbit 2 minor
-   fixed; check 1409, e2e 77). **Deployed 2026-09-29: version `bd9ed7ad`** (302 OK), then `GEMINI_API_KEY` set as a
-   Worker secret (new version). Live Gemini verified 2026-09-28 (gemini-3.5-flash-lite read an arXiv PDF via url_context,
-   JSON validated by zod; evenings often 503). **Crons registered 2026-09-29** after the owner opened Workers & Pages (creates the account workers.dev
-   subdomain; Cloudflare refuses schedules without it). Live version `3f5f38a9`, 302 OK. Verified via API: script
-   workers.dev `enabled:false`, previews `false`, `vault-companion.<sub>.workers.dev` → 404; schedules `30 4`, `30 6`. The
-   new dashboard has no "Domains & Routes" under Settings (docs/deploy.md step 8 is stale; the API check replaces it).
-   Next: first run 2026-09-30 04:30 UTC → check `Research/Explained/` + Scouts page. CPU per run: measure with `wrangler tail`.
-   No more Claude Cloud sessions (owner). Dependabot #29 closed.
-2. **PR #43 lease reclaim (ADR-0028)** — **merged 2026-09-28 (`7c5309e`)** after the CodeRabbit ADR fix, full check
-   (1355) and full e2e (77) on the merged tree. **Deployed** by the owner: version `12692438`, anonymous 302 OK. The
-   Lead may now deploy: `.claude/settings.local.json` allows `pnpm exec wrangler deploy *` (owner, 2026-09-28).
-   R1 session was blocked by its own classifier (remote repoint / "Data Exfiltration"); owner re-approved in-session.
-   ADR-0029 amended (`1d0eac2`) with the worker's three design answers. Open bug **B1** (Danish comma in weight/distance:
-   `type="number"` rejects `84,5`; fix = text input + `inputMode="decimal"` + comma→dot), batched with further bugs.
-2a. **Done 2026-09-29: PR #46 merged (`79129e4`), deployed version `df0a77a4`** (302 OK, crons kept): B1 (decimal
-   comma), B2 (Actions line collapsed, on action tabs; attention shows everywhere), **This morning** minimal panel on
-   Today (`GET /api/morning`: day brief + 3-day explanations; hidden when empty). Next for the panel: owner phone check
-   after the first run 2026-09-30; later polish (scouts/digest/tasks per ADR-0029 Part 2). **SP** still open (tomorrow,
-   DeepSeek). Owner gets DeepSeek + another API key 2026-09-30; weekly Claude usage ~84% until Wed 1 Oct 21:00.
-2a2. **B3 (owner phone, 2026-09-29), next bug batch:** Scout insights card says "Picks from Yesterday" for scouts whose
-   run today was `degraded` (daily-research, copenhagen-events): `successfulRuns()` in `apps/web/src/insights.ts` counts
-   only `success`, so label + findings count come from the last clean run while the picks are today's latestOutput.
-   Fix: a degraded run with findings (or `lastSuccessAt`) counts as a run with results; show the reason ("Today 06:31 ·
-   5 sources failed"); also word "Degraded" as "Ran with problems". Also check triage-applier "unreadable decision
-   lines 1" (vault side, read-only). (Not yet committed: classifier outage 2026-09-29.)
-2b. **From the Ready Backlog, missed in earlier checkpoints (re-read 2026-09-29):** bug batch **B1** (decimal/comma
-   weight + distance) + **B2** (Actions list: collapsed by default everywhere, one line "Actions · N saved", error colour
-   + "N needs attention" when something needs it; keep an Undo reachable for a logged training session, e.g. on the
-   Training tab; ~31 e2e expect it visible, so expand first; owner 2026-09-29: maybe not on every tab). **SP - App speed**
-   (measure per endpoint first → cache file contents by commit in the Worker (Cache API) → later show-last-copy (ADR) and
-   prefetch). Rule: always re-read the Ready Backlog note at resume, not only this checkpoint.
-3. **Next product work (owner, 2026-09-28): the morning check.** The owner opens the app in the morning to see all
-   scout results, the morning digest, research explanations, and tasks/actions. Part 2 = "This morning" section on
-   Today (morning digest short answer, new `Research/Explained` notes, scout attention, "N new events", today's tasks).
-   **Shape (owner, 2026-09-28):** one tappable panel like the scout panels: collapsed = a short brief; expanded = all
-   morning reading — the morning Reading Brief itself plus today's explanations (pending ones shown as pending).
-   Then **Research Radar** (owner chose option A + deterministic fallback; overview → highlights → depth + promote;
-   research hub shapes: Reading Briefs `## Read today`/`## Read this week`, Daily Research Scout `## Most relevant items`,
-   `Important Research Updates/`, `Research Intake/`, `AI Research Radar - Living Updates.md`). Brief and build these
-   after the Claude weekly reset (Wed 1 Oct 21:00) or with Codex/DeepSeek.
-4. Owner phone tests pending: training units, Progress, triage (reasons, overlap tag), Scout insights.
-5. Owner decisions open: AGENTS.md rule 4 wording (head-CAS instead of "CAS on blob SHA"), G3.
-6. Engineering (no decision): R3 CPU via `wrangler tail`, Progress events > 2 months (triage decision window),
-   `docs/learning-guide.md` (overdue after L, T2, P, R1), stale items in `docs/plan.md` (R7 and edit double-row were fixed
-   in #34), close Dependabot #29.
-7. **Code tour for the owner (owner, 2026-09-28; start after the Wed 1 Oct 21:00 reset, Lead writes it).** The owner
-   understands the spec but wants to understand the implementation as a developer and DevOps engineer. Markdown in the repo,
-   `docs/code-tour/*.md`, with clickable `path:line` anchors (verified against the code, not the spec). First two chapters:
-   (a) **request lifecycle**: phone tap → offline queue (lease, claim lock) → Worker API boundary → Markdown span splice →
-   GitHub head-CAS commit with trailers → receipt/undo; (b) **DevOps**: monorepo/packages, build, CI, Cloudflare Worker +
-   Access, secrets, deploy runbook, service-worker updates, cron jobs. Each chapter: what runs where, the 5–8 files that
-   matter, one traced path, why it was built this way (link the ADR), self-check questions. Then refresh
-   `docs/learning-guide.md` to point at the tour instead of duplicating it. Later chapters: features since 25 Sep, testing.
-   Reader: the owner on a computer (VS Code), experienced engineer but **new to TypeScript**. So: chapter 0 is a short
-   "TypeScript you need for this repo" (only what the code uses: types/interfaces, Zod schemas as runtime checks,
-   discriminated unions, async/await, `#private` fields, `satisfies`/generics as met), each shown on a real line of this
-   repo; every chapter marks what to **read closely** vs **skim** vs **skip** (boilerplate, UI styling, test helpers), so
-   no time is wasted on unimportant code.
+## Jev and spend accounting (required every checkpoint)
 
-## Capacity (2026-09-28)
+- Historical picks followed: 0 executed. Completed Jev-picked implementation runs: 0/first 5.
+- Historical picks overruled/fallback: 2 (B3 and B4) because the owner's later DeepSeek-only budget routing
+  superseded Codex choices. A new DeepSeek-only Jev call failed once with provider 403/no provider; no retry.
+  Earlier saved answer fields ranked Flash above Pro for both, so the Lead selected Flash as unavailable-Jev fallback.
+- Escalated runs: 0. High-risk downgrade suggestions: none. H1 uses deterministic high-risk floor, not Jev routing.
+- Smoke Jev run check: close probability .99, completed .80, verification .49, scope .84, silent failure .20,
+  unsupported claims .38. Lead accepts only the observed one-word smoke, no implementation claim.
+- DeepSeek API before/after: $9.99 -> $9.99. Reported spend so far $0.00 at API precision; sub-cent cost unknown.
+  Balance snapshots: C:/Dev/tmp/vault-companion/deepseek-balance-{before,after-smoke}.json.
+- Raw Jev responses/state/questions: .agent/jev (gitignored locally). Synthetic B3/B4 packets: .agent/B3-brief.md,
+  .agent/B4-brief.md and each prepared clone's .agent/brief.md. Preserve these local files across resume.
+- Stop dispatch below $3; active routing kill switch after 2 of first 5 Jev-picked runs require escalation/redo.
+  Every finished worker still needs Jev Use 1 and the Lead's evidence verdict.
 
-- **Claude pool** (Lead + local workers + Cloud + claude.ai share it): 5-hour window 84 % used at 17:07 (resets 18:10),
-  **weekly 72 %** (resets Wed 1 Oct 21:00). Until then: integration and bug fixes only; one Claude worker at a time.
-- **Codex:** weekly limit, back **Fri 3 Oct 21:29**. **Antigravity** (`agy`): back ~3 Oct, small jobs only.
-- **DeepSeek API from Wed 1 Oct** (owner): key as Windows user env `DEEPSEEK_API_KEY` with a spending cap; choose a
-  harness (opencode or Claude Code against DeepSeek's API), build a wrapper like `tools/gemini-worker.sh`, test on one
-  small task; route ordinary builds/fixes to it. Lead stays **Claude Opus 5.5** (owner).
-- **Gemini** via `tools/gemini-worker.sh` (Flash-Lite first) works for small jobs.
-- Owner wants a line starting **"ACTION NEEDED:"** whenever they must act; none ⇒ nothing to do.
+## Exact next actions
 
+1. On `WAKE`, read the named worker handoff, not its log. Use `git diff --stat`; do not read source directly.
+   H1 stays untouched until its handoff exists. Start no new Codex worker while `CODEX LOW` remains active.
+2. B3/B4 are running in disjoint clones. On each handoff, run Jev Use 1 if Jev is available; otherwise record the
+   provider blocker once and perform the Lead evidence verdict. Record DeepSeek balance after both finish.
+3. H1 completion: read diff/handoff, run Jev Use 1, disposition discoveries. One focused correction if needed;
+   then escalation rule. Full Lead check and e2e before acceptance. Build H2 separately per high-risk floor.
+   H hook/gate PR MUST have hold and await independent Claude review; live hook canary deferred to Claude.
+4. PR #47 (https://github.com/Nextoz/vault-companion/pull/47): push checkpoint 610699d plus the current owner-rule
+   update. CI and CodeRabbit passed at old head; do not repeat-request CodeRabbit. Recheck hold/owner comments before merge.
+5. Continue Ready order; park underspecified work under Waiting for Evgeny, print ACTION NEEDED and take next.
+   H risk floor is deliberately owner TODO; main required-check rule remains an ADR proposal, no server mutation.
+6. Never wait or poll inside the Lead turn. End with `WAITING: H1/B3/B4 handoff`; the watcher sends `WAKE:`.
+7. At 2026-10-01 21:00 Copenhagen finish a safe step, checkpoint/commit, print HANDOVER TO CLAUDE READY.
 
+## Production and open evidence preserved
+
+- Last verified deployment is PR #46 (79129e4), Worker df0a77a4 at app.karpov.dk, anonymous 302.
+  Crons 30 4 / 30 6 UTC; script workers.dev and previews disabled; GEMINI_API_KEY already set.
+- First 2026-09-30 explainer run not observed in this session. Read allowed Research/Explained and scout status
+  paths only; no private text in repo/logs. CPU via approved observability remains to measure.
+- Phone checks pending: This morning, B1/B2, training/Progress/triage/Scout insights. No new SHIPPED claim.
+- Triage-applier unreadable decision lines diagnosis remains read-only. SP measurement, RR, code tour/learning
+  guide, AGENTS rule-4 head-CAS wording and G3 remain as prior follow-ups; queue governs which starts next.
+- Ask owner before deploying auth, identity, write-path or new-write-target changes. Never merge hold or unanswered
+  owner comment. No Claude Cloud. Normal runbook remains docs/deploy.md plus previous checkpoint API observation:
+  dashboard Domains & Routes guidance is stale. Do not deploy from a dirty build.

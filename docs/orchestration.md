@@ -3,6 +3,32 @@
 Durable policy for multi-agent work on this repository (owner instruction, 2026-09-24).
 Full background: bootstrap §5–7 in `docs/bootstrap/`.
 
+## Continuous mode (owner instruction, 2026-09-30; applies to any Lead)
+
+These instructions supersede older queue and continuous-work guidance below. Current Lead appointments and
+temporary exceptions belong in `docs/plan.md`, not here.
+
+- **Queue:** the Ready table in the vault's Ready Backlog, top to bottom in the owner's priority order, plus its
+  bug backlog, with bugs batched. Check the definition of ready. If an item is not ready, record the questions
+  under `Waiting for Evgeny` in `docs/plan.md` and take the next item. Never build from the Ideas Backlog.
+- **Lead role:** planning, decomposition, delegation, integration and acceptance, not implementation. Delegate
+  according to the routing table to Herdr workers through `tools/agent-pane.sh`.
+- **Token economy:** read diffs, handoffs and gate verdicts rather than whole files.
+- **Turn pacing (owner, 2026-09-30):** never wait or poll inside a Lead turn. End with
+  `WAITING: <what>` and let the watcher resume the Lead with `WAKE: <event>`. Read worker handoffs, not logs; if a
+  log is required for launch verification or diagnosis, read at most its last 20 lines. The Lead does not read
+  source files while coordinating; use `git diff --stat` and delegate source inspection. Save Jev responses to
+  files and expose only their answer fields to the Lead.
+- **Acceptance:** evidence only. Use the harness gates once H exists; until then use the current handoff and
+  check rules. A worker's completion claim is not acceptance.
+- **Shipping:** PR → CodeRabbit → merge → deploy using the normal runbook. Never merge a PR with the `hold`
+  label or an unanswered owner comment. Ask the owner before deploying anything that touches auth, identity,
+  the write path or a new write target.
+- **After each shipped item:** update the plan and checkpoint, commit, and print
+  `SHIPPED: <item> — phone-test: <what to check>`.
+- **Stuck work:** follow the escalation rule. When exhausted, park the item with a reason and continue.
+- **Questions:** print `ACTION NEEDED:` lines and keep working on other items meanwhile.
+
 ## Roles
 
 - **Lead: Claude Opus 5.5** (`claude-opus-5-5`). Owns architecture, decomposition, task contracts,
@@ -295,4 +321,3 @@ All integrated changes go through a PR. Workers never merge. The Lead owns the f
 - Workers must not edit `docs/plan.md`.
 - Visibility: `pwsh -NoProfile -File tools/status.ps1` in its own pane shows agents, Codex logs, cloud session links,
   worker branches and open PRs.
-
