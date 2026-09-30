@@ -1,4 +1,29 @@
-# Checkpoint — 2026-09-30 13:57 Europe/Copenhagen
+# Checkpoint — 2026-09-30 14:03 Europe/Copenhagen
+
+## Latest delta — RR1 correction verified but rejected
+
+- RR1-correction handoff read before logs; corrected command/replay/read-service/UI spans reviewed, remaining
+  full diff/test review partial. Independent **8files/123tests + pnpm typecheck PASS**; no full check/browser/phone.
+- Two new production command-service regressions **2/2 FAIL**, unskipped in domain research-radar-review.test.ts:
+  second Undo of already-undone decision is accepted with a write, poisoning subsequent validation; legitimate
+  Aug31 decision / Sept1 Undo blocks unrelated Oct1 write because August target is omitted from validation.
+  Original foreign-paper/replay/month-boundary tests passing does not resolve these. RR1 NOT accepted.
+- Source-reviewed additional gaps, not yet reproduced: asynchronous note read lacks account/unmount/request
+  guard; listed-but-unreadable previous log conflates null/absence; schema-invalid reader lines silently skipped.
+  Exact evidence packet rr1-radar/.agent/review-blockers.md. Candidate and failing regressions preserved in a
+  local WIP commit, no push/PR/mount. One correction exhausted: independent evidence review/escalation next,
+  not another blind Pro run. Independent Claude/owner new-target deployment gates remain.
+- RR1-correction Jev Use1 strong-review1.00 / verification .09 / silent-failure .71. Lead agrees from reproduced
+  failures. Raw .agent/jev/RR1-correction-run.json. Deterministic floor run, routing kill-switch counts unchanged.
+- Active2: H1 correction w5:p12 and SP2 w5:p0. RR1/H2 parked, no new unspecific work or RR2 desktop/vault scope.
+  Ready table re-read: H/SP/RR/B3+B4 order unchanged; remaining triage unreadable-lines item is diagnosis-only,
+  not authorized live-vault repair. B3/B4/SP1 merged49, not deployed. Watcher excludes consumed RR1.
+- DeepSeek **$6.30** at14:01 → **$6.29** at14:03; aggregate reported spend **$3.70** since9.99, concurrent
+  attribution unknown. Stop NEW dispatch below$3. No vault/production writes, no new OpenAI implementation.
+
+---
+
+# Prior checkpoint — 2026-09-30 13:57 Europe/Copenhagen
 
 ## Latest delta — H1 verified, correction dispatched / PR50 review read
 

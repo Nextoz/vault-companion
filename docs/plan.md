@@ -23,6 +23,10 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
+- 14:03: RR1 correction independently **123tests/typecheck PASS** but new production regressions **2/2 FAIL**:
+  duplicate Undo accepted; legitimate previous-month Undo blocks next-month writes. Candidate/failing tests
+  preserved locally, unaccepted/unmounted; one correction exhausted, independent evidence escalation next.
+  H1/SP2 remain active; H2 held50. Balance **$6.29**, spend$3.70. Checkpoint has evidence and next actions.
 - 13:57: H1 recovery independently **54tests/typecheck PASS**, but scanner exclusions/state inspection and
   Windows fixture portability block acceptance. One bounded Pro correction **w5:p12**; hooks untouched.
   RR1 w5:pY and SP2 w5:p0 remain active, max3. PR50 current CI green, actual CodeRabbit9 findings read/source
