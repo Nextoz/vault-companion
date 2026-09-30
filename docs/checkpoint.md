@@ -1,4 +1,96 @@
-# Checkpoint — 2026-09-30 12:37 Europe/Copenhagen
+# Checkpoint — 2026-09-30 13:23 Europe/Copenhagen
+
+## Latest delta — bug batch verified, PR49 open
+
+- BUGS-Pro handoff read and corrected spans reviewed. Evidence-free degraded history excluded again; equal
+  instants reconciled with Date.parse; known result keeps its timestamp. Exact Lead regression plus offset case
+  added; worker claims22 focused tests/typecheck and fail-before2. No schema or input mutation change.
+- Candidates/corrections committed in b3-b4-fixes (b503cd0), latest main checkpoint merged (989ced9), obsolete
+  SP1 test-path comment corrected by Lead (5b5f7fc). Independent FULL pnpm check PASS **103files/1447tests**;
+  one FULL web e2e PASS **80/80** (3.6min), at isolated preview4173. No other browser job active. All touched
+  source/new files reviewed, git diff --check clean. B3/B4/SP1 local acceptance passes; phone still unverified.
+- Ordinary PR **#49** opened: https://github.com/Nextoz/vault-companion/pull/49 . CI pending at initial head;
+  CodeRabbit initially skipped automatic review (<10stars), no actual findings. Push this checkpoint then request
+  ONE review on final head; no repeated review request/head churn. Merge only current green required CI, no hold,
+  no unanswered owner comments and disposition actionable review. H floor code NOT in this PR, no deployment yet.
+- Freed BUGS slot dispatched RR1's existing correction packet on Pro **w5:pY**, same rr1-radar clone,
+  .agent/correction.log; handoff .agent/handoffs/RR1-correction.md. H1 recovery w5:pW and H2 correction w5:pS
+  continue. Max3 independent workers. No new OpenAI Codex work. All H/RR floor hold/Claude gates unchanged.
+- BUGS-Pro Jev Use1 unresolved .93 / scope .81 / verification .24, before combined checks completed. Lead
+  agreed then; now independently passing full checks resolves local verification, remote CI/review still pending.
+  Raw .agent/jev/BUGS-Pro-run.json. SP1 still first Jev-picked initial run requiring correction1/first5; one B3
+  reasoning escalation; no additional same-tier retries. H1/H2/RR1 deterministic Pro floor.
+- DeepSeek **$7.48** before RR1 dispatch → **$7.25** at13:23; aggregate reported spend **$2.74** since$9.99,
+  concurrent attribution unknown. Stop new dispatch below$3. Private content/logs absent; vault unchanged.
+- Watcher excludes consumed BUGS-Pro; watches H1/H2/RR1 corrected handoffs and PR49 completed CI/review.
+  Next WAKE: review exact handoff, or PR49 current checks/review; do not rerun passing local code checks for docs.
+
+---
+
+# Prior checkpoint — 2026-09-30 13:15 Europe/Copenhagen
+
+## Latest delta — RR1 handoff / H non-hook recovery
+
+- RR1 original handoff and scope request read (request says satisfied inside envelope; no extra edit authority
+  needed). All new production modules plus tracked diff reviewed; test review partial, acceptance blocked.
+  Independent targeted7 files/85 tests and pnpm typecheck PASS. Targeted eslint FAIL unused tagBlock at
+  research-radar.ts:80. No full check/browser job or independent floor review yet.
+- Concrete RR1 failures: real command service accepts paperB Undo targeting paperA (second write); replay
+  remove1/remove2/undo1 erases later remove2. Read JSX always source URL, not explanation/intake note (tests
+  only assert data-read-kind). Month-boundary Undo only current log; generic source/ref query identity stripping
+  merges distinct URLs. Handoff mounts Today, but product lives Scouts. LocalStorage retry/Undo/account fencing
+  and applied-schema honesty require negative tests. New production code reviewed, not accepted.
+- One bounded Pro correction packet prepared, NOT launched: rr1-radar/.agent/correction.md; same allowed
+  envelope, .agent/handoffs/RR1-correction.md. Add trusted paperId-resolved read route, not client-named path;
+  no widening existing linked-note roots. Correct Undo/month-boundary/replay, Read, retry and canonicalization;
+  preserve golden/CAS/dedupe/privacy. RR1 hold and independent Claude/owner deployment gates unchanged.
+- Freed slot dispatched H1 priority non-hook recovery on Pro w5:pW in original h1-harness clone. Original
+  partial code preserved; packet .agent/recovery.md; handoff .agent/handoffs/H1-recovery.md. No hook/settings
+  edits or Claude canary; bounded coordinator-owned baseline scanner required, no clone-ignore bypass.
+  H2 correction w5:pS and BUGS correction w5:pT continue; three workers maximum. RR1 correction next free slot.
+- RR1 Jev Use1 redo .70 / verification .08; Lead agrees on reproduced failures. Raw .agent/jev/RR1-run.json.
+  Floor deterministic Pro, not a new Jev-picked run. Routing stats unchanged: SP1 first picked run needs correction;
+  one reasoning escalation B3. No further same-tier retries after one proper correction without evidence review.
+- DeepSeek balance **$7.54** at13:15, aggregate reported spend **$2.45** since$9.99; concurrent attribution
+  unknown. Stop NEW dispatch below$3. No vault writes, private fixtures, external deployment or new OpenAI work.
+- Watcher excludes consumed RR1 handoff and satisfied scope request; watches H1 recovery, H2 correction,
+  BUGS-Pro and queued RR1-correction. Next wake: review named handoff before accepting; keep H1/H2/RR1 held.
+
+---
+
+# Prior checkpoint — 2026-09-30 12:58 Europe/Copenhagen
+
+## Latest delta — supersedes worker/PR states below
+
+- PR #48 merged `f4e7cc760afe69072a9003d478f815cf54b89ec1`: Ubuntu/Windows and CodeRabbit checks green
+  at 3504037. Bot review request aborted on changing head; no actual review findings. Per normal rules this is
+  not a merge gate. Main clean at merge before this documentation delta. PR #47 already merged and verified.
+- H2 original handoff read/full production diff reviewed. Unaccepted: strict MCP not actually passed, worker
+  default/profile mismatch, actual CLI event/parser mismatch, wake lacks submit, acceptance ignores exits/trusted
+  evidence. Real tiny DeepSeek schema canary failed (missing JSON schema type); no-schema canary succeeded and
+  proved agent_message/text event format. No live Claude/hook canary. One bounded Pro correction active w5:pS,
+  same h2-launcher clone; packet .agent/correction.md, handoff .agent/handoffs/H2-correction.md. Hold remains.
+- BUGS Flash handoff read, changed spans reviewed. Claims 40/40 and typecheck; not independently accepted.
+  B4 wording and SP1 packaging/report corrections look sound. B3 introduces regression: today's null degraded
+  history hides yesterday's known3. Lead reproduced via Node; original evidence exclusion violated. Also raw
+  timestamp keys do not reconcile offset-equivalent instants. Escalated to Pro w5:pT, same b3-b4-fixes clone,
+  .agent/pro-correction.md; handoff .agent/handoffs/BUGS-Pro.md. No acceptance or combined check/e2e yet.
+- Active slots: H2 Pro correction, RR1 Pro implementation w5:pN, BUGS Pro correction. Independent files;
+  three maximum respected. H1 partial remains preserved/unaccepted, no new OpenAI work. Recover H non-hook
+  core on Pro when next slot frees; queue then SP2 contract review, remaining bugs. RR1 scope request absent.
+- Jev completed-run checks: H2 redo .74 / verification .08; BUGS redo .77 / verification .14. Lead agrees both
+  unaccepted on concrete counterexamples, not on probabilities alone. Raw .agent/jev/{H2,BUGS}-run.json.
+  Reasoning escalations now 1 (B3 Flash→Pro). Historical fallback B3/B4 are not Jev-picked; first picked SP1
+  still correction-required 1/first5, accepted0; disable active routing if second picked run needs redo/escalation.
+- DeepSeek balance **$8.47** at 12:56, aggregate reported spend **$1.52** since $9.99. Concurrent attribution
+  and sub-cent costs unknown. $3 stop unchanged. No private log/repo text, vault write or production deployment.
+- Watcher .agent/watch-resume.ps1 now watches only H2-correction, BUGS-Pro, RR1 handoff/scope-request;
+  consumed original handoffs excluded. Next: handoff-first review; BUGS pass→merge latest main into clone,
+  full pnpm check and single web e2e, ordinary PR/review/CI. H2/RR1 floor PRs hold for independent Claude.
+
+---
+
+# Prior checkpoint — 2026-09-30 12:37 Europe/Copenhagen
 
 This section supersedes the historical 07:20 checkpoint below. Lead Codex budget mode expires Thu
 2026-10-01 21:00 Copenhagen / 19:00 UTC; start no new OpenAI Codex workers.
