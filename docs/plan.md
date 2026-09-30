@@ -53,8 +53,38 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 - Initial split: H1 guards/gates and H2 launcher/watcher remain sequential Codex work; B3 insights calculation
   can run independently on DeepSeek after smoke/Jev; select a second low-risk task only after confirming no shared
   files. No private vault material is sent to workers or Jev.
-- Accounting at this checkpoint: Jev picks followed 0, overruled 0; worker runs escalated 0;
-  DeepSeek spend $0 (no run launched yet). Smoke and routing calls pending.
+- Accounting at 2026-09-30 06:59 Copenhagen: Jev picks followed **1 decision queued (B4, not run)**,
+  overruled/fallback **1 (B3)**; completed Jev-picked implementation runs **0**; escalated runs **0**.
+  DeepSeek balance before/after smoke **$9.99 → $9.99**, reported spend **$0.00** at API precision;
+  sub-cent cost unknown. No implementation run on DeepSeek yet. No high-risk downgrade proposed.
+- Smoke PASS: Codex 0.159.2, `deepseek-flash`, provider `deepseek`, effort high, no MCP startup, exact `ready` reply;
+  5,211 transcript tokens. DeepSeek is now **provisional**, not formally added to routing. Jev Use 1 says close
+  (probability .99); Lead agrees for this one-word smoke only (verification score .49 is retained in raw evidence).
+- B3 routing: Jev chose codex-luna with top probability .41, ordinary .98, ambiguous .20. Threshold fails;
+  Lead fallback DeepSeek Flash for the explicit canary. B4: codex-luna .68, ordinary 1.00, ambiguous .20; follow
+  at medium effort after the sole Codex slot is free. Do not reroute merely to fill the second DeepSeek slot.
+- Jev responses and synthetic packets: `.agent/jev/{B3,B4}-routing.json`, `smoke-run.json`, and accompanying state/
+  question files (gitignored through local `.git/info/exclude`). Clone briefs are `.agent/brief.md`.
+
+## Delegated agents — checkpoint 2026-09-30 06:59 Copenhagen
+
+| Task | State / model | Herdr pane | Clone / branch / base |
+|---|---|---|---|
+| H1 core guards/gates | **RUNNING; do not redispatch or stop.** Codex gpt-6-astra medium, real implementation activity verified; no handoff/verdict yet | `w5:p4` (Agents tab `w5:t2`) | `C:\Dev\vault-companion-clones\h1-harness`; `agent/h1-harness`, base `8ce1d57`; worker edits uncommitted |
+| DeepSeek smoke | **Completed PASS**; deepseek-flash high; pane closed itself normally | former `w5:p5` | `C:\Dev\vault-companion-clones\deepseek-smoke`; inherited `docs/continuous-lead-20260930` at `5fc6a94`; no code edits |
+| B3 degraded insights | **Prepared, NOT launched**; DeepSeek Flash fallback selected | none | `C:\Dev\vault-companion-clones\b3-degraded`; `agent/b3-degraded` at `5fc6a94`; dependencies installed |
+| B4 compact Scouts | **Prepared, NOT launched**; Jev-selected Codex Luna medium queued behind H1 | none | `C:\Dev\vault-companion-clones\b4-compact`; `agent/b4-compact` at `5fc6a94`; dependencies installed |
+
+- H1 log: `C:\Dev\vault-companion-clones\h1-harness\.agent\run.log`; session
+  `01a0f0ab-4cde-7d12-9726-3ad8bd566a6a`. Expected report `.agent/handoffs/H1-harness-core.md`.
+  Non-interactive workers do not appear in `herdr agent list`; pane + log are authoritative evidence of this run.
+- Isolated homes under `C:\Dev\tools\vault-companion-codex-home` and `vault-companion-deepseek-home`; no MCP/memories.
+  TEMP/TMP/TMPDIR `C:\Dev\tmp\vault-companion`; pnpm store `C:\Dev\tmp\pnpm-store`; npm cache `C:\Dev\tmp\npm-cache`.
+  Never print/commit auth or keys. Existing DeepSeek config was copied to C:\Dev to honor the write boundary.
+- Documentation PR **#47** open at `5fc6a94`: CI ubuntu/windows in progress; one CodeRabbit full review requested,
+  now pending. No merge/deploy this session. Local current branch `docs/continuous-lead-20260930`.
+- Owner requested this immediate checkpoint; all running workers are left untouched. No watcher was launched by
+  this Lead yet. Other existing panes `w5:p2`/`w5:p3` are not this Lead's workers and were not altered.
 
 ## Waiting for Evgeny
 
