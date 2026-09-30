@@ -85,6 +85,27 @@ describe('compact scout health list', () => {
     expect(list.querySelector('.scout-chips')).toBeNull();
   });
 
+  it('lists an in-progress run separately from problems and ok', async () => {
+    const running = ok('running.json', status({
+      scoutId: 'running-scout', displayName: 'Running scout', runStatus: 'running',
+      lastAttemptAt: NOW, lastSuccessAt: '2026-09-26T07:00:00+02:00',
+    }));
+    root = await render([healthy, running, failed]);
+    expect(document.querySelector('[data-testid="scout-summary"]')!.textContent).toBe('1 ok · 1 with problems · 1 running');
+    expect(row('Running scout').textContent).toContain('Running');
+    expect(row('Running scout').textContent).not.toContain('with problems');
+  });
+
+  it('names unknown findings as unknown and a known zero as zero', async () => {
+    const zero = ok('quiet.json', status({ scoutId: 'quiet', displayName: 'Quiet scout', runStatus: 'success', findings: 0 }));
+    root = await render([failed, zero]);
+    expect(row('City events').getAttribute('aria-label')).toContain('findings unknown');
+    expect(row('Quiet scout').getAttribute('aria-label')).toContain('0 findings');
+    // The visible list stays compact: only the known zero shows a number, unknown stays a dash.
+    expect(row('City events').querySelector('.scout-row-findings')!.textContent).toBe('— findings');
+    expect(row('Quiet scout').querySelector('.scout-row-findings')!.textContent).toBe('0 findings');
+  });
+
   it('keeps a malformed record as an honest disabled fallback', async () => {
     root = await render([healthy, unreadable]);
     const broken = row('unreadable.json');

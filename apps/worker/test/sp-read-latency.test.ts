@@ -1,9 +1,7 @@
 // SP1 read-latency benchmark assertions (synthetic only; harness in tools/sp-read-latency.mjs).
 //
-// Test-discovery note (packet SP1): the shared vitest.config.ts `test.include` does NOT cover tools/**,
-// so `pnpm exec vitest run tools/sp-read-latency.test.ts` finds no test file until that config adds
-// `tools/**/*.test.ts`. This packet forbids editing the shared config, so the integration line is
-// reported in docs/reviews/SP-read-latency.md and .agent/handoffs/SP1.md instead of applied here.
+// The test lives under apps/worker/test so the shared vitest.config.ts `test.include`
+// (`apps/*/test/**/*.test.ts`) discovers it through the normal command with no config change.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -12,13 +10,13 @@ import {
   NoteReadResponse,
   NotesResponse,
   TrainingResponse,
-} from '../packages/contracts/src/index.ts';
+} from '../../../packages/contracts/src/index.ts';
 import {
   createBenchHarness,
   runLatencyBenchmark,
   rowFor,
   toMarkdown,
-} from './sp-read-latency.mjs';
+} from '../../../tools/sp-read-latency.mjs';
 
 const ZERO = { token: 0, head: 0, tree: 0, blob: 0 };
 const NOTE = 'Inbox/Alpha note - 2026-09-25.md';

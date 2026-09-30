@@ -12,8 +12,8 @@ behind it. The fake counts every call by kind — `token` (installation, `/app/i
 `head` (`/git/ref/heads/<branch>`), `tree` (`/git/trees/*`), `blob` (`/contents/*`) — and adds a configurable
 delay before each response, so time can be attributed to the endpoint the Worker actually calls.
 
-`tools/sp-read-latency.test.ts` asserts the harness (see below). Cold = the first request on a brand-new app/store
-(token, head and tree caches all empty). Repeat = the next requests on that same app.
+`apps/worker/test/sp-read-latency.test.ts` asserts the harness (see below). Cold = the first request on a brand-new
+app/store (token, head and tree caches all empty). Repeat = the next requests on that same app.
 
 ### Measured (observable) vs inferred (unobservable)
 
@@ -47,8 +47,10 @@ configs, not absolute values.)
    immutable-by-revision cache.
 3. **Blob reads are immutable per revision.** `contents/<path>?ref=<commit>` never changes for a given
    `(path, commit)`; the store does not cache them, but upstream they are content-addressed by `blobSha`.
-4. **A cold note open is the heaviest read** (`head` + `tree` + `blob`; ~105 ms at these delays) and a cold list is
-   `head` + `tree`.
+4. **A cold note open costs one more request than a cold list.** A note read is the colder list's `head` + `tree`
+   plus the note's `blob` (table: note-read 104.5 ms vs notes-list 76.9 ms cold), so of those two it is the heavier
+   path. It is **not** the heaviest read in the table: cold `scouts` (145.5 ms, three tree probes) and cold
+   `history` (114.4 ms, two blobs) measure higher with their own request mixes.
 5. **The Today tab composes several reads that each call `head`** (morning, active-work, triage, scouts, tasks). They
    run in parallel, so they duplicate the same ref request; that is pure avoidable cost with no freshness benefit.
 6. **An absent scout-status directory costs 3 tree probes cold** (`Automation/Scout Status` 404 → parent
@@ -77,48 +79,31 @@ Cross-cutting risks to respect for any of the above:
 - **Latest-head freshness** — a stale `head` makes every read and the dedupe window view an old revision. Any head
   cache must be short-lived and must never be the base of a write.
 
-## Recommended next implementation (one, small)
+## Cache candidates — recommendation status
 
-**Memoize `head` for the read path only: single-flight + a short TTL (≤ 1500 ms), keyed by `(owner, repo, branch)`.
-Writes keep today's uncached `head`.**
+Nothing here is implemented in this packet; these stay recommendations.
 
-- Rationale: `head` is the dominant repeated cost and the Today tab duplicates it in parallel; a ≤1.5 s TTL caps the
-  staleness window and coalescing removes the parallel duplicates without any new freshness window.
-- Exact files: `packages/github/src/contents-store.ts` (add the bounded memo + a `fresh` head used by writes),
-  `packages/domain/src/store.ts` (`VaultStore` head variant), `packages/domain/src/execute.ts` (write path calls the
-  fresh head), `apps/worker/src/index.ts` (enable the TTL in production read composition); tests in
-  `packages/github/src/read-budget.test.ts` and `apps/worker/src/wiring.test.ts`.
-- Observable acceptance checks: with a counting fake `fetch`, (a) two concurrent tab reads on a warm isolate issue
-  exactly one `/git/ref/heads/*` within the TTL; (b) after the TTL the next read issues a fresh ref call and returns
-  the moved commit; (c) a write started inside the TTL still pins the true head (a concurrently moved head still
-  yields `head-moved`, never a stale-base write); (d) a store for a different `(owner, repo)` never shares an entry.
-- Risk floor: staleness ≤ TTL; writes unaffected (fresh head); per-isolate, O(1) memory; fail-open to the network on
-  any error; no cross-repo/account reuse. Fallback if the write-path change is judged too invasive: ship the
-  single-flight coalescing alone (one file, no TTL) — it captures the parallel-duplicate win with no staleness at all.
+- **Immutable-by-revision contents are the low-risk candidates.** Directory listings per `(commit, dir, recursive)`
+  are already cached in-isolate, and caching blobs per `(repo, blobSha)` would never serve a moved revision. Either
+  could be scoped into a later SP2 contract.
+- **`head` (the mutable branch tip) — Lead decision for now: no TTL head cache.** A TTL trades freshness for calls,
+  and routing the write path around a cached head would widen the write surface; both merit a separate floor review
+  before any contract. **Single-flight coalescing alone** (no TTL, so no staleness window) is the other candidate
+  for that later SP2 contract.
 
-Do **not** start it in this packet.
+Risk floor to respect in any follow-up: keys include owner/repo/installation (never one shared entry for private
+bytes), bounded memory with fail-open behaviour, and a `head` that is never the base of a write.
 
-## Test discovery integration needed
+Do **not** start any of it in this packet.
 
-The shared `vitest.config.ts` `test.include` covers only `packages/*/src`, `apps/*/src`, `packages/*/test` and
-`apps/*/test`, so the packet's command finds no file **by design of the shared config** (no code fault):
+## Discovery and reproduction
 
-```
-$ pnpm exec vitest run tools/sp-read-latency.test.ts --reporter=dot
-No test files found, exiting with code 1
-include: packages/*/src/**/*.test.ts, apps/*/src/**/*.test.ts, packages/*/test/**/*.test.ts, apps/*/test/**/*.test.ts
-```
-
-The one-line integration is to add `'tools/**/*.test.ts'` to that `include` array. It was **not** applied here
-(shared config is out of scope for SP1). The benchmark itself was verified with a throwaway config
-(`include: ['tools/**/*.test.ts']`, deleted after the run): **10/10 tests pass**.
-
-## Reproduction
+The benchmark test was moved from `tools/sp-read-latency.test.ts` (outside the shared Vitest `include`, so the old
+command never found it) to `apps/worker/test/sp-read-latency.test.ts`, which the shared `include` already covers.
+Only its relative imports changed (re-pointed at the repository root); the harness `tools/sp-read-latency.mjs` is
+unchanged, with no duplicate copy and no `vitest.config.ts` edit.
 
 ```powershell
-# After integrating discovery, this is the packet command:
-pnpm exec vitest run tools/sp-read-latency.test.ts --reporter=dot
-# As run here (temporary local config, since deleted):
-pnpm exec vitest run --config vitest.tools.tmp.config.mts --reporter=dot
-pnpm -r exec tsc --noEmit   # 3 pre-existing TS6305 errors in packages/vault-markdown (test-vault/dist unbuilt); none in tools/
+pnpm exec vitest run apps/worker/test/sp-read-latency.test.ts --reporter=dot   # 10/10 pass
+pnpm typecheck                                                                 # tsc -b, clean
 ```

@@ -90,24 +90,35 @@ export function topPicks(markdown: string, n = 3): InsightPick[] {
 type ResultRun = { at: string; findings: number | null };
 
 /**
- * Runs whose results belong on the insights cards: every `success` run, plus `degraded` runs that still carry
- * usable results (a known count, including 0, or `lastSuccessAt` as the result timestamp). Failed and running
- * attempts never count, an unknown count stays `null`, and a degraded run never borrows an older run's findings.
- * Fresh objects, so callers can sort without mutating the input status.
+ * Runs whose results belong on the insights cards: every `success` and evidence-bearing `degraded` entry in
+ * history, plus the current run when it carries evidence. A known count (including 0) stays tied to the attempt
+ * that produced it, while a degraded run with an unknown count is dated by its last success, so an old success
+ * still proves old results instead of a newer unknown attempt. Instants are reconciled across offset spellings,
+ * and at one instant a known count always wins, so unknown history can never suppress a known result. Fresh
+ * objects, so callers can sort without mutating the input status.
  */
 function resultRuns(status: ScoutStatus): ResultRun[] {
-  const runs: ResultRun[] = status.history
-    .filter((run) => run.status === 'success' || (run.status === 'degraded' && run.findings !== null))
-    .map((run) => ({ at: run.at, findings: run.findings }));
-  const at = status.lastAttemptAt ?? status.lastSuccessAt;
-  const current: ResultRun | null =
-    status.runStatus === 'success' && status.lastSuccessAt
-      ? { at: status.lastSuccessAt, findings: status.findings }
-      : status.runStatus === 'degraded' && at && (status.findings !== null || status.lastSuccessAt !== null)
-        ? { at, findings: status.findings }
-        : null;
-  if (current && !runs.some((run) => run.at === current.at)) runs.push(current);
-  return runs;
+  const byAt = new Map<number, ResultRun>();
+  const add = (at: string, findings: number | null) => {
+    const instant = Date.parse(at);
+    if (!Number.isFinite(instant)) return;
+    const existing = byAt.get(instant);
+    if (!existing || (existing.findings === null && findings !== null)) byAt.set(instant, { at, findings });
+  };
+  for (const run of status.history) {
+    if (run.status === 'success' || (run.status === 'degraded' && run.findings !== null)) add(run.at, run.findings);
+  }
+  if (status.runStatus === 'success' && status.lastSuccessAt) {
+    add(status.lastSuccessAt, status.findings);
+  } else if (status.runStatus === 'degraded') {
+    if (status.findings !== null) {
+      const at = status.lastAttemptAt ?? status.lastSuccessAt;
+      if (at) add(at, status.findings);
+    } else if (status.lastSuccessAt) {
+      add(status.lastSuccessAt, null);
+    }
+  }
+  return [...byAt.values()];
 }
 
 /** A bounded, single-line reason for a degraded card: failed sources first, otherwise the last error. */

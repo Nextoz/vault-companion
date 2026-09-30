@@ -79,8 +79,14 @@ export function Scouts({ page, onOpen, refreshKey }: { page: boolean; onOpen: ()
   const triageAttention = triageState === 'Failed' || triageState === 'Stale';
   // Count the attention line too, so the summary never contradicts what is on screen.
   const summarised = triageAttention && triage ? [...listed, triage] : listed;
-  const okCount = data ? summarised.filter((candidate) => entryState(candidate, data.now) === 'Healthy').length : 0;
-  const problemCount = summarised.length - okCount;
+  const states = data ? summarised.map((candidate) => entryState(candidate, data.now)) : [];
+  const okCount = states.filter((state) => state === 'Healthy').length;
+  // An ongoing run is neither ok nor a problem, so it gets its own part of the summary (and only when nonzero).
+  const runningCount = states.filter((state) => state === 'Running').length;
+  const problemCount = states.filter((state) => state !== 'Healthy' && state !== 'Running').length;
+  const summary = [`${okCount} ok`];
+  if (problemCount > 0) summary.push(`${problemCount} with problems`);
+  if (runningCount > 0) summary.push(`${runningCount} running`);
   return <section aria-label="Scouts" className="scouts">
     <h1>Scouts</h1>
     {!data && <p role="status">{!result ? 'Loading scouts…' : result.kind === 'error' ? result.message : result.kind === 'signed-out' ? 'Sign in to view scouts.' : 'Scouts unavailable offline.'}</p>}
@@ -101,7 +107,7 @@ export function Scouts({ page, onOpen, refreshKey }: { page: boolean; onOpen: ()
       <h3>Findings note</h3>
       {detail.latestOutput ? <FindingsNote key={detail.scoutId} id={detail.scoutId} /> : <p>No findings note yet.</p>}
     </div> : <>
-      <p className="scout-summary" data-testid="scout-summary">{okCount} ok · {problemCount} with problems</p>
+      <p className="scout-summary" data-testid="scout-summary">{summary.join(' · ')}</p>
       {triageAttention && triage && <button type="button" className={`scout-triage-attention ${stateClass(triageState!)}`} onClick={() => setSelected(triage.file)}>
         <span className={`scout-dot ${stateClass(triageState!)}`} aria-hidden="true" />
         <span>{triageState === 'Stale' ? 'Calendar sync stale' : 'Calendar sync failed'}</span>
@@ -113,7 +119,7 @@ export function Scouts({ page, onOpen, refreshKey }: { page: boolean; onOpen: ()
           const state = entryState(candidate, data.now);
           const run = status ? lastRun(status) : null;
           const label = status
-            ? `${status.displayName}, ${stateLabel(state)}, ${status.findings ?? 'no'} findings, last run ${run ? exactTime(run) : 'never'}`
+            ? `${status.displayName}, ${stateLabel(state)}, ${status.findings === null ? 'findings unknown' : `${status.findings} findings`}, last run ${run ? exactTime(run) : 'never'}`
             : `${candidate.file}, No status yet`;
           return <li key={candidate.file}>
             <button type="button" className="scout-row" disabled={!status} aria-label={label} onClick={() => setSelected(candidate.file)}>
