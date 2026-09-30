@@ -10,7 +10,7 @@
 //   * Inferred: Cloudflare Access, edge/origin and phone-network time, which this harness does NOT
 //     reproduce. These numbers are not phone or production latency and must never be reported as such.
 //
-// Imported by tools/sp-read-latency.test.ts. Run it through Vitest: plain `node` cannot strip the
+// Imported by apps/worker/test/sp-read-latency.test.ts. Run it through Vitest: plain `node` cannot strip the
 // Worker's TS parameter properties (ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX), so this module is not a CLI.
 
 import { createHash, createPublicKey, createSign, generateKeyPairSync } from 'node:crypto';
