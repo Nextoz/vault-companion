@@ -8,15 +8,13 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Temporary Lead operating constraints (owner, 2026-09-30)
 
-- No Claude usage: no Claude workers or Claude Cloud. **Codex budget mode expires Thursday 2026-10-01 21:00
-  Europe/Copenhagen (19:00 UTC).** `CODEX LOW` is active: start no new Codex workers and use DeepSeek only for new
-  eligible work. Leave the already-running H1 Codex worker untouched.
-- Outside the deterministic floor, every worker goes to DeepSeek; Jev chooses only `deepseek-flash` or
-  `deepseek-pro` (with unresolved retained as the safe outcome). Floor work is sequential, at most one Codex
-  `gpt-6-astra` medium worker; anything needing Astra-high is held for the Claude Lead after the reset.
+**Owner update 3 below supersedes the older provisional, privacy and floor-routing limits in this file.**
+
+- No Claude-plan workers or Claude Cloud. Claude-on-DeepSeek is allowed by update 3. **Codex budget mode expires
+  Thursday 2026-10-01 21:00 Europe/Copenhagen (19:00 UTC).** Start no new OpenAI Codex workers;
+  preserve H1's partial work after its quota exit. DeepSeek handles new implementation, including Pro floor work.
 - Delegate implementation through `tools/agent-pane.sh` per the routing table; Lead plans, decomposes, integrates
-  and accepts. Wait inside the turn for workers; background completion does not wake this Lead. Use the shell's
-  longest supported wait and repeat on timeout. For CI, CodeRabbit or owner input, checkpoint and end with
+  and accepts. Never wait or poll inside the Lead turn. For workers, CI, CodeRabbit or owner input, checkpoint and end with
   `WAITING: <what>`; a watcher pane sends `WAKE: <event>`.
 - For Astra routing rows and H hook/gate code, open a PR with `hold`; do not merge. Independent Claude Lead review
   waits until the reset. Ordinary work follows normal PR/CodeRabbit/merge/deploy rules.
@@ -25,17 +23,45 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
+- Resume at 11:58 Copenhagen: clean documentation branch `bc5a853`; PR #47 CI green on Ubuntu/Windows,
+  real CodeRabbit review completed and its stale-snapshot finding fixed. B3/B4 panes closed without tool activity,
+  code changes or handoffs; restarted in the same clones on Flash with the original briefs plus failure context.
+  H1 stopped at the Codex usage limit, leaving partial tracked and untracked harness work, no handoff. Preserve it;
+  start no new Codex work. H non-hook implementation goes to Pro, then SP measurement, RR1, remaining bugs.
+- Restart launch evidence: Windows workspace-write sandbox repeatedly failed with
+  `orchestrator_helper_incomplete`; stopped those attempts. Unsandboxed Flash B3/B4 now execute tools in
+  `w5:pE`/`w5:pF`. H2 launcher/profiles/watcher dispatched to Pro (`deepseek-v4-pro`) in `w5:pH`, clone
+  `C:/Dev/vault-companion-clones/h2-launcher`, branch `agent/h2-launcher`, original base `bc5a853`.
+  Pro tier alias `deepseek-pro` is not an API model ID; initial alias launch refused before implementation.
+  These three tasks have disjoint allowed files. H2 handoff: `.agent/handoffs/H2.md`; held PR required.
+
 - Pre-PR resume snapshot: clean `main` at `947570d`; the prior Herdr Lead was `w5:p1`, with no other agents or open
   PRs. Resume `pnpm check` passed: lint, typecheck, 101 files / 1415 tests. Refresh the resume SHA and PR state after
   PR #47 merges; historical worker/quota/queue statements below are superseded here.
 - Ready Backlog re-read read-only: H first, then SP, RR, B3+B4. Never select work from the Ideas Backlog.
-- H Part 1 is ready for engineering implementation; H1 core guards/gates first, H2 launch profiles/watcher next,
-  sequential Astra-medium workers. Contract: `docs/briefs/H1-harness-core.md`.
+- H Part 1 is ready for engineering implementation; H1 core guards/gates stopped incomplete, H2 launch
+  profiles/watcher now on DeepSeek Pro. H1 contract: `docs/briefs/H1-harness-core.md`.
   Acceptance: five required hook/gate eval fixtures plus failure cases, targeted checks, Lead full check/e2e;
   held PR and deferred independent review/canary mean H is not accepted or shipped yet.
-- H Part 2 / DeepSeek smoke may start now under owner update 2 below; formal graduation still needs B3 evidence.
+- DeepSeek smoke passed; update 3 removes the formal B3 graduation gate.
 
-## Owner update 2 — provisional parallel backend and Jev (2026-09-30)
+## Owner update 3 — default DeepSeek backend (2026-09-30)
+
+- DeepSeek is the default for **all implementation**, with no B3 graduation gate. Up to **3 DeepSeek workers**
+  may run on independent files: Flash by default; Pro where Sol-medium would be chosen and for floor work.
+- DeepSeek is trusted with **all vault data, including private content**. This supersedes the DeepSeek-only
+  public/synthetic restriction; private text still never enters this repository, fixtures, logs or receipts.
+  Live vault writes still require owner approval; Jev still receives public filtered packets only.
+- No sandbox required. Default: Codex-on-DeepSeek with `--sandbox workspace-write`, isolated home/no MCP/memories;
+  `Tools/claude-deepseek.ps1` is allowed if needed without WSL/container. This uses DeepSeek balance, not Codex quota.
+- Floor work (auth, write path, persistence, concurrency, security, CI, harness) may go to Pro, with a **hold** PR,
+  Lead diff review and later independent Claude review. Hook canary remains deferred; do not merge held work.
+- Every diff gets Lead review; `verify-run` applies once available. Keep the **$3 stop**, **one Playwright job**,
+  and **Codex budget mode until Thu 2026-10-01 21:00 Copenhagen**. No new OpenAI Codex workers.
+- Balance at resume, 2026-09-30 11:58 Copenhagen: **$9.99**, API precision; reported change since smoke $0.00,
+  sub-cent cost unknown. Record balance at every checkpoint. Weekday afternoon runs cost half.
+
+## Owner update 2 — historical provisional rules and Jev (2026-09-30)
 
 - Re-read current Harness Brief Parts 2 and 3. Smoke-test Codex 0.159.2 with a one-word DeepSeek response before
   dispatching real work. Verify provider/model/no MCP; measure balance before/after via the authorized balance API.
@@ -73,14 +99,15 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 - Jev responses and synthetic packets: `.agent/jev/{B3,B4}-routing.json`, `smoke-run.json`, and accompanying state/
   question files (gitignored through local `.git/info/exclude`). Clone briefs are `.agent/brief.md`.
 
-## Delegated agents — checkpoint 2026-09-30 06:59 Copenhagen
+## Delegated agents — resume 2026-09-30 afternoon Copenhagen
 
 | Task | State / model | Herdr pane | Clone / branch / base |
 |---|---|---|---|
-| H1 core guards/gates | **RUNNING; do not redispatch or stop.** Codex gpt-6-astra medium, real implementation activity verified; no handoff/verdict yet | `w5:p4` (Agents tab `w5:t2`) | `C:\Dev\vault-companion-clones\h1-harness`; `agent/h1-harness`, base `8ce1d57`; worker edits uncommitted |
+| H1 core guards/gates | **STOPPED at quota, incomplete**, no handoff; partial work preserved; no new OpenAI Codex work | former `w5:p4` | `C:\Dev\vault-companion-clones\h1-harness`; `agent/h1-harness`, base `8ce1d57`; tracked and untracked edits |
 | DeepSeek smoke | **Completed PASS**; deepseek-flash high; pane closed itself normally | former `w5:p5` | `C:\Dev\vault-companion-clones\deepseek-smoke`; inherited `docs/continuous-lead-20260930` at `5fc6a94`; no code edits |
-| B3 degraded insights | **RUNNING**; DeepSeek Flash high, real activity verified | `w5:pA` | `C:\Dev\vault-companion-clones\b3-degraded`; `agent/b3-degraded` at `5fc6a94`; expected handoff `.agent/handoffs/B3.md` |
-| B4 compact Scouts | **RUNNING**; DeepSeek Flash high, real activity verified | `w5:pB` | `C:\Dev\vault-companion-clones\b4-compact`; `agent/b4-compact` at `5fc6a94`; expected handoff `.agent/handoffs/B4.md` |
+| B3 degraded insights | **RUNNING restarted**; DeepSeek Flash high, unsandboxed tool activity verified | `w5:pE` | `C:\Dev\vault-companion-clones\b3-degraded`; `agent/b3-degraded` at `5fc6a94`; handoff `.agent/handoffs/B3.md`, log `.agent/unsandboxed.log` |
+| B4 compact Scouts | **RUNNING restarted**; DeepSeek Flash high, unsandboxed tool activity verified | `w5:pF` | `C:\Dev\vault-companion-clones\b4-compact`; `agent/b4-compact` at `5fc6a94`; handoff `.agent/handoffs/B4.md`, log `.agent/unsandboxed.log` |
+| H2 non-hook launcher/profiles/watcher | **RUNNING**; DeepSeek Pro high (`deepseek-v4-pro`), unsandboxed tool activity verified | `w5:pH` | `C:/Dev/vault-companion-clones/h2-launcher`; `agent/h2-launcher`, base `bc5a853`; handoff `.agent/handoffs/H2.md`, log `.agent/pro.log`; hold PR |
 
 - H1 log: `C:\Dev\vault-companion-clones\h1-harness\.agent\run.log`; session
   `01a0f0ab-4cde-7d12-9726-3ad8bd566a6a`. Expected report `.agent/handoffs/H1-harness-core.md`.

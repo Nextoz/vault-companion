@@ -27,6 +27,8 @@ reasons to increase reasoning effort.
 
 ## Consequences
 
+- Owner update 3 (2026-09-30): DeepSeek is the default implementation backend (Flash; Pro for Sol-medium/floor), trusted with all vault data; up to three independent workers, no required sandbox or B3 graduation gate; $3 stop, Lead diff review, one Playwright job, and held floor PRs with later independent Claude review remain.
+
 - Historical usage numbers may remain as dated evidence, but historical routing tables do not remain active.
 - `CLAUDE.md` points to the canonical routing policy instead of duplicating model IDs.
 - Reviews use the same routing ladder as implementation; Astra is not the default reviewer for ordinary diffs.
