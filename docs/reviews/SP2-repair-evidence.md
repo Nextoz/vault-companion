@@ -1,10 +1,12 @@
 # SP2 independent repair — evidence
 
+These 88-test / latency-11 results record the original repair run. The later candidate has 90 tests / latency-13; see [SP2 final review fix](SP2-final-review-fix.md). Historical results below are preserved, not current-head acceptance.
+
 Head: `a64f8ca03ac92cc797665f33421f972be9f01f08`. Independent review:
 `C:/Dev/vault-companion-clones/review-sp2/docs/reviews/SP2-independent-pro.md`. All fixtures are synthetic; no private
 vault text, network, or live vault access.
 
-## Validation
+## Historical validation (before the timing repair and added async holdout)
 
 - Combined affected run: 6 files / 88 tests passed (no skips).
 - `pnpm typecheck` (`tsc -b`): clean, exit 0.
@@ -34,7 +36,7 @@ vault text, network, or live vault access.
    `apps/worker/src/index.ts:57,138` caches the app/store per env at module scope, so the bounded cache spans
    requests within one isolate; it is never global or shared across auth identities/envs. No phone-speed claim.
 
-## Actual per-file counts
+## Historical per-file counts
 
 - `read-cache.test.ts`: 28 passed.
 - `contents-store.test.ts`: 23 passed.

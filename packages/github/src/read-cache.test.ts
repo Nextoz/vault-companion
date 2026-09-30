@@ -270,27 +270,51 @@ describe('read cache (SP2)', () => {
     expect(contentCalls(calls)).toBe(10);
   });
 
-  it('single-flight joiners keep their fetched bytes when 128 insertions fill the cache before settlement', async () => {
-    let resolve!: (r: Response) => void;
-    const gate = new Promise<Response>((r) => {
-      resolve = r;
+  it('single-flight joiners keep the flight result when concurrent fillers evict the settled entry', async () => {
+    let targetResolve!: (r: Response) => void;
+    const targetGate = new Promise<Response>((r) => {
+      targetResolve = r;
     });
-    const { s } = store((url) => {
-      if (url.includes('/contents/Tasks/To-Do%20List.md')) return gate;
-      return fileResponse('filler');
+    const fillerResponses: Promise<Response>[] = [];
+    const fillerGates: (() => void)[] = [];
+    for (let i = 0; i < 128; i += 1) {
+      let resolveFiller!: (r: Response) => void;
+      const gate = new Promise<Response>((r) => {
+        resolveFiller = r;
+      });
+      fillerResponses.push(gate);
+      fillerGates.push(() => resolveFiller(fileResponse('filler')));
+    }
+
+    let targetGets = 0;
+    const { s, calls } = store((url) => {
+      if (url.includes('/contents/Tasks/To-Do%20List.md')) {
+        targetGets += 1;
+        return targetGets === 1 ? targetGate : fileResponse('present');
+      }
+      return fillerResponses.shift()!;
     });
 
     const p1 = s.readFile(PATH, SHA('a'));
     const p2 = s.readFile(PATH, SHA('a'));
-    for (let i = 0; i < 128; i += 1) await s.readFile(`Inbox/Filler ${i}.md` as VaultPath, SHA('a'));
+    const fillers = Array.from({ length: 128 }, (_, i) => s.readFile(`Inbox/Filler ${i}.md` as VaultPath, SHA('a')));
 
-    resolve(fileResponse('present'));
+    targetResolve(fileResponse('present'));
+    for (const resolveFiller of fillerGates) resolveFiller();
+
     const [f1, f2] = await Promise.all([p1, p2]);
+    await Promise.all(fillers);
+
+    expect(targetGets).toBe(1);
+    expect(contentCalls(calls)).toBe(129);
     expect(f1).not.toBeNull();
     expect(f2).not.toBeNull();
     expect(decode(f1!.bytes)).toBe('present');
     expect(decode(f2!.bytes)).toBe('present');
     expect(f1!.bytes).not.toBe(f2!.bytes);
+
+    await s.readFile(PATH, SHA('a'));
+    expect(targetGets).toBe(2);
   });
 
   it('pending map overflow: 32 unresolved distinct reads fall back to independent requests and all settle valid', async () => {

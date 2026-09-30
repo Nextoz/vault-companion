@@ -3,10 +3,10 @@
 Date: 2026-09-30. Scope: `packages/github/src/contents-store.ts` read path only, plus new tests and this report.
 No domain/API/auth/write/head/tree changes, no TTL, no configs/harness/CI, no live vault/network/secrets, no deploy.
 
-## Result
+## Historical result (original independent repair)
 
 `pnpm exec vitest run packages/github/src/read-cache.test.ts packages/github/src/contents-store.test.ts packages/github/src/read-budget.test.ts packages/github/src/undo-budget.test.ts packages/github/src/write-budget.test.ts apps/worker/test/sp-read-latency.test.ts --reporter=dot`
-passes 6 files / 88 tests after the SP2 independent repair. `pnpm typecheck` (tsc -b) and targeted `pnpm exec eslint`
+passed 6 files / 88 tests after the original SP2 independent repair. Later timing tests bring the current affected run to 90 tests (latency13); see [SP2 final review fix](SP2-final-review-fix.md). `pnpm typecheck` (tsc -b) and targeted `pnpm exec eslint`
 on the touched files pass. No full `pnpm check`/e2e was run (Lead owns that).
 
 ## Implementation
@@ -60,5 +60,5 @@ No production/phone latency is claimed; these are request counts from a determin
 ## Handoff notes
 
 This cache touches private-data isolation and concurrency: hold the PR until the Lead performs the full diff review and
-verification, followed by an independent Claude floor review. No production deploy. Do not expand this into TTL,
+verification and fresh independent floor review (owner permits DeepSeek Pro instead of Claude). No production deploy. Do not expand this into TTL,
 parser/UI, or RR work.
