@@ -5,6 +5,10 @@ import {
   ActiveWorkResponse,
   ApiError,
   Command,
+  DASHBOARD_RANGE_PLAN,
+  DashboardRange,
+  DashboardResponse,
+  MarketTickerResponse,
   decodeLinkedNoteHeader,
   decodeNoteHeader,
   HistoryResponse,
@@ -66,6 +70,16 @@ export type ReadMode = 'ok' | 'error' | 'offline' | 'hang';
 const lines = (...rows: string[]): string => `${rows.join(String.fromCharCode(10))}${String.fromCharCode(10)}`;
 
 export class MockApi {
+  // Public-market fixtures only; never contact a provider from a browser test.
+  dashboardMode: 'ok' | 'no-history' | 'unavailable' = 'ok';
+  dashboardNow = '2026-09-30T12:00:00Z';
+  dashboardFetchedAt = '2026-09-30T12:00:00Z';
+  readonly dashboardRanges: DashboardRange[] = [];
+  tickerReads = 0;
+  marketTicker: MarketTickerResponse = MarketTickerResponse.parse({
+    status: 'ok', now: '2026-09-30T12:01:00Z', fetchedAt: '2026-09-30T12:01:00Z',
+    ticker: { base: 'BTC', quote: 'USD', provider: 'coinbase', price: 60234.56, providerTime: '2026-09-30T12:00:30Z' },
+  });
   trainingRows: TrainingRow[] = [];
   /** `error`: /api/training answers 503 (Progress then shows "Training unavailable"). */
   trainingMode: 'ok' | 'error' | 'hang' = 'ok';
@@ -179,6 +193,12 @@ export class MockApi {
   async install(target: Page | BrowserContext): Promise<void> {
     const on = (glob: string, handle: (route: Route) => Promise<void>) =>
       target.route(glob, (route) => (this.network === 'down' ? route.abort('internetdisconnected') : handle(route)));
+    await on('**/api/dashboard?**', (route) => this.#dashboard(route));
+    await on('**/api/dashboard/ticker', (route) => {
+      if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+      this.tickerReads++;
+      return this.#json(route, 200, MarketTickerResponse.parse(this.marketTicker));
+    });
     await on('**/api/morning', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, MorningResponse.parse(this.morning ?? { revision: 'a'.repeat(40), date: '2026-09-30', brief: null, explained: [] })));
     await on('**/api/scouts', (route) => this.session === 'signed-out'
@@ -208,6 +228,36 @@ export class MockApi {
     await on('**/api/history', (route) => this.#history(route));
     await on('**/api/notes', (route) => this.#notes(route));
     await on('**/api/notes/read', (route) => this.#noteRead(route));
+  }
+
+  #dashboard(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    const parsed = DashboardRange.safeParse(new URL(route.request().url()).searchParams.get('range') ?? '1W');
+    if (!parsed.success) return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'Invalid range.', retryable: false }));
+    const range = parsed.data;
+    this.dashboardRanges.push(range);
+    const plan = DASHBOARD_RANGE_PLAN[range];
+    const count = plan.spanSeconds / plan.granularitySeconds;
+    const start = Date.parse(this.dashboardNow) - plan.spanSeconds * 1000;
+    const points = Array.from({ length: count }, (_, index) => ({
+      time: new Date(start + index * plan.granularitySeconds * 1000).toISOString(),
+      open: 60000 + index, high: 60100 + index, low: 59900 + index, close: 60000 + index,
+    })).filter((_, index) => index !== 2); // A real missing bucket, not an interpolated point.
+    const meta = { title: 'BTC / USD', provenance: 'Coinbase Exchange (public)',
+      observedAt: '2026-09-30T11:59:00Z', fetchedAt: this.dashboardFetchedAt, drillthrough: null };
+    const market = this.dashboardMode === 'unavailable'
+      ? { ...meta, id: 'market', status: 'unavailable', observedAt: null, fetchedAt: null,
+          reason: 'provider-error', note: 'Market data is unavailable.' }
+      : { ...meta, id: 'market', status: 'ok',
+          ticker: { base: 'BTC', quote: 'USD', provider: 'coinbase', price: 60123.45, providerTime: meta.observedAt },
+          series: this.dashboardMode === 'no-history' ? null : { range, granularitySeconds: plan.granularitySeconds, points, missingIntervals: 1 },
+          note: this.dashboardMode === 'no-history' ? 'History is unavailable.' : null };
+    return this.#json(route, 200, DashboardResponse.parse({ now: this.dashboardNow, cards: [market,
+      { id: 'ai-usage', status: 'not-configured', title: 'AI usage', provenance: 'Not configured',
+        observedAt: null, fetchedAt: null, drillthrough: null, note: 'No approved usage source is connected yet.' },
+      { id: 'health', status: 'not-configured', title: 'Health', provenance: 'Not configured',
+        observedAt: null, fetchedAt: null, drillthrough: null, note: 'No approved health source is connected yet.' },
+    ] }));
   }
 
   #history(route: Route) {

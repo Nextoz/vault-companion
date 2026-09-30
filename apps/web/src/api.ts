@@ -2,6 +2,8 @@
 // opaque redirect instead of silently following it to a login page (F11).
 import {
   ActiveWorkResponse,
+  DashboardResponse,
+  MarketTickerResponse,
   TrainingResponse,
   encodeLinkedNoteHeader,
   encodeNoteHeader,
@@ -16,6 +18,7 @@ import {
   ScoutsResponse,
   TasksResponse,
   TriageResponse,
+  type DashboardRange,
   type LinkedNoteRequest,
 } from '@vault-companion/contracts';
 import { z } from 'zod';
@@ -105,3 +108,9 @@ export const postCommand = (body: string, accountKey: string) =>
   });
 
 export const getTraining = () => getJson('/api/training', z.union(TrainingResponse.options.map((option) => option.strip())));
+
+/** Dashboard (DASH1): read-only, `no-store`, never cached by the SW. The range is an enum, never a provider URL. */
+export const getDashboard = (range: DashboardRange) => getJson(`/api/dashboard?range=${range}`, DashboardResponse);
+
+/** The 60-second refresh: the current value only. The historical series is not polled per minute. */
+export const getMarketTicker = () => getJson('/api/dashboard/ticker', MarketTickerResponse);

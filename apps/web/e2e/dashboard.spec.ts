@@ -1,0 +1,124 @@
+import { expect, test, type Locator } from '@playwright/test';
+import { MockApi } from './mock-api.ts';
+
+async function expectUnconfigured(dashboard: Locator) {
+  for (const [title, note] of [
+    ['AI usage', 'No approved usage source is connected yet.'],
+    ['Health', 'No approved health source is connected yet.'],
+  ] as const) {
+    const card = dashboard.getByRole('article', { name: title, exact: true });
+    await expect(card).toContainText('Not configured');
+    await expect(card).toContainText(note);
+    await expect(card.locator('time, .dash-price, svg')).toHaveCount(0);
+  }
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Guard against accidentally replacing the API mock with a live public-provider request.
+  await page.route('https://api.exchange.coinbase.com/**', (route) => {
+    throw new Error(`Unexpected browser provider request: ${new URL(route.request().url()).pathname}`);
+  });
+});
+
+test('Dashboard keeps Today default and supports mobile ranges, touch and keyboard inspection', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  await page.goto('/');
+  const nav = page.getByRole('navigation', { name: 'Views' });
+  await expect(nav.getByRole('button', { name: 'Today', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('region', { name: 'Dashboard', exact: true })).toHaveCount(0);
+  await expect(nav.getByRole('button')).toHaveText(['Dashboard', 'Today', 'All', 'Notes', 'Training', 'Scouts', 'Progress']);
+  await nav.getByRole('button', { name: 'Dashboard', exact: true }).click();
+  const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
+  const market = dashboard.getByRole('article', { name: 'BTC / USD', exact: true });
+  await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
+  await expect(market.locator('.dash-chip')).toHaveText('Live');
+  await expect(market).toContainText('Coinbase Exchange (public)');
+  await expect(market.locator('.dash-times')).toContainText(/Market time .*11:59 UTC/);
+  await expect(market.locator('.dash-times')).toContainText(/fetched .*12:00 UTC/);
+  await expect(market.locator('.dash-times time').first()).toHaveAttribute('datetime', '2026-09-30T11:59:00Z');
+  await expect(market.locator('.dash-times time').last()).toHaveAttribute('datetime', api.dashboardFetchedAt);
+  await expectUnconfigured(dashboard);
+
+  for (const [range, label, count] of [['1W', '1 week', 167], ['1M', '1 month', 119], ['3M', '3 months', 89]] as const) {
+    await dashboard.getByRole('button', { name: range, exact: true }).click();
+    await expect(dashboard.getByRole('button', { name: range, exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const chart = market.getByRole('img', { name: `BTC / USD ${label}: ${count} points, 1 intervals missing`, exact: true });
+    await expect(chart).toBeVisible();
+    await expect(market).toContainText('1 intervals missing — shown as gaps, not filled in.');
+    await expect(chart.locator('polyline')).toHaveCount(2);
+    await chart.scrollIntoViewIfNeeded();
+    const box = await chart.boundingBox();
+    if (!box) throw new Error('Chart has no touch target');
+    await page.touchscreen.tap(box.x + 1, box.y + box.height / 2);
+    await expect(market.locator('figcaption')).toContainText('$60,000.00');
+    const slider = market.getByRole('slider', { name: `Inspect ${label}`, exact: true });
+    await expect(slider).toHaveValue('0');
+    await slider.focus();
+    await slider.press('ArrowRight');
+    await expect(slider).toHaveValue('1');
+    await expect(market.locator('figcaption')).toContainText('$60,001.00');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(api.dashboardRanges).toContain(range);
+  }
+  await nav.getByRole('button', { name: 'Today', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
+  await expect(dashboard).toHaveCount(0);
+});
+
+test('stale market times stay honest and ticker-only polling preserves history on failure', async ({ page }) => {
+  await page.clock.install();
+  const api = new MockApi();
+  api.dashboardFetchedAt = '2026-09-30T11:55:00Z';
+  await api.install(page);
+  await page.goto('/');
+  await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Dashboard' }).click();
+  const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
+  const market = dashboard.getByRole('article', { name: 'BTC / USD' });
+  await expect(market.locator('.dash-chip')).toHaveText('Stale');
+  await expect(market).toContainText('This value is not fresh');
+  await expect(market.locator('.dash-times time').last()).toHaveAttribute('datetime', api.dashboardFetchedAt);
+  const historyReads = api.dashboardRanges.length;
+  await page.clock.fastForward(60_000);
+  await expect(market.locator('.dash-price')).toHaveText('$60,234.56');
+  await expect(market.locator('.dash-chip')).toHaveText('Live');
+  await expect(market.locator('.dash-times time').first()).toHaveAttribute('datetime', '2026-09-30T12:00:30Z');
+  await expect(market.locator('.dash-times time').last()).toHaveAttribute('datetime', '2026-09-30T12:01:00Z');
+  expect(api.tickerReads).toBe(1);
+  expect(api.dashboardRanges).toHaveLength(historyReads);
+  api.marketTicker = { status: 'unavailable', now: '2026-09-30T12:02:00Z', reason: 'provider-error' };
+  await page.clock.fastForward(60_000);
+  await expect(market.locator('.dash-chip')).toHaveText('Stale');
+  await expect(dashboard).toContainText('Not refreshed — the times below are from the last success.');
+  await expect(market.locator('.dash-price')).toHaveText('$60,234.56');
+  await expect(market.locator('.dash-times time').last()).toHaveAttribute('datetime', '2026-09-30T12:01:00Z');
+  await expect(market.getByRole('img')).toBeVisible();
+  expect(api.dashboardRanges).toHaveLength(historyReads);
+  await expectUnconfigured(dashboard);
+});
+
+test('partial history failure and unavailable market leave honest overview cards and Today usable', async ({ page }) => {
+  const api = new MockApi();
+  api.dashboardMode = 'no-history';
+  await api.install(page);
+  await page.goto('/');
+  const nav = page.getByRole('navigation', { name: 'Views' });
+  await nav.getByRole('button', { name: 'Dashboard' }).click();
+  const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
+  const market = dashboard.getByRole('article', { name: 'BTC / USD' });
+  await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
+  await expect(market).toContainText('History is unavailable.');
+  await expect(market.getByRole('img')).toHaveCount(0);
+  await expect(market.getByRole('slider')).toHaveCount(0);
+  await expectUnconfigured(dashboard);
+  api.dashboardMode = 'unavailable';
+  await dashboard.getByRole('button', { name: '1M', exact: true }).click();
+  await expect(market.locator('.dash-chip')).toHaveText('Unavailable');
+  await expect(market).toContainText('Market data is unavailable.');
+  await expect(market.locator('.dash-price, time, svg')).toHaveCount(0);
+  await expectUnconfigured(dashboard);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await nav.getByRole('button', { name: 'Today', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
+});

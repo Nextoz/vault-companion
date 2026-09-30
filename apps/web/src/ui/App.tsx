@@ -15,6 +15,7 @@ import { buildView, occurrenceKey, overdueSummary } from '../view.ts';
 import { FROZEN_NOTE, taskListLock } from '../writeBlock.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
 import { ActiveWorkCard } from './ActiveWorkCard.tsx';
+import { Dashboard } from './Dashboard.tsx';
 import { EditSheet } from './EditSheet.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
@@ -28,7 +29,7 @@ import { TrainingSheet } from './TrainingSheet.tsx';
 import { Triage } from './Triage.tsx';
 import { TaskList } from './TaskList.tsx';
 
-type Tab = 'today' | 'all' | 'notes' | 'training' | 'scouts' | 'history';
+type Tab = 'dashboard' | 'today' | 'all' | 'notes' | 'training' | 'scouts' | 'history';
 interface Toast {
   target: CompleteTaskCommand;
   label: string;
@@ -297,6 +298,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
     <div className="app">
       <header className="top" inert={noteOpen || editing !== null}>
         <nav className="tabs" aria-label="Views">
+          <button type="button" aria-pressed={tab === 'dashboard'} onClick={() => setTab('dashboard')}>Dashboard</button>
           <button type="button" aria-pressed={tab === 'today'} onClick={() => setTab('today')}>
             Today
           </button>
@@ -379,6 +381,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {needsAttention && (
           <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
+
+        {tab === 'dashboard' && !signedOut && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} />}
 
         {tab === 'history' && !signedOut && <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
           accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />}

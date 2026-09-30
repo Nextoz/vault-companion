@@ -2,17 +2,20 @@
 // No domain logic lives here (docs/architecture.md).
 import {
   Command,
+  DashboardRange,
   decodeLinkedNoteHeader,
   decodeNoteHeader,
   LINKED_NOTE_HEADER,
   NOTE_HEADER,
   MAX_KNOWN,
   ScoutStatus,
+  type MarketTickerResponse,
   type MorningResponse,
   type ScoutsResponse,
   type ActiveWorkResponse,
   type TrainingResponse,
   type ApiError,
+  type DashboardResponse,
   type ErrorCode,
   type HistoryResponse,
   type LinkedNoteRequest,
@@ -46,6 +49,9 @@ export interface Services {
   /** Inbox notes (ADR-0022). Optional: without them the routes answer 404. */
   listNotes?(): Promise<NotesResponse | ApiError>;
   readNote?(path: string): Promise<NoteReadResponse | ApiError>;
+  /** Dashboard (DASH1). Optional: without them the routes answer 404. */
+  readDashboard?(range: DashboardRange): Promise<DashboardResponse | ApiError>;
+  readMarketTicker?(): Promise<MarketTickerResponse | ApiError>;
 }
 
 export interface AppDeps {
@@ -79,7 +85,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | DashboardResponse | MarketTickerResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -311,6 +317,33 @@ export function createApp(deps: AppDeps) {
     return c.json(result);
   });
 
+  // Dashboard (DASH1): read-only, authenticated. The range is an enum, the provider URL is built worker-side only.
+  app.get('/api/dashboard', async (c) => {
+    const read = deps.services.readDashboard;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const range = DashboardRange.safeParse(c.req.query('range') ?? '1W');
+    if (!range.success) return c.json(err('invalid', 'invalid range'), 400);
+    const result = await read(range.data);
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    return c.json(result);
+  });
+
+  // The 60-second refresh reads only the current value: the historical series is never polled every minute.
+  app.get('/api/dashboard/ticker', async (c) => {
+    const read = deps.services.readMarketTicker;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    return c.json(result);
+  });
   app.notFound((c) => c.json(err('invalid', 'not found'), 404));
   app.onError((e, c) => {
     const meta = c.get('logMeta');
