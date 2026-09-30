@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "issuer": "Nextoz",
+  "repo": "synthetic/repo",
+  "pr": 7,
+  "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "diffDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "riskClass": "high",
+  "requiredChecks": ["test"],
+  "implementers": ["synthetic-implementer"],
+  "review": {
+    "kind": "independent-review",
+    "backend": "claude",
+    "reviewer": "synthetic-independent-reviewer",
+    "approved": true,
+    "repo": "synthetic/repo",
+    "pr": 7,
+    "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "diffDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "issuedAt": "2026-09-30T00:00:00Z",
+    "expiresAt": "2026-10-01T00:00:00Z"
+  },
+  "handoffs": [
+    { "id": ".agent/handoffs/synthetic.md", "disposition": "follow-up", "reference": "https://example.invalid/lead-disposition" }
+  ],
+  "findings": [],
+  "ownerResponses": [
+    { "commentId": "SYNTHETIC_COMMENT_ID", "by": "Nextoz", "disposition": "answered", "reference": "https://example.invalid/response", "at": "2026-09-30T01:00:00Z" }
+  ]
+}

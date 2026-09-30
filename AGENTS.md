@@ -8,6 +8,8 @@ Private mobile execution layer over an Obsidian vault. **Markdown + Git are auth
 `docs/commands.md` (retry/receipts) · `docs/architecture.md` · `docs/plan.md` (current work) ·
 `docs/orchestration.md` (roles, model routing, Herdr mechanics).
 
+[Deterministic worker harness](docs/harness.md).
+
 ## Non-negotiables
 
 1. Never write to `C:\Dev\vault-companion-vault-reference` or the live vault. Live writes need the owner's approval.

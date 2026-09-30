@@ -4,5 +4,29 @@
       "Bash(herdr pane run * cmd /c \"cd /d C:\\\\Dev\\\\vault-companion-clones\\\\*agy.exe -p *)",
       "Bash(AGENT_STDIN=* bash tools/agent-pane.sh *)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"C:/Program Files/nodejs/node.exe\" \"C:/Dev/vault-companion/tools/harness/hook.mjs\" SessionStart", "timeout": 6 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell|Pwsh",
+        "hooks": [
+          { "type": "command", "command": "\"C:/Program Files/nodejs/node.exe\" \"C:/Dev/vault-companion/tools/harness/hook.mjs\" PreToolUse", "timeout": 65 }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"C:/Program Files/nodejs/node.exe\" \"C:/Dev/vault-companion/tools/harness/hook.mjs\" ConfigChange", "timeout": 5 }
+        ]
+      }
+    ]
   }
 }
