@@ -1,4 +1,33 @@
-# Checkpoint — 2026-09-30 13:15 Europe/Copenhagen
+# Checkpoint — 2026-09-30 13:23 Europe/Copenhagen
+
+## Latest delta — bug batch verified, PR49 open
+
+- BUGS-Pro handoff read and corrected spans reviewed. Evidence-free degraded history excluded again; equal
+  instants reconciled with Date.parse; known result keeps its timestamp. Exact Lead regression plus offset case
+  added; worker claims22 focused tests/typecheck and fail-before2. No schema or input mutation change.
+- Candidates/corrections committed in b3-b4-fixes (b503cd0), latest main checkpoint merged (989ced9), obsolete
+  SP1 test-path comment corrected by Lead (5b5f7fc). Independent FULL pnpm check PASS **103files/1447tests**;
+  one FULL web e2e PASS **80/80** (3.6min), at isolated preview4173. No other browser job active. All touched
+  source/new files reviewed, git diff --check clean. B3/B4/SP1 local acceptance passes; phone still unverified.
+- Ordinary PR **#49** opened: https://github.com/Nextoz/vault-companion/pull/49 . CI pending at initial head;
+  CodeRabbit initially skipped automatic review (<10stars), no actual findings. Push this checkpoint then request
+  ONE review on final head; no repeated review request/head churn. Merge only current green required CI, no hold,
+  no unanswered owner comments and disposition actionable review. H floor code NOT in this PR, no deployment yet.
+- Freed BUGS slot dispatched RR1's existing correction packet on Pro **w5:pY**, same rr1-radar clone,
+  .agent/correction.log; handoff .agent/handoffs/RR1-correction.md. H1 recovery w5:pW and H2 correction w5:pS
+  continue. Max3 independent workers. No new OpenAI Codex work. All H/RR floor hold/Claude gates unchanged.
+- BUGS-Pro Jev Use1 unresolved .93 / scope .81 / verification .24, before combined checks completed. Lead
+  agreed then; now independently passing full checks resolves local verification, remote CI/review still pending.
+  Raw .agent/jev/BUGS-Pro-run.json. SP1 still first Jev-picked initial run requiring correction1/first5; one B3
+  reasoning escalation; no additional same-tier retries. H1/H2/RR1 deterministic Pro floor.
+- DeepSeek **$7.48** before RR1 dispatch → **$7.25** at13:23; aggregate reported spend **$2.74** since$9.99,
+  concurrent attribution unknown. Stop new dispatch below$3. Private content/logs absent; vault unchanged.
+- Watcher excludes consumed BUGS-Pro; watches H1/H2/RR1 corrected handoffs and PR49 completed CI/review.
+  Next WAKE: review exact handoff, or PR49 current checks/review; do not rerun passing local code checks for docs.
+
+---
+
+# Prior checkpoint — 2026-09-30 13:15 Europe/Copenhagen
 
 ## Latest delta — RR1 handoff / H non-hook recovery
 

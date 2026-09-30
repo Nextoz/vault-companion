@@ -23,6 +23,10 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
+- 13:23: B3 Pro correction reviewed; B3/B4/SP1 batch independently FULL check **103files/1447tests** and
+  single FULL browser suite **80/80** pass. Ordinary PR **#49** open, current-head CI/review pending; no H/RR
+  floor changes included. One CodeRabbit request after final checkpoint push. RR1 correction now Pro **w5:pY**;
+  H1 recovery/H2 correction active, three workers. Balance **$7.25**, reported spend$2.74. Phone/deploy unverified.
 - 13:15: RR1 handoff/production diff reviewed; independent **85/85** tests + typecheck pass, targeted lint fails
   unused variable. Foreign-paper Undo and subsequent-decision replay bugs reproduced; Read ignores note target,
   mount targets wrong tab. RR1 unaccepted; one Pro correction queued in clone .agent/correction.md (not launched).
