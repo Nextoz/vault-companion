@@ -1,4 +1,4 @@
-# Checkpoint — 2026-09-30 12:28 Europe/Copenhagen
+# Checkpoint — 2026-09-30 12:37 Europe/Copenhagen
 
 This section supersedes the historical 07:20 checkpoint below. Lead Codex budget mode expires Thu
 2026-10-01 21:00 Copenhagen / 19:00 UTC; start no new OpenAI Codex workers.
@@ -26,6 +26,12 @@ This section supersedes the historical 07:20 checkpoint below. Lead Codex budget
 - RR1 Pro dispatched with bounded new-write-target contract/ADR and production golden CAS/dedupe/Undo oracles.
   Component implemented independently; Scouts mount after B4 correction/integration. No RR2 desktop job or
   new-target deployment authorized. Hold plus later independent Claude review required. SP1 remains active.
+- SP1 initial handoff now reviewed: independent 10/10 synthetic benchmark tests + tsc -b pass. Production/phone
+  timings remain unknown. Correct excluded tools-test packaging and one report claim contradicting its table.
+  Mutable-head TTL recommendation deferred; no cache implementation begun. Candidate reviewed, not integrated.
+- B3/B4/SP1 candidates preserved locally (`c420882`, `38621cd`, `3ed9c47`), cherry-picked into ordinary correction
+  clone C:/Dev/vault-companion-clones/b3-b4-fixes; base main 6080433, head 7050d3a. No logs/private context staged.
+  Flash correction worker w5:pQ now handles all three precisely bounded fixes. Active slots H2/RR1/BUGS.
 
 ## Workers (resume) — handoff first, no duplicate dispatch
 
@@ -35,8 +41,9 @@ This section supersedes the historical 07:20 checkpoint below. Lead Codex budget
 | B3 | HANDOFF reviewed; scoped checks pass; focused correction queued, unaccepted | C:/Dev/vault-companion-clones/b3-degraded; base 5fc6a94; .agent/unsandboxed.log; handoff .agent/handoffs/B3.md |
 | B4 | HANDOFF reviewed, scoped checks pass, focused correction queued; unaccepted | C:/Dev/vault-companion-clones/b4-compact; base 5fc6a94; .agent/unsandboxed.log; handoff .agent/handoffs/B4.md |
 | H2 | RUNNING Pro high, w5:pH; shell activity verified; hold required | C:/Dev/vault-companion-clones/h2-launcher; agent/h2-launcher base bc5a853; .agent/pro.log; handoff .agent/handoffs/H2.md |
-| SP1 | RUNNING Flash high, w5:pK; shell activity verified | C:/Dev/vault-companion-clones/sp1-measure; agent/sp1-measure base 8a0ca36; .agent/run.log; handoff .agent/handoffs/SP1.md |
+| SP1 | HANDOFF reviewed; 10 tests/typecheck pass; batch packaging/report correction pending | C:/Dev/vault-companion-clones/sp1-measure; candidate 3ed9c47; .agent/run.log; handoff .agent/handoffs/SP1.md |
 | RR1 | RUNNING Pro high, w5:pN; hold required | C:/Dev/vault-companion-clones/rr1-radar; agent/rr1-radar base d542b4d; .agent/run.log; handoff .agent/handoffs/RR1.md; .agent/RR1-scope-request.md for needed wiring outside envelope |
+| BUGS | RUNNING Flash high, w5:pQ; shell activity verified | C:/Dev/vault-companion-clones/b3-b4-fixes; agent/b3-b4-fixes head 7050d3a; .agent/run.log; handoff .agent/handoffs/BUGS.md; clone .agent/brief.md is combined correction contract |
 
 B3/B4 original panes pA/pB closed after opening prose, no code/handoff. Sandboxed retry panes pC/pD failed shell
 creation and were interrupted. Same clones/briefs plus failure context. H2 alias `deepseek-pro` launch refused,
@@ -59,21 +66,28 @@ H2 may read partial H1 interfaces but may not edit that clone. No H1 acceptance 
 - 12:28 balance **$9.54**; aggregate reported spend **$0.45**, per-run attribution unknown. B3 Jev redo .99,
   verification .15, scope .60; Lead agrees one precise correction, no reasoning escalation. B3/B4 were Lead
   fallback picks, not Jev-picked runs. SP1 remains first active picked run (0 completed); RR1 Pro floor, no downgrade.
+- 12:37 balance **$9.22**; aggregate reported spend **$0.77**, concurrent per-run attribution unknown. SP1 Jev
+  redo .83, verification .30, scope .82; Lead agrees scoped packaging/report correction. First picked initial
+  run finished, accepted 0, correction required 1/first 5, reasoning escalations 0. Count toward kill switch;
+  a second affected picked run disables active routing. No floor downgrade. Raw `.agent/jev/SP1-run.json`.
 
 ## Exact next actions (resume)
 
 1. On WAKE read named handoff, diff stat then full diff; disposition all discoveries. Run individual Jev Use 1,
    independently verify, record balance. Scope scan must include untracked files. Never accept prose alone.
-2. Integrate B3/B4 as one bug-batch PR after Lead review, full check and one e2e; CodeRabbit per normal rules.
+2. BUGS correction handoff: review changed spans and preserved candidates, run Jev Use 1, full combined check
+   and single e2e. Integrate B3/B4 plus SP1 measurement packaging in one ordinary batch PR, CodeRabbit normally.
+   No acceptance before these checks. Original clones remain evidence; don't redispatch original briefs.
 3. Review H2 non-hook work, then couple to H1 only once partial core is finished/reviewed. H1 is incomplete,
    preserve it; any later recovery routes Pro, never new OpenAI Codex. Keep H held for later independent Claude
    review/live hook canary. Risk-floor TODO owner-owned; GitHub required-check rule stays a proposal.
-4. H2/SP1/RR1 now running; next free slot remaining bugs (B3/B4 focused corrections before batch acceptance). Re-read Ready before
+4. H2/RR1/BUGS now running. Review SP1 recommendations before any SP2 contract; mutable TTL changes would
+   need floor/hold review, synthetic delay weights do not establish production bottlenecks. Re-read Ready before
    selection, Jev low-risk routing if available, max three independent workers, one Playwright job. SP1 measurements
    only; synthetic timings are not production/phone timings. H2 is current priority work.
 5. Finish follow-up update-3 documentation PR, CI/review. #47 is already merged; no deployment needed for docs.
-6. Interim .agent/watch-resume.ps1 rearm through visible wrapper; H2/SP1/RR1 handoffs, RR1 scope request and
-   completed PR48 review+CI wake Lead w5:p2. Consumed B3/B4 handoffs excluded; no repeated CI-only wake.
+6. Interim .agent/watch-resume.ps1 rearm through visible wrapper; H2/BUGS/RR1 handoffs, RR1 scope request and
+   completed PR48 review+CI wake Lead w5:p2. Consumed B3/B4/SP1 handoffs excluded; no repeated CI-only wake.
    Do not wait/poll inside Lead turn. H2 implements durable watcher signals. At expiry checkpoint/commit and
    print HANDOVER TO CLAUDE READY.
 

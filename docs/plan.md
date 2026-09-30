@@ -23,6 +23,19 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 
 ## Current execution (2026-09-30)
 
+- 12:37 checkpoint: SP1 handoff/new files reviewed; independent synthetic benchmark **10/10** and typecheck pass.
+  Production/phone latency still unmeasured. Test-discovery packaging and one inconsistent report comparison
+  require focused correction; Lead defers mutable-head TTL recommendation, no cache implementation started.
+- Reviewed B3/B4/SP1 candidates preserved locally: `c420882`, `38621cd`, `3ed9c47`. Cherry-picked into
+  `C:/Dev/vault-companion-clones/b3-b4-fixes`, branch `agent/b3-b4-fixes`, base main `6080433`, candidate head
+  `7050d3a`. Flash high correction worker **w5:pQ** active with disjoint files from H2/RR1; handoff
+  `.agent/handoffs/BUGS.md`. It fixes B3/B4 edge cases and moves SP1 tests into normal apps/worker/test discovery
+  without shared config edits. Full combined check/e2e remains required before the ordinary batch PR.
+- Balance **$9.22** at 12:37; aggregate reported spend **$0.77**, concurrent per-run attribution unknown.
+  Jev SP1 redo .83 / scope .82 / verification .30; Lead agrees limited packaging/report correction. First picked
+  run has finished its initial attempt, accepted 0, correction required 1/first 5, reasoning escalations 0.
+  Count this conservatively toward the routing kill switch; a second affected picked run disables active Jev routing.
+
 - 12:28 checkpoint: B3 handoff/diff reviewed; independent targeted **19/19** plus typecheck pass. Fix before merge:
   unknown-count degraded run backed only by yesterday's success must not be dated at today's attempt; matching
   incomplete history must not suppress known current count. `.agent/B3-correction.md` queued for one Flash correction.
@@ -133,8 +146,9 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 | B3 degraded insights | **Handoff reviewed, focused correction queued**, targeted checks pass, unaccepted | former `w5:pE` | `C:\Dev\vault-companion-clones\b3-degraded`; `agent/b3-degraded` at `5fc6a94`; handoff `.agent/handoffs/B3.md`, log `.agent/unsandboxed.log` |
 | B4 compact Scouts | **Handoff reviewed, correction queued**, targeted checks pass, not accepted | former `w5:pF` | `C:\Dev\vault-companion-clones\b4-compact`; `agent/b4-compact` at `5fc6a94`; handoff `.agent/handoffs/B4.md`, log `.agent/unsandboxed.log` |
 | H2 non-hook launcher/profiles/watcher | **RUNNING**; DeepSeek Pro high (`deepseek-v4-pro`), unsandboxed tool activity verified | `w5:pH` | `C:/Dev/vault-companion-clones/h2-launcher`; `agent/h2-launcher`, base `bc5a853`; handoff `.agent/handoffs/H2.md`, log `.agent/pro.log`; hold PR |
-| SP1 read-latency measurement | **RUNNING**, DeepSeek Flash high, tool activity verified | `w5:pK` | `C:/Dev/vault-companion-clones/sp1-measure`; `agent/sp1-measure`, base `8a0ca36`; handoff `.agent/handoffs/SP1.md` |
+| SP1 read-latency measurement | **Handoff reviewed**, independent tests pass; packaging/report correction in batch | former `w5:pK` | `C:/Dev/vault-companion-clones/sp1-measure`; candidate `3ed9c47`; handoff `.agent/handoffs/SP1.md` |
 | RR1 Radar page/decisions | **RUNNING**, DeepSeek Pro high, hold required | `w5:pN` | `C:/Dev/vault-companion-clones/rr1-radar`; `agent/rr1-radar`, base `d542b4d`; handoff `.agent/handoffs/RR1.md` |
+| B3/B4/SP1 focused corrections | **RUNNING**, Flash high, tool activity verified | `w5:pQ` | `C:/Dev/vault-companion-clones/b3-b4-fixes`; `agent/b3-b4-fixes`, candidate head `7050d3a`; handoff `.agent/handoffs/BUGS.md` |
 
 - H1 log: `C:\Dev\vault-companion-clones\h1-harness\.agent\run.log`; session
   `01a0f0ab-4cde-7d12-9726-3ad8bd566a6a`. Expected report `.agent/handoffs/H1-harness-core.md`.
