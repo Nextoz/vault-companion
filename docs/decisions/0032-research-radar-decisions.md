@@ -18,7 +18,8 @@ remain desktop-owned.
   lower-cases the host but preserves `www.` and the rest of the host exactly, rejects userinfo/control characters,
   removes the fragment, and drops only unambiguous tracking parameters (`utm_*`, `fbclid`, `gclid`, `mc_cid`,
   `mc_eid`). Supported arXiv `http(s)://arxiv.org` / `export.arxiv.org` `abs`/`pdf` forms are folded to
-  `https://arxiv.org/abs/<id>` while preserving version suffixes and old category IDs; other arXiv host/path shapes and
+  `https://arxiv.org/abs/<id>` without query parameters while preserving version suffixes and old category IDs;
+  encoded controls are rejected before query removal. Other arXiv host/path shapes and
   unsafe schemes are a typed refusal/null identity, never a guess.
 - Ranking is `Important active update` > `Reading Brief pick` > numeric Scout score, then the canonical-URL string for
   stability. The window is seven Copenhagen calendar days from the real source date (`created` or filename), not fetch
@@ -27,7 +28,7 @@ remain desktop-owned.
   server-side API that resolves a `paperId` to an allowlisted note at a pinned revision; the client never sends a path.
   Important/Explained badges mark intake and explanation state.
 - Decision history is read from at most the current Copenhagen month plus the preceding 24 monthly logs (25 months).
-  Older or future monthly logs, more than 5000 lines, listed-but-missing/blob-mismatched logs, invalid UTF-8, malformed
+  Older, future or malformed monthly log filenames, more than 5000 lines, listed-but-missing/blob-mismatched logs, invalid UTF-8, malformed
   JSONL, duplicate IDs and invalid Undo targets are a typed unreadable/refused state, never an invented absence.
 
 ## Writes

@@ -346,6 +346,7 @@ export interface RadarDecisionHistory {
 }
 
 const RADAR_DECISION_FILE = /^(\d{4}-(0[1-9]|1[0-2]))\.jsonl$/;
+const MALFORMED_RADAR_DECISION_FILE = /^(\d{4}-\d{2})\.jsonl$/;
 
 async function readListedDecisionText(store: VaultStore, x: string, listed: ListedFile): Promise<string> {
   const path = parseVaultPath(listed.path);
@@ -378,7 +379,12 @@ export async function readRadarDecisionHistory(
   for (const file of files) {
     const name = file.path.slice(RADAR_DECISIONS_DIR.length + 1);
     const match = RADAR_DECISION_FILE.exec(name);
-    if (!match) continue;
+    if (!match) {
+      if (!name.includes('/') && MALFORMED_RADAR_DECISION_FILE.test(name)) {
+        throw new RadarDecisionUnreadableError('unsupported-line', 'Radar decision history contains a malformed monthly log filename');
+      }
+      continue;
+    }
     const month = match[1]!;
     if (!inWindow.has(month)) {
       if (month > currentMonth) {
@@ -427,7 +433,7 @@ function direct(files: readonly ListedFile[], dir: string): ListedFile[] {
 
 export async function buildResearchRadar(deps: ResearchRadarServiceDeps): Promise<RadarResponse> {
   const now = deps.now();
-  const date = userDate(now, deps.timeZone);
+  const date = userDate(now, DEFAULT_USER_TIME_ZONE);
   const window = new Set(sevenDays(date));
   const { commitSha: x } = await deps.store.head();
 
@@ -545,7 +551,12 @@ export async function buildResearchRadar(deps: ResearchRadarServiceDeps): Promis
   });
 
   const appliedFile = await deps.store.readFile(parseVaultPath(RADAR_APPLIED_PATH)!, x);
-  const appliedText = appliedFile ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(appliedFile.bytes) : null;
+  let appliedText: string | null;
+  try {
+    appliedText = appliedFile ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(appliedFile.bytes) : null;
+  } catch {
+    throw new RadarAppliedUnreadableError('Research Radar applied state is not valid UTF-8');
+  }
   const parsedApplied = parseRadarApplied(appliedText);
 
   const topics = radarTopics(eligible);

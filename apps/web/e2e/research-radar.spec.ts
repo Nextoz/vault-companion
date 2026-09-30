@@ -10,7 +10,7 @@ test('Radar mounts on Scouts, expands/collapses, reads a note and keeps decision
 
   const radar = page.getByRole('region', { name: 'Research Radar' });
   await expect(radar).toBeVisible();
-  const toggle = radar.getByRole('button', { name: 'Research Radar', exact: true });
+  const toggle = radar.getByRole('button', { name: /^Research Radar(?:\s+[▸▾])?$/ });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');

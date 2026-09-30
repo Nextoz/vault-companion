@@ -219,7 +219,8 @@ Path `Inbox/<Title> - <YYYY-MM-DD>.md`, collision suffix `Inbox/<Title> - <YYYY-
 
 - Reads: only direct `.md` files in the four research folders listed in §1, the monthly Radar decision file, and
   `Research/Radar/applied.json`. `paperId` is the first 20 hex chars of SHA-256 of the canonical HTTP(S) source URL;
-  arXiv `abs`/`pdf`/`export.arxiv.org` forms are one identity. `www.` and generic `source`/`ref` query params are
+  arXiv `abs`/`pdf`/`export.arxiv.org` forms are one versioned identity without query parameters; encoded controls
+  are refused before query removal. For other URLs, `www.` and generic `source`/`ref` query params are
   preserved because they may identify different content; only unambiguous tracking params are dropped. Note reads are
   resolved server-side from `paperId`, never from a client-named path.
 - Decision file: `Research/Radar/Decisions/YYYY-MM.jsonl` (Copenhagen month). Each append is exactly

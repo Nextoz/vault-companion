@@ -35,7 +35,7 @@ export interface RealStack {
 
 export async function startRealStack(seed: Readonly<Record<string, string>>): Promise<RealStack> {
   const remote = createRemote(seed);
-  const steps: (() => unknown)[] = [() => rmSync(remote.root, { recursive: true, force: true })];
+  const steps: (() => unknown)[] = [() => rmSync(remote.root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })];
   const close = async () => {
     for (const step of steps.reverse()) await step();
   };

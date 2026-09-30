@@ -59,7 +59,7 @@ const TRACKING_PARAMS = new Set([
 /**
  * Canonical identity URL: http/https only, no userinfo/control characters, lower-case host preserved exactly (including
  * `www.`), fragment removed, and only the unambiguous tracking params above removed. Supported arXiv
- * `http(s)://arxiv.org` / `export.arxiv.org` `abs`/`pdf` forms are folded to one `https://arxiv.org/abs/<id>` URL;
+ * `http(s)://arxiv.org` / `export.arxiv.org` `abs`/`pdf` forms are folded to one `https://arxiv.org/abs/<id>` URL without query;
  * other arXiv host/path shapes are refused rather than guessed. Anything unsupported returns null.
  */
 export function canonicalRadarUrl(raw: string): string | null {
@@ -76,7 +76,8 @@ export function canonicalRadarUrl(raw: string): string | null {
   u.hash = '';
   const host = u.hostname.toLowerCase();
   const path = u.pathname;
-  if (host === 'arxiv.org' || host === 'export.arxiv.org') {
+  const isArxiv = host === 'arxiv.org' || host === 'export.arxiv.org';
+  if (isArxiv) {
     const m = /^\/(abs|pdf)\/(.+)$/i.exec(path);
     if (!m) return null;
     let id = m[2]!;
@@ -93,8 +94,12 @@ export function canonicalRadarUrl(raw: string): string | null {
   } catch {
     return null;
   }
-  const kept = [...u.searchParams.entries()].filter(([key]) => !TRACKING_PARAMS.has(key.toLowerCase()));
-  u.search = new URLSearchParams(kept).toString();
+  if (isArxiv) {
+    u.search = '';
+  } else {
+    const kept = [...u.searchParams.entries()].filter(([key]) => !TRACKING_PARAMS.has(key.toLowerCase()));
+    u.search = new URLSearchParams(kept).toString();
+  }
   return u.href;
 }
 
