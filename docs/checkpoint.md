@@ -13,8 +13,8 @@ redo; no evidence yet of a second affected picked run. Preserve history and mark
 Radar is the active implementation feature; Dashboard deployed but phone acceptance remains separate. Policy
 owner decision is operative in this Lead; the durable documentation PR is prepared and remains unmerged until
 focused reviews/current CI/actual CodeRabbit. ADR accepted status records the owner's decision, not PR acceptance. Next:
-complete actual CodeRabbit/current CI and merge the focused verified policy PR. Independent Pro approves c633871
-after six policy contradictions were corrected. Supplementary GLM returned no report: all2048 completion tokens
+complete actual CodeRabbit/current CI and merge the focused verified policy PR. Independent Pro approved c3d0a22
+after six policy contradictions and the historical-heading caveat were corrected. Supplementary GLM returned no report: all2048 completion tokens
 used for reasoning; recorded explicit blocked result, no unchanged retry or substituted review gate. Actual usage
 8500 tokens; local baseline9628 remains separate from provider-wide balance proof. Routing-quality attribution
 is unknown for this tooling/output-cap failure; preserve it in calibration beside the prior SP1 redo.

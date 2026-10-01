@@ -55,7 +55,7 @@ reasons to increase reasoning effort.
   meaningful milestones; never infer top-ups. GLM is owner-authorized inside its verified free-token guard, with
   no paid fallback, billing, credential or provisioning change. GLM does not replace the Pro floor.
 - Policy changes update the canonical table, operational entry and this ADR through focused PR/review/merge;
-  a new backend requires verified launcher, spending guard and small trial. Preserve routing outcome history.
+  a new backend requires a verified launcher, a verified spending guard, and a verified small trial. Preserve routing outcome history.
 
 - Historical usage numbers may remain as dated evidence, but historical routing tables do not remain active.
 - `CLAUDE.md` points to the canonical routing policy instead of duplicating model IDs.
