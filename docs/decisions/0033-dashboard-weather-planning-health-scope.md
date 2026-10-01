@@ -18,6 +18,9 @@ rewritten. Preserve active H/SP/RR reviews/repairs, then deliver small usable ap
   model agreement. Model comparison serves run/travel decisions, not an extra curiosity dashboard. Nowcast follows
   with radar/coverage/freshness evidence; do not relabel hourly/15-minute forecasts as minute-level radar predictions.
   Coordinates rounded to approximately1km before provider calls, never written to Git. No background geolocation.
+  The static HTML and Worker Permissions-Policy allow geolocation only for `self`; camera, microphone and payment
+  remain disabled. Device location requires explicit foreground permission and the authenticated same-origin
+  `/api/weather/location` flow; this does not grant cross-origin or background location access.
 - Needs You, Guided Morning Review and Weekly Review remain three distinct features. Derive facts from current
   source-backed services; existing commands own mutations. Do not create a parallel task list or merge into Today.
 

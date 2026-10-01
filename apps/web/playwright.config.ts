@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const SW_SPEC = /offline-shell\.spec\.ts$/;
 const REAL_SPEC = /real-stack\.spec\.ts$/;
+const ASSET_POLICY_SPEC = /asset-policy\.spec\.ts$/;
 // Optional: a preinstalled Chromium when Playwright's own download is unavailable (e.g. cloud sandboxes).
 const chromiumPath = process.env['PW_CHROMIUM_EXECUTABLE'];
 // Parallel local clones can select their own preview without reusing another clone's build.
@@ -33,7 +34,7 @@ export default defineConfig({
   projects: [
     {
       name: 'iphone-15-webkit',
-      testIgnore: [SW_SPEC, REAL_SPEC],
+      testIgnore: [SW_SPEC, REAL_SPEC, ASSET_POLICY_SPEC],
       use: { ...devices['iPhone 15'], browserName: 'webkit', serviceWorkers: 'block' },
     },
     {
@@ -42,6 +43,15 @@ export default defineConfig({
       use: {
         ...devices['Pixel 7'],
         serviceWorkers: 'allow',
+        ...(chromiumPath ? { launchOptions: { executablePath: chromiumPath } } : {}),
+      },
+    },
+    {
+      name: 'pixel-7-chromium-asset-policy',
+      testMatch: ASSET_POLICY_SPEC,
+      use: {
+        ...devices['Pixel 7'],
+        serviceWorkers: 'block',
         ...(chromiumPath ? { launchOptions: { executablePath: chromiumPath } } : {}),
       },
     },

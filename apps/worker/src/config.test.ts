@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EXPLAINER_CRONS, slotForCron } from '@vault-companion/domain';
 import runbook from '../../../docs/deploy.md?raw';
 import raw from '../wrangler.jsonc?raw';
+import assetHeaders from '../../web/public/_headers?raw';
 import { configProblems } from './index.ts';
 
 /** JSONC → JSON: drops comments and trailing commas outside strings. */
@@ -87,6 +88,10 @@ describe('wrangler.jsonc', () => {
   it('routes /api/* to the Worker and serves the web build from the same origin', () => {
     expect(config.assets?.directory).toBe('../web/dist');
     expect(config.assets?.run_worker_first).toEqual(['/api/*']);
+  });
+
+  it('allows only same-origin device geolocation while keeping other asset permissions disabled', () => {
+    expect(assetHeaders.match(/^\s*Permissions-Policy: (.+)$/m)?.[1]).toBe('camera=(), microphone=(), geolocation=(self), payment=()');
   });
 
   it('schedules exactly the research explainer crons (ADR-0029) and keeps its key optional and secret', () => {
