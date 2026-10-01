@@ -7,7 +7,8 @@ appending amendments. History: Git and branch `archive/codex-lead-2026-10-01`.
 ## Roles
 
 - **Lead: Claude Opus 5.5, effort medium.** An engineer, not a dispatcher: owns understanding the relevant code,
-  slicing, briefs, integration, acceptance, PRs and merges. Makes small fixes itself when delegating costs more.
+  slicing, briefs, integration, acceptance, PRs and merges. **Delegates implementation by default** (Claude usage
+  is the scarcest budget); writes code itself only for fixes of about 20 lines or after a worker failed twice.
 - **Workers:** implement one bounded slice each in a disposable full clone under `C:\Dev\vault-companion-clones\`.
   They never merge, push to `main`, deploy, read the live vault or edit `docs/plan.md` / `docs/checkpoint.md`.
 - **Owner:** product priorities (vault *Ready Backlog*, read-only for the Lead), deploys, phone acceptance.
@@ -75,14 +76,17 @@ Verify the model in the log header and real activity before waiting. Wait on the
 - **Findings are fixed once and verified by the Lead.** A fix does not trigger a new full review unless it rewrites
   the risky logic. No review chains, no "floor" that blocks delivery when a provider is out of credit: reroute.
 
-## Jev (cheap typed judgments, use freely)
+## Jev (cheap typed judgments, use by default)
 
-Jev (`Tools/jev.ps1` in the vault, pinned `jev-1.13.0`, ~400 tokens a call) replaces model reasoning wherever the
-question is a typed choice/score/yes-no over **public repo** material:
+Jev (`Tools/jev.ps1` in the vault, pinned `jev-1.13.0`, ~400 tokens a call) replaces Lead reasoning wherever the
+question is a typed choice/score/yes-no over **public repo** material. Owner wants it used a lot:
 - **Automatic:** CodeRabbit finding triage inside `handoff-check.ps1` (critical/major always fix; Jev decides the rest).
-- **Before dispatch:** `-Choose` the worker tier for a brief (`gemini`, `glm`, `flash`, `pro`, `unresolved`).
-  Deterministic floor wins: high-risk work is never routed below Pro/Lead review.
-- **Anywhere cheap triage helps:** "is this in scope?", "is this handoff claim supported by the test output?".
+- **Before every dispatch (required):** choose the worker tier; state the brief's outcome, size and risk in a few
+  lines. Follow Jev's pick unless the deterministic floor says otherwise (high-risk ⇒ Pro or Lead review), and say
+  which in the STATUS line:
+  `pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,glm,flash,pro,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks?" -Json`
+- **Instead of deliberating:** "is this in scope?", "is this handoff claim supported by the test output?", "real
+  failure or flaky?", "which backlog item is smallest?" — ask Jev (`-Ask` / `-Choose` / `-Rate`) first.
 Never send private vault text or raw logs to Jev. Receipts land in `.agent/jev-receipts.jsonl`; the Lead notes
 notable misses in the checkpoint. Jev never accepts work, waives a check or authorizes anything.
 
@@ -99,7 +103,9 @@ notable misses in the checkpoint. Jev never accepts work, waives a check or auth
 - Startup reads: `AGENTS.md` (auto), `docs/checkpoint.md`, the Ready Backlog's ranked table. Nothing else until a task
   needs it; then `rg -n` + a line window, not whole files.
 - Commit state only at milestones (merge, pause, end of session): overwrite `docs/checkpoint.md`. No docs commit per event.
-- After each merged slice, start a **fresh Lead session** from the checkpoint instead of carrying a long context.
+- **Fresh context after each merge:** overwrite the checkpoint, get it onto `main`, then end the turn with a line
+  containing only `LEAD-RESTART-NOW`. `tools/lead-watch.ps1` (running in a second pane) sends `/clear` and the start
+  prompt. Do the same before any wait longer than ~30 minutes. It also resumes the Lead after a usage limit resets.
 - Do not build orchestration tooling unless the owner asks for it. The tools here are enough.
 
 ## Authority
@@ -125,6 +131,7 @@ line: free RAM, DeepSeek balance, Scaleway GLM estimate) and post a short update
 
 ## Herdr
 
-Start the Lead inside Herdr with `pwsh -NoProfile -File tools/start-lead.ps1` (optional `-Focus "<task>"`); workers appear in the **Agents** tab via `tools/agent-pane.sh`. Never navigate
+Start the Lead inside Herdr with `pwsh -NoProfile -File tools/start-lead.ps1` (optional `-Focus "<task>"`), then
+`pwsh -NoProfile -File tools/lead-watch.ps1` in a second pane; workers appear in the **Agents** tab via `tools/agent-pane.sh`. Never navigate
 or close panes the Lead did not create. Never end a Claude agent with `/exit`; close its pane instead.
 Git Bash rewrites `/word` arguments: prefix slash commands with `MSYS_NO_PATHCONV=1`.
