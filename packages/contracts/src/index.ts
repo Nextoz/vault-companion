@@ -836,3 +836,4 @@ export const TrainingResponse = z.discriminatedUnion('status', [
 ]);
 export type TrainingResponse = z.infer<typeof TrainingResponse>;
 export * from './dashboard.ts';
+export * from './weather.ts';

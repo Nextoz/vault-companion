@@ -1,0 +1,27 @@
+/* Weather (ADR-0033 W1). Uses shared tokens for light/dark; the chart and controls stay inside 390 px. */
+.weather-lab { display: flex; flex-direction: column; gap: 8px; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.weather-lab h2 { font-size: 1rem; margin: 0; }
+.weather-morning .weather-lab { border: 0; padding: 0; background: transparent; }
+.dash-weather .weather-lab { border: 0; padding: 0; background: transparent; }
+.weather-stale { margin: 0; color: var(--warn); font-size: 0.85rem; }
+.weather-note { margin: 0; font-size: 0.9rem; overflow-wrap: anywhere; }
+.weather-window { background: var(--accent-soft); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 4px; }
+.weather-window strong { font-weight: 650; }
+.weather-source-list { display: flex; flex-direction: column; gap: 4px; }
+.weather-source-list p { margin: 0; }
+.weather-controls { display: flex; gap: 6px; }
+.weather-controls button { flex: 1; min-height: var(--tap); }
+.weather-compare { align-self: flex-start; }
+.weather-chart { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.weather-svg { width: 100%; height: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; touch-action: pan-y; }
+.weather-line-primary { fill: none; stroke: var(--accent); stroke-width: 2; }
+.weather-line-primary circle { fill: var(--accent); stroke: none; }
+.weather-line-comparison { fill: none; stroke: var(--maybe); stroke-width: 2; stroke-dasharray: 5 4; }
+.weather-line-comparison circle { fill: var(--maybe); stroke: none; }
+.weather-cursor { fill: var(--text); stroke: var(--surface); stroke-width: 2; }
+.weather-slider { width: 100%; }
+.weather-readout { font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.weather-readout-primary { color: var(--accent); }
+.weather-readout-comparison { color: var(--maybe); }
+.weather-location { display: flex; flex-direction: column; gap: 6px; }
+.weather-location button { align-self: flex-start; }

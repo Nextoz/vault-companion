@@ -30,6 +30,7 @@ import {
   ScoutsResponse,
   TasksResponse,
   TriageResponse,
+  WeatherResponse,
   type TaskView,
 } from '@vault-companion/contracts';
 import type { BrowserContext, Page, Route } from '@playwright/test';
@@ -74,6 +75,51 @@ export type ReadMode = 'ok' | 'error' | 'offline' | 'hang';
 
 const lines = (...rows: string[]): string => `${rows.join(String.fromCharCode(10))}${String.fromCharCode(10)}`;
 
+const weatherStart = Date.parse('2026-09-30T06:00:00Z') / 1000;
+const weatherPoint = (hour: number, over: Record<string, unknown> = {}) => ({
+  time: new Date((weatherStart + hour) * 1000).toISOString(),
+  temperatureC: 14 + hour * 0.5,
+  rainMm: 0.1 + hour * 0.1,
+  windMs: 3 + hour * 0.4,
+  ...over,
+});
+
+export const sampleWeather = (partial = false): WeatherResponse => WeatherResponse.parse({
+  status: 'ok',
+  projection: {
+    location: { label: 'Copenhagen city centre (coarse fallback)', latitude: 55.68, longitude: 12.57, precision: 'city-fallback', timeZone: 'Europe/Copenhagen' },
+    now: '2026-09-30T12:00:00Z',
+    models: [
+      {
+        model: 'dmi_harmonie_arome_europe', label: 'DMI HARMONIE AROME Europe', resolutionKm: 2,
+        sourceUrl: 'https://open-meteo.com/en/docs/dmi-api', retrievedAt: '2026-09-30T11:55:00Z', expectedPoints: 48,
+        points: [0, 1, 2, 3, 4, 5].map((hour) => weatherPoint(hour, { rainMm: 0.1 + hour * 0.1 })),
+        missingIntervals: 42,
+      },
+      ...(partial ? [] : [{
+        model: 'ecmwf_ifs', label: 'ECMWF IFS 9 km', resolutionKm: 9,
+        sourceUrl: 'https://open-meteo.com/en/docs/ecmwf-api', retrievedAt: '2026-09-30T11:55:00Z', expectedPoints: 48,
+        points: [0, 1, 2, 3, 4, 5].map((hour) => weatherPoint(hour, { rainMm: 0.2 + hour * 0.1 })),
+        missingIntervals: 42,
+      }]),
+    ],
+    agreement: partial ? 'single-model' : 'two-models',
+    coverage: { expectedPoints: 48, primaryReturned: 6, comparisonReturned: partial ? 0 : 6, primaryMissingIntervals: 42, comparisonMissingIntervals: partial ? 0 : 42 },
+    runWindow: {
+      day: '2026-09-30', daytimeStart: '08:00', daytimeEnd: '20:00',
+      start: '2026-09-30T06:00:00Z', end: '2026-09-30T08:00:00Z',
+      agreement: partial ? 'single-model' : 'two-models',
+      models: partial ? ['dmi_harmonie_arome_europe'] : ['dmi_harmonie_arome_europe', 'ecmwf_ifs'],
+      rainMm: 0.3, rainRangeMm: partial ? { min: 0.3, max: 0.3 } : { min: 0.3, max: 0.5 },
+      temperatureRangeC: { min: 14, max: 15 }, windRangeMs: { min: 3, max: 4 },
+      note: 'Lowest-rain two-hour window inside Copenhagen daytime 08:00-20:00. Not a guarantee of dry or daylight weather.',
+    },
+    partialError: partial ? 'one-model-unavailable' : 'none',
+    attribution: 'Forecast data by DMI and ECMWF via Open-Meteo, CC-BY 4.0.',
+    termsUrl: 'https://open-meteo.com/en/terms',
+  },
+});
+
 export class MockApi {
   // Public-market fixtures only; never contact a provider from a browser test.
   dashboardMode: 'ok' | 'no-history' | 'unavailable' = 'ok';
@@ -85,6 +131,11 @@ export class MockApi {
     status: 'ok', now: '2026-09-30T12:01:00Z', fetchedAt: '2026-09-30T12:01:00Z',
     ticker: { base: 'BTC', quote: 'USD', provider: 'coinbase', price: 60234.56, providerTime: '2026-09-30T12:00:30Z' },
   });
+  /** Weather projection (ADR-0033 W1). Synthetic public-provider shape, served to both Dashboard and Today. */
+  weather: WeatherResponse = sampleWeather();
+  weatherReads = 0;
+  weatherLocationReads = 0;
+  readonly weatherLocationBodies: string[] = [];
   trainingRows: TrainingRow[] = [];
   /** `error`: /api/training answers 503 (Progress then shows "Training unavailable"). */
   trainingMode: 'ok' | 'error' | 'hang' = 'ok';
@@ -236,6 +287,8 @@ export class MockApi {
       this.tickerReads++;
       return this.#json(route, 200, MarketTickerResponse.parse(this.marketTicker));
     });
+    await on('**/api/weather/location', (route) => this.#weatherLocation(route));
+    await on('**/api/weather', (route) => this.#weather(route));
     await on('**/api/morning', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, MorningResponse.parse(this.morning ?? { revision: 'a'.repeat(40), date: '2026-09-30', brief: null, explained: [] })));
     await on('**/api/scouts', (route) => this.session === 'signed-out'
@@ -270,6 +323,24 @@ export class MockApi {
     await on('**/api/notes/read', (route) => this.#noteRead(route));
   }
 
+  #weather(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    this.weatherReads++;
+    return this.#json(route, 200, WeatherResponse.parse(this.weather));
+  }
+
+  #weatherLocation(route: Route) {
+    const request = route.request();
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    this.weatherLocationReads++;
+    this.weatherLocationBodies.push(request.postData() ?? '');
+    if (request.headers()['x-vc-request'] !== '1') return this.#json(route, 403, ApiError.parse({ code: 'forbidden', message: 'request origin not allowed', retryable: false }));
+    if (request.headers()['x-vc-account'] !== this.account) {
+      return this.#json(route, 409, ApiError.parse({ code: 'account-mismatch', message: 'Other account.', retryable: false }));
+    }
+    return this.#json(route, 200, WeatherResponse.parse(this.weather));
+  }
+
   #dashboard(route: Route) {
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     const parsed = DashboardRange.safeParse(new URL(route.request().url()).searchParams.get('range') ?? '1W');
@@ -292,7 +363,14 @@ export class MockApi {
           ticker: { base: 'BTC', quote: 'USD', provider: 'coinbase', price: 60123.45, providerTime: meta.observedAt },
           series: this.dashboardMode === 'no-history' ? null : { range, granularitySeconds: plan.granularitySeconds, points, missingIntervals: 1 },
           note: this.dashboardMode === 'no-history' ? 'History is unavailable.' : null };
-    return this.#json(route, 200, DashboardResponse.parse({ now: this.dashboardNow, cards: [market,
+    const weather = this.weather.status === 'ok'
+      ? { id: 'weather', status: 'ok', title: 'Weather', provenance: 'DMI HARMONIE AROME Europe vs ECMWF IFS 9 km (Open-Meteo)',
+          observedAt: null, fetchedAt: this.weather.projection.models[0]?.retrievedAt ?? null,
+          note: this.weather.projection.partialError === 'one-model-unavailable' ? 'One model is unavailable; agreement is single-model.' : null,
+          drillthrough: null, projection: this.weather.projection }
+      : { id: 'weather', status: 'unavailable', title: 'Weather', provenance: 'Open-Meteo (DMI + ECMWF)',
+          observedAt: null, fetchedAt: null, note: 'Weather is unavailable.', drillthrough: null, reason: this.weather.reason };
+    return this.#json(route, 200, DashboardResponse.parse({ now: this.dashboardNow, cards: [market, weather,
       { id: 'ai-usage', status: 'not-configured', title: 'AI usage', provenance: 'Not configured',
         observedAt: null, fetchedAt: null, drillthrough: null, note: 'No approved usage source is connected yet.' },
       { id: 'health', status: 'not-configured', title: 'Health', provenance: 'Not configured',

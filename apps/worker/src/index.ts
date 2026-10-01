@@ -1,11 +1,13 @@
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
-import { createTrainingService, createActiveWorkService, createCommandService, createHistoryService, createLinkedNoteService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, DEFAULT_USER_TIME_ZONE } from '@vault-companion/domain';
+import { createTrainingService, createActiveWorkService, createCommandService, createHistoryService, createLinkedNoteService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
+import { WEATHER_TIME_ZONE } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createApp } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
 import { createMarketSource } from './market.ts';
+import { createWeatherProvider } from './weather-provider.ts';
 import { createAccessVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
 import type { LogRecord } from './log.ts';
@@ -82,6 +84,11 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...(env.VAULT_BRANCH ? { branch: env.VAULT_BRANCH } : {}),
     token: createInstallationTokenSource({ appId: env.GITHUB_APP_ID, privateKeyPem: env.GITHUB_APP_PRIVATE_KEY, installationId: env.GITHUB_INSTALLATION_ID }),
   });
+  const weatherService = createWeatherService({
+    reader: createWeatherProvider({ fetch: fetchImpl, now: () => Date.now() }),
+    now: () => new Date(),
+    timeZone: WEATHER_TIME_ZONE,
+  });
   const services = {
     ...createCommandService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createLinkedNoteService({ store }),
@@ -93,7 +100,8 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...createMorningService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createHistoryService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createNotesService({ store }),
-    ...createDashboardService({ market: createMarketSource({ fetch: fetchImpl, now: () => Date.now() }), now: () => new Date() }),
+    ...createDashboardService({ market: createMarketSource({ fetch: fetchImpl, now: () => Date.now() }), weather: weatherService, now: () => new Date() }),
+    ...weatherService,
   };
   return createApp({ verify, appOrigin: env.APP_ORIGIN, services, log });
 }

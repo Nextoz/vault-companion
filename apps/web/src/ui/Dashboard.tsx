@@ -1,9 +1,10 @@
 // Dashboard (DASH1): read-only overview. One BTC/USD card with a 1W/1M/3M series, plus honest overview cards for the
 // AI usage and Health sources that are not connected yet. No writes, no provider calls from the browser.
-import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketSeries, MarketTickerResponse } from '@vault-companion/contracts';
+import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketSeries, MarketTickerResponse, WeatherCard } from '@vault-companion/contracts';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { getDashboard, getMarketTicker, type Fetched } from '../api.ts';
 import './Dashboard.css';
+import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
 
 export const TICKER_POLL_MS = 60_000;
 /** Older than this and the card says so, in words; the number is never silently repainted as fresh. */
@@ -147,6 +148,25 @@ function MarketView({ card, stale, onDrillthrough }: {
   );
 }
 
+function WeatherCardView({ card, stale, onDrillthrough }: {
+  card: WeatherCard; stale: boolean; onDrillthrough?: ((view: string) => void) | undefined;
+}) {
+  const headingId = useId();
+  const status = card.status === 'unavailable' ? 'Unavailable' : stale ? 'Stale' : 'Live';
+  return (
+    <article className="dash-card dash-weather" aria-labelledby={headingId} aria-busy={stale}>
+      <header className="dash-card-head">
+        <h2 id={headingId}>{card.title}</h2>
+        <span className={`dash-chip dash-chip-${status.toLowerCase()}`}>{status}</span>
+      </header>
+      {card.status === 'unavailable'
+        ? <p className="dash-note" role="status">{card.note ?? 'Weather is unavailable.'}</p>
+        : <WeatherLab projection={card.projection} />}
+      {card.drillthrough && <button type="button" className="link" onClick={() => onDrillthrough?.(card.drillthrough!.view)}>{card.drillthrough.label}</button>}
+    </article>
+  );
+}
+
 function OverviewCard({ card, onDrillthrough }: { card: DashboardCard; onDrillthrough?: ((view: string) => void) | undefined }) {
   const headingId = useId();
   const status = card.status === 'ok' ? 'Live' : card.status === 'unavailable' ? 'Unavailable' : 'Not configured';
@@ -218,7 +238,9 @@ export function Dashboard({ refreshKey, onDrillthrough }: { refreshKey: number |
   // When the requested range has not arrived yet, an older range's data may still be shown — but only labelled as stale.
   const shown = matching ?? (failed ? loaded?.data ?? null : null);
   const market = shown?.cards.find((card): card is MarketCard => card.id === 'market') ?? null;
+  const weather = shown?.cards.find((card): card is WeatherCard => card.id === 'weather') ?? null;
   const stale = failed || tickerFailed || (market !== null && market.status === 'ok' && shown !== null && !marketFresh(market, at(shown.now)));
+  const weatherStale = failed || (weather !== null && weather.status === 'ok' && shown !== null && !weatherFresh(weather.projection, at(shown.now)));
 
   return (
     <section className="dash" aria-label="Dashboard">
@@ -233,7 +255,8 @@ export function Dashboard({ refreshKey, onDrillthrough }: { refreshKey: number |
       {(failed || market?.status === 'unavailable' || (market?.status === 'ok' && !market.series)) && <button type="button" className="link" onClick={() => setRetryKey((previous) => previous + 1)}>Retry dashboard</button>}
       {shown && stale && <p className="dash-stale" role="status">Not refreshed — the times below are from the last success.</p>}
       {shown && market && <MarketView card={market} stale={stale} onDrillthrough={onDrillthrough} />}
-      {shown && shown.cards.filter((card) => card.id !== 'market').map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}
+      {shown && weather && <WeatherCardView card={weather} stale={weatherStale} onDrillthrough={onDrillthrough} />}
+      {shown && shown.cards.filter((card) => card.id !== 'market' && card.id !== 'weather').map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}
     </section>
   );
 }

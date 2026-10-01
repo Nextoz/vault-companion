@@ -2,6 +2,8 @@
 // No writes, no identity data, no secrets. The market card is the first card; its provider is reversible.
 import { z } from 'zod';
 
+import { WeatherFailureReason, WeatherProjection } from './weather.ts';
+
 // Disallow runtime code generation (eval/Function probe) under strict CSP (script-src 'self') and Cloudflare Workers.
 z.config({ jitless: true });
 
@@ -94,7 +96,17 @@ export type AiUsageCard = z.infer<typeof AiUsageCard>;
 export const HealthCard = z.strictObject({ id: z.literal('health'), status: z.enum(['not-configured', 'unavailable']), ...cardMeta });
 export type HealthCard = z.infer<typeof HealthCard>;
 
-export const DashboardCard = z.union([MarketCard, AiUsageCard, HealthCard]);
+/**
+ * The Weather card carries the same projection as the `/api/weather` read (ADR-0033 W1): a single read model feeds the
+ * Dashboard card and the Today morning projection. `unavailable` means no usable model series at all.
+ */
+export const WeatherCard = z.union([
+  z.strictObject({ id: z.literal('weather'), status: z.literal('ok'), ...cardMeta, projection: WeatherProjection }),
+  z.strictObject({ id: z.literal('weather'), status: z.literal('unavailable'), ...cardMeta, reason: WeatherFailureReason }),
+]);
+export type WeatherCard = z.infer<typeof WeatherCard>;
+
+export const DashboardCard = z.union([MarketCard, WeatherCard, AiUsageCard, HealthCard]);
 export type DashboardCard = z.infer<typeof DashboardCard>;
 
 export const DashboardResponse = z.strictObject({
