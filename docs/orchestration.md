@@ -358,7 +358,8 @@ comments. The handoff file is deleted from the branch once integrated (or on `ma
 
 All integrated changes go through a PR. Workers never merge. The Lead owns the final diff, verification and merge.
 
-- **PR CodeRabbit is separate from local pre-handoff CodeRabbit.** Local review happens before Lead acceptance; the PR review remains a final integrated-branch check.\n- **CodeRabbit is useful but not a merge gate.** After the PR's final pushes, request one
+- **PR CodeRabbit is separate from local pre-handoff CodeRabbit.** Local review happens before Lead acceptance; the PR review remains a final integrated-branch check.
+- **CodeRabbit is useful but not a merge gate.** After the PR's final pushes, request one
   `@coderabbitai full review` if no real review already exists. If it is skipped, rate-limited or unavailable, record
   that fact and continue when CI/local verification and the Lead's review pass. High-risk work still needs the
   independent review required by the routing table.
