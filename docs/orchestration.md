@@ -110,6 +110,6 @@ command and asks with a line starting `ACTION NEEDED:`.
 
 ## Herdr
 
-Run the Lead in its own Herdr pane; workers appear in the **Agents** tab via `tools/agent-pane.sh`. Never navigate
+Start the Lead inside Herdr with `pwsh -NoProfile -File tools/start-lead.ps1` (optional `-Focus "<task>"`); workers appear in the **Agents** tab via `tools/agent-pane.sh`. Never navigate
 or close panes the Lead did not create. Never end a Claude agent with `/exit`; close its pane instead.
 Git Bash rewrites `/word` arguments: prefix slash commands with `MSYS_NO_PATHCONV=1`.
