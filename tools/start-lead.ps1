@@ -4,7 +4,9 @@
   Run from inside Herdr (workers need HERDR_ENV=1):  pwsh -NoProfile -File C:\Dev\vault-companion\tools\start-lead.ps1
   Then, in a second pane, run tools/lead-watch.ps1 (auto-resume after usage limits, fresh context after each merge).
 #>
-param([string]$Focus = 'the first open item under "Next actions" in docs/checkpoint.md')
+param([string]$Focus = 'the first open item under "Next actions" in docs/checkpoint.md',
+      # Unattended run: no permission prompts (safe actions auto-approved, risky ones blocked). Pair with .agent/overnight.md.
+      [switch]$Overnight)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $repo
@@ -16,4 +18,5 @@ if ($env:HERDR_ENV) {
 } else { Write-Warning 'Not inside Herdr: workers launched with tools/agent-pane.sh will fail. Start Herdr first (run: herdr).' }
 git fetch -q origin
 $prompt = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'lead-prompt.md') -Raw) -replace '\{FOCUS\}', $Focus
-& claude --model claude-opus-5-5 --effort medium --name 'VC Lead' $prompt
+$mode = if ($Overnight) { @('--permission-mode', 'auto') } else { @() }
+& claude --model claude-opus-5-5 --effort medium --name 'VC Lead' @mode $prompt
