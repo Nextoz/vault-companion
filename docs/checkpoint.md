@@ -19,8 +19,13 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 1. **Radar #54 — Lead's focused independent review** (owner decision 2026-10-01): read only the write path
    (`packages/domain/src/research-radar-command.ts`, `research-radar-format.ts`, the Worker route and the vault-contract
-   change) against AGENTS.md non-negotiables 3–4 and ADR-0032. Fix or record findings, then `pnpm check` + e2e once,
-   mark ready, merge. Then `ACTION NEEDED:` deploy approval (new write target ⇒ owner approves the release).
+   change) against AGENTS.md non-negotiables 3–4 and ADR-0032. Write target: append-only
+   `Research/Radar/Decisions/YYYY-MM.jsonl`; read bounds 25 months / 5,000 lines / 48 subrequests. Fix or record
+   findings, then `pnpm check` + e2e once, mark ready, merge. Then `ACTION NEEDED:` deploy approval (new write target).
+   Clone `C:\Dev\vault-companion-clones\radar-delivery`: **`origin` is a local clone, `github` is GitHub** — check
+   remotes before pushing. Prior evidence and CodeRabbit dispositions: `.agent/resume/radar-*` in the main checkout;
+   previous Lead's handover `.agent/resume/claude-lead-handoff-20261001.md` (read only the Radar/Weather sections;
+   its pause, review floor, watcher and Jev-ledger rules are superseded by ADR-0035).
 2. **Weather #56:** retarget to `main` after Radar merges, merge `main` in, `pnpm check` + e2e once, Lead diff read
    of the Weather-only delta (ordinary risk except the location permission change), merge, ask for deploy.
 3. Then features from the Ready Backlog, owner order 2026-10-01: phone-facing items first (Mood check-in, SP speed,
@@ -34,5 +39,5 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Budget
 
-DeepSeek: owner reports credits available (2026-10-01); check the balance before the first Pro run.
-Scaleway GLM-5.2: ~1M free allocation, ~22k used. CodeRabbit CLI: 3 reviews per rolling hour, usage billing inactive.
+DeepSeek: $9.99 available (read-only balance check 2026-10-01 21:13); check before the first Pro run.
+Scaleway GLM-5.2: 1M declared free tokens, keep 100k margin; ~24k used (local accounting, not a provider invoice). CodeRabbit CLI: 3 reviews per rolling hour, usage billing inactive.
