@@ -1,33 +1,31 @@
-# Checkpoint — 2026-10-01 (Radar deployed, Weather #56 merged)
+# Checkpoint — 2026-10-02 (SP4 + Mood M1 merged, deploy pending owner)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
 
-- **Deployed: Radar** (`main` `292df67`, Worker version `f1e8b609`, tag `radar-292df67`, owner-approved 2026-10-01;
-  rollback baseline Dashboard `190e091c`). Includes Dashboard (#53), R1 (#45), B1/B2 + This Morning (#46), scouts (#49),
-  read cache (#52), Radar (#54; Lead review in `docs/reviews/RR1-integration.md`).
-  Known, fail-closed: once any Radar decision log is older than 25 months, Radar refuses all reads and writes — needs a
-  rollover/archive design before ~2028-09.
-- **Weather #56 merged** (`e43f9d7`, not deployed). Lead diff read: location rounded ~1 km before provider/cache, POST
-  body only, origin/account guards, `geolocation=(self)`. `pnpm check` 1695 + e2e 91 passed, CI green.
-- **Phone problem (owner, 2026-10-01):** app does not work on the phone but works in the PC browser; symptom unknown.
-  Server side checked: site up, unauthenticated requests 302 to Cloudflare Access, the client maps expired Access to
-  signed-out. Needs the owner's symptom before more work. Blocks all phone acceptance.
-- Closed as superseded (owner, 2026-10-01): #50/#51 harness, #55 Jev policy, #57 CodeRabbit policy. Their useful
-  parts are `tools/handoff-check.ps1` and `docs/orchestration.md`.
-- The Codex Lead's 64 unpushed docs commits are on local branch `archive/codex-lead-2026-10-01` (evidence only).
-  The held harness candidate stays in `C:\Dev\vault-companion-clones\harness-closeout` (not needed).
+- **Live: Weather** (Worker `cae397cc`, tag `weather-e43f9d7`; rollback `f1e8b609` = Radar). Radar known limit: once a
+  decision log is older than 25 months Radar refuses reads/writes — needs a rollover design before ~2028-09.
+- **Merged, not live:** SP4 prefetch #63 (Notes/Progress/Training warm the per-commit read cache after a task read) and
+  Mood M1 #64 (pure frontmatter splice, ADR-0036 *proposed*; no runtime effect). Both: `pnpm check` + e2e 91, CI green.
+  Version uploaded with tag `sp4-36e8d03` (no traffic). The deploy was denied by Claude Code auto mode: owner deploys.
+- **Phone problem (owner, 2026-10-01):** app fails on the phone, works on PC; symptom unknown. Blocks phone acceptance.
+- Overnight mode until 2026-10-02 08:00 (`.agent/overnight.md`); decisions in `.agent/overnight-decisions.md`.
+- Parked: stray `sp-read-latency.test.ts` change in `git stash@{0}` (reverts #52 cache expectations, origin unknown).
+- Codex Lead evidence: branch `archive/codex-lead-2026-10-01`. Parallel workers allowed by owner (2026-10-01).
 
 ## Next actions (in order)
 
-1. Features from the Ready Backlog, owner order 2026-10-01: phone-facing items first (Mood check-in, SP speed,
-   B3/B4). Harness v0 is not a priority. Main checkout has an uncommitted `apps/worker/test/sp-read-latency.test.ts`
-   change of unknown origin (not the Lead's) — check before SP speed work.
+1. **Mood M2** (high-risk, new write target): Worker command `mood-checkin` on `Journal/Daily/YYYY-MM-DD.md` using
+   `applyMoodCheckin`, create-from-template via `renderDailyNote`, op ID/CAS/trailers/dedupe, exact-inverse Undo;
+   update `docs/vault-contract.md` (Journal section, §7 exception) per ADR-0036. Then M3 Today card (Layout C).
+2. SP3 show-last-copy (needs ADR). Phone measurement of SP when the phone works.
 
 ## Owner items
 
-- Approve Weather deploy; describe the phone symptom.
+- Deploy `36e8d03` (SP4 + M1): `cd apps/worker; pnpm exec wrangler versions list` → id tagged `sp4-36e8d03` →
+  `pnpm exec wrangler versions deploy <id>@100% --yes`; rollback `wrangler rollback cae397cc`. Describe the phone symptom.
+- Review ADR-0036 (Mood check-in choices: ISO `checkin_at`, prose values refused).
 - Phone acceptance (after the phone fix): Dashboard, R1 explainer, This Morning, Radar (Remove/Undo, Keep pending).
 - Confirm the 2026-09-30 amendments carried over: ADR-0018 wider Lead read scope; product-contract extension (Dashboard,
   Weather, Needs You, reviews, Apple Health intake per ADR-0033, now merged).
