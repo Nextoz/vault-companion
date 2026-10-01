@@ -299,7 +299,7 @@ export function WeatherMorning({ refreshKey, accountKey, blocked = false }: Weat
   if (result?.kind !== 'ok') {
     if (result?.kind === 'offline' || result?.kind === 'error' || result?.kind === 'signed-out') {
       return (
-        <section className="group weather-morning" aria-label="This morning weather">
+        <section className="weather-morning" aria-label="This morning weather">
           <h2>Weather</h2>
           <p className="weather-note" role="status">{result.kind === 'offline' ? 'Weather is unavailable offline.' : 'Weather could not be loaded.'}</p>
           {result.kind !== 'signed-out' && <button type="button" className="link" onClick={() => setRetryKey((n) => n + 1)}>Retry weather</button>}
@@ -310,7 +310,7 @@ export function WeatherMorning({ refreshKey, accountKey, blocked = false }: Weat
   }
   if (result.data.status !== 'ok') {
     return (
-      <section className="group weather-morning" aria-label="This morning weather">
+      <section className="weather-morning" aria-label="This morning weather">
         <h2>Weather</h2>
         <p className="weather-note" role="status">{result.data.message}</p>
         <button type="button" className="link" onClick={() => setRetryKey((n) => n + 1)}>Retry weather</button>
@@ -319,9 +319,9 @@ export function WeatherMorning({ refreshKey, accountKey, blocked = false }: Weat
   }
   const projection = result.data.projection;
   return (
-    <section className="group weather-morning" aria-label="This morning weather">
+    <section className="weather-morning" aria-label="This morning weather">
       <h2>
-        <button type="button" className="link group-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}>Weather</button>
+        <button type="button" className="link group-toggle" aria-label="Weather" aria-expanded={open} onClick={() => setOpen((value) => !value)}>Weather</button>
       </h2>
       <p className="muted small" data-testid="weather-morning-summary">{runWindowSummary(projection.runWindow)}</p>
       {open && (

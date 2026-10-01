@@ -23,6 +23,7 @@ test('Dashboard mounts Weather with attribution, model comparison and touch/keyb
   await expect(weather).toContainText('CC-BY 4.0');
   await expect(weather.locator('a', { hasText: 'Source' })).toHaveCount(2);
   await expect(weather).toContainText('lowest-rain window');
+  const readsBeforeInspection = api.weatherReads;
 
   await weather.getByRole('button', { name: 'Temperature', exact: true }).click();
   await expect(weather.getByRole('button', { name: 'Temperature', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -32,7 +33,7 @@ test('Dashboard mounts Weather with attribution, model comparison and touch/keyb
   await slider.press('ArrowLeft');
   await expect(weather.locator('figcaption')).toContainText('°C');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  expect(api.weatherReads).toBe(0); // Dashboard weather arrives through /api/dashboard, never a separate provider call
+  expect(api.weatherReads).toBe(readsBeforeInspection); // chart interaction uses the Dashboard projection; initial Today reads are separate
 });
 
 test('Today shows the compact weather morning projection and opens the same shared read model', async ({ page }) => {
