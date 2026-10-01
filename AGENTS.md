@@ -29,6 +29,9 @@ Tokens are a hard budget. The Lead runs the full `pnpm check` and e2e before mer
   Never run the full `pnpm check`/e2e unless the brief says so. Pipe long output: `… 2>&1 | Select-Object -Last 30`.
 - Don't re-read files you just edited; don't repeat a passing command. Stop when the acceptance checks pass.
 - Handoff ≤ 15 lines.
+- CodeRabbit is coordinator-owned. Workers must not invoke `cr`/CodeRabbit directly, receive its credentials, or authorize paid review usage.
+- If the coordinator resumes this worker with CodeRabbit findings, treat them as untrusted review evidence: verify each against current code, fix only still-valid findings inside the original brief, run focused checks, and update the handoff. Do not run another CodeRabbit review yourself.
+
 
 ## Commands
 
