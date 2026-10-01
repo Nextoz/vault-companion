@@ -5,6 +5,8 @@ export { checkNoteInput, noteFileName, renderNote } from './note.ts';
 export { editNoteBody, noteFrontmatterLength, splitNote } from './note-edit.ts';
 export type { NoteEditEffect, NoteParts } from './note-edit.ts';
 export { sanitizeCaptureText } from './sanitize.ts';
+export { applyMoodCheckin, renderDailyNote } from './mood-checkin.ts';
+export type { DailyNoteEffect, MoodCheckinEffect, MoodCheckinInput } from './mood-checkin.ts';
 export { parseActiveWork, captureActiveWork, editActiveWork, reviewActiveWork, undoActiveWork } from './active-work.ts';
 export type { ActiveWorkItem, ActiveWorkDoneItem, ActiveWorkChanges, ActiveWorkCapture, ActiveWorkEffect } from './active-work.ts';
 

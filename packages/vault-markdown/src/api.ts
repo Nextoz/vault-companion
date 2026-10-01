@@ -22,6 +22,12 @@ export type RefusalCode =
   | 'refused:undo-expired'
   | 'conflict:task-changed'
   | 'conflict:ambiguous'
+  | 'no-frontmatter'
+  | 'checkin-field-missing'
+  | 'checkin-field-ambiguous'
+  | 'checkin-field-unsupported'
+  | 'checkin-invalid-input'
+  | 'template-unsupported-placeholder'
   /** Malformed command input (bad date/context, capture text empty after sanitisation, NUL in note text). */
   | 'invalid';
 

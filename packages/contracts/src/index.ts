@@ -294,6 +294,12 @@ export const ErrorCode = z.enum([
   'conflict:task-changed',
   'conflict:ambiguous',
   'conflict:stale',
+  'no-frontmatter',
+  'checkin-field-missing',
+  'checkin-field-ambiguous',
+  'checkin-field-unsupported',
+  'checkin-invalid-input',
+  'template-unsupported-placeholder',
   /** Undo: more than one compare page (250 commits) since the completion (ADR-0013). Undo it in Obsidian. */
   'refused:undo-expired',
   'operation-id-reused',
