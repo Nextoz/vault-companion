@@ -1,6 +1,6 @@
 # ADR-0030 — Cost-aware worker model routing
 
-**Status:** accepted (owner decision, 2026-09-28).
+**Status:** superseded by ADR-0035 (2026-10-01) for routing and review; kept as history.
 
 ## Context
 
