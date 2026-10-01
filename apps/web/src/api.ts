@@ -13,6 +13,9 @@ import {
   NOTE_HEADER,
   NoteReadResponse,
   NotesResponse,
+  RADAR_PAPER_HEADER,
+  RadarNoteResponse,
+  RadarResponse,
   SessionResponse,
   MorningResponse,
   ScoutsResponse,
@@ -67,6 +70,9 @@ export const getSession = () => getJson('/api/session', SessionResponse);
 export const getScouts = () => getJson('/api/scouts', ScoutsResponse.strip());
 export const getMorning = () => getJson('/api/morning', MorningResponse.strip());
 export const getTriage = () => getJson('/api/triage', TriageResponse.strip());
+export const getRadar = () => getJson('/api/radar', RadarResponse.strip());
+export const getRadarNote = (paperId: string) =>
+  getJson('/api/radar/read', RadarNoteResponse, { [RADAR_PAPER_HEADER]: paperId });
 export const getScoutOutput = (id: string) => getJson('/api/scouts/output', LinkedNoteResponse, { 'X-VC-Scout': id });
 
 // .strip(): a new top-level field from a newer server is ignored, not an error. A PWA resumed from the background keeps
@@ -95,6 +101,21 @@ export const getNote = (path: string) =>
 /** `accountKey` is the queued item's binding, checked by the Worker against the session (A7), outside the body. */
 export const postCommand = (body: string, accountKey: string) =>
   fetch('/api/commands', {
+    ...base,
+    method: 'POST',
+    body,
+    signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
+    headers: {
+      'Content-Type': 'application/json',
+      'X-VC-Request': '1',
+      'X-VC-Account': accountKey,
+      Accept: 'application/json',
+    },
+  });
+
+/** Radar decisions use their own wire endpoint but the same CSRF/account/session guards as `/api/commands`. */
+export const postRadarDecision = (body: string, accountKey: string) =>
+  fetch('/api/radar/decisions', {
     ...base,
     method: 'POST',
     body,

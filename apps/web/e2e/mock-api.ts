@@ -22,6 +22,11 @@ import {
   Receipt,
   SessionResponse,
   MorningResponse,
+  RADAR_PAPER_HEADER,
+  RadarDecisionLine,
+  RadarNoteResponse,
+  RadarResponse,
+  ResearchRadarDecideCommand,
   ScoutsResponse,
   TasksResponse,
   TriageResponse,
@@ -161,6 +166,38 @@ export class MockApi {
     '',
     '<script>alert(1)</script>',
   ].join('\n')]]);
+  /** Synthetic Research Radar read model. Decisions are appended by the radar decision endpoint, then re-parsed. */
+  radar = RadarResponse.parse({
+    revision: 'a'.repeat(40),
+    now: '2026-09-30T10:00:00Z',
+    sources: {
+      dailyScout: { state: 'ok', count: 2 },
+      readingBriefs: { state: 'absent', count: 0 },
+      importantUpdates: { state: 'absent', count: 0 },
+      explained: { state: 'absent', count: 0 },
+    },
+    papers: [
+      { paperId: '00000000000000000001', rank: 1, title: 'Synthetic sparse routing', why: 'A faster phone-side lookup.',
+        topic: 'systems', sourceUrl: 'https://example.com/paper-1', sourceDate: '2026-09-29',
+        badges: ['important'], read: { kind: 'source', url: 'https://example.com/paper-1' } },
+      { paperId: '00000000000000000002', rank: 2, title: 'Graph retrieval on device', why: 'Small, on-device recall.',
+        topic: 'systems', sourceUrl: 'https://example.com/paper-2', sourceDate: '2026-09-28',
+        badges: [], read: { kind: 'note', path: 'Research/Radar/Notes/graph-retrieval.md' } },
+    ],
+    topics: [{ topic: 'systems', count: 2 }],
+    decisions: [],
+    applied: {},
+    appliedUpdatedAt: null,
+    warnings: [],
+  });
+  radarReads = 0;
+  readonly radarBodies: string[] = [];
+  /** Synthetic server-resolved note bodies by paper id; never a client-supplied path. */
+  radarNotes = new Map<string, string>([['00000000000000000002', lines(
+    '# Graph retrieval on device',
+    '',
+    'Synthetic note body used only by the Radar e2e mock.',
+  )]]);
   /** Completion history (ADR-0021): done-today tasks plus these earlier items, served newest first. */
   olderHistory: HistoryItem[] = [
     { source: 'active-work', description: 'Garden plan: beds ready [[Garden Plan]]', doneDate: '2026-09-23', links: ['Garden Plan'],
@@ -214,6 +251,9 @@ export class MockApi {
         ? { status: 'ok', revision: this.#revision, blobSha: 'b'.repeat(40), path: `Discoveries/${id}.md`, markdown }
         : { status: 'refused', revision: this.#revision, code: 'not-found', message: 'No findings note yet.' }));
     });
+    await on('**/api/radar/decisions', (route) => this.#radarDecision(route));
+    await on('**/api/radar/read', (route) => this.#radarNote(route));
+    await on('**/api/radar', (route) => this.#radar(route));
     await on('**/api/session', (route) => this.#session(route));
     await on('**/api/tasks**', (route) => this.#tasks(route));
     await on('**/api/commands', (route) => this.#command(route));
@@ -258,6 +298,50 @@ export class MockApi {
       { id: 'health', status: 'not-configured', title: 'Health', provenance: 'Not configured',
         observedAt: null, fetchedAt: null, drillthrough: null, note: 'No approved health source is connected yet.' },
     ] }));
+  }
+
+  #radar(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    this.radarReads += 1;
+    return this.#json(route, 200, RadarResponse.parse(this.radar));
+  }
+
+  #radarNote(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    const paperId = route.request().headers()[RADAR_PAPER_HEADER.toLowerCase()] ?? '';
+    const markdown = this.radarNotes.get(paperId);
+    return this.#json(route, 200, RadarNoteResponse.parse(markdown !== undefined
+      ? { status: 'ok', revision: this.#revision, path: `Research/Radar/Notes/${paperId}.md`, blobSha: 'e'.repeat(40), markdown }
+      : { status: 'refused', revision: this.#revision, code: 'missing', message: 'No Radar note for this paper.' }));
+  }
+
+  #radarDecision(route: Route) {
+    const request = route.request();
+    const raw = request.postData() ?? '';
+    this.radarBodies.push(raw);
+    if (request.headers()['x-vc-request'] !== '1') return this.#json(route, 403, ApiError.parse({ code: 'forbidden', message: 'request origin not allowed', retryable: false }));
+    if (request.headers()['x-vc-account'] !== this.account) {
+      return this.#json(route, 409, ApiError.parse({ code: 'account-mismatch', message: 'Other account.', retryable: false }));
+    }
+    const command = ResearchRadarDecideCommand.parse(JSON.parse(raw));
+    const existing = this.radar.decisions.find((line) => line.decisionId === command.operationId);
+    if (existing) {
+      return this.#json(route, 200, Receipt.parse({ operationId: command.operationId, status: 'already-applied',
+        path: 'Research/Radar/Decisions/2026-09.jsonl', commitSha: this.#revision, blobSha: 'f'.repeat(40),
+        effect: { kind: 'research-radar-decided', path: 'Research/Radar/Decisions/2026-09.jsonl', decisionId: command.operationId } }));
+    }
+    this.radar.decisions.push({ ...RadarDecisionLine.parse({
+      schemaVersion: 1,
+      decisionId: command.operationId,
+      paperId: command.payload.paperId,
+      decision: command.payload.decision,
+      undoes: command.payload.undoes,
+      at: command.occurredAt,
+      card: command.payload.card,
+    }), month: this.radar.now.slice(0, 7) });
+    return this.#json(route, 200, Receipt.parse({ operationId: command.operationId, status: 'applied',
+      path: 'Research/Radar/Decisions/2026-09.jsonl', commitSha: this.#revision, blobSha: 'f'.repeat(40),
+      effect: { kind: 'research-radar-decided', path: 'Research/Radar/Decisions/2026-09.jsonl', decisionId: command.operationId } }));
   }
 
   #history(route: Route) {

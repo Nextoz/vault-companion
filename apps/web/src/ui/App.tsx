@@ -393,7 +393,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           accountKey={accountKey} baseRevision={revision} />}
 
         {tab === 'today' && !signedOut && <Morning key={`morning:${accountKey}`} refreshKey={checkedAt} />}
-        {(tab === 'today' || tab === 'scouts') && !signedOut && <Scouts key={`scouts:${accountKey}`} page={tab === 'scouts'} onOpen={() => setTab('scouts')} refreshKey={checkedAt} />}
+        {(tab === 'today' || tab === 'scouts') && !signedOut && <Scouts key={`scouts:${accountKey}`} page={tab === 'scouts'} onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />}
 
         {tab === 'today' && !signedOut && <ActiveWorkCard key={accountKey} revision={tasks?.revision ?? null} queue={queue} accountKey={accountKey} onOpenLink={openNote} />}
         {tab === 'today' && !signedOut && <Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} />}
