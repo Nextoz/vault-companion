@@ -6,6 +6,7 @@ import { notRedoneBy, stillUnresolved, UNRESOLVED_TEXT, unresolvedFrom, type Unr
 import { completeTask, undoCompleteTask, undoDraft } from '../commands.ts';
 import { unreachableText, wake as wakeUp, type Connection } from '../connection.ts';
 import { captureDefaultForTab, prefs } from '../prefs.ts';
+import { browserPrefetchDeps, createPrefetcher } from '../prefetch.ts';
 import { getUpdateReady, subscribeUpdateReady } from '../update-ready.ts';
 import type { DraftStore } from '../draft.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
@@ -43,6 +44,7 @@ const STALE_REREADS = 3;
 export const STALE_BEFORE_RESET = 3;
 
 const ACTION_TABS: ReadonlySet<string> = new Set(['today', 'all', 'notes', 'training', 'history']);
+const prefetcher = createPrefetcher(browserPrefetchDeps);
 
 export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: DraftStore; receipts: EventTarget }) {
   const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
@@ -126,6 +128,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             setCheckedAt(Date.now());
             setReadFailed(false);
             prefs.setLastRevision(out.read.data.revision);
+            prefetcher.maybePrefetch(prefs.lastAccountKey() ?? '', out.read.data.revision);
             staleRef.current = 0;
             setStaleStreak(0);
             const read = out.read;
