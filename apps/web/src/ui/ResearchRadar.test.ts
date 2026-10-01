@@ -4,7 +4,7 @@ import { act, createElement, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRadar, getRadarNote, postRadarDecision } from '../api.ts';
-import { deriveRadar, ResearchRadar, type RadarIntent } from './ResearchRadar.tsx';
+import { deriveRadar, radarDecisionCommand, ResearchRadar, type RadarIntent } from './ResearchRadar.tsx';
 
 vi.mock('../api.ts', () => ({ getRadar: vi.fn(), getRadarNote: vi.fn(), postRadarDecision: vi.fn() }));
 
@@ -393,6 +393,7 @@ describe('ResearchRadar component', () => {
     expect(document.querySelector('[data-testid="radar-decision"]')).not.toBeNull();
     expect(JSON.parse(dom.window.localStorage.getItem('vault-companion:radar-pending:v1:account') ?? '[]')).toHaveLength(1);
     expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Discard')).toBe(true);
+    expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Undo')).toBe(false);
 
     const discard = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Discard')!;
     await act(async () => { discard.click(); });
@@ -412,6 +413,27 @@ describe('ResearchRadar component', () => {
     expect(document.querySelectorAll('[data-testid="radar-card"]')).toHaveLength(3);
     expect(document.querySelector('[data-testid="radar-decision"]')).toBeNull();
     expect(vi.mocked(postRadarDecision)).toHaveBeenCalledTimes(1);
+  });
+
+  it('Discard clears a restored refused decision and its dependent Undo from storage', async () => {
+    const command = radarDecisionCommand(paper(1), 'remove', REV);
+    const undo = ResearchRadarDecideCommand.parse({ ...command, operationId: OP, payload: { ...command.payload, decision: 'undo', undoes: command.operationId } });
+    dom.window.localStorage.setItem('vault-companion:radar-pending:v1:account', JSON.stringify([
+      { command, attempts: 1, status: 'failure', error: 'Refused' },
+      { command: undo, attempts: 0, status: 'pending', error: 'Waiting', dependsOn: command.operationId },
+    ]));
+    vi.mocked(getRadar).mockResolvedValue({ kind: 'ok', data: response([paper(1)]) });
+    const root = await render();
+    await open();
+    await flush();
+    const discard = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Discard')!;
+    expect(discard).toBeDefined();
+    await act(async () => { discard.click(); });
+    await flush();
+    expect(document.querySelectorAll('[data-testid="radar-decision"]')).toHaveLength(0);
+    expect(dom.window.localStorage.getItem('vault-companion:radar-pending:v1:account')).toBe('[]');
+    expect(postRadarDecision).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
   });
 
   it('does not offer Discard while an intent is saving', async () => {
