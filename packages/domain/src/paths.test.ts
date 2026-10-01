@@ -160,7 +160,7 @@ describe('ADR-0032 Research Radar path scope', () => {
   it('accepts only safe Research/Library applied paths', () => {
     expect(isResearchLibraryPath('Research/Library/Paper.md')).toBe(true);
     expect(isResearchLibraryPath('Research/Library/Topic/Paper.md')).toBe(true);
-    for (const p of ['Research/Library/../Paper.md', 'Research/Library/.hidden.md', 'Inbox/Paper.md', 'Research/Library/Paper.txt']) {
+    for (const p of ['Research/Library/../Paper.md', 'Research/Library/.hidden.md', 'Research/Library/tmp/Paper.md', 'Research/Library/TMP/Paper.md', 'Inbox/Paper.md', 'Research/Library/Paper.txt']) {
       expect(isResearchLibraryPath(p), p).toBe(false);
     }
   });

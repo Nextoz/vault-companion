@@ -364,7 +364,8 @@ export function ResearchRadar({ accountKey, refreshKey, blocked }: {
 
   function discardIntent(intent: RadarIntent) {
     if (intent.status !== 'failure' || savingRef.current.has(intent.command.operationId)) return;
-    setIntents((current) => current.filter((item) => item.command.operationId !== intent.command.operationId));
+    const id = intent.command.operationId;
+    setIntents((current) => current.filter((item) => item.command.operationId !== id && item.dependsOn !== id));
     setError(null);
   }
 
@@ -531,7 +532,7 @@ export function ResearchRadar({ accountKey, refreshKey, blocked }: {
                   {line.intent?.error && <span className="error">{line.intent.error}</span>}
                   {line.intent && !savingIds.has(line.decisionId) && <button type="button" onClick={() => retryIntent(line.intent!)}>Retry</button>}
                   {line.intent?.status === 'failure' && !savingIds.has(line.decisionId) && <button type="button" onClick={() => discardIntent(line.intent!)}>Discard</button>}
-                  {line.decision !== 'undo' && line.undoable && <button type="button" disabled={blocked || !accountKey || savingIds.has(line.decisionId)} onClick={() => undoDecision(line)}>Undo</button>}
+                  {line.decision !== 'undo' && line.undoable && line.intent?.status !== 'failure' && <button type="button" disabled={blocked || !accountKey || savingIds.has(line.decisionId)} onClick={() => undoDecision(line)}>Undo</button>}
                 </li>
               ))}
             </ul>
