@@ -1,4 +1,4 @@
-# Checkpoint — 2026-09-30 13:23 Europe/Copenhagen
+# Checkpoint — Jev policy amendment, 2026-10-01
 
 ## Current policy checkpoint — 2026-10-01
 
@@ -13,13 +13,17 @@ redo; no evidence yet of a second affected picked run. Preserve history and mark
 Radar is the active implementation feature; Dashboard deployed but phone acceptance remains separate. Policy
 owner decision is operative in this Lead; the durable documentation PR is prepared and remains unmerged until
 focused reviews/current CI/actual CodeRabbit. ADR accepted status records the owner's decision, not PR acceptance. Next:
-complete supplementary guarded GLM and independent floor review, then resolve findings and merge verified policy.
-No new production deployment or vault-write authority. Latest actual DeepSeek balance $1.55 before current review;
-no $3 reserve. GLM local baseline9628 tokens is not account-wide balance proof; conservative guard in orchestration.
+complete actual CodeRabbit/current CI and merge the focused verified policy PR. Independent Pro approves c633871
+after six policy contradictions were corrected. Supplementary GLM returned no report: all2048 completion tokens
+used for reasoning; recorded explicit blocked result, no unchanged retry or substituted review gate. Actual usage
+8500 tokens; local baseline9628 remains separate from provider-wide balance proof. Routing-quality attribution
+is unknown for this tooling/output-cap failure; preserve it in calibration beside the prior SP1 redo.
+No new production deployment or vault-write authority. DeepSeek verified $1.28 at03:31 before final disposition;
+full balance allowed, no $3 reserve. Exact later balance and task-bound operational receipts remain local.
 
 ## Historical checkpoint records — not current activity or policy
 
-## Latest delta — bug batch verified, PR49 open
+### Latest delta — bug batch verified, PR49 open
 
 - BUGS-Pro handoff read and corrected spans reviewed. Evidence-free degraded history excluded again; equal
   instants reconciled with Date.parse; known result keeps its timestamp. Exact Lead regression plus offset case
@@ -48,7 +52,7 @@ no $3 reserve. GLM local baseline9628 tokens is not account-wide balance proof; 
 
 # Prior checkpoint — 2026-09-30 13:15 Europe/Copenhagen
 
-## Latest delta — RR1 handoff / H non-hook recovery
+### Latest delta — RR1 handoff / H non-hook recovery
 
 - RR1 original handoff and scope request read (request says satisfied inside envelope; no extra edit authority
   needed). All new production modules plus tracked diff reviewed; test review partial, acceptance blocked.
@@ -79,7 +83,7 @@ no $3 reserve. GLM local baseline9628 tokens is not account-wide balance proof; 
 
 # Prior checkpoint — 2026-09-30 12:58 Europe/Copenhagen
 
-## Latest delta — supersedes worker/PR states below
+### Latest delta — supersedes worker/PR states below
 
 - PR #48 merged `f4e7cc760afe69072a9003d478f815cf54b89ec1`: Ubuntu/Windows and CodeRabbit checks green
   at 3504037. Bot review request aborted on changing head; no actual review findings. Per normal rules this is
@@ -114,7 +118,7 @@ no $3 reserve. GLM local baseline9628 tokens is not account-wide balance proof; 
 This section supersedes the historical 07:20 checkpoint below. Lead Codex budget mode expires Thu
 2026-10-01 21:00 Copenhagen / 19:00 UTC; start no new OpenAI Codex workers.
 
-## Completed and evidence (resume)
+### Completed and evidence (resume)
 
 - Read repository contracts, plan/checkpoint/orchestration and the live Ready Backlog/Harness update 3,
   read-only. Queue H non-hook → SP measurement → RR1 → remaining bugs; never Ideas.
@@ -144,7 +148,7 @@ This section supersedes the historical 07:20 checkpoint below. Lead Codex budget
   clone C:/Dev/vault-companion-clones/b3-b4-fixes; base main 6080433, head 7050d3a. No logs/private context staged.
   Flash correction worker w5:pQ now handles all three precisely bounded fixes. Active slots H2/RR1/BUGS.
 
-## Workers (resume) — handoff first, no duplicate dispatch
+### Workers (resume) — handoff first, no duplicate dispatch
 
 | Task | State / pane | Clone / evidence |
 |---|---|---|
@@ -161,7 +165,7 @@ creation and were interrupted. Same clones/briefs plus failure context. H2 alias
 corrected to API ID. These are tooling restarts, not reasoning escalation. Three active tasks own disjoint files;
 H2 may read partial H1 interfaces but may not edit that clone. No H1 acceptance or new OpenAI Codex work.
 
-## Jev and balance (resume)
+### Jev and balance (resume)
 
 - DeepSeek 11:58 **$9.99** → 12:10 **$9.89** → 12:15 **$9.81** → 12:20 **$9.71**, reported aggregate change **$0.28**. Concurrent per-run attribution
   unknown; sub-cent cost unknown. Stop new dispatch below $3. Afternoon weekday runs cost half.
@@ -182,7 +186,7 @@ H2 may read partial H1 interfaces but may not edit that clone. No H1 acceptance 
   run finished, accepted 0, correction required 1/first 5, reasoning escalations 0. Count toward kill switch;
   a second affected picked run disables active routing. No floor downgrade. Raw `.agent/jev/SP1-run.json`.
 
-## Exact next actions (resume)
+### Exact next actions (resume)
 
 1. On WAKE read named handoff, diff stat then full diff; disposition all discoveries. Run individual Jev Use 1,
    independently verify, record balance. Scope scan must include untracked files. Never accept prose alone.
@@ -213,7 +217,7 @@ Follow CLAUDE.md / orchestration resume procedure, then this file's exact next a
 gpt-6-astra in `CODEX LOW` budget mode; temporary appointment and budget mode expire 2026-10-01 21:00 Copenhagen
 / 19:00 UTC. No Claude usage before handover. Start no new Codex worker while `CODEX LOW` is active.
 
-## Completed and evidence
+### Completed and evidence
 
 - Read AGENTS.md, CLAUDE.md, orchestration and prior checkpoint/plan. Reconciled clean main at 947570d.
 - Resume `pnpm check` PASS: lint, typecheck, 101 files / 1415 tests. No e2e run this session yet.
@@ -232,7 +236,7 @@ gpt-6-astra in `CODEX LOW` budget mode; temporary appointment and budget mode ex
 - PR #47 remote head 5fc6a94: ubuntu/windows CI and CodeRabbit passed. CodeRabbit's single stale-snapshot wording
   finding is fixed locally; do not request a repeat review. Local checkpoint 610699d plus this update still need push.
 
-## Running and prepared workers (do not redispatch)
+### Running and prepared workers (do not redispatch)
 
 | Task | State | Pane | Clone / branch |
 |---|---|---|---|
@@ -247,7 +251,7 @@ Non-interactive workers are absent from herdr agent list but present in pane inv
 done. B3/B4 initial panes w5:p7/w5:p8 exited before source work because `CODEX_HOME` was not propagated; retries
 inject it in the worker command and are the runs above. Lead is w5:p2. Do not wait or poll; watcher wake is expected.
 
-## Jev and spend accounting (required every checkpoint)
+### Jev and spend accounting (required every checkpoint)
 
 - Historical picks followed: 0 executed. Completed Jev-picked implementation runs: 0/first 5.
 - Historical picks overruled/fallback: 2 (B3 and B4) because the owner's later DeepSeek-only budget routing
@@ -263,7 +267,7 @@ inject it in the worker command and are the runs above. Lead is w5:p2. Do not wa
 - Stop dispatch below $3; active routing kill switch after 2 of first 5 Jev-picked runs require escalation/redo.
   Every finished worker still needs Jev Use 1 and the Lead's evidence verdict.
 
-## Exact next actions
+### Exact next actions
 
 1. On `WAKE`, read the named worker handoff, not its log. Use `git diff --stat`; do not read source directly.
    H1 stays untouched until its handoff exists. Start no new Codex worker while `CODEX LOW` remains active.
@@ -279,7 +283,7 @@ inject it in the worker command and are the runs above. Lead is w5:p2. Do not wa
 6. Never wait or poll inside the Lead turn. End with `WAITING: H1/B3/B4 handoff`; the watcher sends `WAKE:`.
 7. At 2026-10-01 21:00 Copenhagen finish a safe step, checkpoint/commit, print HANDOVER TO CLAUDE READY.
 
-## Production and open evidence preserved
+### Production and open evidence preserved
 
 - Last verified deployment is PR #46 (79129e4), Worker df0a77a4 at app.karpov.dk, anonymous 302.
   Crons 30 4 / 30 6 UTC; script workers.dev and previews disabled; GEMINI_API_KEY already set.

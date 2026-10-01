@@ -24,7 +24,7 @@ commit, and print `HANDOVER TO CLAUDE READY`; Claude Opus resumes the normal Lea
 Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint.md`.
 **Latest (2026-09-30): continuous mode; select work from the live Ready table, top to bottom, plus batched bugs.**
 
-## Temporary Lead operating constraints (owner, 2026-09-30)
+### Temporary Lead operating constraints (owner, 2026-09-30)
 
 **Owner update 3 below supersedes the older provisional, privacy and floor-routing limits in this file.**
 
@@ -39,7 +39,7 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 - Live vault remains read-only per ADR-0018; no hook enforces it yet. Never write outside `C:\Dev`.
 - Build and test H's Claude hooks using piped-JSON fixtures; defer the live hooks-fire canary to the Claude Lead.
 
-## Current execution (2026-09-30)
+### Current execution (2026-09-30)
 
 - 13:23: B3 Pro correction reviewed; B3/B4/SP1 batch independently FULL check **103files/1447tests** and
   single FULL browser suite **80/80** pass. Ordinary PR **#49** open, current-head CI/review pending; no H/RR
@@ -118,7 +118,7 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
   held PR and deferred independent review/canary mean H is not accepted or shipped yet.
 - DeepSeek smoke passed; update 3 removes the formal B3 graduation gate.
 
-## Historical owner update 3 — superseded DeepSeek defaults (2026-09-30)
+### Historical owner update 3 — superseded DeepSeek defaults (2026-09-30)
 
 - DeepSeek is the default for **all implementation**, with no B3 graduation gate. Up to **3 DeepSeek workers**
   may run on independent files: Flash by default; Pro where Sol-medium would be chosen and for floor work.
@@ -133,7 +133,7 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 - Balance at resume, 2026-09-30 11:58 Copenhagen: **$9.99**, API precision; reported change since smoke $0.00,
   sub-cent cost unknown. Record balance at every checkpoint. Weekday afternoon runs cost half.
 
-## Owner update 2 — historical provisional rules and Jev (2026-09-30)
+### Owner update 2 — historical provisional rules and Jev (2026-09-30)
 
 - Re-read current Harness Brief Parts 2 and 3. Smoke-test Codex 0.159.2 with a one-word DeepSeek response before
   dispatching real work. Verify provider/model/no MCP; measure balance before/after via the authorized balance API.
@@ -171,7 +171,7 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 - Jev responses and synthetic packets: `.agent/jev/{B3,B4}-routing.json`, `smoke-run.json`, and accompanying state/
   question files (gitignored through local `.git/info/exclude`). Clone briefs are `.agent/brief.md`.
 
-## Delegated agents — resume 2026-09-30 afternoon Copenhagen
+### Delegated agents — resume 2026-09-30 afternoon Copenhagen
 
 | Task | State / model | Herdr pane | Clone / branch / base |
 |---|---|---|---|
@@ -198,7 +198,7 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 - Owner requested this immediate checkpoint; all running workers are left untouched. No watcher was launched by
   this Lead yet. Other existing panes `w5:p2`/`w5:p3` are not this Lead's workers and were not altered.
 
-## Waiting for Evgeny
+### Waiting for Evgeny
 
 - H risk floor: fill the deliberately owner-owned TODO in the forthcoming `docs/harness.md`; existing high-risk
   routing and the temporary hold rule apply meanwhile.
@@ -208,7 +208,7 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
 Updated 2026-09-26. **Goal now: the agreed first release (`docs/product-contract.md`) on the owner's phone.**
 Ambition beyond that stays the owner's choice, informed by observed use (milestone 3).
 
-## Verified done (merged on `main`, CI green on ubuntu + windows)
+### Verified done (merged on `main`, CI green on ubuntu + windows)
 
 Kernel, stores, worker, auth, PWA shell + queue (Phase 1 gate) · CI (#3) · real-Git e2e harness, 19 scenarios (#4) ·
 Today rule ADR-0012 (#5) · hermetic fixtures (#6) · offline service worker + `Vary` fix (#7) · linked notes, security
@@ -216,7 +216,7 @@ review PASS (#8) · client correctness: duplicate-task identity, read timeouts, 
 Overdue below Today (#9) · account-aware drafts, one submitter per draft, ADR-0014 (#11) · 30 s test timeout (#12) ·
 deploy scaffold: wrangler, `_headers`, secrets-only identifiers, `workers.dev` off, runbook `docs/deploy.md` (#10).
 
-## Milestone 3 — product improvement (Lead session `2c2489c5`, Herdr agent `lead`)
+### Milestone 3 — product improvement (Lead session `2c2489c5`, Herdr agent `lead`)
 
 **Priority and product decisions:** the owner's vault note *Projects/Vault Companion/Vault Companion - Ready Backlog*
 (read-only for the Lead, ADR-0018). This file tracks engineering status only.
@@ -264,7 +264,7 @@ ran an old build after deploy) · post-save wording "reaches Obsidian at your ne
 
 **Owner decisions pending:** G3 (count the day's owner-initiated writes as the canary?) · phone feedback on A and B.
 
-## Status (2026-09-26): the app is live on the owner's phone
+### Status (2026-09-26): the app is live on the owner's phone
 
 Deployed `main` `36aeb42` to `https://app.karpov.dk` (Workers Free, Access owner-only). Reads and live writes verified
 end to end (phone → GitHub → desktop); details and evidence: `docs/checkpoint.md`.
@@ -278,7 +278,7 @@ end to end (phone → GitHub → desktop); details and evidence: `docs/checkpoin
 
 **Next demonstrable result:** milestone 3 — several days of owner use, improvements chosen from observed friction.
 
-## Phone experience — verified vs. untested
+### Phone experience — verified vs. untested
 
 Verified in tests (WebKit iPhone viewport + unit/e2e): Today/Overdue grouping, Active Work Now card,
 complete + Undo (toast and Done today), task/note capture offline with exact-once send, draft recovery across reload
@@ -296,14 +296,14 @@ long text, dictation, large text, VoiceOver, one-handed use, PWA install/update 
 
 Observations: none yet; recorded privately (`.private/`, git-ignored) during milestones 2–3.
 
-## Owner decisions
+### Owner decisions
 
 T1 Today — decided, provisional (ADR-0012) · P1 Workers plan — **decided: Free** (owner, 2026-09-26). Real list 16 KB / 39 tasks ⇒ est. 4–5 ms CPU (10 ms cap);
 read budget fixed by O1; measure real CPU with `wrangler tail` after the read-only deploy; optimise (O7: commits listing
 instead of patch-carrying compare) only if a request nears the cap · D2 linked-note roots `Projects/`, `Tasks/`, `Inbox/` ·
 D3 no `🆔` writes · D4 capture at top of Open (ADR-0010).
 
-## Known limitations (accepted for the first release)
+### Known limitations (accepted for the first release)
 
 - Cold offline launch shows the shell and pending actions, not the task list (no vault content on device by design).
 - Desktop conflicts surface only in the sync log/status file until the owner resolves them.
@@ -313,12 +313,12 @@ D3 no `🆔` writes · D4 capture at top of Open (ADR-0010).
   cannot be sent (undo in Obsidian).
 - R7 (Low): semantic Undo leaves a blank line in Done when Done has other content.
 
-## Follow-ups (not blocking the first release)
+### Follow-ups (not blocking the first release)
 
 Per-task conflict flags from the worker · single-page dedupe bound for other commands if budgets demand ·
 shared lazy renderer loader · "Load latest draft" in a superseded window · lease reclaim after reload (60 s
 "Saving…") · NFD/recursive-tree GitHub probes · A3 two-tab e2e flaked once under full parallel WebKit load.
 
-## Human gates
+### Human gates
 
 G1 sandbox (done) · G2 credentials (B5) · G3 first live write (B6). Vault writes only with owner approval.
