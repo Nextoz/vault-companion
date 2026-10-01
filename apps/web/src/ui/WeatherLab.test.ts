@@ -192,4 +192,26 @@ describe('WeatherMorning Today projection and fences', () => {
     await act(async () => { success({ coords: { latitude: 55.68123, longitude: 12.57123 } } as GeolocationPosition); });
     expect(postWeatherLocation).not.toHaveBeenCalled();
   });
+
+  it('clears a late hidden location attempt without posting coordinates', async () => {
+    let success!: PositionCallback;
+    Object.defineProperty(dom.window.navigator, 'geolocation', { configurable: true, value: { getCurrentPosition: (callback: PositionCallback) => { success = callback; } } });
+    await render();
+    await act(async () => { [...document.querySelectorAll('button')].find((b) => b.textContent === 'Weather')!.click(); });
+    await act(async () => { [...document.querySelectorAll('button')].find((b) => b.textContent === 'Use my device location')!.click(); });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    await act(async () => { success({ coords: { latitude: 55.68123, longitude: 12.57123 } } as GeolocationPosition); });
+    expect(document.getElementById('root')!.textContent).not.toContain('Finding device location');
+    expect(document.getElementById('root')!.textContent).toContain('not used while hidden or offline');
+    expect(postWeatherLocation).not.toHaveBeenCalled();
+  });
+
+  it('does not call position-unavailable a permission denial', async () => {
+    Object.defineProperty(dom.window.navigator, 'geolocation', { configurable: true, value: { getCurrentPosition: (_success: unknown, error: PositionErrorCallback) => error({ code: 2 } as GeolocationPositionError) } });
+    await render();
+    await act(async () => { [...document.querySelectorAll('button')].find((b) => b.textContent === 'Weather')!.click(); });
+    await act(async () => { [...document.querySelectorAll('button')].find((b) => b.textContent === 'Use my device location')!.click(); });
+    expect(document.getElementById('root')!.textContent).toContain('could not be obtained');
+    expect(document.getElementById('root')!.textContent).not.toContain('permission denied');
+  });
 });
