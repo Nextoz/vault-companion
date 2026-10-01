@@ -168,4 +168,49 @@ describe('createPrefetcher', () => {
       expect(init?.signal).toBeInstanceOf(AbortSignal);
     }
   });
+
+  it('aborts a fetch that never settles, so no later endpoint is asked', async () => {
+    const sent: Sent[] = [];
+    const h = harness({
+      fetch: ((input: string, init?: RequestInit) => {
+        sent.push({ url: input, init });
+        return new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      }) as unknown as PrefetchDeps['fetch'],
+    });
+    h.prefetcher.maybePrefetch('acct', 'rev1');
+    await h.flush();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.init?.signal?.aborted).toBe(false);
+    vi.advanceTimersByTime(10_000);
+    await drain();
+    expect(sent[0]?.init?.signal?.aborted).toBe(true);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('aborts a response body that never settles, so no later endpoint is asked', async () => {
+    const sent: Sent[] = [];
+    const h = harness({
+      fetch: ((input: string, init?: RequestInit) => {
+        sent.push({ url: input, init });
+        return Promise.resolve({
+          type: 'basic',
+          status: 200,
+          ok: true,
+          arrayBuffer: () =>
+            new Promise<ArrayBuffer>((_, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+            }),
+        } as unknown as Response);
+      }) as unknown as PrefetchDeps['fetch'],
+    });
+    h.prefetcher.maybePrefetch('acct', 'rev1');
+    await h.flush();
+    expect(sent).toHaveLength(1);
+    vi.advanceTimersByTime(10_000);
+    await drain();
+    expect(sent[0]?.init?.signal?.aborted).toBe(true);
+    expect(sent).toHaveLength(1);
+  });
 });
