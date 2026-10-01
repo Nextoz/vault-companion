@@ -1,2 +1,4 @@
 # Synthetic test key in the research-explainer scenario test (SENTINEL-key-7f2a), not a secret.
 2eacd52852a1a663b9182e8cc49366d5bf3e1b1b:apps/worker/src/research-explainer.test.ts:generic-api-key:20
+# False positive (2026-10-01): prose 'signed intake secret, revocation/rotation' in a brief, no key present.
+80f4ff1a81a8209be66ca7c96c753a0012c1c739:docs/briefs/HEALTH0-capability-and-contract.md:generic-api-key:46
