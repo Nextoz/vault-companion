@@ -3,9 +3,25 @@
 Durable policy for multi-agent work on this repository (owner instruction, 2026-09-24).
 Full background: bootstrap §5–7 in `docs/bootstrap/`.
 
-## Continuous mode (owner instruction, 2026-09-30; applies to any Lead)
+## Current precedence and decision layer (owner correction, 2026-10-01)
 
-These instructions supersede older queue and continuous-work guidance below. Current Lead appointments and
+Jev is the default first decision layer for compatible cheap structured judgments, including eligible worker,
+model and provider selection. It is System One beneath the Lead, not an implementation worker or a replacement
+for the Lead. Deterministic code decides exact questions first. Generative/System-Two reasoning owns architecture,
+implementation, ambiguous open-ended reasoning and difficult diff understanding. The operational Jev entry below
+defines Use 1, Use 2, thresholds, invocation, privacy and measured-outcome safeguards.
+
+Current queue, appointment, verified runtime and budgets are in plan/checkpoint; their current owner instructions
+override dated continuous-mode/budget observations below. One active implementation feature; a second worker
+only for independent review or bounded existing close-out. One browser job; no recursive delegation.
+The Lead reads source when needed and owns integration, diagnosis, acceptance and release preparation.
+Retain holds, actual CodeRabbit review (minimum 60 minutes between requests across the queue), current CI and
+required independent review. A merge is separate from production deployment and authenticated phone acceptance;
+each additional deployment requires scoped owner authority. No live/reference-vault writes or credential/billing changes.
+
+## Historical continuous guidance (2026-09-30; current amendments take precedence)
+
+These dated instructions are historical where they conflict with current owner instructions. Current Lead appointments and
 temporary exceptions belong in `docs/plan.md`, not here.
 
 - **Queue:** the Ready table in the vault's Ready Backlog, top to bottom in the owner's priority order, plus its
@@ -14,7 +30,7 @@ temporary exceptions belong in `docs/plan.md`, not here.
 - **Lead role:** planning, decomposition, delegation, integration and acceptance, not implementation. Delegate
   according to the routing table to Herdr workers through `tools/agent-pane.sh`.
 - **Token economy:** read diffs, handoffs and gate verdicts rather than whole files.
-- **Turn pacing (owner, 2026-09-30):** never wait or poll inside a Lead turn. End with
+- **Historical turn pacing (superseded by current owner recovery/overnight rules):** never wait or poll inside a Lead turn. End with
   `WAITING: <what>` and let the watcher resume the Lead with `WAKE: <event>`. Read worker handoffs, not logs; if a
   log is required for launch verification or diagnosis, read at most its last 20 lines. The Lead does not read
   source files while coordinating; use `git diff --stat` and delegate source inspection. Save Jev responses to
@@ -31,13 +47,13 @@ temporary exceptions belong in `docs/plan.md`, not here.
 
 ## Roles
 
-- **Lead: Claude Opus 5.5** (`claude-opus-5-5`). Owns architecture, decomposition, task contracts,
+- **Lead:** current appointment and actual runtime are recorded in plan/checkpoint; Claude Opus was the historical default. Owns architecture, decomposition, task contracts,
   integration, conflict reconciliation and final technical decisions. Never delegated.
 - Workers and reviewers run with bounded briefs. Claude/local workers normally use separate worktrees under
   `C:\Dev\vault-companion-worktrees\`; Codex uses disposable full clones under
   `C:\Dev\vault-companion-clones\` because its workspace sandbox cannot write a worktree's shared `.git`.
   Implementation workers hand off through `.agent/handoffs/`; dedicated reviewers write `docs/reviews/` when a durable review is required.
-- Concurrency is budgeted, not unlimited: **one Codex worker by default** (maximum two only when the Lead records that
+- Historical concurrency was budgeted, not unlimited: **one Codex worker by default** (maximum two only when the Lead recorded that
   the tasks are independent and the speedup is worth the quota), **one Claude worker at a time**, and **one Playwright
   job at a time**. Never run two Astra-high jobs in parallel. Free/local workers are additionally limited by RAM and
   provider quotas. No recursive spawning unless the Lead explicitly delegates it.
@@ -49,30 +65,27 @@ This section is the **only active routing table**. Dated usage observations late
 policy exists; they do not override it. Model availability changes, so every launch still verifies the model and
 reasoning effort from the worker banner/log.
 
-OpenAI's current Codex availability for the owner's Plus account includes GPT-5.6 Luna, Terra and Sol plus GPT-6
-Astra. Route to the **cheapest model reasonably capable of passing the brief and acceptance checks**:
+Before a compatible routing decision, use Jev Use 2 with only currently eligible choices from this pool plus
+`unresolved`. Verify availability, privacy, budget and deterministic risk floors before constructing the choices.
+Do not infer availability from older model rows. Route to the cheapest capable eligible model; guarded free GLM
+is preferred when suitable. A new or resumed Lead must invoke Jev, or record a concrete fallback reason.
 
 | Task | Default worker/model |
 |---|---|
-| All implementation by default: tiny/bounded edits, UI, tests, ordinary bugs and moderate debugging | DeepSeek `deepseek-flash` **high** via Codex-on-DeepSeek |
+| Eligible bounded ordinary work, after verified guard/small trial | Scaleway `glm-5.2` via OpenCode or guarded direct API; initial one-step ordinary review only, operational bounds below |
+| Tiny/bounded edits, UI, tests, ordinary bugs and moderate debugging | Jev selects among eligible guarded GLM, DeepSeek `deepseek-flash` **high**, and economical Codex workers |
 | Implementation needing Sol-medium judgment or broader context | DeepSeek `deepseek-pro` **high** |
-| Floor implementation: auth, write path, persistence, concurrency, security, CI, harness | DeepSeek `deepseek-pro` **high**; PR with `hold`, Lead diff review, later independent Claude review |
-| Tiny deterministic edit: rename, one-line fix, docs/formatting | Free/local worker when suitable; otherwise Codex `gpt-5.6-luna` **low** |
-| Clear bounded task: focused test, small UI/CSS, simple bug, coordinated edits from a precise brief | Codex `gpt-5.6-luna` **medium** |
-| Moderate debugging or multi-file change with a clear contract | Codex `gpt-5.6-terra` **medium** |
-| Ordinary implementation/integration requiring engineering judgment | Codex `gpt-5.6-sol` **medium** |
-| Difficult diagnosis or deep review without a critical integrity/security boundary | Codex `gpt-5.6-sol` **high** |
-| Concurrency, identity, persistence/data-integrity, security/privacy, or other genuinely high-risk work | Codex `gpt-6-astra` **medium** |
-| Critical adversarial review of a new write target, realistic data-loss/identity bug, or unresolved high-risk invariant | Codex `gpt-6-astra` **high** |
-| Substantial self-contained feature when Codex is unavailable | Claude Code Cloud; Sonnet by default, Opus only for critical core work |
+| Floor implementation and independent review: auth, write path, persistence, concurrency, security/privacy, CI, harness/hooks, new write targets | DeepSeek `deepseek-v4-pro` **high** under existing owner authorization; fresh independent reviewer, held PR, Lead acceptance; Jev cannot downgrade |
+| Economical bounded Codex worker | Verified `gpt-6.1-sol` **low** (owner authorized); other rows only if currently available and authorized |
+| Other economical Codex / free-local ordinary choices | Only currently available and explicitly authorized models; verify banner/effort and existing privacy/budget bounds before including |
 
-**Owner update 3 (2026-09-30): the DeepSeek rows take precedence for implementation; older Codex rows remain
+**Historical owner update 3 (superseded where it conflicts with current owner instructions): the DeepSeek rows take precedence for implementation; older Codex rows remain
 capability/review references. No B3 graduation gate. Up to three DeepSeek workers on independent files, one
 Playwright job. Temporary Codex budget mode in plan prohibits new OpenAI Codex workers.**
 `deepseek-pro` is the routing tier; the verified API model ID passed to `-m` is `deepseek-v4-pro`.
 
 Free/local workers (Gemini, Antigravity, Qwen) may replace Luna/Terra only for bounded low-risk public-repo work; their
-operational constraints are below. The **Lead remains Claude Opus 5.5** and keeps architecture, decomposition,
+operational constraints are below. The **current appointed Lead** keeps architecture, decomposition,
 integration, conflict reconciliation and final acceptance.
 
 ### Escalation rule
@@ -118,6 +131,10 @@ A new backend enters the table only after its wrapper, spending cap and one smal
 names models: new briefs say "model per routing table", and the model lines in older dated briefs (`docs/briefs/`) are
 historical, never instructions.
 
+Make these policy changes through a focused branch/PR, independent review, current CI and actual CodeRabbit;
+retain existing holds and floors. Synchronize plan/checkpoint pointers and evidence without duplicating routing
+tables or secrets. The owner's Oct1 Jev correction authorizes this change, not any new deployment or privacy scope.
+
 ## Sources of truth and vault access (owner, 2026-09-26; ADR-0018)
 
 - **Priority and product decisions:** the owner's vault note `Projects/Vault Companion/Vault Companion - Ready
@@ -125,8 +142,9 @@ historical, never instructions.
 - **Engineering status:** `docs/plan.md`, written only by the Lead; it links to the Ready Backlog, not copies it.
 - **Live vault reads:** the local Lead only, read-only, paths per ADR-0018. Workers of any kind (Cloud, Codex,
   Antigravity, Qwen, Jev) never touch the live vault; their briefs are synthetic, with shapes derived by the Lead.
-  Owner update 3 supersedes this restriction for DeepSeek: it is trusted with all vault data, private content
-  included. Reads remain task-scoped; live writes still need owner approval. Private text never enters this repo.
+  Historical broader DeepSeek access is not an instruction to put private text in worker/Jev packets. Current
+  repository constitution and owner privacy boundaries apply: local Lead-only task-relevant read access;
+  no private text in this repo, logs, screenshots or cloud judgment packets.
 
 ## Visible agents (owner, 2026-09-26)
 
@@ -283,20 +301,68 @@ removed an identity guard).
 **Local Qwen:** tiny deterministic work only, one at a time, and only with at least 5 GB free RAM. It is a budget
 fallback, not a reviewer for high-risk invariants.
 
-**DeepSeek (owner update 3, 2026-09-30):** default implementation backend, Flash by default and Pro for Sol-medium
+**DeepSeek (historical owner update 3, 2026-09-30; current amendments take precedence):** default implementation backend, Flash by default and Pro for Sol-medium
 judgment/floor work. Smoke and balance API verified; no B3 graduation gate. Up to three workers on independent files.
 Trusted with all vault data, including private content; no sandbox required. Default launcher remains
 `tools/agent-pane.sh` with `AGENT_USER_ENV=DEEPSEEK_API_KEY`, an isolated no-MCP/no-memory DeepSeek `CODEX_HOME`,
 explicit model/provider/effort and `--sandbox workspace-write`. Claude-on-DeepSeek (`Tools/claude-deepseek.ps1`)
 is allowed without WSL/container if needed. Never print keys. Read `GET https://api.deepseek.com/user/balance`
-using the Windows User key at every checkpoint and before/after runs; below $3 stop dispatch and print
-`ACTION NEEDED:`. Afternoon weekday runs cost half. Every diff needs Lead review and `verify-run` once available;
-floor PRs retain `hold` and later independent Claude review. Private text never enters repo/logs/receipts; Jev's
+using the Windows User key before/after dispatch and meaningful checkpoints. The owner removed the $3 reserve:
+use the actual available balance economically until exhausted/provider refusal, never infer a top-up or buy credits.
+Every diff needs Lead review and `verify-run` once available; floor PRs retain `hold` and fresh independent Pro
+review under existing owner authorization. Private text never enters repo/logs/receipts; Jev's
 public-only boundary remains. One Playwright job at a time.
 
-**Jev** (TypeSafe System One): a free typed judgment helper, never a worker or Lead. It may do first-cut triage on
-public-repo material; high-risk decisions still get the Lead's own read. Product use with private note text requires a
-separate privacy ADR.
+**Scaleway GLM-5.2 (owner authorized, Oct1):** configured OpenCode smoke passed. Use
+`opencode run --standalone --model scaleway/glm-5.2` or a bounded direct API invocation with existing authentication;
+no credential duplication or billing changes. Initial task is one-step ordinary review, no tools/delegation/network
+access by the model, small public/synthetic packet, maximum output 2048. Before dispatch reserve 50000 tokens;
+observed usage plus reservation must remain <=900000 of the owner's declared 1000000 free allocation (100000
+safety margin). Check actual usage before/after: OpenCode Scaleway stats plus direct-API response usage ledger;
+count input/output/reasoning/cache conservatively without double counting. Local stats are not account-wide balance
+proof: missing usage, outside-usage uncertainty or insufficient free allowance stops new dispatch. No paid fallback.
+Multi-step implementation requires an equivalently bounded verified guard first. GLM does not replace the Pro floor.
+
+**Jev — active default System One (Use 1 / Use 2):** prefer deterministic code for exact decisions. Otherwise use
+typed Choice/Score/Noul judgments for compatible cheap triage, classification, relevance/filtering, tool choices,
+review necessity and routing. Batch related questions in one call when practical. Do not force architecture,
+ambiguous design, implementation or difficult diff analysis into a typed question to avoid generative reasoning.
+
+- **Use 2, before compatible routing:** filter the current pool by availability, budget, privacy and task risk.
+  Include guarded Scaleway GLM-5.2, DeepSeek Flash/Pro and currently eligible economical Codex workers when
+  allowed, plus `unresolved`. Ask tier/provider choice, integrity class and ambiguity together. Follow a low-risk
+  choice only when its top probability is >=0.60, integrity class is ordinary and ambiguity probability is <0.50.
+  Otherwise the Lead applies normal routing and records the fallback reason. Never treat headline confidence as
+  the top-choice probability. Missing/malformed answers, unavailable helper/provider or an unresolved choice
+  also require explicit fallback, without repeated unchanged failed calls or fabricated Jev use.
+- **Deterministic floor overrides every Jev result:** security/privacy/auth/identity/account binding, writes,
+  persistence/concurrency/data integrity, new write targets and harness/hooks/CI keep their established floor.
+  Exclude ineligible lower choices before the call; log any conflicting advice and retain the floor. Jev cannot
+  remove a hold, waive a review/check, authorize live access/writes/deployment or certify a worker's implementation.
+- **Use 1, after every compatible completed worker:** batch completion, verification sufficiency, scope adherence
+  or creep, silent-failure risk, unsupported claims, and redo/escalation/review disposition. Supply filtered facts
+  and material limitations, not an unexamined success claim. Record Jev advice next to the Lead verdict; the Lead
+  reads the source/evidence and owns acceptance. Uncertain scores prompt inspection rather than prove a defect.
+  If a run cannot safely be summarized within the public boundary, record that exclusion/fallback explicitly.
+- **Privacy and invocation:** only the local Lead calls the existing authorized helper. Resolve
+  `Join-Path $env:USERPROFILE 'Obsidian Vault/Second Brain/Tools/jev.ps1'`; check `Test-Path`, then use
+  `& $jev -StateFile <filtered-public-packet> -QuestionsFile <typed-questions.json> -Json`.
+  `-Ask`, `-Choose` and `-Rate` cover single judgments; `-QuestionsFile` batches named questions with
+  `type: choice` plus criteria including unresolved, `type: score` plus ordered criteria, or `type: boolean`
+  (helper converts boolean to direct-API Noul). The helper defaults to pinned `jev-1.13.0`; direct credentials are
+  resolved from existing TYPESAFE_API_KEY, with configured gateway fallback. Do not copy the key/helper into the
+  repository, print credentials, or pass raw worker logs/private vault text. If the helper is absent, record its
+  missing path and use normal Lead policy; do not search unrelated private notes or create another invocation.
+  Product use with private note text requires a separate privacy ADR.
+- **Receipts and calibration:** save packets, question objects and responses in gitignored `.agent/jev/` and an
+  outcome ledger bound to task ID, candidate SHA/diff, timestamp and model. Record eligible choices/floors,
+  probabilities, followed/overruled/fallback reason, Lead verdict and actual subsequent checks/redo/escalation.
+  Ensure local Git exclusion before writing; never commit these receipts or an API key. At meaningful checkpoints
+  report followed/overruled picks and affected runs; unknown remains unknown. Preserve prior observations rather
+  than resetting the experiment on resume. **Existing kill switch:** two of the first five Jev-picked runs needing
+  escalation/redo disables active routing, reverts Use 2 to shadow and requires an owner report. Continue Use 1
+  and deterministic floors. Later demonstrably poor routing likewise warrants an explicit stop/reassessment,
+  never a silent threshold change. Threshold/routing changes use the policy-change contract above.
 
 **Shell hygiene (Lead):** never put Markdown with backticks or `$(…)` inside `node -e "…"`/`bash -c "…"` strings;
 the shell can execute them. Write such text with file tools instead.

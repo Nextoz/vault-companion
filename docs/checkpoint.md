@@ -1,5 +1,21 @@
 # Checkpoint — 2026-09-30 13:23 Europe/Copenhagen
 
+## Current policy checkpoint — 2026-10-01
+
+Owner corrected Jev from optional advisory to default typed System-One decision layer. Canonical policy and
+ADR-0030 now specify existing Use 1/Use 2, >=0.60 top probability/ordinary/<0.50 ambiguity, risk-floor override,
+public-only authorized helper invocation, explicit fallback and preserved outcome kill switch. Runtime: Lead
+gpt-6.1-sol medium; old model/queue/budget claims below are historical. No running worker interrupted.
+Operational evidence: batched Jev Use 1 on Radar CodeRabbit repair recommends strong review (.95); Lead agrees.
+Use 2 for supplementary ordinary policy coherence review chose eligible guarded GLM-5.2 (.95), ordinary1.00,
+ambiguity .39. Required Pro review remains mandatory; GLM does not replace it. One prior picked SP1 run needed
+redo; no evidence yet of a second affected picked run. Preserve history and mark unverified accounting unknown.
+Radar is the active implementation feature; Dashboard deployed but phone acceptance remains separate. Policy
+change is prepared, not accepted until focused PR/reviews/current CI/actual CodeRabbit. Exact next action:
+complete supplementary guarded GLM and independent floor review, then resolve findings and merge verified policy.
+No new production deployment or vault-write authority. Latest actual DeepSeek balance $1.55 before current review;
+no $3 reserve. GLM local baseline9628 tokens is not account-wide balance proof; conservative guard in orchestration.
+
 ## Latest delta — bug batch verified, PR49 open
 
 - BUGS-Pro handoff read and corrected spans reviewed. Evidence-free degraded history excluded again; equal

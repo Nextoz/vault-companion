@@ -1,5 +1,21 @@
 # Current plan
 
+## Current owner instructions — 2026-10-01
+
+Jev is the active default structured decision layer: Use 2 before compatible eligible routing; Use 1 after
+compatible worker completion. Follow [canonical orchestration](orchestration.md) and [ADR-0030](decisions/0030-cost-aware-worker-model-routing.md),
+including existing thresholds, deterministic floors, public-only packets, explicit fallback and preserved kill switch.
+No parallel routing policy in this plan. Current Lead runtime is gpt-6.1-sol medium, verified in session metadata;
+older Astra/Claude claims below are historical. No currently running worker is interrupted by this policy change.
+One active implementation feature: Research Radar, bounded existing H1/H2 during external waits, then integrated
+Weather W1. Dashboard and cache merged; Dashboard deployed, authenticated phone acceptance separate.
+Owner permits overnight work until Oct1 08:00 Copenhagen; start no new task then. One browser job, no recursive
+delegation, full available DeepSeek balance (no $3 reserve), guarded owner-authorized GLM. New deployment needs
+separate scoped approval; no live/reference-vault writes, private worker/Jev packets or credential/billing changes.
+Next: accept current Radar repair only after matching combined checks, independent Pro, current CI and actual
+CodeRabbit; prepare this focused Jev policy PR through the same review/merge rules. Older queue/budget restrictions
+below are historical evidence where superseded by these instructions.
+
 Lead: **Codex gpt-6-astra, temporary owner exception and Codex budget mode (2026-09-30)**, replacing Claude Opus while the Claude budget is low.
 **Expires Thursday 2026-10-01 21:00 Europe/Copenhagen (19:00 UTC).** Finish the current safe step, checkpoint,
 commit, and print `HANDOVER TO CLAUDE READY`; Claude Opus resumes the normal Lead role.
