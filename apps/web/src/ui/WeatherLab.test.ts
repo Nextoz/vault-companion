@@ -104,6 +104,18 @@ describe('WeatherLab full inspector', () => {
     });
     expect(document.querySelector('.weather-readout')!.textContent).toContain('°C');
   });
+
+  it('turns a fresh mounted forecast stale as monotonic time advances without fetching', async () => {
+    vi.useFakeTimers();
+    try {
+      root = createRoot(document.getElementById('root')!);
+      await act(async () => { root!.render(createElement(WeatherLab, { projection: projection() })); });
+      expect(document.getElementById('root')!.textContent).not.toContain('Not refreshed');
+      await act(async () => { vi.advanceTimersByTime(16 * 60_000); });
+      expect(document.getElementById('root')!.textContent).toContain('Not refreshed');
+      expect(getWeather).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
 });
 
 describe('WeatherMorning Today projection and fences', () => {

@@ -122,7 +122,8 @@ export function parseWeatherBody(body: unknown, model: WeatherModel, retrievedAt
   let previous = Number.NEGATIVE_INFINITY;
   for (let i = 0; i < times.length; i++) {
     const rawTime = times[i];
-    if (typeof rawTime !== 'number' || !Number.isInteger(rawTime) || rawTime <= previous) return null;
+    if (typeof rawTime !== 'number' || !Number.isInteger(rawTime) || rawTime <= previous || rawTime % 3600 !== 0) return null;
+    if (rawTime - (times[0] as number) >= WEATHER_FORECAST_HOURS * 3600) return null;
     const instant = new Date(rawTime * 1000);
     if (!Number.isFinite(instant.getTime())) return null;
     previous = rawTime;
@@ -141,7 +142,7 @@ export function parseWeatherBody(body: unknown, model: WeatherModel, retrievedAt
     retrievedAt,
     expectedPoints: WEATHER_FORECAST_HOURS,
     points,
-    missingIntervals: WEATHER_FORECAST_HOURS - points.length,
+    missingIntervals: WEATHER_FORECAST_HOURS - points.length + points.filter((p) => p.temperatureC === null || p.rainMm === null || p.windMs === null).length,
   };
 }
 

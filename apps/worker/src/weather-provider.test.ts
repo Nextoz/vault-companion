@@ -37,6 +37,14 @@ describe('weatherUrl (fixed endpoints/models only)', () => {
 });
 
 describe('parseWeatherBody (strict provider validation)', () => {
+  it('refuses non-hourly instants and points outside the bounded 48-hour grid', () => {
+    for (const times of [[START_SEC + 1], [START_SEC, START_SEC + 48 * 3600]]) {
+      const values = times.map(() => 1);
+      expect(parseWeatherBody(raw({ hourly: { time: times, temperature_2m: values, rain: values, wind_speed_10m: values } }), 'dmi_harmonie_arome_europe', NOW_ISO)).toBeNull();
+    }
+    const parsed = parseWeatherBody(raw({ hourly: { time: [START_SEC, START_SEC + 2 * 3600], temperature_2m: [15, null], rain: [0, 0], wind_speed_10m: [4, 4] } }), 'dmi_harmonie_arome_europe', NOW_ISO)!;
+    expect(parsed.missingIntervals).toBe(47);
+  });
   it('refuses a unix instant outside the JavaScript date range without throwing', () => {
     expect(parseWeatherBody(raw({ hourly: { time: [Number.MAX_SAFE_INTEGER], temperature_2m: [15], rain: [0], wind_speed_10m: [4] } }), 'dmi_harmonie_arome_europe', NOW_ISO)).toBeNull();
   });

@@ -30,6 +30,18 @@ const localTime = new Intl.DateTimeFormat('en-GB', {
 export const formatWeatherTime = (iso: string): string => localTime.format(new Date(iso));
 const at = (iso: string): number => Date.parse(iso);
 
+/** Advance server time with monotonic elapsed time, without fetching or trusting the phone wall clock. */
+function useWeatherNow(serverNow: string | null): number {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    setElapsed(0);
+    const started = performance.now();
+    const timer = setInterval(() => setElapsed(performance.now() - started), 30_000);
+    return () => clearInterval(timer);
+  }, [serverNow]);
+  return serverNow ? at(serverNow) + elapsed : 0;
+}
+
 export function weatherFresh(projection: WeatherProjection, nowMs: number): boolean {
   const newest = projection.models.map((series) => at(series.retrievedAt)).sort((a, b) => a - b)[0];
   return newest !== undefined && nowMs - newest <= WEATHER_STALE_MS;
@@ -194,7 +206,7 @@ export function WeatherLab({ projection, accountKey, onUsePreciseLocation, locat
     return primary && comparison && showComparison ? [primary, comparison] : primary ? [primary] : [];
   }, [projection.models, showComparison]);
   // Freshness is measured against the server `now` in the projection, never the phone clock.
-  const stale = !weatherFresh(projection, at(projection.now));
+  const stale = !weatherFresh(projection, useWeatherNow(projection.now));
   const headingId = useId();
   return (
     <section className="weather-lab" aria-labelledby={headingId}>
@@ -257,6 +269,8 @@ export function WeatherMorning({ refreshKey, accountKey, blocked = false }: Weat
   const [locationBusy, setLocationBusy] = useState(false);
   const [locationDenied, setLocationDenied] = useState<string | null>(null);
   const genRef = useRef(0);
+  const serverNow = result?.kind === 'ok' && result.data.status === 'ok' ? result.data.projection.now : null;
+  const currentNow = useWeatherNow(serverNow);
 
   useEffect(() => {
     const gen = ++genRef.current;
@@ -277,7 +291,12 @@ export function WeatherMorning({ refreshKey, accountKey, blocked = false }: Weat
     const gen = ++genRef.current;
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        if (gen !== genRef.current || document.visibilityState === 'hidden' || !navigator.onLine) return;
+        if (gen !== genRef.current) return;
+        if (document.visibilityState === 'hidden' || !navigator.onLine) {
+          setLocationBusy(false);
+          setLocationDenied('Device location was not used while hidden or offline — using the coarse Copenhagen fallback.');
+          return;
+        }
         const request = { latitude: roundWeatherCoordinate(position.coords.latitude), longitude: roundWeatherCoordinate(position.coords.longitude) };
         void postWeatherLocation(request, accountKey).then((value) => {
           if (gen !== genRef.current) return;
@@ -285,10 +304,12 @@ export function WeatherMorning({ refreshKey, accountKey, blocked = false }: Weat
           setResult(value);
         });
       },
-      () => {
+      (error) => {
         if (gen !== genRef.current) return;
         setLocationBusy(false);
-        setLocationDenied('Location permission denied — using the coarse Copenhagen fallback.');
+        setLocationDenied(error.code === 1
+          ? 'Location permission denied — using the coarse Copenhagen fallback.'
+          : 'Device location could not be obtained — using the coarse Copenhagen fallback.');
       },
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 0 },
     );
@@ -324,6 +345,7 @@ export function WeatherMorning({ refreshKey, accountKey, blocked = false }: Weat
         <button type="button" className="link group-toggle" aria-label="Weather" aria-expanded={open} onClick={() => setOpen((value) => !value)}>Weather</button>
       </h2>
       <p className="muted small" data-testid="weather-morning-summary">{runWindowSummary(projection.runWindow)}</p>
+      {!weatherFresh(projection, currentNow) && <p role="status">Not refreshed — showing the last successful forecast.</p>}
       {open && (
         <WeatherLab projection={projection} accountKey={accountKey} onUsePreciseLocation={usePreciseLocation} locationBusy={locationBusy} locationDenied={locationDenied} />
       )}
