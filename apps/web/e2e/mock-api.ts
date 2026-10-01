@@ -330,7 +330,7 @@ export class MockApi {
         path: 'Research/Radar/Decisions/2026-09.jsonl', commitSha: this.#revision, blobSha: 'f'.repeat(40),
         effect: { kind: 'research-radar-decided', path: 'Research/Radar/Decisions/2026-09.jsonl', decisionId: command.operationId } }));
     }
-    this.radar.decisions.push(RadarDecisionLine.parse({
+    this.radar.decisions.push({ ...RadarDecisionLine.parse({
       schemaVersion: 1,
       decisionId: command.operationId,
       paperId: command.payload.paperId,
@@ -338,7 +338,7 @@ export class MockApi {
       undoes: command.payload.undoes,
       at: command.occurredAt,
       card: command.payload.card,
-    }));
+    }), month: this.radar.now.slice(0, 7) });
     return this.#json(route, 200, Receipt.parse({ operationId: command.operationId, status: 'applied',
       path: 'Research/Radar/Decisions/2026-09.jsonl', commitSha: this.#revision, blobSha: 'f'.repeat(40),
       effect: { kind: 'research-radar-decided', path: 'Research/Radar/Decisions/2026-09.jsonl', decisionId: command.operationId } }));
