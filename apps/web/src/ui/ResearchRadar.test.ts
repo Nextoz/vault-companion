@@ -1,4 +1,4 @@
-import { RadarResponse, Receipt, ResearchRadarDecideCommand, type RadarPaper } from '@vault-companion/contracts';
+import { ApiError, RadarResponse, Receipt, ResearchRadarDecideCommand, type RadarPaper } from '@vault-companion/contracts';
 import { JSDOM } from 'jsdom';
 import { act, createElement, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -362,6 +362,7 @@ describe('ResearchRadar component', () => {
     await flush();
     expect(document.querySelector('[role="status"]')?.textContent).toContain('waiting to retry');
     expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Retry')).toBe(true);
+    expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Discard')).toBe(false);
     expect(document.querySelector('[data-testid="radar-decision"]')).not.toBeNull();
 
     const retry = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Retry')!;
@@ -369,6 +370,67 @@ describe('ResearchRadar component', () => {
     await flush();
     expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Retry')).toBe(false);
     expect(document.querySelector('[data-testid="radar-decision"]')).toBeNull();
+  });
+
+  it('discards a refused local intent and clears it from account-bound storage on reload', async () => {
+    vi.mocked(getRadar).mockResolvedValue({ kind: 'ok', data: response([paper(1), paper(2), paper(3)]) });
+    vi.mocked(postRadarDecision).mockImplementation(async (body) => {
+      const command = ResearchRadarDecideCommand.parse(JSON.parse(body as string));
+      expect(command.payload.decision).toBe('remove');
+      return new Response(JSON.stringify(ApiError.parse({
+        code: 'refused:path',
+        message: 'Radar decision path is not writable',
+        retryable: false,
+      })), { status: 422, headers: { 'Content-Type': 'application/json' } });
+    });
+    const root = await render();
+    await open();
+    expect(document.querySelectorAll('[data-testid="radar-card"]')).toHaveLength(3);
+    const remove = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!;
+    await act(async () => { remove.click(); });
+    await flush();
+    expect(document.querySelectorAll('[data-testid="radar-card"]')).toHaveLength(2);
+    expect(document.querySelector('[data-testid="radar-decision"]')).not.toBeNull();
+    expect(JSON.parse(dom.window.localStorage.getItem('vault-companion:radar-pending:v1:account') ?? '[]')).toHaveLength(1);
+    expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Discard')).toBe(true);
+
+    const discard = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Discard')!;
+    await act(async () => { discard.click(); });
+    await flush();
+    expect(document.querySelectorAll('[data-testid="radar-card"]')).toHaveLength(3);
+    expect(document.querySelector('[data-testid="radar-decision"]')).toBeNull();
+    expect(dom.window.localStorage.getItem('vault-companion:radar-pending:v1:account')).toBe('[]');
+
+    await act(async () => root.unmount());
+    const next = createRoot(document.getElementById('root')!);
+    await act(async () => {
+      next.render(createElement(ResearchRadar, { accountKey: 'account', refreshKey: null, blocked: false }));
+      await Promise.resolve(); await Promise.resolve();
+    });
+    await open();
+    await flush();
+    expect(document.querySelectorAll('[data-testid="radar-card"]')).toHaveLength(3);
+    expect(document.querySelector('[data-testid="radar-decision"]')).toBeNull();
+    expect(vi.mocked(postRadarDecision)).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not offer Discard while an intent is saving', async () => {
+    vi.mocked(getRadar).mockResolvedValue({ kind: 'ok', data: response([paper(1), paper(2), paper(3)]) });
+    const gate = deferred<Response>();
+    vi.mocked(postRadarDecision).mockReturnValueOnce(gate.promise);
+    await render();
+    await open();
+    const remove = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!;
+    await act(async () => { remove.click(); });
+    await flush(2);
+    expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Discard')).toBe(false);
+    gate.resolve(new Response(JSON.stringify(ApiError.parse({
+      code: 'refused:path',
+      message: 'Radar decision path is not writable',
+      retryable: false,
+    })), { status: 422, headers: { 'Content-Type': 'application/json' } }));
+    await flush(8);
+    expect([...document.querySelectorAll('button')].some((b) => b.textContent === 'Discard')).toBe(true);
   });
 
   it('keeps an offline pending intent across a remount without silently resending', async () => {

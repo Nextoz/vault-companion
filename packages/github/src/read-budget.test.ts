@@ -120,8 +120,8 @@ describe('Research Radar read request budget (review 7 finding 5)', () => {
     const result = await service.readResearchRadar();
     if ('code' in result) throw new Error(result.code);
     expect(calls.length).toBeLessThanOrEqual(50);
-    expect(result.sources.importantUpdates).toEqual({ state: 'degraded', count: 16 });
-    expect(result.sources.explained).toEqual({ state: 'degraded', count: 0 });
+    expect(result.sources.importantUpdates).toEqual({ state: 'degraded', count: 13 });
+    expect(result.sources.explained).toEqual({ state: 'degraded', count: 3 });
     expect(result.warnings.join(' ')).toContain('partial coverage');
   });
 });

@@ -1,5 +1,42 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { ApiError } from '@vault-companion/contracts';
+
+test('a refused Radar decision can be discarded and stays cleared after reload', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  let attempts = 0;
+  await page.route('**/api/radar/decisions', async (route) => {
+    attempts += 1;
+    await route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify(ApiError.parse({
+      code: 'invalid', message: 'Synthetic permanent decision refusal', retryable: false,
+    })) });
+  });
+  await page.goto('/');
+  const scouts = page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Scouts', exact: true });
+  await scouts.click();
+  const radar = page.getByRole('region', { name: 'Research Radar' });
+  const toggle = radar.getByRole('button', { name: /^Research Radar(?:\s+[▸▾])?$/ });
+  await toggle.click();
+  const cards = radar.getByTestId('radar-card');
+  await expect(cards).toHaveCount(2);
+  await cards.first().getByRole('button', { name: 'Remove', exact: true }).click();
+  const discard = radar.getByRole('button', { name: 'Discard', exact: true });
+  await expect(discard).toBeVisible();
+  await expect(cards).toHaveCount(1);
+  await discard.click();
+  await expect(cards).toHaveCount(2);
+  await expect(radar.getByTestId('radar-decision')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => Object.entries(localStorage)
+    .filter(([key]) => key.startsWith('vault-companion:radar-pending:'))
+    .reduce((total, [, value]) => total + (JSON.parse(value) as unknown[]).length, 0))).toBe(0);
+  await page.reload();
+  await scouts.click();
+  await toggle.click();
+  await expect(cards).toHaveCount(2);
+  await expect(radar.getByTestId('radar-decision')).toHaveCount(0);
+  expect(attempts).toBe(1);
+});
 
 test('Radar mounts on Scouts, expands/collapses, reads a note and keeps decisions honest', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

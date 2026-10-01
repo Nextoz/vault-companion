@@ -353,7 +353,13 @@ const MALFORMED_RADAR_DECISION_FILE = /^(\d{4}-\d{2})\.jsonl$/;
 async function readListedDecisionText(store: VaultStore, x: string, listed: ListedFile): Promise<string> {
   const path = parseVaultPath(listed.path);
   if (!path) throw new RadarDecisionUnreadableError('unsupported-line', 'invalid Radar decision path');
-  const file = await store.readFile(path, x);
+  let file;
+  try {
+    file = await store.readFile(path, x);
+  } catch (e) {
+    if (e instanceof FileTooLarge) throw new RadarDecisionUnreadableError('too-large', 'a Radar decision log is larger than 1 MB');
+    throw e;
+  }
   if (!file) throw new RadarDecisionUnreadableError('missing-at-revision', 'a listed Radar decision log is missing at the pinned revision');
   if (file.blobSha !== listed.blobSha) throw new RadarDecisionUnreadableError('blob-mismatch', 'a listed Radar decision log changed during the read');
   if (file.bytes.length > MAX_NOTE_BYTES) throw new RadarDecisionUnreadableError('too-large', 'a Radar decision log is larger than 1 MB');
@@ -440,6 +446,8 @@ function direct(files: readonly ListedFile[], dir: string): ListedFile[] {
  */
 export const RADAR_NOTE_READ_BUDGET = 16;
 
+const RADAR_READ_RESERVES = { important: 5, scout: 4, brief: 4, explained: 3 } as const;
+
 interface ReadNotesOutcome {
   readonly notes: ReadNote[];
   /** Files that were attempted but could not be read (encoding, size guard, missing/mismatched blob). */
@@ -448,25 +456,149 @@ interface ReadNotesOutcome {
   readonly capped: number;
 }
 
-/** Reads listed source notes in deterministic path order until the shared budget is exhausted. */
-async function readBoundedNotes(
+interface ReadNoteSlice {
+  readonly notes: ReadNote[];
+  readonly unreadable: number;
+  readonly attempted: number;
+  readonly remaining: ListedFile[];
+}
+
+const byPath = (a: ListedFile, b: ListedFile): number => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+
+function importantDateHint(file: ListedFile): string | null {
+  const name = file.path.slice(IMPORTANT_DIR.length + 1);
+  return /^(\d{4}-\d{2}-\d{2})\b/.exec(name)?.[1] ?? null;
+}
+
+function pathHash(path: string, salt: number): number {
+  let hash = 2166136261 ^ salt;
+  for (let i = 0; i < path.length; i++) {
+    hash ^= path.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * Filename dates are only preselection hints: parsed `created`, `status`, and `source` remain authoritative for
+ * Important eligibility. Current Copenhagen seven-day date-prefixed files come first, then newer dated hints, then a
+ * deterministic day-rotated undated fallback so unknown filenames are still considered rather than silently dropped.
+ */
+function importantOrder(window: ReadonlySet<string>, today: string): (a: ListedFile, b: ListedFile) => number {
+  const rank = (file: ListedFile): number => {
+    const hint = importantDateHint(file);
+    if (hint === null) return 2;
+    return window.has(hint) ? 0 : 1;
+  };
+  const day = Math.floor(Date.parse(`${today}T00:00:00Z`) / 86_400_000);
+  return (a, b) => {
+    const ar = rank(a);
+    const br = rank(b);
+    if (ar !== br) return ar - br;
+    const ah = importantDateHint(a);
+    const bh = importantDateHint(b);
+    if (ah !== null && bh !== null && ah !== bh) return ah < bh ? 1 : -1;
+    if (ah !== null && bh === null) return -1;
+    if (ah === null && bh !== null) return 1;
+    if (ah !== null && bh !== null) return byPath(a, b);
+    const ha = pathHash(a.path, day);
+    const hb = pathHash(b.path, day);
+    return ha === hb ? byPath(a, b) : ha < hb ? -1 : 1;
+  };
+}
+
+interface CandidateHint {
+  readonly title: string;
+  readonly sourceUrl: string;
+}
+
+function candidateHints(
+  scoutNotes: readonly ReadNote[],
+  briefNotes: readonly ReadNote[],
+  importantNotes: readonly ReadNote[],
+): CandidateHint[] {
+  const hints: CandidateHint[] = [];
+  for (const note of scoutNotes) {
+    for (const item of parseRadarItems(note.markdown, 'Most relevant items')) hints.push({ title: item.title, sourceUrl: item.url });
+  }
+  for (const note of briefNotes) {
+    for (const item of [...parseRadarItems(note.markdown, 'Read today'), ...parseRadarItems(note.markdown, 'Read this week')]) {
+      hints.push({ title: item.title, sourceUrl: item.url });
+    }
+  }
+  for (const note of importantNotes) {
+    const fm = parseRadarFrontmatter(note.markdown);
+    if (fm.source) hints.push({ title: fm.title ?? '', sourceUrl: fm.source });
+  }
+  return hints;
+}
+
+function normalizeHint(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Preselection for explanation notes only. Matching a ranked candidate title/source path is a read-order hint; the
+ * actual explanation association is still made from the parsed canonical source URL, never from a guessed title.
+ */
+function explanationOrder(candidates: readonly CandidateHint[]): (a: ListedFile, b: ListedFile) => number {
+  const titles = candidates.map((c) => normalizeHint(c.title)).filter((t) => t.length >= 3);
+  const sourceFragments = candidates.map((c) => {
+    try {
+      const pathname = new URL(c.sourceUrl).pathname;
+      return normalizeHint(pathname.split('/').filter(Boolean).at(-1) ?? '');
+    } catch {
+      return '';
+    }
+  }).filter((t) => t.length >= 3);
+  return (a, b) => {
+    const score = (file: ListedFile): number => {
+      const stem = normalizeHint(file.path.slice(RADAR_EXPLAINED_DIR.length + 1).replace(/\.md$/i, ''));
+      if (!stem) return 2;
+      if (titles.some((title) => stem.includes(title) || title.includes(stem))) return 0;
+      if (sourceFragments.some((fragment) => stem.includes(fragment) || fragment.includes(stem))) return 1;
+      return 2;
+    };
+    const sa = score(a);
+    const sb = score(b);
+    return sa === sb ? byPath(a, b) : sa - sb;
+  };
+}
+
+/** Reads the first `limit` files in the supplied deterministic order, leaving later files for the spare pass. */
+async function readNoteSlice(
   store: VaultStore,
   x: string,
   files: readonly ListedFile[],
   budget: { remaining: number },
-): Promise<ReadNotesOutcome> {
-  const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  limit: number,
+  order: (a: ListedFile, b: ListedFile) => number,
+): Promise<ReadNoteSlice> {
+  const sorted = [...files].sort(order);
   const notes: ReadNote[] = [];
   let unreadable = 0;
-  let capped = 0;
+  let attempted = 0;
+  const remaining: ListedFile[] = [];
   for (const listed of sorted) {
-    if (budget.remaining <= 0) { capped += 1; continue; }
+    if (attempted >= limit || budget.remaining <= 0) {
+      remaining.push(listed);
+      continue;
+    }
     budget.remaining -= 1;
+    attempted += 1;
     const note = await readAllowedNote(store, x, listed);
     if (note) notes.push(note);
     else unreadable += 1;
   }
-  return { notes, unreadable, capped };
+  return { notes, unreadable, attempted, remaining };
+}
+
+function finishRead(reserved: ReadNoteSlice, spare: ReadNoteSlice): ReadNotesOutcome {
+  return {
+    notes: [...reserved.notes, ...spare.notes],
+    unreadable: reserved.unreadable + spare.unreadable,
+    capped: spare.remaining.length,
+  };
 }
 
 interface ResearchRadarRead {
@@ -501,10 +633,33 @@ async function loadResearchRadar(deps: ResearchRadarServiceDeps): Promise<Resear
   const explainedListed = direct(explainedFiles, RADAR_EXPLAINED_DIR);
 
   const budget = { remaining: RADAR_NOTE_READ_BUDGET };
-  const scoutRead = await readBoundedNotes(deps.store, x, scoutListed, budget);
-  const briefRead = await readBoundedNotes(deps.store, x, briefListed, budget);
-  const importantRead = await readBoundedNotes(deps.store, x, importantListed, budget);
-  const explainedRead = await readBoundedNotes(deps.store, x, explainedListed, budget);
+  const importantCompare = importantOrder(window, date);
+  const scoutReserved = await readNoteSlice(deps.store, x, scoutListed, budget, RADAR_READ_RESERVES.scout, byPath);
+  const briefReserved = await readNoteSlice(deps.store, x, briefListed, budget, RADAR_READ_RESERVES.brief, byPath);
+  const importantReserved = await readNoteSlice(deps.store, x, importantListed, budget, RADAR_READ_RESERVES.important, importantCompare);
+  const explainedReserved = await readNoteSlice(
+    deps.store,
+    x,
+    explainedListed,
+    budget,
+    RADAR_READ_RESERVES.explained,
+    explanationOrder(candidateHints(scoutReserved.notes, briefReserved.notes, importantReserved.notes)),
+  );
+  const scoutSpare = await readNoteSlice(deps.store, x, scoutReserved.remaining, budget, Number.POSITIVE_INFINITY, byPath);
+  const briefSpare = await readNoteSlice(deps.store, x, briefReserved.remaining, budget, Number.POSITIVE_INFINITY, byPath);
+  const importantSpare = await readNoteSlice(deps.store, x, importantReserved.remaining, budget, Number.POSITIVE_INFINITY, importantCompare);
+  const explainedSpare = await readNoteSlice(
+    deps.store,
+    x,
+    explainedReserved.remaining,
+    budget,
+    Number.POSITIVE_INFINITY,
+    explanationOrder(candidateHints(scoutReserved.notes, briefReserved.notes, importantReserved.notes)),
+  );
+  const scoutRead = finishRead(scoutReserved, scoutSpare);
+  const briefRead = finishRead(briefReserved, briefSpare);
+  const importantRead = finishRead(importantReserved, importantSpare);
+  const explainedRead = finishRead(explainedReserved, explainedSpare);
   const scoutNotes = scoutRead.notes;
   const briefNotes = briefRead.notes;
   const importantNotes = importantRead.notes;
@@ -605,7 +760,13 @@ async function loadResearchRadar(deps: ResearchRadarServiceDeps): Promise<Resear
     };
   });
 
-  const appliedFile = await deps.store.readFile(parseVaultPath(RADAR_APPLIED_PATH)!, x);
+  let appliedFile;
+  try {
+    appliedFile = await deps.store.readFile(parseVaultPath(RADAR_APPLIED_PATH)!, x);
+  } catch (e) {
+    if (e instanceof FileTooLarge) throw new RadarAppliedUnreadableError('Research Radar applied state is larger than 1 MB');
+    throw e;
+  }
   let appliedText: string | null;
   try {
     appliedText = appliedFile ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(appliedFile.bytes) : null;

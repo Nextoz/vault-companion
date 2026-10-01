@@ -389,16 +389,91 @@ tags:
     }
   });
 
+  it('turns a decision-log FileTooLarge store throw into a nonretryable invalid read', async () => {
+    const store = await InMemoryStore.create({ 'Research/Radar/Decisions/2026-09.jsonl': '{}\n' });
+    const original = store.readFile.bind(store);
+    const spy = vi.spyOn(store, 'readFile').mockImplementation(async (p, at) => {
+      if ((p as string) === 'Research/Radar/Decisions/2026-09.jsonl') throw new FileTooLarge('file exceeds 1 MB');
+      return original(p, at);
+    });
+    try {
+      const service = createResearchRadarService({ store, now: () => NOW, timeZone: TZ });
+      await expect(service.readResearchRadar()).resolves.toMatchObject({ code: 'invalid', retryable: false });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('turns an applied.json FileTooLarge store throw into a nonretryable invalid read', async () => {
+    const store = await InMemoryStore.create({ 'Research/Radar/applied.json': '{}' });
+    const original = store.readFile.bind(store);
+    const spy = vi.spyOn(store, 'readFile').mockImplementation(async (p, at) => {
+      if ((p as string) === 'Research/Radar/applied.json') throw new FileTooLarge('file exceeds 1 MB');
+      return original(p, at);
+    });
+    try {
+      const service = createResearchRadarService({ store, now: () => NOW, timeZone: TZ });
+      await expect(service.readResearchRadar()).resolves.toMatchObject({ code: 'invalid', retryable: false });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('caps large Important/Explained directories and reports honest partial coverage', async () => {
     const files: Record<string, string> = {};
     for (let i = 0; i < 40; i += 1) files[`${IMPORTANT_DIR}/Note ${String(i).padStart(2, '0')}.md`] = important('2026-09-29', `Note ${i}`, `https://example.com/imp-${i}`);
     for (let i = 0; i < 40; i += 1) files[`${EXPLAINED_DIR}/Expl ${String(i).padStart(2, '0')}.md`] = explained(`https://example.com/exp-${i}`);
     const store = await InMemoryStore.create(files);
     const out = await buildResearchRadar({ store, now: () => NOW, timeZone: TZ });
+    expect(out.sources.importantUpdates).toEqual({ state: 'degraded', count: 13 });
+    expect(out.sources.explained).toEqual({ state: 'degraded', count: 3 });
+    expect(out.warnings.join(' ')).toContain('importantUpdates read only 13 of 40 papers before the read budget');
+    expect(out.warnings.join(' ')).toContain('explained read only 3 of 40 explanations before the read budget');
+  });
+
+  it('prioritizes a current-window dated Important over many older dated files', async () => {
+    const current = 'https://example.com/current-important';
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 20; i += 1) {
+      files[`${IMPORTANT_DIR}/2026-01-01 Old ${String(i).padStart(2, '0')}.md`] = important('2026-01-01', `Old ${i}`, `https://example.com/old-${i}`);
+    }
+    files[`${IMPORTANT_DIR}/2026-09-29 Current.md`] = important('2026-09-29', 'Current', current);
+    const out = await build(files);
+    expect(out.papers.map((p) => p.sourceUrl)).toContain(current);
+  });
+
+  it('reserves a positive share for Explained even when Scout/Brief/Important are full', async () => {
+    const files: Record<string, string> = {};
+    for (const date of ['2026-09-24', '2026-09-25', '2026-09-26', '2026-09-27', '2026-09-28', '2026-09-29', '2026-09-30']) {
+      files[`${SCOUT_DIR}/Daily Research Scout - ${date}.md`] = scout(date, `Scout ${date}`, `https://example.com/scout-${date}`, 80);
+      files[`${BRIEF_DIR}/Research Reading Brief - ${date}.md`] = brief(date, `Brief ${date}`, `https://example.com/brief-${date}`);
+    }
+    for (let i = 0; i < 40; i += 1) files[`${IMPORTANT_DIR}/Note ${String(i).padStart(2, '0')}.md`] = important('2026-09-29', `Note ${i}`, `https://example.com/imp-${i}`);
+    for (let i = 0; i < 40; i += 1) files[`${EXPLAINED_DIR}/Expl ${String(i).padStart(2, '0')}.md`] = explained(`https://example.com/exp-${i}`);
+    const out = await build(files);
+    expect(out.sources.explained.count).toBe(3);
+  });
+
+  it('reads the matching explanation for a ranked candidate when many explanations compete', async () => {
+    const url = 'https://example.com/match';
+    const files: Record<string, string> = {
+      [`${IMPORTANT_DIR}/2026-09-29 Matching Paper.md`]: important('2026-09-29', 'Matching Paper', url),
+    };
+    for (let i = 0; i < 40; i += 1) files[`${EXPLAINED_DIR}/Expl ${String(i).padStart(2, '0')}.md`] = explained(`https://example.com/exp-${i}`);
+    files[`${EXPLAINED_DIR}/ZZ Matching Paper.md`] = explained(url);
+    const out = await build(files);
+    expect(out.papers).toHaveLength(1);
+    expect(out.papers[0]!.badges).toContain('explained');
+    expect(out.papers[0]!.read).toEqual({ kind: 'explanation', path: `${EXPLAINED_DIR}/ZZ Matching Paper.md` });
+  });
+
+  it('keeps undated Important filenames as deterministic fallback instead of dropping them', async () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 20; i += 1) {
+      files[`${IMPORTANT_DIR}/Mystery ${String(i).padStart(2, '0')}.md`] = important('2026-09-29', `Mystery ${i}`, `https://example.com/mystery-${i}`);
+    }
+    const out = await build(files);
     expect(out.sources.importantUpdates).toEqual({ state: 'degraded', count: 16 });
-    expect(out.sources.explained).toEqual({ state: 'degraded', count: 0 });
-    expect(out.warnings.join(' ')).toContain('importantUpdates read only 16 of 40 papers before the read budget');
-    expect(out.warnings.join(' ')).toContain('explained read only 0 of 40 explanations before the read budget');
   });
 
   it('selects the same capped sources regardless of listing order', async () => {

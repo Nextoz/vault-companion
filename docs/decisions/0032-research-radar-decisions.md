@@ -30,8 +30,12 @@ remain desktop-owned.
 - Decision history is read from at most the current Copenhagen month plus the preceding 24 monthly logs (25 months).
   Older, future or malformed monthly log filenames, more than 5000 lines, listed-but-missing/blob-mismatched logs, invalid UTF-8, malformed
   JSONL, duplicate IDs and invalid Undo targets are a typed unreadable/refused state, never an invented absence.
-- Intake-note reads share one aggregate budget; large Important/Explained directories are capped deterministically and reported as
-  degraded partial coverage, never silently treated as an exhaustive ranking.
+- Intake-note reads share one aggregate budget of 16 per request. Each populated intake reserves a positive share before
+  unused capacity is lent: Important 5, Scout 4, Brief 4, Explained 3. Important preselection reads current Copenhagen
+  seven-day date-prefixed filenames first, then newer dated filename hints, then a deterministic day-rotated undated
+  fallback; parsed `created`, `status`, and `source` remain authoritative for eligibility. Explained preselection may use
+  candidate title/source filename hints, but association is always by parsed canonical source URL. Large directories are
+  reported as degraded partial coverage with per-source capped/unreadable warnings, never as an exhaustive ranking.
 
 ## Writes
 
