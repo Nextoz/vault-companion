@@ -12,3 +12,6 @@ tools/wait-for-work.sh.started
 .private/
 
 .claude/settings.local.json
+
+# Local coordination: briefs, handoffs, worker logs, CodeRabbit/Jev receipts (never committed)
+.agent/

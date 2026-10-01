@@ -5,6 +5,11 @@ restriction.
 
 ## Decision
 
+Owner amendment (2026-09-30): the local Lead may read any task-relevant vault or other source needed for assigned
+work, including source-only aggregation code and prior designs. The bounded list below records the earlier scope,
+not the current Lead read limit. This grants no writes, worker access or permission to send real Health records to
+AI; raw HealthCSV/exports/samples remain excluded from prompts, logs and repository fixtures.
+
 The **local Lead only** may **read** the live vault, read-only, limited to:
 
 - `Projects/Vault Companion/**` (product decisions: the Ready Backlog is the source of truth for priority);

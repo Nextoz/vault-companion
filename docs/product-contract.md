@@ -79,4 +79,12 @@ bulk task IDs, archiving of old completed tasks.
 
 ## Owner decisions still open (non-blocking)
 
-Recorded in `docs/plan.md#open-owner-decisions`.
+Open owner decisions are listed in `docs/checkpoint.md` (Owner items).
+
+## Owner-promoted extensions (2026-09-30)
+
+After the first daily-use release, the owner explicitly authorizes Dashboard, Weather lab, Needs You,
+Guided Morning Review, Weekly Review and approved Apple Health intake/cards (ADR-0033). Planning surfaces stay
+separate; HealthCSV stays canonical, synthetic development only, no health data to AI, live writes/secrets/Access
+changes/production calls/deployment without explicit approval. Historical first-release exclusions above describe
+that release, not a veto on these newly approved extensions.
