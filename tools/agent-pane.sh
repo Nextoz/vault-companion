@@ -3,8 +3,8 @@
 # Output streams live in the pane and is copied to <log>; the pane closes itself 60 s after the command ends.
 #
 #   bash tools/agent-pane.sh <label> <cwd> <log> <command...>
-#   e.g. bash tools/agent-pane.sh "astra-high · pr18" C:/Dev/vault-companion-clones/pr18 C:/…/review.log \
-#          codex exec -m gpt-6-astra -c model_reasoning_effort=high -c model_reasoning_summary=detailed … - < brief.md
+#   e.g. bash tools/agent-pane.sh "flash · mood1" C:/Dev/vault-companion-clones/mood1 C:/…/review.log \
+#          codex exec -m deepseek-flash -c model_provider=deepseek (full command: docs/orchestration.md) … - < brief.md
 #
 # Set AGENT_STDIN=<file> to feed a brief on stdin. Prints the new pane ID. Requires HERDR_ENV=1 (run from inside Herdr).
 set -euo pipefail

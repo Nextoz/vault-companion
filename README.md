@@ -113,7 +113,7 @@ Deployment is documented in [docs/deploy.md](docs/deploy.md) and needs the owner
 | [docs/threat-model.md](docs/threat-model.md) | Threat model |
 | [docs/testing.md](docs/testing.md) | Testing |
 | [docs/decisions/](docs/decisions/) | 24 ADRs |
-| [docs/plan.md](docs/plan.md) | Current work |
+| [docs/checkpoint.md](docs/checkpoint.md) | Current state and next action |
 
 ## Project status
 
