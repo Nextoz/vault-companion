@@ -108,6 +108,21 @@ The Lead may push branches, open/close PRs and merge them. **Deploys, live/refer
 Access and billing changes need the owner's explicit approval each time.** The Lead prepares the exact deploy
 command and asks with a line starting `ACTION NEEDED:`.
 
+## Owner updates
+
+The owner wants to follow progress without reading logs. Run `pwsh -NoProfile -File tools/owner-status.ps1` (one
+line: free RAM, DeepSeek balance, Scaleway GLM estimate) and post a short update **in the Lead pane**:
+
+- **When:** after each worker run and handoff-check, after each merge, when blocked, and before a long wait.
+  Format: `STATUS: <what just happened> · <what's next> · <owner-status line>` — two lines at most.
+- **Low RAM:** before launching a worker, `pnpm install` or e2e, run the script; exit 1 (< 3 GB free) ⇒ post
+  `ACTION NEEDED: free RAM — <x> GB free, need ~3 GB for <job>` and wait instead of launching.
+- **Credits:** after every paid DeepSeek run, include the balance; below $2 ⇒ `ACTION NEEDED:` with the remaining
+  planned work, and switch to GLM/Gemini where the risk allows. After a GLM run, append `{"tokens":N}` (from its
+  log) to `.agent/budget/scaleway.jsonl`; above ~800k ⇒ tell the owner and stop GLM at 900k.
+- **CodeRabbit:** if `cr usage` shows 0 reviews left in the hour, say so instead of waiting silently.
+- Lines starting `ACTION NEEDED:` are the only ones that require the owner to act; everything else is information.
+
 ## Herdr
 
 Start the Lead inside Herdr with `pwsh -NoProfile -File tools/start-lead.ps1` (optional `-Focus "<task>"`); workers appear in the **Agents** tab via `tools/agent-pane.sh`. Never navigate
