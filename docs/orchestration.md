@@ -72,8 +72,8 @@ is preferred when suitable. A new or resumed Lead must invoke Jev, or record a c
 
 | Task | Default worker/model |
 |---|---|
-| Eligible bounded ordinary work, after verified guard/small trial | Scaleway `glm-5.2` via OpenCode or guarded direct API; initial one-step ordinary review only, operational bounds below |
-| Tiny/bounded edits, UI, tests, ordinary bugs and moderate debugging | Jev selects among eligible guarded GLM, DeepSeek `deepseek-flash` **high**, and economical Codex workers |
+| Supplementary one-step ordinary review | Jev selects among guarded Scaleway `glm-5.2`, DeepSeek Flash/Pro and economical Codex; GLM preferred when its current task guard/trial is usable |
+| Ordinary implementation: bounded edits, UI, tests, bugs and moderate debugging | Jev selects among eligible DeepSeek `deepseek-flash` **high** and economical Codex workers; GLM only after an equivalent multi-step guard is verified |
 | Implementation needing Sol-medium judgment or broader context | DeepSeek `deepseek-pro` **high** |
 | Floor implementation and independent review: auth, write path, persistence, concurrency, security/privacy, CI, harness/hooks, new write targets | DeepSeek `deepseek-v4-pro` **high** under existing owner authorization; fresh independent reviewer, held PR, Lead acceptance; Jev cannot downgrade |
 | Economical bounded Codex worker | Verified `gpt-6.1-sol` **low** (owner authorized); other rows only if currently available and authorized |
@@ -96,7 +96,7 @@ integration, conflict reconciliation and final acceptance.
 3. Escalate **one tier** only when the evidence shows the task needs more reasoning, broader context or stronger review.
 4. Never escalate because of a rate limit, unavailable model, missing access, broken tooling, flaky test, dependency
    problem or under-specified brief. Fix/reroute the blocker instead.
-5. Astra-high requires a one-line risk reason in the brief. "Seems difficult" is not a risk reason.
+5. Record the deterministic risk reason for floor work; retain the established Pro independent floor.
 6. Do not duplicate implementation across models except for a deliberate independent comparison or review.
 
 ### Launch rules
@@ -104,10 +104,8 @@ integration, conflict reconciliation and final acceptance.
 Always pass the model and effort explicitly; never rely on CLI defaults. Examples:
 
 ```sh
-codex exec -m gpt-5.6-luna  -c model_reasoning_effort=medium …
-codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium …
-codex exec -m gpt-5.6-sol   -c model_reasoning_effort=medium …
-codex exec -m gpt-6-astra   -c model_reasoning_effort=medium …
+codex exec -m gpt-6.1-sol -c model_reasoning_effort=low …
+codex exec -m deepseek-v4-pro -c model_provider=deepseek -c model_reasoning_effort=high …
 ```
 
 All Codex repo workers also disable memories:
@@ -219,7 +217,11 @@ the only record.
 2. Read `docs/checkpoint.md`, then `docs/plan.md`, then only the ADRs/docs the next action names.
 3. `herdr agent list` (inside Herdr) — reconcile with the plan's delegated-agents table; read a worker's report file
    before re-prompting it. Never re-dispatch work whose branch already contains it.
-4. Run `pnpm check` to confirm the recorded test state, then continue with the checkpoint's exact next action.
+4. Reconcile current evidence with the source/configuration before relying on it; run changed/required checks,
+   not unchanged passing suites as a ritual. Consume compatible completed handoffs with Jev Use 1 plus Lead verdict.
+5. Before the next compatible routing/structured decision, use the Jev operational entry below (Use 2), or record
+   the concrete fallback/exclusion. Deterministic floors and an active kill switch always take precedence.
+   Verify the existing watcher targets this Lead and bind new results to the current task/candidate before waiting.
 - `MSYS_NO_PATHCONV=1` also disables Git Bash path translation for git: pass Windows paths (`C:/Dev/...`) to git while
   it is set, or `/c/Dev/...` becomes `C:/c/Dev/...` (happened once; empty leftover dirs under `C:\c\` for the owner to delete).
 - `codex exec` writes its transcript to **stderr**; under Windows PowerShell 5, `2>&1 | Tee-Object` renders every line
@@ -302,8 +304,9 @@ removed an identity guard).
 fallback, not a reviewer for high-risk invariants.
 
 **DeepSeek (historical owner update 3, 2026-09-30; current amendments take precedence):** default implementation backend, Flash by default and Pro for Sol-medium
-judgment/floor work. Smoke and balance API verified; no B3 graduation gate. Up to three workers on independent files.
-Trusted with all vault data, including private content; no sandbox required. Default launcher remains
+judgment/floor work. Smoke and balance API verified; no B3 graduation gate. Current one-feature/review concurrency
+and public/synthetic worker packets apply; older broader private access and three-worker rules are retired.
+Default launcher remains
 `tools/agent-pane.sh` with `AGENT_USER_ENV=DEEPSEEK_API_KEY`, an isolated no-MCP/no-memory DeepSeek `CODEX_HOME`,
 explicit model/provider/effort and `--sandbox workspace-write`. Claude-on-DeepSeek (`Tools/claude-deepseek.ps1`)
 is allowed without WSL/container if needed. Never print keys. Read `GET https://api.deepseek.com/user/balance`
@@ -386,16 +389,18 @@ comments. The handoff file is deleted from the branch once integrated (or on `ma
 
 All integrated changes go through a PR. Workers never merge. The Lead owns the final diff, verification and merge.
 
-- **CodeRabbit is useful but not a merge gate.** After the PR's final pushes, request one
-  `@coderabbitai full review` if no real review already exists. If it is skipped, rate-limited or unavailable, record
-  that fact and continue when CI/local verification and the Lead's review pass. High-risk work still needs the
-  independent review required by the routing table.
+- **Actual CodeRabbit review is required.** On a stable locally verified candidate, request
+  `@coderabbitai full review`, retaining the minimum 60-minute interval across the queue. Read the actual review
+  and disposition all findings; SUCCESS metadata, a skipped/rate-limited/unavailable review or an older candidate
+  does not satisfy the gate. Retain hold and advance another authorized independent item during external wait.
+  Current CI and the independent review required by the routing table remain separate gates.
 - Route actionable CodeRabbit findings through the **current routing table**, not a hard-coded provider/model. Fix with
   a regression test where appropriate or reject with a recorded reason.
 - CodeRabbit has recently allowed roughly one full review per hour. Batch small follow-ups, bugs and docs into one PR
   per round; keep a new write target or security surface in its own PR. Never poll a rate-limited review.
-- **Waking the Lead:** before stopping with delegated work outstanding, run `bash tools/wait-for-work.sh` in the
-  background. It exits on a finished CodeRabbit review or a new `agent/*` branch on origin.
+- **Waking the Lead:** before waiting, verify the existing watcher named by the checkpoint targets this Lead,
+  retains failed deliveries and observes current-task results/PRs. Verify actual resumed activity, not just prompt
+  submission. Do not start a duplicate watcher or treat an old handoff as current completion.
 - Run `gh pr merge` from the main checkout; running it from a temporary worktree can merge remotely and then fail the
   local main checkout because `main` is already used by another worktree. CodeRabbit config: `.coderabbit.yaml`.
 - **Codex runs in disposable full clones** under `C:\Dev\vault-companion-clones\<task>`, not git worktrees.

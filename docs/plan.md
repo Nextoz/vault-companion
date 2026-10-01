@@ -16,6 +16,8 @@ Next: accept current Radar repair only after matching combined checks, independe
 CodeRabbit; prepare this focused Jev policy PR through the same review/merge rules. Older queue/budget restrictions
 below are historical evidence where superseded by these instructions.
 
+## Historical plan records — not active queue, model, privacy or budget instructions
+
 Lead: **Codex gpt-6-astra, temporary owner exception and Codex budget mode (2026-09-30)**, replacing Claude Opus while the Claude budget is low.
 **Expires Thursday 2026-10-01 21:00 Europe/Copenhagen (19:00 UTC).** Finish the current safe step, checkpoint,
 commit, and print `HANDOVER TO CLAUDE READY`; Claude Opus resumes the normal Lead role.
@@ -116,13 +118,12 @@ Routing, handoffs, resume: `docs/orchestration.md`. Checkpoint: `docs/checkpoint
   held PR and deferred independent review/canary mean H is not accepted or shipped yet.
 - DeepSeek smoke passed; update 3 removes the formal B3 graduation gate.
 
-## Owner update 3 — default DeepSeek backend (2026-09-30)
+## Historical owner update 3 — superseded DeepSeek defaults (2026-09-30)
 
 - DeepSeek is the default for **all implementation**, with no B3 graduation gate. Up to **3 DeepSeek workers**
   may run on independent files: Flash by default; Pro where Sol-medium would be chosen and for floor work.
-- DeepSeek is trusted with **all vault data, including private content**. This supersedes the DeepSeek-only
-  public/synthetic restriction; private text still never enters this repository, fixtures, logs or receipts.
-  Live vault writes still require owner approval; Jev still receives public filtered packets only.
+- Earlier broader DeepSeek private-vault access is retired. Current Lead-only task-relevant reads and public/
+  synthetic-only worker/Jev packets apply; no live/reference-vault writes or private repository artifacts.
 - No sandbox required. Default: Codex-on-DeepSeek with `--sandbox workspace-write`, isolated home/no MCP/memories;
   `Tools/claude-deepseek.ps1` is allowed if needed without WSL/container. This uses DeepSeek balance, not Codex quota.
 - Floor work (auth, write path, persistence, concurrency, security, CI, harness) may go to Pro, with a **hold** PR,

@@ -11,10 +11,13 @@ Use 2 for supplementary ordinary policy coherence review chose eligible guarded 
 ambiguity .39. Required Pro review remains mandatory; GLM does not replace it. One prior picked SP1 run needed
 redo; no evidence yet of a second affected picked run. Preserve history and mark unverified accounting unknown.
 Radar is the active implementation feature; Dashboard deployed but phone acceptance remains separate. Policy
-change is prepared, not accepted until focused PR/reviews/current CI/actual CodeRabbit. Exact next action:
+owner decision is operative in this Lead; the durable documentation PR is prepared and remains unmerged until
+focused reviews/current CI/actual CodeRabbit. ADR accepted status records the owner's decision, not PR acceptance. Next:
 complete supplementary guarded GLM and independent floor review, then resolve findings and merge verified policy.
 No new production deployment or vault-write authority. Latest actual DeepSeek balance $1.55 before current review;
 no $3 reserve. GLM local baseline9628 tokens is not account-wide balance proof; conservative guard in orchestration.
+
+## Historical checkpoint records — not current activity or policy
 
 ## Latest delta — bug batch verified, PR49 open
 
