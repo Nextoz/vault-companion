@@ -17,5 +17,14 @@ reviews:
         idempotent retries, head-CAS writes), security (auth, origin checks, path validation, no personal text in logs),
         and tests that would fail if the guarded production line were broken. Flag any real personal data, secrets or
         vault content; fixtures must be synthetic.
+    - path: "tools/**"
+      instructions: >-
+        Treat agent/harness launchers as trust-boundary code. Prioritize command injection, credential exposure,
+        sandbox escape, stale authorization, malformed or weakly-bound receipts, process/stream handling,
+        fail-open behavior, and any path that could authorize paid external-service usage.
+    - path: "apps/worker/**"
+      instructions: >-
+        Prioritize authentication/authorization, origin and path validation, write idempotency, CAS/concurrency,
+        bounded resource usage, retry correctness, and failures that could corrupt or misroute durable vault writes.
     - path: "docs/**"
       instructions: "Check docs against the code they describe; flag contradictions with docs/commands.md or docs/vault-contract.md."
