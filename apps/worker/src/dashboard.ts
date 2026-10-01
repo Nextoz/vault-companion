@@ -1,6 +1,7 @@
 // Dashboard composition (DASH1): the read-only card list the phone renders. Market data comes from the public
-// Coinbase source; the AI usage and Health overviews have no approved source yet and say so honestly.
-import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketTickerResponse, MarketUnavailableReason } from '@vault-companion/contracts';
+// Coinbase source; Weather uses the same projection as the Today morning view; AI usage and Health have no approved
+// source yet and say so honestly.
+import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketTickerResponse, MarketUnavailableReason, WeatherCard, WeatherFailureReason, WeatherResponse } from '@vault-companion/contracts';
 import type { MarketSource } from './market.ts';
 
 const PROVIDER_LABEL = 'Coinbase Exchange (public)';
@@ -11,6 +12,17 @@ const REASON_NOTE: Record<MarketUnavailableReason, string> = {
   malformed: 'The market provider sent data we could not read.',
   'provider-error': 'The market provider is unavailable right now.',
 };
+
+const WEATHER_REASON_NOTE: Record<WeatherFailureReason, string> = {
+  timeout: 'The weather provider did not answer in time.',
+  malformed: 'The weather provider sent data we could not read.',
+  'provider-error': 'The weather provider is unavailable right now.',
+  'no-data': 'No weather model returned usable forecast points.',
+};
+
+export interface WeatherReadService {
+  readWeather(): Promise<WeatherResponse>;
+}
 
 /** No approved AI-usage or Health source exists: these cards carry no numbers, only an honest status and a seam. */
 const overviewCards = (): DashboardCard[] => [
@@ -26,6 +38,7 @@ const overviewCards = (): DashboardCard[] => [
 
 export interface DashboardDeps {
   readonly market: MarketSource;
+  readonly weather: WeatherReadService;
   readonly now: () => Date;
 }
 
@@ -50,10 +63,29 @@ export function createDashboardService(deps: DashboardDeps) {
     };
   };
 
+  const weatherCard = async (): Promise<WeatherCard> => {
+    const response = await deps.weather.readWeather();
+    if (response.status !== 'ok') {
+      return {
+        id: 'weather', status: 'unavailable', title: 'Weather', provenance: 'Open-Meteo (DMI + ECMWF)',
+        observedAt: null, fetchedAt: null, note: WEATHER_REASON_NOTE[response.reason], drillthrough: null, reason: response.reason,
+      };
+    }
+    const projection = response.projection;
+    const retrievedAt = projection.models.map((series) => series.retrievedAt).sort()[0] ?? null;
+    return {
+      id: 'weather', status: 'ok', title: 'Weather', provenance: 'DMI HARMONIE AROME Europe vs ECMWF IFS 9 km (Open-Meteo)',
+      observedAt: null, fetchedAt: retrievedAt,
+      note: projection.partialError === 'one-model-unavailable' ? 'One model is unavailable; agreement is single-model.' : null,
+      drillthrough: null,
+      projection,
+    };
+  };
+
   return {
     async readDashboard(range: DashboardRange): Promise<DashboardResponse> {
-      const market = await marketCard(range);
-      return { now: deps.now().toISOString(), cards: [market, ...overviewCards()] };
+      const [market, weather] = await Promise.all([marketCard(range), weatherCard()]);
+      return { now: deps.now().toISOString(), cards: [market, weather, ...overviewCards()] };
     },
     async readMarketTicker(): Promise<MarketTickerResponse> {
       const now = deps.now().toISOString();

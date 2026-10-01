@@ -1,4 +1,4 @@
-import { DASHBOARD_RANGE_PLAN, DashboardResponse, MarketTickerResponse } from '@vault-companion/contracts';
+import { DASHBOARD_RANGE_PLAN, DashboardResponse, MarketTickerResponse, WeatherResponse } from '@vault-companion/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp, type Services } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
@@ -58,16 +58,20 @@ describe('Dashboard routes are authenticated (DASH1)', () => {
 });
 
 describe('real Dashboard composition (no live provider)', () => {
-  const market = (fetchImpl: typeof fetch) => createDashboardService({ market: createMarketSource({ fetch: fetchImpl, now: () => NOW_MS }), now: () => new Date(NOW_MS) });
+  const weatherUnavailable = () => ({
+    readWeather: async () => WeatherResponse.parse({ status: 'unavailable', now: new Date(NOW_MS).toISOString(), location: { label: 'Copenhagen city centre (coarse fallback)', latitude: 55.68, longitude: 12.57, precision: 'city-fallback', timeZone: 'Europe/Copenhagen' }, reason: 'provider-error', message: 'No weather.' }),
+  });
+  const market = (fetchImpl: typeof fetch) => createDashboardService({ market: createMarketSource({ fetch: fetchImpl, now: () => NOW_MS }), weather: weatherUnavailable(), now: () => new Date(NOW_MS) });
 
   it('builds the BTC/USD market card plus honest non-ok overview cards', async () => {
     const service = market(async (url) => (String(url).includes('/ticker') ? json({ price: '60123.45', time: '2026-09-30T11:59:59Z' }) : json([bucket(startSec), bucket(startSec + G)])));
     const body = await service.readDashboard('1W');
     const parsed = DashboardResponse.parse(body); // the shipped contract accepts what the worker writes
-    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'ai-usage', 'health']);
+    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'weather', 'ai-usage', 'health']);
     const card = parsed.cards[0]!;
     expect(card).toMatchObject({ id: 'market', status: 'ok', ticker: { price: 60123.45, providerTime: '2026-09-30T11:59:59.000Z' }, series: { range: '1W' } });
-    for (const overview of parsed.cards.slice(1)) {
+    expect(parsed.cards[1]).toMatchObject({ id: 'weather', status: 'unavailable', reason: 'provider-error' });
+    for (const overview of parsed.cards.slice(2)) {
       expect(overview.status).toBe('not-configured');
       expect(JSON.stringify(overview)).not.toMatch(/[0-9]+ ?(quota|spend|reset|bpm|kcal)/i);
     }
@@ -77,7 +81,8 @@ describe('real Dashboard composition (no live provider)', () => {
     const service = market(async () => new Response('x', { status: 503 }));
     const parsed = DashboardResponse.parse(await service.readDashboard('1M'));
     expect(parsed.cards[0]).toMatchObject({ id: 'market', status: 'unavailable', reason: 'provider-error', observedAt: null });
-    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'ai-usage', 'health']);
+    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'weather', 'ai-usage', 'health']);
+    expect(parsed.cards[1]).toMatchObject({ id: 'weather', status: 'unavailable' });
   });
 
   it('serves the ticker-only poll response', async () => {

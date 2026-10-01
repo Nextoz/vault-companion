@@ -21,8 +21,10 @@ import {
   ScoutsResponse,
   TasksResponse,
   TriageResponse,
+  WeatherResponse,
   type DashboardRange,
   type LinkedNoteRequest,
+  type WeatherLocationRequest,
 } from '@vault-companion/contracts';
 import { z } from 'zod';
 
@@ -135,3 +137,40 @@ export const getDashboard = (range: DashboardRange) => getJson(`/api/dashboard?r
 
 /** The 60-second refresh: the current value only. The historical series is not polled per minute. */
 export const getMarketTicker = () => getJson('/api/dashboard/ticker', MarketTickerResponse);
+
+/** Weather projection (ADR-0033 W1): default read is the fixed coarse Copenhagen fallback. */
+export const getWeather = () => getJson('/api/weather', WeatherResponse);
+
+/** Precise device location only after explicit foreground consent, sent as a bounded same-origin JSON POST. */
+export async function postWeatherLocation(location: WeatherLocationRequest, accountKey: string): Promise<Fetched<WeatherResponse>> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), READ_TIMEOUT_MS);
+  try {
+    let res: Response;
+    try {
+      res = await fetch('/api/weather/location', {
+        ...base,
+        method: 'POST',
+        signal: abort.signal,
+        body: JSON.stringify(location),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-VC-Request': '1',
+          'X-VC-Account': accountKey,
+          Accept: 'application/json',
+        },
+      });
+    } catch {
+      return abort.signal.aborted ? { kind: 'error', message: TIMED_OUT } : { kind: 'offline' };
+    }
+    if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403) return { kind: 'signed-out' };
+    if (!res.ok) return { kind: 'error', message: `The server answered ${res.status}.` };
+    const aborted = new Promise<undefined>((resolve) => abort.signal.addEventListener('abort', () => resolve(undefined)));
+    const body: unknown = await Promise.race([res.json().catch(() => undefined), aborted]);
+    if (abort.signal.aborted) return { kind: 'error', message: TIMED_OUT };
+    const parsed = WeatherResponse.safeParse(body);
+    return parsed.success ? { kind: 'ok', data: parsed.data } : { kind: 'error', message: 'Unexpected reply from the server.' };
+  } finally {
+    clearTimeout(timer);
+  }
+}

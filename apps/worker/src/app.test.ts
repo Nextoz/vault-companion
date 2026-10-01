@@ -138,6 +138,7 @@ describe('responses', () => {
       expect(res.headers.get('Cache-Control')).toBe('no-store');
       expect(res.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'");
       expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+      expect(res.headers.get('Permissions-Policy')).toBe('camera=(), microphone=(), geolocation=(self), payment=()');
     }
   });
   it.each([

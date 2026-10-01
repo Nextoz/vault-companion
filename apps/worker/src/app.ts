@@ -12,6 +12,7 @@ import {
   RadarPaperId,
   ResearchRadarDecideCommand,
   ScoutStatus,
+  WeatherLocationRequest,
   type MarketTickerResponse,
   type MorningResponse,
   type ScoutsResponse,
@@ -31,6 +32,7 @@ import {
   type ResearchRadarDecideCommand as ResearchRadarDecideCommandType,
   type TasksResponse,
   type TriageResponse,
+  type WeatherResponse,
 } from '@vault-companion/contracts';
 import { Hono } from 'hono';
 import type { Identity } from './auth.ts';
@@ -64,6 +66,9 @@ export interface Services {
   readResearchRadar?(): Promise<RadarResponse | ApiError>;
   /** Server-side Radar note read (ADR-0032). The client sends a paper ID, never a path. */
   readRadarNote?(paperId: string): Promise<RadarNoteResponse | ApiError>;
+  /** Weather projection (ADR-0033 W1). Optional: without it the routes answer 404. */
+  readWeather?(): Promise<WeatherResponse | ApiError>;
+  readWeatherAtLocation?(request: WeatherLocationRequest): Promise<WeatherResponse | ApiError>;
 }
 
 export interface AppDeps {
@@ -93,11 +98,11 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self), payment=()',
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -379,6 +384,53 @@ export function createApp(deps: AppDeps) {
     const read = deps.services.readMarketTicker;
     if (!read) return c.json(err('invalid', 'not found'), 404);
     const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    return c.json(result);
+  });
+
+  // Weather projection (ADR-0033 W1): read-only default GET uses the fixed coarse Copenhagen fallback. No model/URL
+  // input is accepted; the provider URL is built worker-side from the contract allowlist.
+  app.get('/api/weather', async (c) => {
+    const read = deps.services.readWeather;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    return c.json(result);
+  });
+
+  // Precise device location rides a same-origin authenticated JSON POST so raw coordinates stay out of URL query logs.
+  // The same origin/account guards as commands apply; the service rounds the values before any provider call/cache key.
+  app.post('/api/weather/location', async (c) => {
+    if (c.req.header('Origin') !== deps.appOrigin || c.req.header('X-VC-Request') !== '1') {
+      return c.json(err('forbidden', 'request origin not allowed'), 403);
+    }
+    if (!(c.req.header('Content-Type') ?? '').toLowerCase().startsWith('application/json')) {
+      return c.json(err('forbidden', 'JSON required'), 403);
+    }
+    if (c.req.header('X-VC-Account') !== c.get('identity').accountKey) {
+      return c.json(err('account-mismatch', 'this action was saved under a different sign-in'), 409);
+    }
+    const read = deps.services.readWeatherAtLocation;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const text = await c.req.text();
+    if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return c.json(err('invalid', 'body too large'), 400);
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      return c.json(err('invalid', 'body is not JSON'), 400);
+    }
+    const location = WeatherLocationRequest.safeParse(raw);
+    if (!location.success) return c.json(err('invalid', 'invalid device location'), 400);
+    const result = await read(location.data);
     const meta = c.get('logMeta');
     if (isApiError(result)) {
       meta.errorCode = result.code;
