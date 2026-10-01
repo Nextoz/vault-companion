@@ -13,7 +13,8 @@ git fetch -q origin
 $prompt = @"
 You are the Vault Companion Lead. Read docs/checkpoint.md, then follow docs/orchestration.md exactly (it is the only
 policy). Work on: $Focus. Keep tokens low: read only what the task needs, use the delivery loop and
-tools/handoff-check.ps1 for worker output, commit docs/checkpoint.md only at milestones. Ask me with a line starting
-'ACTION NEEDED:' for deploys or anything outside your authority.
+tools/handoff-check.ps1 for worker output, commit docs/checkpoint.md only at milestones. Keep me informed with short
+STATUS lines including tools/owner-status.ps1 (RAM, DeepSeek, GLM) as described under "Owner updates". Ask me with a
+line starting 'ACTION NEEDED:' for low RAM, low credits, deploys or anything outside your authority.
 "@
 & claude --model claude-opus-5-5 --effort medium --name 'VC Lead' $prompt
