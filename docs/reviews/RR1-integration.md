@@ -27,3 +27,16 @@ Bounded integration of the transplanted Research Radar candidate into the Scouts
 
 ## Notes
 - The Radar mock intentionally never returns `applied` for Keep, so the UI stays honest with "Saving to Library pending".
+
+## Lead independent high-risk review (2026-10-01, Claude Opus 5.5)
+Scope: write path only — `research-radar-command.ts`, `research-radar-format.ts`, history reader, `paths.ts`
+`canWrite`/`parseVaultPath`, `POST /api/radar/decisions`, wire schemas — against AGENTS.md 3–4 and ADR-0032.
+- Pass: operation ID = `decisionId`; reads and listing pinned to one commit X; head-CAS via `baseCommit: X`;
+  op/payload trailers; trailer dedupe plus an in-log decision-ID check; `deriveApplied` verifies the exact append.
+  Server-month target; prior months never touched. Only the Radar plan reaches the JSONL path (other `canWrite`
+  callers build Inbox/Explained paths). Command and line schemas share `RadarCard`/`isoInstant`/`uuid`, so an
+  accepted write cannot make its own log unreadable. Route has the same Origin/X-VC-Request/JSON/account/body guards.
+- Fixed: the in-log decision-ID guard had no test of its own (removing it only changed the code to `invalid`).
+  Added a negative test that fails when the guard is disabled (verified).
+- Recorded, not blocking (fails closed): once any log is older than the 25-month window, every Radar read and write
+  is refused until old logs are archived. Needs a rollover/archive design before about 25 months of use.

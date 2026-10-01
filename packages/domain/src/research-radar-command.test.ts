@@ -114,6 +114,27 @@ describe('executeRadarDecide', () => {
     expect(store.text(PATH)).toBe('not-json\n');
   });
 
+  it('refuses as dedupe-unknown when the decision ID is already in the log without a trailer commit', async () => {
+    const otherSource = 'https://example.org/other';
+    const seeded = new TextDecoder().decode(appendRadarDecisionLine(null, {
+      schemaVersion: 1,
+      decisionId: '00000000-0000-4000-8000-000000000001',
+      paperId: (await radarPaperId(otherSource))!,
+      decision: 'keep',
+      undoes: null,
+      at: AT,
+      card: { title: 'Synthetic other', source: otherSource, topic: 'AI' },
+    }));
+    store = await InMemoryStore.create({ [PATH]: seeded });
+    svc = createCommandService({ store, now: () => NOW, timeZone: 'Europe/Copenhagen' });
+    base = store.headCommit;
+    const { raw } = await make();
+    expect(raw.operationId).toBe('00000000-0000-4000-8000-000000000001');
+    await expect(run(raw)).resolves.toMatchObject({ code: 'dedupe-unknown' });
+    expect(store.writeCalls).toBe(0);
+    expect(store.text(PATH)).toBe(seeded);
+  });
+
   it('refuses a decision file that is not valid UTF-8', async () => {
     store = await InMemoryStore.create({ [PATH]: new Uint8Array([0xff, 0xfe]) });
     svc = createCommandService({ store, now: () => NOW, timeZone: 'Europe/Copenhagen' });
