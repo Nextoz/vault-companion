@@ -14,6 +14,7 @@ import {
   type VaultStore,
 } from '@vault-companion/domain';
 import { diagnosticDetail, sanitize, type LogSink } from './log.ts';
+import { renderBriefEmail, type BriefMailer } from './morning-brief-email.ts';
 import type { MorningBriefCandidates } from './morning-brief-gather.ts';
 import { writeBrief, type ScalewayChat } from './scaleway-chat.ts';
 
@@ -39,6 +40,8 @@ export interface BriefJobDeps {
   readonly gather: (day: string) => Promise<MorningBriefCandidates>;
   /** Absent when SCALEWAY_API_KEY is unset; the job then writes the deterministic fallback. */
   readonly chat?: ScalewayChat;
+  /** Absent when the `send_email` binding or its from/to secrets are unset; the job then writes without emailing. */
+  readonly mailer?: BriefMailer;
   readonly now: () => Date;
   readonly timeZone: string;
   readonly log: LogSink;
@@ -107,6 +110,21 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
     const durationMs = Date.now() - started;
     if (result.kind === 'committed') {
       deps.log(sanitize({ ...base, status: 200, durationMs, operationId: result.operationId, commitSha: result.commitSha }));
+      if (deps.mailer) {
+        // Delivery is best-effort: a send failure is logged but never fails or rolls back the committed brief.
+        try {
+          await deps.mailer.send(renderBriefEmail(file));
+        } catch {
+          deps.log(sanitize({
+            ...base,
+            status: 200,
+            durationMs: Date.now() - started,
+            operationId: result.operationId,
+            commitSha: result.commitSha,
+            errorCode: 'email-failed',
+          }));
+        }
+      }
     } else if (result.kind === 'already-written') {
       deps.log(sanitize({ ...base, status: 204, durationMs, operationId: result.operationId, errorCode: 'already-written' }));
     } else {

@@ -21,6 +21,10 @@
     "not_found_handling": "single-page-application",
   },
 
+  // MB1d: Morning Brief email. Names the Worker binding only — the owner from/to addresses are optional secrets
+  // (`BRIEF_EMAIL_FROM`/`BRIEF_EMAIL_TO`, `wrangler secret put`); the public repo carries no addresses.
+  "send_email": [{ "name": "BRIEF_EMAIL" }],
+
   // ADR-0029 research explainer: daily run + catch-up (UTC). ADR-0046 Morning Brief: `31 4` and `31 5` are the two
   // UTC slots whose local Copenhagen hour is 06:xx across DST; a separate minute keeps its own invocation (and
   // subrequest budget). Must equal EXPLAINER_CRONS and BRIEF_CRONS together (config.test.ts).
