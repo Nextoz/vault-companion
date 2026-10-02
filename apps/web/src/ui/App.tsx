@@ -10,6 +10,7 @@ import { browserPrefetchDeps, createPrefetcher } from '../prefetch.ts';
 import { getUpdateReady, subscribeUpdateReady } from '../update-ready.ts';
 import type { DraftStore } from '../draft.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
+import { lastCopies } from '../lastCopy.ts';
 import { knownCommits, renderable, TaskReads, type RenderedRead } from '../reads.ts';
 import { plainWikilinks } from '../text.ts';
 import { buildView, occurrenceKey, overdueSummary } from '../view.ts';
@@ -82,6 +83,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   useEffect(() => {
     if (editing && (signedOut || editing.account !== accountKey)) setEditing(null);
   }, [editing, signedOut, accountKey]);
+  // SP3 (ADR-0038): any signed-out answer, not only one a read-only screen saw, drops every last copy.
+  useEffect(() => { if (signedOut) lastCopies.clear(); }, [signedOut]);
   const openNote = useCallback((link: OpenLink) => setOpenLink({ ...link, account: accountKey }), [accountKey]);
   // A read checked against an older watermark than the snapshot's may predate receipts evicted since (G3-1).
   const fresh = rendered !== null && renderable(rendered, snapshot.watermark);
