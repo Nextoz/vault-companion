@@ -88,6 +88,15 @@ textarea:focus-visible {
     calc(16px + env(safe-area-inset-left));
 }
 
+.top-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.top-actions .link {
+  min-height: 32px;
+}
+
 .tabs,
 .segmented {
   display: flex;

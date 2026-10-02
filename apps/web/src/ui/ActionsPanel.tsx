@@ -1,6 +1,6 @@
 import type { CommandType, TasksResponse } from '@vault-companion/contracts';
 import { useState } from 'react';
-import { exportText, undoLogTraining, undoLogTrainingDraft, undoMoodCheckin, undoMoodCheckinDraft } from '../commands.ts';
+import { exportText, undoLogTraining, undoLogTrainingDraft, undoMoodCheckin, undoMoodCheckinDraft, undoReportFeedback, undoReportFeedbackDraft } from '../commands.ts';
 import { prefs } from '../prefs.ts';
 import { knownNotApplied } from '../queue/classify.ts';
 import type { PendingQueue, QueueItem, ReadEvidence } from '../queue/queue.ts';
@@ -135,6 +135,18 @@ export function ActionsPanel({
                 const ctx = { baseRevision: read?.revision ?? target.baseRevision };
                 const undo = item.receipt ? undoMoodCheckin(ctx, target, item.receipt.commitSha) : undoMoodCheckinDraft(ctx, target);
                 void queue.undoCompletion(target, undo, { accountKey: item.accountKey, label: item.label, taskKey: 'mood' })
+                  .catch(() => setUndoError('Could not keep this Undo on the device.'))
+                  .finally(() => setUndoing(null));
+              }}>Undo</button>}
+            {item.envelope.type === 'ReportFeedback' && !item.accountMismatch && item.state !== 'attention' &&
+              !items.some((q) => q.envelope.type === 'UndoReportFeedback' && q.envelope.payload.target.operationId === item.operationId) &&
+              <button type="button" disabled={undoing !== null} onClick={() => {
+                if (item.envelope.type !== 'ReportFeedback' || undoing !== null) return;
+                setUndoing(item.operationId); setUndoError(null);
+                const target = item.envelope;
+                const ctx = { baseRevision: read?.revision ?? target.baseRevision };
+                const undo = item.receipt ? undoReportFeedback(ctx, target, item.receipt.commitSha) : undoReportFeedbackDraft(ctx, target);
+                void queue.undoCompletion(target, undo, { accountKey: item.accountKey, label: item.label, taskKey: 'report' })
                   .catch(() => setUndoError('Could not keep this Undo on the device.'))
                   .finally(() => setUndoing(null));
               }}>Undo</button>}
