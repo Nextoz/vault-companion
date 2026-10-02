@@ -38,10 +38,16 @@ export const browserPrefetchDeps: PrefetchDeps = {
 export function createPrefetcher(deps: PrefetchDeps = browserPrefetchDeps) {
   /** Only the last accepted key is kept: the history does not grow, and a pair prefetches at most once. */
   let lastKey: string | null = null;
+  /** The run that owns the wire right now; accepting a newer key aborts it so one sequence runs at a time. */
+  let run: AbortController | null = null;
 
-  async function warm(): Promise<void> {
+  async function warm(current: AbortController): Promise<void> {
     for (const path of READ_PATHS) {
+      if (current.signal.aborted) return;
       const abort = new AbortController();
+      const onRunAbort = () => abort.abort();
+      // The fetch dies on its own timeout or when a newer key supersedes this run.
+      current.signal.addEventListener('abort', onRunAbort);
       const timer = setTimeout(() => abort.abort(), TIMEOUT_MS);
       try {
         const res = await deps.fetch(path, {
@@ -52,13 +58,16 @@ export function createPrefetcher(deps: PrefetchDeps = browserPrefetchDeps) {
           signal: abort.signal,
           headers: { Accept: 'application/json' },
         });
+        if (current.signal.aborted) return;
         // Signed out (opaque redirect, 401, 403) or any other non-OK answer: stop, leave the rest cold.
         if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403 || !res.ok) return;
         await res.arrayBuffer();
+        if (current.signal.aborted) return;
       } catch {
         return;
       } finally {
         clearTimeout(timer);
+        current.signal.removeEventListener('abort', onRunAbort);
       }
     }
   }
@@ -71,7 +80,10 @@ export function createPrefetcher(deps: PrefetchDeps = browserPrefetchDeps) {
       const key = `${accountKey}\u0000${revision}`;
       if (key === lastKey) return;
       lastKey = key;
-      deps.schedule(() => void warm());
+      run?.abort();
+      const current = new AbortController();
+      run = current;
+      deps.schedule(() => void warm(current));
     },
   };
 }
