@@ -22,6 +22,7 @@ import {
   type DashboardResponse,
   type ErrorCode,
   type HistoryResponse,
+  type HealthResponse,
   type LinkedNoteRequest,
   type LinkedNoteResponse,
   type NoteReadResponse,
@@ -69,6 +70,8 @@ export interface Services {
   /** Weather projection (ADR-0033 W1). Optional: without it the routes answer 404. */
   readWeather?(): Promise<WeatherResponse | ApiError>;
   readWeatherAtLocation?(request: WeatherLocationRequest): Promise<WeatherResponse | ApiError>;
+  /** Health daily card (HC1). Read-only. Optional: without it the route answers 404. */
+  readHealth?(): Promise<HealthResponse | ApiError>;
 }
 
 export interface AppDeps {
@@ -102,7 +105,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -270,6 +273,21 @@ export function createApp(deps: AppDeps) {
 
   app.get('/api/scouts', async (c) => {
     const read = deps.services.readScouts;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Health daily card (HC1): ONE fixed vault file, read-only. The path is a constant, never accepted from the client;
+  // logs carry only the commit SHA (no health value, row or file text).
+  app.get('/api/health', async (c) => {
+    const read = deps.services.readHealth;
     if (!read) return c.json(err('invalid', 'not found'), 404);
     const result = await read();
     const meta = c.get('logMeta');

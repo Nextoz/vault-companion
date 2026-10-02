@@ -878,5 +878,46 @@ export const TrainingResponse = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('refused'), revision: commitSha, code: ErrorCode, message: z.string() }),
 ]);
 export type TrainingResponse = z.infer<typeof TrainingResponse>;
+
+// ---- Health daily card (HC1): read-only projection of ONE fixed Apple Health export ----
+
+/** The only health source. A constant: no client-supplied path is ever accepted. */
+export const HEALTH_DAILY_CSV = 'Health/Data/Apple Health Daily.csv';
+
+export const HealthStatus = z.enum(['ok', 'missing', 'unreadable']);
+export type HealthStatus = z.infer<typeof HealthStatus>;
+
+export const HealthMetricKey = z.enum(['steps', 'headphone_min', 'first_move', 'last_move']);
+export type HealthMetricKey = z.infer<typeof HealthMetricKey>;
+
+export const HealthCompare = z.enum(['above', 'below', 'usual', 'unknown']);
+export type HealthCompare = z.infer<typeof HealthCompare>;
+
+/**
+ * One metric for the shown day: its value, the personal baseline (median over the 90 days before), how the value
+ * compares, and the trailing 30-day series (oldest first) ending at the shown day. Times are minutes after 03:00
+ * (behavioural day) so medians never wrap midnight. A gap or a "no data" day is `null`.
+ */
+export const HealthMetric = z.strictObject({
+  key: HealthMetricKey,
+  value: z.number().nullable(),
+  baseline: z.number().nullable(),
+  compare: HealthCompare,
+  series: z.array(z.number().nullable()),
+});
+export type HealthMetric = z.infer<typeof HealthMetric>;
+
+export const HealthResponse = z.strictObject({
+  revision: commitSha,
+  /** Server time: staleness never depends on the phone clock. */
+  now: isoInstant,
+  status: HealthStatus,
+  /** The shown day (newest row at or before yesterday), present only when `status` is `ok`. */
+  day: z.iso.date().optional(),
+  /** Yesterday minus the shown day, in whole days; present only when `status` is `ok`. */
+  staleDays: z.number().int().nonnegative().optional(),
+  metrics: z.array(HealthMetric),
+});
+export type HealthResponse = z.infer<typeof HealthResponse>;
 export * from './dashboard.ts';
 export * from './weather.ts';
