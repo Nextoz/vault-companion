@@ -1,8 +1,8 @@
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
-import { createTrainingService, createActiveWorkService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE } from '@vault-companion/domain';
+import { createTrainingService, createActiveWorkService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, slotForCron } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
-import { WEATHER_TIME_ZONE } from '@vault-companion/contracts';
+import { WEATHER_TIME_ZONE, type ApiError } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createApp } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
@@ -10,6 +10,9 @@ import { createMarketSource } from './market.ts';
 import { createWeatherProvider } from './weather-provider.ts';
 import { createAccessVerifier, createServiceTokenVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
+import { createScalewayChat } from './scaleway-chat.ts';
+import { gatherCandidates } from './morning-brief-gather.ts';
+import { briefSlotForCron, runBriefJob } from './morning-brief-job.ts';
 import type { LogRecord } from './log.ts';
 import { EXPLAINER_ROUTE, runExplainerJob } from './research-explainer.ts';
 
@@ -30,6 +33,8 @@ export interface Env {
   HEALTH_INGEST_AUD?: string;
   /** ADR-0029: only the research-explainer cron uses it; optional so the API never depends on it. Never logged. */
   GEMINI_API_KEY?: string;
+  /** ADR-0045/0046: only the morning-brief cron uses it; optional, so an unset key falls back. Never logged. */
+  SCALEWAY_API_KEY?: string;
 }
 
 /** The two members of Cloudflare's ScheduledController/ExecutionContext the cron handler uses. */
@@ -119,9 +124,11 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
  * counting `fetch`, so the run stays inside the subrequest budget (ADR-0029 amendment). `fetchImpl` is for tests.
  */
 export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis)): Promise<void> {
-  const started = { requestId: crypto.randomUUID(), method: 'CRON', route: EXPLAINER_ROUTE, durationMs: 0 };
-  if (configProblems(env).length > 0) return log({ ...started, status: 503, errorCode: 'not-configured' });
-  if (!env.GEMINI_API_KEY) return log({ ...started, status: 503, errorCode: 'gemini-key-missing' });
+  const base = { requestId: crypto.randomUUID(), method: 'CRON' as const, durationMs: 0 };
+  if (configProblems(env).length > 0) return log({ ...base, route: 'cron:unknown', status: 503, errorCode: 'not-configured' });
+  const explainerSlot = slotForCron(cron);
+  const briefSlot = briefSlotForCron(cron);
+  if (!explainerSlot && !briefSlot) return log({ ...base, route: 'cron:unknown', status: 400, errorCode: 'unknown-cron' });
   let used = 0;
   const counted: typeof fetch = (input, init) => {
     used++;
@@ -134,14 +141,48 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
     fetch: counted,
     token: createInstallationTokenSource({ appId: env.GITHUB_APP_ID, privateKeyPem: env.GITHUB_APP_PRIVATE_KEY, installationId: env.GITHUB_INSTALLATION_ID, fetch: counted }),
   });
-  await runExplainerJob(cron, {
-    store,
-    explainer: createGeminiExplainer({ apiKey: env.GEMINI_API_KEY, fetch: counted }),
-    now: () => new Date(),
-    timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE,
-    subrequests: () => used,
-    log,
-  });
+
+  if (explainerSlot) {
+    if (!env.GEMINI_API_KEY) {
+      log({ ...base, route: EXPLAINER_ROUTE, status: 503, errorCode: 'gemini-key-missing' });
+    } else {
+      await runExplainerJob(cron, {
+        store,
+        explainer: createGeminiExplainer({ apiKey: env.GEMINI_API_KEY, fetch: counted }),
+        now: () => new Date(),
+        timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE,
+        subrequests: () => used,
+        log,
+      });
+    }
+  }
+
+  if (briefSlot) {
+    const timeZone = env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE;
+    const now = () => new Date();
+    const command = createCommandService({ store, now, timeZone });
+    const training = createTrainingService({ store });
+    const health = createHealthService({ store, now, timeZone });
+    const weather = createWeatherService({ reader: createWeatherProvider({ fetch: counted, now: () => Date.now() }), now, timeZone });
+    const unavailable: ApiError = { code: 'upstream-unavailable', message: 'reader unavailable', retryable: true };
+    const gather = (day: string) => gatherCandidates({
+      day,
+      timeZone,
+      readTasks: () => command.readTasks([]),
+      readHealthHistory: () => health.readHealthHistory(),
+      readTraining: () => training.readTraining(),
+      readWeather: () => weather.readWeather(),
+      readMood: () => Promise.resolve(unavailable),
+    });
+    await runBriefJob(cron, {
+      store,
+      gather,
+      ...(env.SCALEWAY_API_KEY ? { chat: createScalewayChat({ apiKey: env.SCALEWAY_API_KEY, fetch: counted }) } : {}),
+      now,
+      timeZone,
+      log,
+    });
+  }
 }
 
 export default {

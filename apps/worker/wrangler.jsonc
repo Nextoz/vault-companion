@@ -21,10 +21,13 @@
     "not_found_handling": "single-page-application",
   },
 
-  // ADR-0029 research explainer: daily run + catch-up (UTC). Must equal EXPLAINER_CRONS (config.test.ts).
-  // Its key GEMINI_API_KEY is an optional secret (`wrangler secret put`, docs/deploy.md), not in `secrets.required`.
+  // ADR-0029 research explainer: daily run + catch-up (UTC). ADR-0046 Morning Brief: `30 4` and `30 5` are the
+  // two UTC slots whose local Copenhagen hour is 06:xx across DST; `30 4` is shared with the explainer's primary
+  // trigger and runScheduled routes it to both jobs. Must equal EXPLAINER_CRONS ∪ BRIEF_CRONS (config.test.ts).
+  // Optional keys GEMINI_API_KEY and SCALEWAY_API_KEY are Worker secrets only (`wrangler secret put`,
+  // docs/deploy.md), not in `secrets.required`.
   "triggers": {
-    "crons": ["30 4 * * *", "30 6 * * *"],
+    "crons": ["30 4 * * *", "30 6 * * *", "30 5 * * *"],
   },
 
   // Non-secret settings (Env in src/index.ts). AUTH_MODE must stay "access": configProblems() refuses anything else.
