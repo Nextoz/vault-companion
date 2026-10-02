@@ -87,6 +87,38 @@ describe('createPrefetcher', () => {
     expect(urls(h.sent)).toEqual([...READS, ...READS]);
   });
 
+  it('supersedes a run still in flight: aborts its fetch and lets the newer run warm every path', async () => {
+    const sent: Sent[] = [];
+    const settleFirst: Array<() => void> = [];
+    const h = harness({
+      fetch: ((input: string, init?: RequestInit) => {
+        sent.push({ url: input, init });
+        if (sent.length === 1) {
+          return new Promise<Response>((resolve) => {
+            const settle = () => resolve(reply());
+            settleFirst.push(settle);
+            init?.signal?.addEventListener('abort', settle);
+          });
+        }
+        return Promise.resolve(reply());
+      }) as unknown as PrefetchDeps['fetch'],
+    });
+
+    h.prefetcher.maybePrefetch('acct', 'rev1');
+    await h.flush();
+    expect(sent).toHaveLength(1);
+    const firstSignal = sent[0]?.init?.signal;
+    expect(firstSignal?.aborted).toBe(false);
+
+    h.prefetcher.maybePrefetch('acct', 'rev2');
+    expect(firstSignal?.aborted).toBe(true);
+    // Even if the superseded fetch resolves, the old run must not ask for another path.
+    for (const settle of settleFirst) settle();
+    await h.flush();
+
+    expect(urls(sent)).toEqual(['/api/notes', '/api/notes', '/api/history', '/api/training']);
+  });
+
   it('does nothing until the scheduled callback runs', () => {
     const h = harness();
     h.replies.push(reply(), reply(), reply());
