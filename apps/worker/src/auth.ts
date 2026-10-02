@@ -1,6 +1,6 @@
 // Independent verification of the Cloudflare Access JWT (docs/security.md, ADR-0008).
 // Access sits in front of the app, but the Worker never trusts that alone.
-import { errors, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
+import { jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 
 export interface AccessConfig {
   /** Remote JWKS in production (`createRemoteJWKSet(<team>/cdn-cgi/access/certs)`), local set in tests. */
@@ -88,26 +88,28 @@ export function createServiceTokenVerifier(config: { readonly keys: JWTVerifyGet
   };
 }
 
+/** Matches jose's stable `code` strings rather than `instanceof`, which breaks if jose is ever bundled twice. */
 function refusalOf(e: unknown): ServiceTokenRefusal {
-  // jose reports `maxTokenAge` (iat too old) as JWTExpired on the `iat` claim: that is our lifetime rule.
-  if (e instanceof errors.JWTExpired) return e.claim === 'iat' ? 'lifetime' : 'expired';
-  if (e instanceof errors.JWTClaimValidationFailed) {
-    if (e.reason === 'missing') return 'missing-claim';
-    if (e.claim === 'iss') return 'iss';
-    if (e.claim === 'aud') return 'aud';
-    if (e.claim === 'iat' || e.claim === 'nbf') return 'lifetime';
-    return 'other';
+  const { code, claim, reason } = (e ?? {}) as { code?: string; claim?: string; reason?: string };
+  switch (code) {
+    case 'ERR_JWT_EXPIRED':
+      // jose reports `maxTokenAge` (iat too old) as expired on the `iat` claim: that is our lifetime rule.
+      return claim === 'iat' ? 'lifetime' : 'expired';
+    case 'ERR_JWT_CLAIM_VALIDATION_FAILED':
+      if (reason === 'missing') return 'missing-claim';
+      if (claim === 'iss') return 'iss';
+      if (claim === 'aud') return 'aud';
+      if (claim === 'iat' || claim === 'nbf') return 'lifetime';
+      return 'other';
+    case 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED':
+    case 'ERR_JWKS_NO_MATCHING_KEY':
+    case 'ERR_JOSE_ALG_NOT_ALLOWED':
+    case 'ERR_JWS_INVALID':
+    case 'ERR_JWT_INVALID':
+      return 'bad-signature';
+    default:
+      return 'other';
   }
-  if (
-    e instanceof errors.JWSSignatureVerificationFailed ||
-    e instanceof errors.JWKSNoMatchingKey ||
-    e instanceof errors.JOSEAlgNotAllowed ||
-    e instanceof errors.JWSInvalid ||
-    e instanceof errors.JWTInvalid
-  ) {
-    return 'bad-signature';
-  }
-  return 'other';
 }
 
 async function sha256Hex(text: string): Promise<string> {
