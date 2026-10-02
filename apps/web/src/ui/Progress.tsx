@@ -1,9 +1,10 @@
 // Progress Wall (ADR-0027): "This week", "Earlier weeks", then the unchanged day-by-day History list. Read-only.
 // Each source loads on its own; a failed one says "… unavailable" and the rest still counts. Evidence, not scores.
 import type { CompleteTaskCommand, HistoryItem, HistoryResponse, NotesResponse, TrainingResponse, TriageResponse } from '@vault-companion/contracts';
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { getHistory, getNotes, getTraining, getTriage, type Fetched } from '../api.ts';
 import { dayHeading } from '../history.ts';
+import { combineViews } from '../lastCopy.ts';
 import { progressWeeks, weekRange, weekSummary, type ProgressInputs, type ProgressWeek } from '../progress.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { plainWikilinks, taskSegments } from '../text.ts';
@@ -13,6 +14,7 @@ import { weekdayBars } from '../week-chart.ts';
 import { BarChart } from './BarChart.tsx';
 import { History } from './History.tsx';
 import { NoteScreen } from './Notes.tsx';
+import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 import type { OpenLink } from './NoteView.tsx';
 
 type Note = NotesResponse['notes'][number];
@@ -28,20 +30,16 @@ export function Progress({ refreshKey, queue, queued, accountKey, baseRevision, 
   onReopen: (target: CompleteTaskCommand, label: string) => void;
   onOpenLink: (link: OpenLink) => void;
 }) {
-  const [history, setHistory] = useState<Fetched<HistoryResponse> | null>(null);
-  const [training, setTraining] = useState<Fetched<TrainingResponse> | null>(null);
-  const [triage, setTriage] = useState<Fetched<TriageResponse> | null>(null);
-  const [notes, setNotes] = useState<Fetched<NotesResponse> | null>(null);
+  // SP3 (ADR-0038): each source opens from its last copy (shared keys with the Training and Notes tabs).
+  const historyView = useLastCopy<HistoryResponse>(accountKey, 'history', getHistory, refreshKey);
+  const trainingView = useLastCopy<TrainingResponse>(accountKey, 'training', getTraining, refreshKey);
+  const triageView = useLastCopy<TriageResponse>(accountKey, 'triage', getTriage, refreshKey);
+  const notesView = useLastCopy<NotesResponse>(accountKey, 'notes', getNotes, refreshKey);
+  const history = historyView.res;
+  const training = trainingView.res;
+  const triage = triageView.res;
+  const notes = notesView.res;
   const [openNote, setOpenNote] = useState<Note | null>(null);
-  useEffect(() => {
-    let live = true;
-    const load = <T,>(read: () => Promise<T>, set: (value: T) => void) => void read().then((value) => { if (live) set(value); });
-    load(getHistory, setHistory);
-    load(getTraining, setTraining);
-    load(getTriage, setTriage);
-    load(getNotes, setNotes);
-    return () => { live = false; };
-  }, [refreshKey]);
 
   if (openNote) {
     return <NoteScreen entry={openNote} refreshKey={refreshKey} queue={queue} items={queued} accountKey={accountKey}
@@ -66,6 +64,7 @@ export function Progress({ refreshKey, queue, queued, accountKey, baseRevision, 
   const evidence = { onOpenLink, onOpenNote: setOpenNote };
   return <section aria-label="Progress" className="progress">
     <h1>Progress</h1>
+    <CopyNote view={combineViews([historyView, trainingView, triageView, notesView])} />
     {loading && <p role="status">Loading progress…</p>}
     {week && <section aria-label="This week" className="progress-card">
       <h2>This week <span className="muted small">{weekRange(week)}</span></h2>
@@ -84,7 +83,8 @@ export function Progress({ refreshKey, queue, queued, accountKey, baseRevision, 
       </ul>
     </section>}
     <h2 className="progress-days">Day by day</h2>
-    <History result={history} queued={queued} accountKey={accountKey} blocked={blocked} onReopen={onReopen} onOpenLink={onOpenLink} />
+    {/* A copy is never actionable: Reopen waits for this read's own answer. */}
+    <History result={history} queued={queued} accountKey={accountKey} blocked={blocked || historyView.copyAt !== null} onReopen={onReopen} onOpenLink={onOpenLink} />
   </section>;
 }
 
