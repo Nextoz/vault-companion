@@ -7,7 +7,8 @@
   1. Boundary: commits the worker's changes in the disposable clone as one candidate commit, never `.agent/`,
      logs or env files; refuses if such paths are already in the committed delta.
   2. Tests: runs -TestCmd (the brief's touched-test command) in the clone; failure => exit 20, no review spent.
-  3. Review: `cr review --agent --committed --base-commit <Base> --fresh` over the complete task delta. Never
+  3. Review: `cr review --agent --committed --base-commit <Base> --fresh` over the complete task delta, or GLM-5.2 via
+     tools/glm-review.ps1 when CodeRabbit is out of hourly reviews (-Reviewer auto|coderabbit|glm|both). Never
      `--use-credits`. Incomplete/unavailable review => exit 30 (not "clean").
   4. Triage: each finding gets one Jev choice (~400 tokens). Deterministic floor: critical/major always go to
      the fix list. Jev "must-fix" (p >= 0.5) also goes to the fix list; everything else is listed as skipped.
@@ -27,6 +28,8 @@ param(
     [string]$TestCmd,
     # Reuse a saved CodeRabbit JSONL instead of spending a review (testing, or re-triage after a crash).
     [string]$FindingsFile,
+    # auto: CodeRabbit while it has hourly reviews, else GLM-5.2. both: CodeRabbit + GLM (high-risk second opinion).
+    [ValidateSet('auto', 'coderabbit', 'glm', 'both')][string]$Reviewer = 'auto',
     [switch]$NoJev
 )
 $ErrorActionPreference = 'Stop'
@@ -64,19 +67,39 @@ if ($TestCmd) {
     if (-not $ok) { $lines.Add('```'); ($out -split "`n" | Select-Object -Last 25) | ForEach-Object { $lines.Add($_) }; $lines.Add('```'); Finish 20 'TESTS FAILED' }
 } else { $lines.Add('Tests: none given (Lead runs checks).') }
 
-# 3. CodeRabbit CLI review of the complete committed delta
-$jsonl = if ($FindingsFile) { $FindingsFile } else { Join-Path $agent "cr-$Task.jsonl" }
-if (-not $FindingsFile) { & cr review --agent --committed --base-commit $Base --fresh 2>&1 | Out-File -LiteralPath $jsonl -Encoding utf8 }
-$events = Get-Content -LiteralPath $jsonl | Where-Object { $_.Trim().StartsWith('{') } | ForEach-Object { try { $_ | ConvertFrom-Json } catch { } }
-$complete = $events | Where-Object type -eq 'complete' | Select-Object -Last 1
-if (-not $complete -or $complete.outcome -ne 'completed') {
-    $err = $events | Where-Object { $_.type -in 'error', 'status' } | Select-Object -Last 1
-    $lines.Add("CodeRabbit: NOT COMPLETED ($($err.message ?? $err.status ?? 'no output')). Not a clean review.")
-    Finish 30 'REVIEW UNAVAILABLE'
+# 3. Review of the complete committed delta: CodeRabbit CLI and/or GLM-5.2 (tools/glm-review.ps1), same JSONL shape.
+function Read-Review([string]$file, [string]$name) {
+    $ev = @(Get-Content -LiteralPath $file -ErrorAction SilentlyContinue | Where-Object { $_.Trim().StartsWith('{') } | ForEach-Object { try { $_ | ConvertFrom-Json } catch { } })
+    $done = $ev | Where-Object type -eq 'complete' | Select-Object -Last 1
+    if (-not $done -or $done.outcome -ne 'completed') {
+        $err = $ev | Where-Object { $_.type -in 'error', 'status' } | Select-Object -Last 1
+        $lines.Add("${name}: NOT COMPLETED ($($err.message ?? $err.status ?? 'no output')).")
+        return $null
+    }
+    $miss = @($delta | Where-Object { $_ -notin $done.reviewedFiles -and $_ -match '\.(ts|tsx|js|mjs|css|ps1|sh)$' })
+    $fs = @($ev | Where-Object type -eq 'finding' | ForEach-Object { $_ | Add-Member -Force reviewer $name -PassThru })
+    $lines.Add("${name}: completed, $($fs.Count) finding(s), $(@($done.reviewedFiles).Count) file(s) reviewed$(if ($miss) {"; NOT reviewed: $($miss -join ', ')"})")
+    return , $fs
 }
-$missing = @($delta | Where-Object { $_ -notin $complete.reviewedFiles -and $_ -match '\.(ts|tsx|js|mjs|css|ps1|sh)$' })
-$findings = @($events | Where-Object type -eq 'finding')
-$lines.Add("CodeRabbit: completed, $($findings.Count) finding(s), $($complete.reviewedFiles.Count) file(s) reviewed$(if ($missing) {"; NOT reviewed: $($missing -join ', ')"})")
+function Invoke-CodeRabbit { $f = Join-Path $agent "cr-$Task.jsonl"; & cr review --agent --committed --base-commit $Base --fresh 2>&1 | Out-File -LiteralPath $f -Encoding utf8; Read-Review $f 'CodeRabbit' }
+function Invoke-Glm { $f = Join-Path $agent "glm-$Task.jsonl"; & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'glm-review.ps1') -Clone $Clone -Base $Base -Out $f | Out-Null; Read-Review $f 'GLM-5.2' }
+
+$results = @()
+if ($FindingsFile) { $results += , (Read-Review $FindingsFile 'saved review') }
+elseif ($Reviewer -eq 'auto') {
+    # CodeRabbit while it has hourly reviews left; GLM when it is out or fails (owner, 2026-10-02).
+    $left = [regex]::Match((cr usage 2>&1 | Out-String), 'Remaining\s*:\s*(\d+)').Groups[1].Value
+    $cr = if ($left -eq '0') { $lines.Add('CodeRabbit: 0 reviews left this hour -> GLM-5.2.'); $null } else { Invoke-CodeRabbit }
+    $results += , $cr
+    if ($null -eq $cr) { $results += , (Invoke-Glm) }
+}
+else {
+    if ($Reviewer -in 'coderabbit', 'both') { $results += , (Invoke-CodeRabbit) }
+    if ($Reviewer -in 'glm', 'both') { $results += , (Invoke-Glm) }
+}
+$completed = @($results | Where-Object { $null -ne $_ })
+if ($completed.Count -eq 0) { $lines.Add('No review completed. Not a clean review.'); Finish 30 'REVIEW UNAVAILABLE' }
+$findings = @($completed | ForEach-Object { $_ })
 
 # 4. Triage: deterministic floor, then Jev
 $jev = Join-Path $env:USERPROFILE 'Obsidian Vault/Second Brain/Tools/jev.ps1'
@@ -90,7 +113,7 @@ foreach ($f in $findings) {
     $why = 'no Jev'; $must = $false
     if ($useJev) {
         try {
-            $state = "Task: $Task. CodeRabbit finding (severity $($f.severity)) on $($f.fileName): $text"
+            $state = "Task: $Task. $($f.reviewer) finding (severity $($f.severity)) on $($f.fileName): $text"
             $r = & $jev -State $state -Choose 'must-fix defect', 'worth fixing, low value', 'not actionable / style only', 'unresolved' `
                 -Instructions 'Should the worker spend its single correction round on this finding?' -Json | Out-String | ConvertFrom-Json
             $p = $r.answers.answer.probabilities.'must-fix defect'
@@ -102,8 +125,8 @@ foreach ($f in $findings) {
     $entry = [pscustomobject]@{ n = $i; f = $f; text = $text; why = $why }
     if ($must) { $fix.Add($entry) } else { $skip.Add($entry) }
 }
-foreach ($e in $fix) { $lines.Add("- FIX #$($e.n) [$($e.f.severity)] $($e.f.fileName) - $($e.why)") }
-foreach ($e in $skip) { $lines.Add("- skip #$($e.n) [$($e.f.severity)] $($e.f.fileName) - $($e.why)") }
+foreach ($e in $fix) { $lines.Add("- FIX #$($e.n) [$($e.f.severity)] $($e.f.fileName) ($($e.f.reviewer)) - $($e.why)") }
+foreach ($e in $skip) { $lines.Add("- skip #$($e.n) [$($e.f.severity)] $($e.f.fileName) ($($e.f.reviewer)) - $($e.why)") }
 
 # 5. Correction brief for the same worker (one round only)
 if ($fix.Count -gt 0) {

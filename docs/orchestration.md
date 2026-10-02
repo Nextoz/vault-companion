@@ -43,7 +43,7 @@ appending amendments. History: Git and branch `archive/codex-lead-2026-10-01`.
 
 **Scaleway GLM-5.2 is not an implementation worker (2026-10-02):** Codex CLI needs the Responses API, which Scaleway
 does not serve for GLM-5.2 (chat completions only), and OpenCode exited silently twice. Use GLM only for one-shot
-public-repo questions over the plain API (e.g. a fallback diff review when CodeRabbit is down), not for edits.
+public-repo questions over the plain API, not for edits: it is the **second code reviewer** (`tools/glm-review.ps1`, run by `handoff-check.ps1`; benchmark 2026-10-02: at reasoning `low` it found the same major missing-test issue as CodeRabbit in ~30 s / ~9k tokens; it tends to overrate severity).
 
 Launch every worker with **one command**, from inside Herdr (it opens a visible pane in the Agents tab):
 
@@ -67,7 +67,7 @@ Verify the model in the log header and real activity before waiting. Wait on the
    handoff path `.agent/handoffs/<task>.md` (≤ 15 lines).
 4. **Worker runs once.** Then the Lead runs the pre-handoff check — before reading any diff:
    `pwsh -NoProfile -File tools/handoff-check.ps1 -Clone <clone> -Base <base> -Task <task> -TestCmd '<touched tests>'`
-   It commits the candidate (never `.agent/`), runs the tests, reviews the complete delta with the CodeRabbit CLI
+   It commits the candidate (never `.agent/`), runs the tests, reviews the complete delta (`-Reviewer auto`: CodeRabbit CLI while it has hourly reviews, else GLM-5.2; `both` for high-risk)
    and triages each finding with Jev. Exit 0 clean · 10 fixes needed · 20 tests failed · 30 review unavailable ·
    40 boundary refused.
 5. **At most one correction round**, by the same worker session (`tools/launch-worker.ps1 … -Fix`),
@@ -82,7 +82,8 @@ Verify the model in the log header and real activity before waiting. Wait on the
 - **High-risk** — new vault write target, write/CAS/dedupe/receipt path, auth/Access, privacy boundary,
   concurrency/queue: add **one** independent review of the risky diff only. If a worker wrote it, the Lead's own
   focused review is that review (different model family). If the Lead wrote it, one DeepSeek Pro medium review with
-  a packet of the risky diff + the invariant. Plus negative tests that fail when the guard breaks.
+  a packet of the risky diff + the invariant. Plus negative tests that fail when the guard breaks. Run its pre-handoff check with
+  `-Reviewer both` (CodeRabbit + GLM second opinion).
 - **Findings are fixed once and verified by the Lead.** A fix does not trigger a new full review unless it rewrites
   the risky logic. No review chains, no "floor" that blocks delivery when a provider is out of credit: reroute.
 
@@ -90,7 +91,7 @@ Verify the model in the log header and real activity before waiting. Wait on the
 
 Jev (`Tools/jev.ps1` in the vault, pinned `jev-1.13.0`, ~400 tokens a call) replaces Lead reasoning wherever the
 question is a typed choice/score/yes-no over **public repo** material. Owner wants it used a lot:
-- **Automatic:** CodeRabbit finding triage inside `handoff-check.ps1` (critical/major always fix; Jev decides the rest).
+- **Automatic:** review-finding triage inside `handoff-check.ps1`, for CodeRabbit and GLM alike (critical/major always fix; Jev decides the rest).
 - **Before every dispatch (required):** choose the worker tier; state the brief's outcome, size and risk in a few
   lines. Follow Jev's pick unless the deterministic floor says otherwise (high-risk ⇒ Pro or Lead review), and say
   which in the STATUS line:
@@ -146,7 +147,7 @@ line: free RAM, DeepSeek balance, Scaleway GLM estimate) and post a short update
 - **Credits:** after every paid DeepSeek run, include the balance; below $2 ⇒ `ACTION NEEDED:` with the remaining
   planned work, and switch to Gemini where the risk allows. After a GLM run, append `{"tokens":N}` (from its
   log) to `.agent/budget/scaleway.jsonl`; above ~800k ⇒ tell the owner and stop GLM at 900k.
-- **CodeRabbit:** if `cr usage` shows 0 reviews left in the hour, say so instead of waiting silently.
+- **CodeRabbit:** at 0 reviews left in the hour, `handoff-check.ps1 -Reviewer auto` switches to GLM-5.2; say so in the STATUS line.
 - Lines starting `ACTION NEEDED:` are the only ones that require the owner to act; everything else is information.
 
 ## Herdr
