@@ -1,6 +1,6 @@
 import type { CommandType, TasksResponse } from '@vault-companion/contracts';
 import { useState } from 'react';
-import { exportText, undoLogTraining, undoLogTrainingDraft } from '../commands.ts';
+import { exportText, undoLogTraining, undoLogTrainingDraft, undoMoodCheckin, undoMoodCheckinDraft } from '../commands.ts';
 import { prefs } from '../prefs.ts';
 import { knownNotApplied } from '../queue/classify.ts';
 import type { PendingQueue, QueueItem, ReadEvidence } from '../queue/queue.ts';
@@ -31,11 +31,11 @@ export const UNDO_UNKNOWN_TEXT = 'This Undo may already have been applied. Check
 
 /** The line shown for an action that needs attention: the conflict in plain words, else the server's message. */
 export function attentionText(item: QueueItem): string | null {
-  if ((item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining') && item.error && knownNotApplied(item.error)) return 'Cannot restore the exact previous file; undo it in Obsidian.';
+  if ((item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining' || item.type === 'UndoMoodCheckin') && item.error && knownNotApplied(item.error)) return 'Cannot restore the exact previous file; undo it in Obsidian.';
   if (item.error?.code === 'conflict:task-changed') return 'This task changed on another device.';
   if (item.error?.code === 'clock-skew') return CLOCK_SKEW_TEXT;
   // Review O5: the outcome is unknown, not refused — never tell the owner to redo something that may have happened.
-  if (item.error?.code === 'dedupe-unknown' && (item.type === 'UndoCompleteTask' || item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining')) return UNDO_UNKNOWN_TEXT;
+  if (item.error?.code === 'dedupe-unknown' && (item.type === 'UndoCompleteTask' || item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining' || item.type === 'UndoMoodCheckin')) return UNDO_UNKNOWN_TEXT;
   return item.error?.message ?? null;
 }
 
@@ -121,6 +121,18 @@ export function ActionsPanel({
                 const ctx = { baseRevision: read?.revision ?? target.baseRevision };
                 const undo = item.receipt ? undoLogTraining(ctx, target, item.receipt.commitSha) : undoLogTrainingDraft(ctx, target);
                 void queue.undoCompletion(target, undo, { accountKey: item.accountKey, label: item.label, taskKey: 'training' })
+                  .catch(() => setUndoError('Could not keep this Undo on the device.'))
+                  .finally(() => setUndoing(null));
+              }}>Undo</button>}
+            {item.envelope.type === 'MoodCheckin' && !item.accountMismatch && item.state !== 'attention' &&
+              !items.some((q) => q.envelope.type === 'UndoMoodCheckin' && q.envelope.payload.target.operationId === item.operationId) &&
+              <button type="button" disabled={undoing !== null} onClick={() => {
+                if (item.envelope.type !== 'MoodCheckin' || undoing !== null) return;
+                setUndoing(item.operationId); setUndoError(null);
+                const target = item.envelope;
+                const ctx = { baseRevision: read?.revision ?? target.baseRevision };
+                const undo = item.receipt ? undoMoodCheckin(ctx, target, item.receipt.commitSha) : undoMoodCheckinDraft(ctx, target);
+                void queue.undoCompletion(target, undo, { accountKey: item.accountKey, label: item.label, taskKey: 'mood' })
                   .catch(() => setUndoError('Could not keep this Undo on the device.'))
                   .finally(() => setUndoing(null));
               }}>Undo</button>}

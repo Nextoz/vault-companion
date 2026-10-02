@@ -4,6 +4,7 @@ import {
   type CompleteTaskCommand,
   type ReviewActiveWorkCommand,
   type LogTrainingCommand,
+  type MoodCheckinCommand,
   type TrainingSession,
   type ActiveWorkLocator,
   type Priority,
@@ -64,12 +65,13 @@ export function undoDraft(ctx: MintContext, target: CompleteTaskCommand): Comman
 
 /** An Undo draft (no token yet), as the queue stores it. */
 export function isUndoDraft(envelope: Command): boolean {
-  return (envelope.type === 'UndoCompleteTask' || envelope.type === 'UndoActiveWork' || envelope.type === 'UndoLogTraining') && !('targetCommit' in envelope.payload);
+  return (envelope.type === 'UndoCompleteTask' || envelope.type === 'UndoActiveWork' || envelope.type === 'UndoLogTraining' || envelope.type === 'UndoMoodCheckin') && !('targetCommit' in envelope.payload);
 }
 
 /** The draft with its token: a checked, sendable Undo whose other fields are unchanged. */
 export function withTargetCommit(draft: Command, targetCommit: string): Command {
   if (draft.type === 'UndoLogTraining') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
+  if (draft.type === 'UndoMoodCheckin') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type === 'UndoActiveWork') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type !== 'UndoCompleteTask') throw new TypeError('not an Undo');
   return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
@@ -152,6 +154,8 @@ export function bindUndoTarget(undo: Command, target: Command): Command | null {
     return { ...undo, payload: { ...undo.payload, target } };
   if (undo.type === 'UndoLogTraining' && target.type === 'LogTraining')
     return { ...undo, payload: { ...undo.payload, target } };
+  if (undo.type === 'UndoMoodCheckin' && target.type === 'MoodCheckin')
+    return { ...undo, payload: { ...undo.payload, target } };
   return null;
 }
 
@@ -163,6 +167,18 @@ export function undoLogTraining(ctx: MintContext, target: LogTrainingCommand, ta
 }
 export function undoLogTrainingDraft(ctx: MintContext, target: LogTrainingCommand): Command {
   const draft = { ...base(ctx), type: 'UndoLogTraining' as const, payload: { target } };
+  checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
+  return draft as Command;
+}
+
+export function moodCheckin(ctx: MintContext, payload: MoodCheckinCommand['payload']): MoodCheckinCommand {
+  return checked({ ...base(ctx), type: 'MoodCheckin', payload });
+}
+export function undoMoodCheckin(ctx: MintContext, target: MoodCheckinCommand, targetCommit: string): Command {
+  return checked({ ...base(ctx), type: 'UndoMoodCheckin', payload: { target, targetCommit } });
+}
+export function undoMoodCheckinDraft(ctx: MintContext, target: MoodCheckinCommand): Command {
+  const draft = { ...base(ctx), type: 'UndoMoodCheckin' as const, payload: { target } };
   checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
   return draft as Command;
 }
