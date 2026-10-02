@@ -76,3 +76,16 @@ test('ages without fetching and falls back to revision when metadata is absent',
   await expect(status).toContainText('Not refreshed since 14:10');
   expect(api.taskReads).toBe(count);
 });
+
+test('the Vault status details list the last read time per route (SP measure), without queries', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  await page.goto('/');
+  const status = page.getByRole('region', { name: 'Vault status' });
+  await expect(status).toContainText('Checked');
+  await status.locator('summary').click();
+  const speed = status.getByRole('list', { name: 'Read speed' });
+  await expect(speed.getByRole('listitem').filter({ hasText: /^tasks \d+ ms/ })).toHaveCount(1);
+  await expect(speed).not.toContainText('?');
+  await page.screenshot({ path: test.info().outputPath('sp1-read-speed-390x844.png') });
+});
