@@ -13,7 +13,7 @@ $clientId = Read-Secret 'GOOGLE_CLIENT_ID'
 $clientSecret = Read-Secret 'GOOGLE_CLIENT_SECRET'
 $refreshToken = Read-Secret 'GOOGLE_REFRESH_TOKEN'
 
-$expected = @('https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/gmail.readonly')
+$expected = @('https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/gmail.metadata')
 $ok = $true
 
 try {
@@ -30,7 +30,7 @@ try {
 $scopes = @($token.scope -split ' ' | Sort-Object)
 "refresh: ok · access token lifetime $($token.expires_in) s"
 "scopes:  $($scopes -join ' ')"
-if (Compare-Object $scopes $expected) { 'scopes:  MISMATCH (expected exactly gmail.readonly + calendar.readonly)'; $ok = $false }
+if (Compare-Object $scopes $expected) { 'scopes:  MISMATCH (expected exactly gmail.metadata + calendar.readonly)'; $ok = $false }
 if ($null -ne $token.refresh_token_expires_in) {
   "refresh token expires in $($token.refresh_token_expires_in) s: the client is probably still in Testing"; $ok = $false
 } else { 'refresh token: no expiry reported (In production)' }
