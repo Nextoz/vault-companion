@@ -1,5 +1,5 @@
 // Ready Backlog feedback write: exact golden bytes. Synthetic notes only.
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { applyFeedbackReport, revertFeedbackReport } from './feedback-report.ts';
 import type { FeedbackReportInput } from './feedback-report.ts';
 
