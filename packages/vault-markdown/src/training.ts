@@ -5,7 +5,7 @@ import { scanLines } from './scan.ts';
 
 export const TRAINING_HEADER = '| Date | Time | Type | Distance | Duration | Weight | Split | Note |';
 export type TrainingRow = { date: string; time: string; type: string; distance: string; duration: string; weight: string; split: string; note: string };
-export type TrainingEffect = { kind: 'training'; op: 'logged' | 'undone'; lineText: string };
+export type TrainingEffect = { kind: 'training'; op: 'logged' | 'edited' | 'undone'; lineText: string };
 export type TrainingSession = { when: string; duration: number; note?: string | undefined } & (
   { type: 'Run'; distance: number } | { type: 'Gym'; split: 'Bicep' | 'Tricep' | 'Legs' | 'Group'; className?: string | undefined; weight?: number | undefined }
 );
@@ -82,17 +82,50 @@ export function formatTrainingRow(session: TrainingSession): string {
   return '|' + values.map((v) => v ? ` ${v} ` : ' ').join('|') + '|';
 }
 
+/** The one insertion slot for the shared ordering rule: before the first older row, or after the table. */
+function insertionIndex(rows: readonly (TrainingRow & { lineIndex: number })[], key: string, tableEnd: number): number {
+  return rows.find((r) => r.date + r.time < key)?.lineIndex ?? tableEnd;
+}
+
+const groupClassRefusal = () => refuse('refused:invalid-edit', 'A group class needs a class name.');
+
 export function insertTrainingRow(source: string, session: TrainingSession): MutationOk<TrainingEffect> | Refusal {
-  if (session.type === 'Gym' && session.split === 'Group' && !session.className?.trim()) return refuse('refused:invalid-edit', 'A group class needs a class name.');
+  if (session.type === 'Gym' && session.split === 'Group' && !session.className?.trim()) return groupClassRefusal();
   const parsed = parseTraining(source);
   if (!parsed.ok) return parsed;
   const lineText = formatTrainingRow(session);
   const c = cells(lineText);
   const key = c[0]! + c[1]!;
-  const at = parsed.rows.find((r) => r.date + r.time < key)?.lineIndex ?? parsed.tableEnd;
+  const at = insertionIndex(parsed.rows, key, parsed.tableEnd);
   const lines = [...parsed.doc.lines];
   lines.splice(at, 0, lineText);
   return { ok: true, text: joinDoc(parsed.doc, lines), effect: { kind: 'training', op: 'logged', lineText } };
+}
+
+export function editTrainingRow(source: string, row: TrainingRow, session: TrainingSession): MutationOk<TrainingEffect> | Refusal {
+  if (session.type === 'Gym' && session.split === 'Group' && !session.className?.trim()) return groupClassRefusal();
+  const parsed = parseTraining(source);
+  if (!parsed.ok) return parsed;
+  const wanted = [row.date, row.time, row.type, row.distance, row.duration, row.weight, row.split, row.note];
+  const matches = parsed.rows.filter((r) => [r.date, r.time, r.type, r.distance, r.duration, r.weight, r.split, r.note].every((v, i) => v === wanted[i]));
+  if (matches.length === 0) return refuse('conflict:training-changed', 'That session row is no longer in the table — reload Training in Obsidian.');
+  if (matches.length > 1) return refuse('conflict:ambiguous', 'More than one row matches that session — edit it in Obsidian.');
+  const target = matches[0]!;
+  const oldLine = parsed.doc.lines[target.lineIndex]!;
+  const lineText = formatTrainingRow(session);
+  if (lineText === oldLine) return refuse('refused:invalid-edit', 'The edited session is identical to the current row.');
+  const newCells = cells(lineText);
+  const lines = [...parsed.doc.lines];
+  if (newCells[0] === row.date && newCells[1] === row.time) {
+    lines.splice(target.lineIndex, 1, lineText);
+  } else {
+    lines.splice(target.lineIndex, 1);
+    const remaining = parsed.rows.filter((r) => r.lineIndex !== target.lineIndex);
+    let at = insertionIndex(remaining, newCells[0]! + newCells[1]!, parsed.tableEnd);
+    if (at > target.lineIndex) at -= 1;
+    lines.splice(at, 0, lineText);
+  }
+  return { ok: true, text: joinDoc(parsed.doc, lines), effect: { kind: 'training', op: 'edited', lineText } };
 }
 
 export function undoTraining(source: string, target: string, parent: string, effect: TrainingEffect): MutationOk<TrainingEffect> | Refusal {

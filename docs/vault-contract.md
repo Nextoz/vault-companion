@@ -11,7 +11,7 @@ Any change here is consequential: update the golden tests and record an ADR.
 | Task source | `Tasks/To-Do List.md` | read, complete, undo, edit, append capture |
 | Inbox notes | `Inbox/*.md` (regular files directly in `Inbox/`, no subfolders) | create (capture); list, read, body edit with frontmatter/BOM/EOL kept (ADR-0022) |
 | Active Work | `Tasks/Active Work Now.md` | read, capture, edit, review, exact Undo (ADR-0019) |
-| Training log | `Health/Training Log.md` | read, insert one session row, exact Undo; update only, never create (ADR-0025) |
+| Training log | `Health/Training Log.md` | read, insert or edit one session row (B12), exact Undo; update only, never create (ADR-0025) |
 | Event triage | `Events/Triage/feed.json`, `applied.json`, `Decisions/YYYY-MM.jsonl` | read; create/append **only** decision JSONL, per [ADR-0024](decisions/0024-event-triage.md) |
 | Research Radar | `Research/Daily Research Scout/*.md`, `Research/Reading Briefs/*.md`, `Research/Important Research Updates/*.md`, `Research/Explained/*.md`, `Research/Radar/Decisions/YYYY-MM.jsonl`, `Research/Radar/applied.json` | read; create/append **only** the decision JSONL, per [ADR-0032](decisions/0032-research-radar-decisions.md) |
 | Research explainer (cron, ADR-0029) | read today's `Research/Reading Briefs/Research Reading Brief - YYYY-MM-DD.md` and `Research/Daily Research Scout/Daily Research Scout - YYYY-MM-DD.md`, list `Research/Explained/`; write `Research/Explained/YYYY-MM-DD - <slug>.md` (directly in the folder, not hidden) | notes: **create**, skipped if that paper's slug already has a note on any date; **update only** to replace this job's own pending note while its blob SHA is unchanged (§4.7); all new notes + the status record in **one** commit (§4.7) |

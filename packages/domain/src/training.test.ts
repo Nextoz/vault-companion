@@ -20,6 +20,9 @@ const fixture = '\uFEFF---\r\nprivate: synthetic\r\n---\r\n## Sessions\r\n| Date
 const NOW = new Date('2026-09-28T16:42:00Z');
 const session = { type: 'Run', when: NOW.toISOString(), distance: 5.2, duration: 28, note: 'Easy loop' };
 const line = '| 2026-09-28 | 18:42 | Run | 5.2 km | 28 min | | | Easy loop |';
+const row = { date: '2026-09-28', time: '18:42', type: 'Run', distance: '5.2 km', duration: '28 min', weight: '', split: '', note: 'Easy loop' };
+const editSession = { type: 'Run', when: NOW.toISOString(), distance: 5.2, duration: 30, note: 'Edited' };
+const editedLine = '| 2026-09-28 | 18:42 | Run | 5.2 km | 30 min | | | Edited |';
 let n = 0;
 function receipt(r: Receipt | { code: string }): Receipt { if ('code' in r) throw new Error(r.code); return r; }
 async function setup(text: string | null = fixture) {
@@ -101,6 +104,50 @@ it('Undo restores original bytes, dedupes, and cannot undo twice', async () => {
   expect(h.store.writeCalls).toBe(2);
   expect((await h.store.readCommit(undone.commitSha))?.trailers[TRAILER_UNDOES]).toBe(target.operationId);
   expect(await h.run(h.command('UndoLogTraining', { target, targetCommit: logged.commitSha }))).toMatchObject({ code: 'conflict:task-changed' });
+});
+it('EditTraining commits once with trailers and retries are a no-op', async () => {
+  const h = await setup();
+  const log = h.command('LogTraining', { session }); receipt(await h.run(log));
+  const loggedText = h.store.text(TRAINING_PATH)!;
+  const target = h.command('EditTraining', { row, session: editSession });
+  h.store.writeFaults.push('apply-then-unknown');
+  const saved = receipt(await h.run(target));
+  expect(saved.status).toBe('already-applied'); expect(await h.run(target)).toEqual(saved);
+  expect(h.store.writeCalls).toBe(2);
+  expect(h.store.text(TRAINING_PATH)).toBe(loggedText.replace(line, editedLine));
+  expect((await h.store.readCommit(saved.commitSha))?.trailers).toMatchObject({ [TRAILER_OP]: target.operationId, [TRAILER_PAYLOAD]: await payloadHash(target) });
+});
+it('UndoEditTraining restores the pre-edit bytes exactly', async () => {
+  const h = await setup();
+  const log = h.command('LogTraining', { session }); receipt(await h.run(log));
+  const loggedText = h.store.text(TRAINING_PATH)!;
+  const target = h.command('EditTraining', { row, session: editSession }); const saved = receipt(await h.run(target));
+  const undo = h.command('UndoEditTraining', { target, targetCommit: saved.commitSha });
+  h.store.writeFaults.push('apply-then-unknown'); const undone = receipt(await h.run(undo));
+  expect(undone.effect).toMatchObject({ kind: 'training', op: 'undone' });
+  expect(h.store.text(TRAINING_PATH)).toBe(loggedText);
+});
+it('UndoEditTraining refuses when the file changed after the edit', async () => {
+  const h = await setup();
+  receipt(await h.run(h.command('LogTraining', { session })));
+  const target = h.command('EditTraining', { row, session: editSession }); const saved = receipt(await h.run(target));
+  await h.store.commitFiles({ [TRAINING_PATH]: h.store.text(TRAINING_PATH)! + ' ' });
+  const undo = h.command('UndoEditTraining', { target, targetCommit: saved.commitSha });
+  expect(await h.run(undo)).toMatchObject({ code: 'refused:undo-expired' });
+});
+it('denied canWrite refuses EditTraining and UndoEditTraining without writing', async () => {
+  const h = await setup(fixture.replace('| 2026-09-27', line + '\r\n| 2026-09-27'));
+  const target = h.command('EditTraining', { row, session: editSession });
+  const head = h.store.headCommit; const writes = h.store.writeCalls;
+  vi.mocked(paths.canWrite).mockReturnValue(false);
+  expect(await h.run(target)).toMatchObject({ code: 'refused:path' });
+  expect(h.store.writeCalls).toBe(writes); expect(h.store.headCommit).toBe(head);
+  vi.mocked(paths.canWrite).mockReturnValue(true); const saved = receipt(await h.run(target));
+  const undo = h.command('UndoEditTraining', { target, targetCommit: saved.commitSha });
+  vi.mocked(paths.canWrite).mockReturnValue(false);
+  expect(await h.run(undo)).toMatchObject({ code: 'refused:path' });
+  expect(h.store.headCommit).toBe(saved.commitSha);
+  expect(paths.canWrite).toHaveBeenCalledWith(TRAINING_PATH, 'update');
 });
 it('Undo refuses intervening edits, forged token, altered target, unknown and unbounded history', async () => {
   const h = await setup(); const target = h.command('LogTraining', { session }); const logged = receipt(await h.run(target));
