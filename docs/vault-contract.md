@@ -263,3 +263,13 @@ and `checkin_at` (millisecond UTC instant). Every other key, the body, BOM and l
 Each key must occur exactly once; prose, list or block values are refused, never overwritten. Exact-inverse
 Undo restores those four spans from the target commit's parent (or the rendered template when the note was
 created) and never deletes the note.
+
+## 9. Feedback reports to the Ready Backlog (ADR-0040)
+
+Only `Projects/Vault Companion/Vault Companion - Ready Backlog.md` is writable, and only as an update; the app
+never creates it. `ReportFeedback` sanitises its text (whitespace runs to one space, `|` to `\|`), then inserts
+one line: under `## Bug backlog` after the separator row of the first exact bug table, or under
+`## Candidates to refine next` after the last bullet of the first `- ` list. B-numbers count every `B<n>` in the
+note and use `max + 1`. Missing or duplicate headings, table or list are refusals. `UndoReportFeedback` replays
+the target on its parent, verifies the committed blob, and removes exactly that one line; an absent or duplicated
+line is `conflict:report-changed`. BOM, EOL, final newline and all other bytes stay identical.

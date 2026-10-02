@@ -11,6 +11,8 @@ export const RADAR_DIR = 'Research/Radar';
 export const RADAR_DECISIONS_DIR_LOCAL = RADAR_DECISIONS_DIR;
 /** ADR-0036: the template a missing daily journal is rendered from (read-only). */
 export const DAILY_JOURNAL_TEMPLATE_PATH = 'Templates/Daily Journal Template.md';
+/** ADR-0040: the only note a feedback report may update; never created by the app. */
+export const FEEDBACK_BACKLOG_PATH = 'Projects/Vault Companion/Vault Companion - Ready Backlog.md';
 
 const DENIED_ROOTS = new Set(['.git', '.obsidian', '.trash', 'Tools', 'tmp', 'output']);
 // Case-folded: the owner's desktop (Windows) treats `TMP/` and `tmp/` as the same folder.
@@ -92,6 +94,7 @@ export function isExplainedNotePath(path: string): boolean {
 }
 
 export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
+  if (path === FEEDBACK_BACKLOG_PATH) return kind === 'update';
   if (isTriageDecisionPath(path)) return true;
   if (isRadarDecisionPath(path)) return true;
   if (path === EXPLAINER_STATUS_PATH) return true;
