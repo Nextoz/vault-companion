@@ -602,6 +602,10 @@ export class MockApi {
         this.trainingRows = before;
         return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'undone', lineText: '| synthetic session |' } };
       }
+      case 'MoodCheckin':
+        return { ...base, path: `Journal/Daily/${command.payload.date}.md`, effect: { kind: 'mood', op: 'checked-in' } };
+      case 'UndoMoodCheckin':
+        return { ...base, path: `Journal/Daily/${command.payload.target.payload.date}.md`, effect: { kind: 'mood', op: 'undone' } };
       case 'TriageDecide': {
         const { eventId, decision, outcome, undoes, card } = command.payload;
         this.triage.decisions.push({ decisionId: command.operationId, eventId, decision, outcome, undoes, at: command.occurredAt, title: card.title, start: card.start });

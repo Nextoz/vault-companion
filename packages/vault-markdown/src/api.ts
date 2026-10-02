@@ -21,6 +21,7 @@ export type RefusalCode =
   | 'refused:invalid-edit'
   | 'refused:undo-expired'
   | 'conflict:task-changed'
+  | 'conflict:mood-changed'
   | 'conflict:ambiguous'
   | 'no-frontmatter'
   | 'checkin-field-missing'

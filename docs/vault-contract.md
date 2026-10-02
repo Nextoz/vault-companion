@@ -251,4 +251,15 @@ accepted and flagged `backdated`. `uploadedAt` = commit committer date only.
 
 `Tasks/Active Work Now.md` follows [ADR-0019](decisions/0019-active-work-writes.md): exact item grammar,
 minimal span edits, section placement, unknown-content preservation and verified exact-inverse Undo.
-The app never rewrites existing frontmatter, reformats prose, writes outside §1 or resolves merge conflicts.
+The app never rewrites existing frontmatter — except the four daily-journal value spans in §8 — reformats
+prose, writes outside §1 or resolves merge conflicts.
+
+## 8. Daily journal mood check-in (ADR-0036)
+
+Path `Journal/Daily/YYYY-MM-DD.md` (valid calendar date only). The app may create the note from
+`Templates/Daily Journal Template.md` (filling only `{{date:YYYY-MM-DD}}`) and may update exactly four
+top-level frontmatter value spans: `mood` (−3…3 integer), `energy` (−3…3 integer), `sleep` (0…24, 0.5 steps)
+and `checkin_at` (millisecond UTC instant). Every other key, the body, BOM and line endings stay byte-identical.
+Each key must occur exactly once; prose, list or block values are refused, never overwritten. Exact-inverse
+Undo restores those four spans from the target commit's parent (or the rendered template when the note was
+created) and never deletes the note.

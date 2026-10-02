@@ -56,7 +56,10 @@ describe('write allowlist', () => {
     }
     expect(canWrite(parseVaultPath(TODO_LIST_PATH)!, 'create')).toBe(false);
     expect(canWrite(parseVaultPath('Tasks/Active Work Now.md')!, 'create')).toBe(false);
-    expect(canWrite(parseVaultPath('Journal/Daily/2026-09-24.md')!, 'create')).toBe(false);
+    // ADR-0036: daily journals are now a create target; other Journal paths stay denied.
+    expect(canWrite(parseVaultPath('Journal/Daily/2026-09-24.md')!, 'create')).toBe(true);
+    expect(canWrite(parseVaultPath('Journal/2026-09-24.md')!, 'create')).toBe(false);
+    expect(canWrite(parseVaultPath('Journal/Daily/Notes/2026-09-24.md')!, 'create')).toBe(false);
   });
 });
 

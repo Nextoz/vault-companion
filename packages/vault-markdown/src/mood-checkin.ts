@@ -157,6 +157,78 @@ export function applyMoodCheckin(text: string, input: MoodCheckinInput): Mutatio
   };
 }
 
+interface CheckinParts {
+  readonly bom: boolean;
+  readonly eol: '\n' | '\r\n';
+  readonly lines: readonly string[];
+  readonly closeIndex: number;
+  readonly targets: readonly TargetLine[];
+  readonly body: string;
+}
+
+function checkinParts(text: string): CheckinParts | Refusal {
+  const parts = splitNote(text);
+  if ('ok' in parts) return parts;
+  if (parts.frontmatter === '') return refuse('no-frontmatter', 'The note has no frontmatter block.');
+  const lines = parts.frontmatter.split(parts.eol);
+  const closeIndex = lines.findIndex((line, index) => index > 0 && DELIM.test(line));
+  if (closeIndex < 0) return refuse('no-frontmatter', 'The frontmatter block is not closed.');
+  return { bom: parts.bom, eol: parts.eol, lines, closeIndex, targets: findTargets(lines, closeIndex), body: parts.body };
+}
+
+function targetsByKey(targets: readonly TargetLine[]): Map<TargetKey, TargetLine> | null {
+  const map = new Map<TargetKey, TargetLine>();
+  for (const target of targets) {
+    if (map.has(target.key)) return null;
+    map.set(target.key, target);
+  }
+  return map;
+}
+
+/**
+ * The exact inverse of `applyMoodCheckin`: restore the four value spans from `previous` while keeping every other
+ * byte of the current note. Refuses when one of the four current values no longer matches the applied check-in.
+ */
+export function revertMoodCheckin(text: string, applied: string, previous: string): MutationOk<MoodCheckinEffect> | Refusal {
+  const current = checkinParts(text);
+  if ('ok' in current) return current;
+  const after = checkinParts(applied);
+  if ('ok' in after) return after;
+  const before = checkinParts(previous);
+  if ('ok' in before) return before;
+
+  const currentTargets = targetsByKey(current.targets);
+  const afterTargets = targetsByKey(after.targets);
+  const beforeTargets = targetsByKey(before.targets);
+  if (currentTargets === null || afterTargets === null || beforeTargets === null) {
+    return refuse('checkin-field-ambiguous', 'Frontmatter has more than one check-in key.');
+  }
+
+  for (const key of TARGET_KEYS) {
+    const currentLine = currentTargets.get(key);
+    const afterLine = afterTargets.get(key);
+    const beforeLine = beforeTargets.get(key);
+    if (!currentLine || !afterLine || !beforeLine) {
+      return refuse('checkin-field-missing', `Frontmatter is missing the ${key} key.`);
+    }
+    if (currentLine.value !== afterLine.value) {
+      return refuse('conflict:mood-changed', 'A check-in value changed since the check-in; undo it in Obsidian.');
+    }
+  }
+
+  const edited = [...current.lines];
+  for (const key of TARGET_KEYS) {
+    const currentLine = currentTargets.get(key)!;
+    const beforeLine = beforeTargets.get(key)!;
+    edited[currentLine.index] = before.lines[beforeLine.index]!;
+  }
+  return {
+    ok: true,
+    text: (current.bom ? BOM : '') + edited.join(current.eol) + current.body,
+    effect: { kind: 'mood-checkin' },
+  };
+}
+
 export function renderDailyNote(template: string, date: string): MutationOk<DailyNoteEffect> | Refusal {
   if (!isValidDate(date)) return refuse('checkin-invalid-input', 'date must be a valid YYYY-MM-DD date.');
   const placeholders = template.match(PLACEHOLDER) ?? [];
