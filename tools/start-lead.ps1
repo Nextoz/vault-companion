@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Start a fresh Vault Companion Lead (Claude Opus 5.5, effort medium) in the current Herdr pane.
+  Start a fresh Vault Companion Lead (Claude Sonnet 5.5, effort medium) in the current Herdr pane.
   Run from inside Herdr (workers need HERDR_ENV=1):  pwsh -NoProfile -File C:\Dev\vault-companion\tools\start-lead.ps1
   Then, in a second pane, run tools/lead-watch.ps1 (fresh context after each merge).
 #>
@@ -19,4 +19,4 @@ if ($env:HERDR_ENV) {
 git fetch -q origin
 $prompt = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'lead-prompt.md') -Raw) -replace '\{FOCUS\}', $Focus
 $mode = if ($Overnight) { @('--permission-mode', 'auto') } else { @() }
-& claude --model claude-opus-5-5 --effort medium --name 'VC Lead' @mode $prompt
+& claude --model claude-sonnet-5-5 --effort medium --name 'VC Lead' @mode $prompt

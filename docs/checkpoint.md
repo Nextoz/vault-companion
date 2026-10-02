@@ -22,8 +22,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the
    Worker Google reader (Pro, `-Reviewer both`); day-8 re-run ≥ 2026-10-10 gates MB "done". MB1a merged (pure day
    model `packages/domain/src/morning-brief.ts`: `freeBlocks` 07–22 local DST-safe, `rankTodos` bills/due ≤ 3 d →
-   overdue → rest, max 3; `stateLine` above/below flags, low = mood or energy ≤ −2). **Next: MB1b** gatherers +
-   Scaleway writer, then MB1c brief JSON write target (ADR) + 06:30 cron + email.
+   overdue → rest, max 3; `stateLine` above/below flags, low = mood or energy ≤ −2). **MB1b merged** (`apps/worker/src/morning-brief-gather.ts`: injected readers -> todos/metrics/mood/training/weather windows, never throws, `unavailable` list; `bill` always false: TaskView has no bill marker, `readMood` is device-held check-ins, so MB1c must decide the server-side mood source). **Next: MB1b2** Scaleway writer (select+phrase, ADR on health data to Scaleway), then MB1c brief JSON write target (ADR) + 06:30 cron + email.
    Tooling note: pass `handoff-check.ps1 -Clone` as an absolute path (a relative one writes the report to a nested dir).
 2. UX2–UX5 (UX1b overrides them where they differ) → **MB2** right after UX2 → AB AI budget card → NY Needs You +
    Morning Review → SP phone measurement (re-read the backlog).
