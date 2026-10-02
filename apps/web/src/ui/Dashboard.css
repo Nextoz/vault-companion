@@ -1,25 +1,33 @@
-/* Dashboard (DASH1). Colours come from the shared tokens so light and dark appearance both work. */
-.dash { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.dash-heading { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 20px 0 0; }
+/* Dashboard (DASH1), board mode since UI refresh slice 3: Grafana-style panels on black with small uppercase panel
+   titles, a big stat number, and a line with a soft gradient fill. Indigo means markets; status chips use the
+   threshold colours (green live, yellow stale, red unavailable). */
+.dash { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dash-heading { font-size: 1.6rem; font-weight: 700; margin: 12px 0 0; }
 .dash-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .dash-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.dash-card-head h2 { font-size: 1rem; margin: 0; }
-.dash-chip { font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--line); color: var(--muted); white-space: nowrap; }
-.dash-chip-live { background: var(--accent-soft); color: var(--accent); }
-.dash-chip-stale { background: var(--warn-soft); color: var(--warn); }
-.dash-chip-not-configured { background: var(--warn-soft); color: var(--warn); }
-.dash-chip-unavailable { background: var(--danger-soft); color: var(--danger); }
-.dash-price { font-size: 1.6rem; font-weight: 700; margin: 0; font-variant-numeric: tabular-nums; }
+.dash-card-head h2 { font-size: .8rem; font-weight: 600; margin: 0; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; overflow-wrap: anywhere; }
+.dash-chip { display: inline-flex; align-items: center; gap: 5px; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--raised); color: var(--muted); white-space: nowrap; }
+.dash-chip::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.dash-chip-live { color: var(--done); }
+.dash-chip-stale { color: var(--warn); }
+.dash-chip-not-configured { color: var(--muted); }
+.dash-chip-unavailable { color: var(--danger); }
+.dash-market .dash-price { color: var(--ios-indigo); }
+.dash-price { font-size: 2.2rem; font-weight: 700; line-height: 1.1; margin: 0; font-variant-numeric: tabular-nums; }
 .dash-times { margin: 0; font-variant-numeric: tabular-nums; }
-.dash-note { margin: 0; font-size: 0.9rem; overflow-wrap: anywhere; }
-.dash-stale { margin: 0; color: var(--warn); font-size: 0.85rem; }
-.dash-ranges { display: flex; gap: 6px; }
-.dash-ranges button { flex: 1; min-height: var(--tap); }
-.dash-ranges button[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent); }
+.dash-note { margin: 0; font-size: .9rem; overflow-wrap: anywhere; }
+.dash-stale { margin: 0; color: var(--warn); font-size: .85rem; }
+.dash-ranges { background: var(--surface); border-radius: 10px; padding: 2px; }
+.dash-ranges button { min-height: var(--tap); }
+.dash-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 10px; }
+.dash-tiles .dash-card-head { flex-wrap: wrap; }
 .dash-chart { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.dash-svg { width: 100%; height: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; touch-action: pan-y; }
-.dash-line { fill: none; stroke: var(--accent); stroke-width: 2; }
-.dash-dot { fill: var(--accent); }
-.dash-cursor { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
-.dash-slider { width: 100%; }
-.dash-readout { font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dash-svg { width: 100%; height: auto; background: var(--bg); border-radius: 8px; touch-action: pan-y; }
+.dash-line { fill: none; stroke: var(--ios-indigo); stroke-width: 2; stroke-linejoin: round; }
+.dash-fill-top { stop-color: var(--ios-indigo); stop-opacity: .45; }
+.dash-fill-bottom { stop-color: var(--ios-indigo); stop-opacity: 0; }
+.dash-area { stroke: none; }
+.dash-dot { fill: var(--ios-indigo); }
+.dash-cursor { fill: var(--text); stroke: var(--ios-indigo); stroke-width: 2; }
+.dash-slider { width: 100%; accent-color: var(--ios-indigo); }
+.dash-readout { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
