@@ -201,7 +201,10 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
         gather,
         ...(env.SCALEWAY_API_KEY ? { chat: createScalewayChat({ apiKey: env.SCALEWAY_API_KEY, fetch: counted }) } : {}),
         ...(env.BRIEF_EMAIL && env.BRIEF_EMAIL_FROM && env.BRIEF_EMAIL_TO
-          ? { mailer: cloudflareMailer(env.BRIEF_EMAIL, env.BRIEF_EMAIL_FROM, env.BRIEF_EMAIL_TO) }
+          ? { mailer: cloudflareMailer(env.BRIEF_EMAIL, env.BRIEF_EMAIL_FROM, env.BRIEF_EMAIL_TO, async (f, t, raw) => {
+            const { EmailMessage } = await import('cloudflare:email');
+            return new EmailMessage(f, t, raw);
+          }) }
           : {}),
         now,
         timeZone,

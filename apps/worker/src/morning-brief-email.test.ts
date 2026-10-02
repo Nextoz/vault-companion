@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { BriefFile } from '@vault-companion/domain';
 import { cloudflareMailer, renderBriefEmail } from './morning-brief-email.ts';
 
+const decode = (b64: string): string => new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
+
 const DATE = '2026-06-15';
 
 const file = (over: Partial<BriefFile> = {}): BriefFile => ({
@@ -50,6 +52,25 @@ describe('renderBriefEmail', () => {
     expect(text).toContain(attack);
   });
 
+  it('escapes hostile stateLine, gap times, due date, file.date and unavailable in the HTML', () => {
+    const hostile = '<img src=x onerror=1>';
+    const { html } = renderBriefEmail(
+      file({
+        date: hostile,
+        unavailable: [hostile],
+        brief: {
+          source: 'model',
+          dayLine: 'ok',
+          stateLine: hostile,
+          gaps: [{ blockIndex: 0, start: hostile, end: hostile }],
+          todos: [{ id: 0, text: 'ok', due: hostile, bill: false }],
+        },
+      }),
+    );
+    expect(html).not.toContain('<img');
+    expect(html.match(/&lt;img src=x onerror=1&gt;/g)?.length).toBe(6);
+  });
+
   it('renders a fallback brief without inventing suggestion, firstStep, state or encouragement text', () => {
     const fallback = file({
       source: 'fallback',
@@ -71,10 +92,29 @@ describe('renderBriefEmail', () => {
 });
 
 describe('cloudflareMailer', () => {
-  it('sends from/to with the rendered subject, text and html through the binding', async () => {
+  it('builds a base64 UTF-8 multipart MIME message and hands it to the binding', async () => {
     const sent: unknown[] = [];
-    const mailer = cloudflareMailer({ send: async (message) => { sent.push(message); } }, 'briefs@example.com', 'owner@example.com');
-    await mailer.send({ subject: 'Morning Brief - 2026-06-15', text: 'text body', html: '<p>html body</p>' });
-    expect(sent).toEqual([{ from: 'briefs@example.com', to: 'owner@example.com', subject: 'Morning Brief - 2026-06-15', text: 'text body', html: '<p>html body</p>' }]);
+    const created: [string, string, string][] = [];
+    const mailer = cloudflareMailer(
+      { send: async (message) => { sent.push(message); } },
+      'briefs@example.com',
+      'owner@example.com',
+      (from, to, raw) => { created.push([from, to, raw]); return { marker: 'msg' }; },
+    );
+    const subject = 'Morning Brief - æøå\r\nBcc: x@evil.test';
+    await mailer.send({ subject, text: 'text bødy', html: '<p>html bødy</p>' });
+    expect(sent).toEqual([{ marker: 'msg' }]);
+    const [from, to, raw] = created[0]!;
+    expect([from, to]).toEqual(['briefs@example.com', 'owner@example.com']);
+    expect(raw).toContain('From: briefs@example.com\r\nTo: owner@example.com\r\n');
+    expect(raw).toContain('multipart/alternative');
+    // header injection: a CRLF in the subject is encoded away and never becomes a header of its own
+    expect(raw).not.toMatch(/^Bcc:/m);
+    const encoded = /^Subject: =\?UTF-8\?B\?(.+)\?=$/m.exec(raw)![1]!;
+    expect(decode(encoded)).toBe(subject);
+    const bodies = [...raw.matchAll(/Content-Transfer-Encoding: base64\r\n\r\n([\s\S]*?)\r\n--/g)].map((m) =>
+      decode(m[1]!.replace(/\r\n/g, '')),
+    );
+    expect(bodies).toEqual(['text bødy', '<p>html bødy</p>']);
   });
 });

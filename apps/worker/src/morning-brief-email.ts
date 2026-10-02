@@ -17,18 +17,51 @@ export interface BriefMailer {
 }
 
 /**
- * The subset of the Workers `send_email` binding this job uses. The repo does not install
- * `@cloudflare/workers-types` (wrangler generates types on demand), so the shape is declared structurally here.
+ * The Workers `send_email` binding (Email Routing: free, verified destination only). It takes an `EmailMessage`
+ * built from raw MIME; the repo installs no `@cloudflare/workers-types`, so the shape is declared structurally.
  */
 export interface BriefEmailBinding {
-  send(message: { from: string; to: string; subject: string; text: string; html: string }): Promise<unknown>;
+  send(message: unknown): Promise<unknown>;
+}
+
+/** Builds the runtime `EmailMessage` (`new EmailMessage(from, to, raw)` from `cloudflare:email`; injected by index.ts). */
+export type EmailMessageFactory = (from: string, to: string, raw: string) => unknown;
+
+function b64(value: string): string {
+  let bin = '';
+  for (const byte of new TextEncoder().encode(value)) bin += String.fromCharCode(byte);
+  return btoa(bin);
+}
+
+function b64Lines(value: string): string {
+  return (b64(value).match(/.{1,76}/g) ?? ['']).join('\r\n');
+}
+
+/** RFC 5322 multipart/alternative message; subject and bodies are base64 UTF-8, so any brief text is header-safe. */
+export function buildMime(from: string, to: string, message: BriefEmail, messageId: string): string {
+  const boundary = `vc-${messageId}`;
+  const part = (type: string, body: string) =>
+    [`--${boundary}`, `Content-Type: ${type}; charset=utf-8`, 'Content-Transfer-Encoding: base64', '', b64Lines(body)].join('\r\n');
+  return [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: =?UTF-8?B?${b64(message.subject)}?=`,
+    `Message-ID: <${messageId}@vault-companion>`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    part('text/plain', message.text),
+    part('text/html', message.html),
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
 }
 
 /** Wrap the `send_email` binding with the owner's fixed from/to addresses (both are secrets, never logged). */
-export function cloudflareMailer(binding: BriefEmailBinding, from: string, to: string): BriefMailer {
+export function cloudflareMailer(binding: BriefEmailBinding, from: string, to: string, create: EmailMessageFactory): BriefMailer {
   return {
     async send(message) {
-      await binding.send({ from, to, subject: message.subject, text: message.text, html: message.html });
+      await binding.send(await create(from, to, buildMime(from, to, message, crypto.randomUUID())));
     },
   };
 }
