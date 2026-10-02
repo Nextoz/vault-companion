@@ -18,6 +18,8 @@ export interface MorningLine {
 /** The projections the card has already loaded, plus the client-side counts it can compute on its own. */
 export interface MorningCardFacts {
   readonly weather: WeatherResponse | null;
+  /** A failed weather read (offline/error): still offer the line so the panel, and its retry, stays reachable. */
+  readonly weatherFailed: boolean;
   readonly scouts: ScoutsResponse | null;
   readonly morning: MorningResponse | null;
   readonly eventsToTriage: number;
@@ -37,6 +39,8 @@ export function morningLines(facts: MorningCardFacts): MorningLine[] {
   if (facts.weather) {
     lines.push({ id: 'weather', text: facts.weather.status === 'ok'
       ? runWindowSummary(facts.weather.projection.runWindow) : facts.weather.message });
+  } else if (facts.weatherFailed) {
+    lines.push({ id: 'weather', text: 'Weather unavailable' });
   }
   const problems = facts.scouts ? attentionCount(facts.scouts) : 0;
   if (problems > 0) lines.push({ id: 'scouts', text: `${problems} scouts need attention` });

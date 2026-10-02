@@ -62,7 +62,7 @@ const morningWith = (brief: boolean, explained: number): MorningResponse =>
   MorningResponse.parse({ revision: SHA, date: '2026-10-02', brief: brief ? note('complete', 'Brief') : null,
     explained: Array.from({ length: explained }, (_, i) => note(i === 0 ? 'complete' : 'pending', `Paper ${i}`)) });
 
-const empty: MorningCardFacts = { weather: null, scouts: null, morning: null, eventsToTriage: 0, tasksToday: 0 };
+const empty: MorningCardFacts = { weather: null, weatherFailed: false, scouts: null, morning: null, eventsToTriage: 0, tasksToday: 0 };
 
 describe('morning card lines', () => {
   it('omits lines with nothing to say and always keeps the tasks line', () => {
@@ -76,6 +76,13 @@ describe('morning card lines', () => {
       reason: 'no-data', message: 'No weather model returned usable forecast points.' });
     expect(morningLines({ ...empty, weather: unavailable })).toEqual([
       { id: 'weather', text: 'No weather model returned usable forecast points.' },
+      { id: 'tasks', text: 'No tasks today' },
+    ]);
+  });
+
+  it('keeps a detail entry point when the weather read itself failed', () => {
+    expect(morningLines({ ...empty, weatherFailed: true })).toEqual([
+      { id: 'weather', text: 'Weather unavailable' },
       { id: 'tasks', text: 'No tasks today' },
     ]);
   });
@@ -99,7 +106,7 @@ describe('morning card lines', () => {
 
   it('renders an events line only when events wait and keeps the order', () => {
     expect(morningLines({ ...empty, eventsToTriage: 1 })[0]).toEqual({ id: 'triage', text: '1 new events' });
-    expect(morningLines({ weather: weatherOk(), scouts: scoutsWith('failed'), morning: morningWith(true, 2), eventsToTriage: 3, tasksToday: 2 }))
+    expect(morningLines({ weather: weatherOk(), weatherFailed: false, scouts: scoutsWith('failed'), morning: morningWith(true, 2), eventsToTriage: 3, tasksToday: 2 }))
       .toEqual([{ id: 'weather', text: expect.stringContaining('lowest-rain window') }, { id: 'scouts', text: '1 scouts need attention' },
         { id: 'papers', text: 'Reading brief \u00b7 1 explained \u00b7 1 pending' }, { id: 'triage', text: '3 new events' },
         { id: 'tasks', text: '2 tasks today' }]);

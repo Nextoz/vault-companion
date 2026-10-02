@@ -50,6 +50,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   const triageView = triage ? deriveTriage(triage, items, accountKey) : null;
   const lines = morningLines({
     weather: weather?.kind === 'ok' ? weather.data : null,
+    weatherFailed: weather !== null && weather.kind !== 'ok',
     scouts: scouts?.kind === 'ok' ? scouts.data : null,
     morning: morning?.kind === 'ok' ? morning.data : null,
     eventsToTriage: triageView ? triageView.cards.length + triageView.checkins.length : 0,
