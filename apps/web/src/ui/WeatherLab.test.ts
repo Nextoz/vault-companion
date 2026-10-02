@@ -84,6 +84,16 @@ describe('WeatherLab full inspector', () => {
     vi.clearAllMocks();
   });
 
+  it('plots values on the chart scale, not as raw pixel coordinates', async () => {
+    root = createRoot(document.getElementById('root')!);
+    await act(async () => { root!.render(createElement(WeatherLab, { projection: projection() })); });
+    const temperature = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Temperature')!;
+    await act(async () => { temperature.click(); });
+    // Temperatures span 14..18 C; the 140-high chart with 8 padding puts 14 C at y=132 and 15 C at y=101.
+    const first = document.querySelector('.weather-line-primary polyline')!.getAttribute('points')!;
+    expect(first.split(' ').map((pair) => Number(pair.split(',')[1]))).toEqual([132, 101]);
+  });
+
   it('renders provider attribution, model sources, variable controls and keyboard inspection', async () => {
     root = createRoot(document.getElementById('root')!);
     await act(async () => { root!.render(createElement(WeatherLab, { projection: projection() })); });

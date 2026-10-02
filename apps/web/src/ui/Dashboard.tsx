@@ -79,9 +79,21 @@ function Chart({ series, active, onInspect }: { series: MarketSeries; active: nu
     onInspect(Math.min(points.length - 1, Math.max(0, Math.round(ratio * (points.length - 1)))));
   };
   const label = `BTC / USD ${RANGE_LABELS[series.range]}: ${points.length} points, ${series.missingIntervals} intervals missing`;
+  const fillId = `dash-fill-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <figure className="dash-chart">
       <svg viewBox={`0 0 ${W} ${H}`} className="dash-svg" role="img" aria-label={label} onPointerDown={pick} onPointerMove={(e) => { if (e.buttons) pick(e); }}>
+        <defs>
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" className="dash-fill-top" />
+            <stop offset="100%" className="dash-fill-bottom" />
+          </linearGradient>
+        </defs>
+        {/* Soft fill under each segment only: a gap stays empty, like the line. */}
+        {segments.filter((segment) => segment.length > 1).map((segment, index) => (
+          <path key={`fill-${index}`} className="dash-area" fill={`url(#${fillId})`}
+            d={`M${x(segment[0]!)},${H - PAD} ${segment.map((i) => `L${x(i)},${y(points[i]!.close)}`).join(' ')} L${x(segment[segment.length - 1]!)},${H - PAD} Z`} />
+        ))}
         {segments.map((segment, index) =>
           segment.length > 1 ? (
             <polyline key={index} className="dash-line" points={segment.map((i) => `${x(i)},${y(points[i]!.close)}`).join(' ')} />
@@ -245,7 +257,7 @@ export function Dashboard({ refreshKey, onDrillthrough }: { refreshKey: number |
   return (
     <section className="dash" aria-label="Dashboard">
       <h2 className="dash-heading">Dashboard</h2>
-      <div className="dash-ranges" role="group" aria-label="Chart range">
+      <div className="segmented dash-ranges" role="group" aria-label="Chart range">
         {DASHBOARD_RANGES.map((r) => (
           <button key={r} type="button" aria-pressed={range === r} onClick={() => onRange(r)}>{r}</button>
         ))}
@@ -256,7 +268,11 @@ export function Dashboard({ refreshKey, onDrillthrough }: { refreshKey: number |
       {shown && stale && <p className="dash-stale" role="status">Not refreshed — the times below are from the last success.</p>}
       {shown && market && <MarketView card={market} stale={stale} onDrillthrough={onDrillthrough} />}
       {shown && weather && <WeatherCardView card={weather} stale={weatherStale} onDrillthrough={onDrillthrough} />}
-      {shown && shown.cards.filter((card) => card.id !== 'market' && card.id !== 'weather').map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}
+      {shown && (
+        <div className="dash-tiles">
+          {shown.cards.filter((card) => card.id !== 'market' && card.id !== 'weather').map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}
+        </div>
+      )}
     </section>
   );
 }

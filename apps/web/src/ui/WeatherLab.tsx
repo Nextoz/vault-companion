@@ -140,18 +140,33 @@ function WeatherChart({ seriesList, variable, active, onInspect }: ChartProps) {
   };
   const activeTime = points[Math.min(active, points.length - 1)]?.time;
   const hasData = seriesList.some((series) => series.points.some((p) => valueAt(p, variable) !== null));
+  const fillId = `weather-fill-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <figure className="weather-chart">
       <svg viewBox={`0 0 ${W} ${H}`} className="weather-svg" role="img" aria-label={`${VARIABLES.find((v) => v.value === variable)!.label}: ${points.length} points`} onPointerDown={pick} onPointerMove={(e) => { if (e.buttons) pick(e); }}>
+        <defs>
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" className="weather-fill-top" />
+            <stop offset="100%" className="weather-fill-bottom" />
+          </linearGradient>
+        </defs>
         {hasData && seriesList.map((series, seriesIndex) => {
           const segments = weatherSegments(series.points, variable);
           return (
             <g key={series.model} className={seriesIndex === 0 ? 'weather-line-primary' : 'weather-line-comparison'}>
               {segments.map((segment, index) => {
-                const values = segment.map((i) => ({ x: x(at(series.points[i]!.time)), y: valueAt(series.points[i]!, variable) })).filter((v) => v.y !== null) as { x: number; y: number }[];
-                return values.length > 1
-                  ? <polyline key={index} points={values.map((v) => `${v.x},${v.y}`).join(' ')} />
-                  : values.map((v) => <circle key={index} cx={v.x} cy={v.y} r={2} />);
+                const values = segment
+                  .map((i) => ({ x: x(at(series.points[i]!.time)), value: valueAt(series.points[i]!, variable) }))
+                  .filter((v): v is { x: number; value: number } => v.value !== null)
+                  .map((v) => ({ x: v.x, y: y(v.value) }));
+                if (values.length < 2) return values.map((v) => <circle key={index} cx={v.x} cy={v.y} r={2} />);
+                const line = values.map((v) => `${v.x},${v.y}`).join(' ');
+                return (
+                  <g key={index}>
+                    {seriesIndex === 0 && <path className="weather-area" fill={`url(#${fillId})`} d={`M${values[0]!.x},${H - PAD} L${line.replaceAll(' ', ' L')} L${values[values.length - 1]!.x},${H - PAD} Z`} />}
+                    <polyline points={line} />
+                  </g>
+                );
               })}
             </g>
           );
