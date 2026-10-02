@@ -946,5 +946,27 @@ export const HealthResponse = z.strictObject({
   metrics: z.array(HealthMetric),
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
+
+/** One calendar day of the history view. Times share the card's encoding: minutes after 03:00 (0-1439). */
+export const HealthHistoryDay = z.strictObject({
+  date: z.iso.date(),
+  steps: z.number().nullable(),
+  headphone_min: z.number().nullable(),
+  first_move: z.number().nullable(),
+  last_move: z.number().nullable(),
+});
+export type HealthHistoryDay = z.infer<typeof HealthHistoryDay>;
+
+/**
+ * History view (HC3b) over the same fixed export: every day at or before yesterday (Copenhagen), ascending by date.
+ * `days` is empty unless `status` is `ok`; range chips slice it client-side.
+ */
+export const HealthHistoryResponse = z.strictObject({
+  revision: commitSha,
+  now: isoInstant,
+  status: HealthStatus,
+  days: z.array(HealthHistoryDay),
+});
+export type HealthHistoryResponse = z.infer<typeof HealthHistoryResponse>;
 export * from './dashboard.ts';
 export * from './weather.ts';

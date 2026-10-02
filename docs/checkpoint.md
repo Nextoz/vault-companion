@@ -1,9 +1,10 @@
-# Checkpoint — 2026-10-02 (HC3a done)
+# Checkpoint — 2026-10-02 (HC3b history view)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
 
+- **HC3b**: Health card → **History** toggle (lazy `GET /api/health/history`, all rows ≤ yesterday; chips 30 d / 90 d / 1 y / All slice client-side; range medians + SVG lines). Shares `readSource` with the card.
 - **HC3a** (ADR-0043): `POST /api/health/ingest`, own service-token verifier (ingest AUD only, no email claim),
   rewrites only sent days of the health CSV via `executeWrite`. **Live and working with the real Shortcut.**
   Root causes: Access session lifetime > 24 h (401), a trailing space in the Shortcut's `steps` key (422). Ingest
@@ -17,12 +18,12 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-1. **HC3b** history view: range chips 30 d / 90 d / 1 y / all for steps, headphone, first/last move (Flash, ordinary).
-2. Then UX2–UX5 (UX1b overrides them where they differ) → AB AI budget card → NY Needs You + Morning Review → SP
+1. UX2–UX5 (UX1b overrides them where they differ) → AB AI budget card → NY Needs You + Morning Review → SP
    phone measurement (re-read the backlog).
 
 ## Owner items
 
+- Phone: Today → Health → History → tap 30 d / 90 d / 1 y / All; values and lines look right (HC3b).
 - Phone: bottom bar Today · Tasks · Scouts · Notes · Log; Tasks → Today/All; Log → Training/Progress; status dot →
   Status → Back (UX1b). Tell me if the cockpit order on Today feels right.
 - Phone: Log → Training → tap a session → change a value → Save changes; status dot → Actions → Undo (B12).
@@ -33,4 +34,4 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Budget
 
-DeepSeek $7.88. GLM ~249k/900k.
+DeepSeek $7.76. GLM ~270k/900k.

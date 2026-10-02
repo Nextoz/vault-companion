@@ -1,4 +1,4 @@
-import { HEALTH_DAILY_CSV, HealthResponse } from '@vault-companion/contracts';
+import { HEALTH_DAILY_CSV, HealthHistoryResponse, HealthResponse } from '@vault-companion/contracts';
 import { expect, it } from 'vitest';
 import { createHealthService } from './health.ts';
 import { FileTooLarge, StoreUnavailable } from './store.ts';
@@ -35,6 +35,11 @@ function addDays(date: string, n: number): string {
 async function setup(csvText: string) {
   const store = await InMemoryStore.create({ [HEALTH_DAILY_CSV]: csvText });
   return { store, read: createHealthService({ store, now: () => NOW, timeZone: TZ }).readHealth };
+}
+
+async function setupHistory(csvText: string) {
+  const store = await InMemoryStore.create({ [HEALTH_DAILY_CSV]: csvText });
+  return { store, read: createHealthService({ store, now: () => NOW, timeZone: TZ }).readHealthHistory };
 }
 
 const byKey = (r: HealthResponse, key: string) => r.metrics.find((m) => m.key === key)!;
@@ -128,6 +133,39 @@ it('maps a store outage to upstream-unavailable without leaking any cell text', 
   const store = await InMemoryStore.create({ [HEALTH_DAILY_CSV]: csv([data('2026-04-30', 43210)]) });
   store.listFiles = async () => { throw new StoreUnavailable('43210'); };
   const result = await createHealthService({ store, now: () => NOW, timeZone: TZ }).readHealth();
+  expect(result).toEqual({ code: 'upstream-unavailable', message: 'GitHub is not reachable right now', retryable: true });
+  expect(JSON.stringify(result)).not.toContain('43210');
+});
+
+it('history lists every day at or before yesterday, ascending, keeping no-data days as gaps', async () => {
+  const days: Day[] = [
+    data('2026-04-28', 4000),
+    { date: '2026-04-29', steps: '0', first: '' }, // exporter sentinel: no data
+    data('2026-04-30', 5600, { headphone: '70', first: '11:20', last: '00:40' }),
+    data('2026-05-01', 99999), // today: never in the history
+  ];
+  const { store, read } = await setupHistory(csv(days));
+  const r = HealthHistoryResponse.parse(await read());
+  expect(store.writeCalls).toBe(0);
+  expect(r).toMatchObject({ status: 'ok', now: NOW.toISOString() });
+  expect(r.days.map((day) => day.date)).toEqual(['2026-04-28', '2026-04-29', '2026-04-30']);
+  expect(r.days[1]).toEqual({ date: '2026-04-29', steps: null, headphone_min: null, first_move: null, last_move: null });
+  expect(r.days[2]).toEqual({ date: '2026-04-30', steps: 5600, headphone_min: 70, first_move: 500, last_move: 1300 });
+});
+
+it('history reports missing and unreadable exports like the card', async () => {
+  const empty = await InMemoryStore.create({});
+  expect(await createHealthService({ store: empty, now: () => NOW, timeZone: TZ }).readHealthHistory())
+    .toMatchObject({ status: 'missing', days: [] });
+
+  const badHeader = csv([data('2026-04-30', 5000)], HEADER.replace('headphone_min,', ''));
+  expect(await (await setupHistory(badHeader)).read()).toMatchObject({ status: 'unreadable', days: [] });
+});
+
+it('history maps a store outage to upstream-unavailable without leaking any cell text', async () => {
+  const store = await InMemoryStore.create({ [HEALTH_DAILY_CSV]: csv([data('2026-04-30', 43210)]) });
+  store.listFiles = async () => { throw new StoreUnavailable('43210'); };
+  const result = await createHealthService({ store, now: () => NOW, timeZone: TZ }).readHealthHistory();
   expect(result).toEqual({ code: 'upstream-unavailable', message: 'GitHub is not reachable right now', retryable: true });
   expect(JSON.stringify(result)).not.toContain('43210');
 });

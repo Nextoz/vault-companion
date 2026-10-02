@@ -1087,3 +1087,9 @@ textarea:focus-visible {
 .edit-sheet select,
 .sheet label input { background: var(--surface); border-color: transparent; }
 .vault-status .read-speed { margin: 0.25rem 0 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+
+/* Health history (HC3b): the card's range chips plus a plain gap-aware line; keeps the neutral cyan token. */
+.health-history { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.health-history-ranges { align-self: flex-start; }
+.health-history-line { width: 100%; height: 36px; margin-top: 4px; }
+.health-history-line polyline { fill: none; stroke: var(--ios-cyan); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }

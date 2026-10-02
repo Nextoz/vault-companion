@@ -22,6 +22,7 @@ import {
   type DashboardResponse,
   type ErrorCode,
   type HistoryResponse,
+  type HealthHistoryResponse,
   type HealthResponse,
   type LinkedNoteRequest,
   type LinkedNoteResponse,
@@ -73,6 +74,8 @@ export interface Services {
   readWeatherAtLocation?(request: WeatherLocationRequest): Promise<WeatherResponse | ApiError>;
   /** Health daily card (HC1). Read-only. Optional: without it the route answers 404. */
   readHealth?(): Promise<HealthResponse | ApiError>;
+  /** Health history view (HC3b). Read-only. Optional: without it the route answers 404. */
+  readHealthHistory?(): Promise<HealthHistoryResponse | ApiError>;
   /** Health sample ingest (HC3a). Optional: without it the route answers 404. */
   ingestHealth?(body: string): Promise<HealthIngestOutcome>;
 }
@@ -111,7 +114,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -299,6 +302,21 @@ export function createApp(deps: AppDeps) {
   // logs carry only the commit SHA (no health value, row or file text).
   app.get('/api/health', async (c) => {
     const read = deps.services.readHealth;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Health history view (HC3b): the same fixed file and the same Access/email auth as the card. Read-only, no client
+  // path; logs carry only commitSha/errorCode (no health value, row or file text). Never the ingest service token.
+  app.get('/api/health/history', async (c) => {
+    const read = deps.services.readHealthHistory;
     if (!read) return c.json(err('invalid', 'not found'), 404);
     const result = await read();
     const meta = c.get('logMeta');

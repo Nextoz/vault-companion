@@ -1,4 +1,4 @@
-import { HEALTH_DAILY_CSV, HealthResponse } from '@vault-companion/contracts';
+import { HEALTH_DAILY_CSV, HealthHistoryResponse, HealthResponse } from '@vault-companion/contracts';
 import { createCommandService, createHealthService, StoreUnavailable, type VaultStore } from '@vault-companion/domain';
 import { InMemoryStore } from '@vault-companion/domain/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -76,5 +76,37 @@ describe('health worker route', () => {
     expect(logs.at(-1)?.errorCode).toBe('upstream-unavailable');
     expect(JSON.stringify([logs, printed])).not.toContain('SENTINEL-health');
     expect((await stack(store, false).app.request('/api/health', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } })).status).toBe(404);
+  });
+
+  it('GET /api/health/history returns every day with no value, row or path in logs', async () => {
+    const store = await seed();
+    const { app, logs, printed } = stack(store);
+    const res = await app.request('/api/health/history', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    const body = HealthHistoryResponse.parse(await res.json());
+    expect(body.status).toBe('ok');
+    expect(body.days.at(-1)).toMatchObject({ date: '2026-04-30', steps: SENTINEL });
+    expect(logs.at(-1)).toMatchObject({ route: '/api/health/history', commitSha: store.headCommit, status: 200 });
+    const all = JSON.stringify([logs, printed]);
+    expect(all).not.toContain(String(SENTINEL));
+    expect(all).not.toContain(HEALTH_DAILY_CSV);
+    expect(all).not.toContain('Health/Data');
+    expect(store.writeCalls).toBe(0);
+  });
+
+  it('history requires user auth, 404s without the service, and maps a store outage by code only', async () => {
+    const store = await seed();
+    expect((await stack(store, false).app.request('/api/health/history', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } })).status).toBe(404);
+    const { app, logs, printed } = stack(store);
+    const head = vi.spyOn(store, 'head');
+    expect((await app.request('/api/health/history')).status).toBe(401);
+    expect(head).not.toHaveBeenCalled();
+    head.mockRejectedValue(new StoreUnavailable('SENTINEL-health'));
+    const res = await app.request('/api/health/history', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: 'upstream-unavailable', retryable: true });
+    expect(logs.at(-1)?.errorCode).toBe('upstream-unavailable');
+    expect(JSON.stringify([logs, printed])).not.toContain('SENTINEL-health');
   });
 });
