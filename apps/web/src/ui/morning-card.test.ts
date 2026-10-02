@@ -1,8 +1,8 @@
-import { MorningResponse, ScoutsResponse, WeatherResponse, type Command } from '@vault-companion/contracts';
+import { MorningBriefResponse, MorningResponse, ScoutsResponse, WeatherResponse, type Command } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
 import { moodCheckin, undoMoodCheckinDraft } from '../commands.ts';
 import type { QueueItem } from '../queue/queue.ts';
-import { checkinDue, morningLines, tasksTodayText, type MorningCardFacts } from './morning-card.ts';
+import { briefLines, checkinDue, morningLines, tasksTodayText, type MorningCardFacts } from './morning-card.ts';
 
 const ACCOUNT = 'a'.repeat(64);
 const ctx = { baseRevision: '1'.repeat(40) };
@@ -128,5 +128,51 @@ describe('check-in line visibility', () => {
     expect(checkinDue([queued(checkin('2026-10-01'), 1)], '2026-10-02')).toBe(true);
     const target = checkin('2026-10-02');
     expect(checkinDue([queued(target, 1), queued(undoMoodCheckinDraft(ctx, target), 2)], '2026-10-02')).toBe(true);
+  });
+});
+
+describe('Morning Brief rows (MB2)', () => {
+  const sample = (o: { date?: string; source?: 'model' | 'fallback'; brief?: Partial<MorningBriefResponse['brief']> } = {}) => {
+    const source = o.source ?? 'model';
+    return MorningBriefResponse.parse({
+      revision: 'a'.repeat(40),
+      date: o.date ?? '2026-10-02',
+      generatedAt: '2026-10-02T04:31:00+02:00',
+      source,
+      unavailable: [],
+      brief: { source, dayLine: 'A calm Thursday.', gaps: [], todos: [], ...o.brief },
+    });
+  };
+
+  it('is null without a brief, and for a stale date so the card keeps its own lines', () => {
+    expect(briefLines(null, '2026-10-02')).toBeNull();
+    expect(briefLines(sample({ date: '2026-10-01' }), '2026-10-02')).toBeNull();
+  });
+
+  it('marks a fallback brief', () => {
+    const lines = briefLines(sample({ source: 'fallback' }), '2026-10-02')!;
+    expect(lines[0]).toEqual({ id: 'fallback', text: 'Fallback brief', marker: true, todo: false });
+  });
+
+  it('renders gaps in their ISO offset wall clock and omits a gap without a suggestion', () => {
+    const lines = briefLines(sample({ brief: { gaps: [
+      { blockIndex: 1, start: '2026-10-02T09:00:00+02:00', end: '2026-10-02T10:30:00+02:00', suggestion: 'Deep work' },
+      { blockIndex: 2, start: '2026-10-02T11:00:00+02:00', end: '2026-10-02T11:20:00+02:00' },
+    ] } }), '2026-10-02')!;
+    expect(lines.map((l) => l.text)).toEqual(['A calm Thursday.', '09:00-10:30  Deep work']);
+  });
+
+  it('appends a todo first step and marks only todos as opening Tasks', () => {
+    const lines = briefLines(sample({ brief: { stateLine: 'Low energy.', todos: [
+      { id: 1, text: 'Pay the bill', due: '2026-10-02', bill: true, firstStep: 'Open the banking app' },
+      { id: 2, text: 'Call the dentist', due: null, bill: false },
+    ], encouragement: 'You have got this.' } }), '2026-10-02')!;
+    expect(lines).toEqual([
+      { id: 'day', text: 'A calm Thursday.', marker: false, todo: false },
+      { id: 'state', text: 'Low energy.', marker: false, todo: false },
+      { id: 'todo-1', text: 'Pay the bill - Open the banking app', marker: false, todo: true },
+      { id: 'todo-2', text: 'Call the dentist', marker: false, todo: true },
+      { id: 'encouragement', text: 'You have got this.', marker: false, todo: false },
+    ]);
   });
 });

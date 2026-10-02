@@ -375,6 +375,8 @@ export const ErrorCode = z.enum([
   'unauthorized',
   'forbidden',
   'invalid',
+  /** A fixed read target does not exist (MB2 morning brief). Not retryable. */
+  'not-found',
   'clock-skew',
   'upstream-unavailable',
 ]);
@@ -599,6 +601,45 @@ export const MorningResponse = z.strictObject({
   explained: z.array(LinkedNoteResponse).max(10),
 });
 export type MorningResponse = z.infer<typeof MorningResponse>;
+
+// ---- Morning Brief card (MB2): the Worker-written brief JSON (ADR-0046), read-only ----
+
+/** Same field shapes as `BriefFile.brief` in packages/domain; the domain re-validates the file on every read. */
+const MorningBriefGap = z.strictObject({
+  blockIndex: z.number().int().nonnegative(),
+  start: isoInstant,
+  end: isoInstant,
+  suggestion: z.string().optional(),
+});
+
+const MorningBriefTodo = z.strictObject({
+  id: z.number().int().nonnegative(),
+  text: z.string(),
+  due: z.iso.date().nullable(),
+  bill: z.boolean(),
+  firstStep: z.string().optional(),
+});
+
+export const MorningBriefBody = z.strictObject({
+  source: z.enum(['model', 'fallback']),
+  dayLine: z.string(),
+  stateLine: z.string().optional(),
+  gaps: z.array(MorningBriefGap),
+  todos: z.array(MorningBriefTodo),
+  encouragement: z.string().optional(),
+});
+export type MorningBriefBody = z.infer<typeof MorningBriefBody>;
+
+/** `Daily/Morning Digest/Morning Brief - latest.json`, projected for the Today card. No path or text is client input. */
+export const MorningBriefResponse = z.strictObject({
+  revision: commitSha,
+  date: z.iso.date(),
+  generatedAt: isoInstant,
+  source: z.enum(['model', 'fallback']),
+  unavailable: z.array(z.string()),
+  brief: MorningBriefBody,
+});
+export type MorningBriefResponse = z.infer<typeof MorningBriefResponse>;
 
 export const ScoutsResponse = z.strictObject({
   revision: commitSha,
