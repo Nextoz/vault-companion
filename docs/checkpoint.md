@@ -18,8 +18,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-1. **HC3a deploy** + owner sets `HEALTH_INGEST_AUD` (ACTION NEEDED) → Lead writes the exact Shortcut steps (doc
-   for the owner) → owner runs it once; capture real non-step output (units, sleep text) and adjust the parser.
+1. **HC3a** deployed (afc5b960) but **off**: owner sets `HEALTH_INGEST_AUD`, builds the Shortcut per
+   `docs/health-shortcut.md`, runs it once → fix the parser for any field/line error the owner reports (names only).
 2. **HC3b** history view: range chips 30 d / 90 d / 1 y / all for steps, headphone, first/last move (Flash, ordinary).
 3. Then UX2–UX5 (UX1b overrides them where they differ) → AB AI budget card → NY Needs You + Morning Review → SP
    phone measurement (re-read the backlog).
