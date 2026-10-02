@@ -2,10 +2,10 @@
 .SYNOPSIS
   Start a fresh Vault Companion Lead (Claude Opus 5.5, effort medium) in the current Herdr pane.
   Run from inside Herdr (workers need HERDR_ENV=1):  pwsh -NoProfile -File C:\Dev\vault-companion\tools\start-lead.ps1
-  Then, in a second pane, run tools/lead-watch.ps1 (auto-resume after usage limits, fresh context after each merge).
+  Then, in a second pane, run tools/lead-watch.ps1 (fresh context after each merge).
 #>
 param([string]$Focus = 'the first open item under "Next actions" in docs/checkpoint.md',
-      # Unattended run: no permission prompts (safe actions auto-approved, risky ones blocked). Pair with .agent/overnight.md.
+      # Unattended run: no permission prompts (safe actions auto-approved, risky ones blocked). Standing decisions live in .agent/owner-instructions.md.
       [switch]$Overnight)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
