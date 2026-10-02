@@ -30,6 +30,9 @@ export const tickerUrl = (): string => `${MARKET_BASE_URL}/products/${MARKET_PRO
 export const candlesUrl = (range: DashboardRange, startSec: number, endSec: number): string =>
   `${MARKET_BASE_URL}/products/${MARKET_PRODUCT}/candles?granularity=${DASHBOARD_RANGE_PLAN[range].granularitySeconds}&start=${startSec}&end=${endSec}`;
 
+/** B9: Coinbase answers `/candles` with 400 when User-Agent is absent, and a Worker's fetch sends none by default. */
+export const MARKET_HEADERS = { Accept: 'application/json', 'User-Agent': 'vault-companion' } as const;
+
 class TimedOut extends Error {}
 
 async function readJson(fetchImpl: typeof fetch, url: string, timeoutMs: number): Promise<{ ok: true; body: unknown } | { ok: false; reason: MarketUnavailableReason }> {
@@ -44,7 +47,7 @@ async function readJson(fetchImpl: typeof fetch, url: string, timeoutMs: number)
     }, timeoutMs);
   });
   try {
-    const fetching = fetchImpl(url, { signal: abort.signal, headers: { Accept: 'application/json' } }).then((response) => {
+    const fetching = fetchImpl(url, { signal: abort.signal, headers: MARKET_HEADERS }).then((response) => {
       if (abort.signal.aborted) void response.body?.cancel().catch(() => {});
       return response;
     });
