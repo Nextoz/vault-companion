@@ -264,7 +264,7 @@ function formatHm(ms: number, timeZone: string): string {
   return `${h}:${m}`;
 }
 
-function weekday(date: string, timeZone: string): string {
+function weekday(date: string): string {
   const instant = new Date(`${date}T00:00:00Z`);
   // The date string is a calendar date, so its weekday is timezone-independent; format the UTC-midnight
   // instant as UTC, never in the user zone (behind-UTC zones would otherwise get the previous day).
@@ -376,7 +376,7 @@ function aggregate(payload: Payload, timeZone: string): { ok: true; aggs: Readon
 function formatDay(date: string, agg: DayAgg, timeZone: string): string {
   return [
     date,
-    weekday(date, timeZone),
+    weekday(date),
     formatNumber(agg.steps, 0),
     formatNumber(agg.distance, 2),
     formatNumber(agg.flights, 0),
