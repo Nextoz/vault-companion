@@ -1,6 +1,6 @@
 import { HEALTH_DAILY_CSV } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
-import { createHealthIngestService } from './health-ingest.ts';
+import { bodyShape, createHealthIngestService } from './health-ingest.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 const TZ = 'Europe/Copenhagen';
@@ -136,8 +136,22 @@ describe('health ingest aggregation and merge', () => {
   it('refuses a locked request without writing', async () => {
     const seed = csv([row('2026-09-29', 'Tue')]);
     const { store, result } = await ingest(seed, payload({ steps: '', distance: '2026-09-29T08:00:00+02:00|2026-09-29T09:00:00+02:00|1|km' }));
-    expect(result).toEqual({ ok: false, status: 422, error: 'Health was locked: no step samples' });
+    expect(result).toMatchObject({ ok: false, status: 422 });
+    if (!result.ok) {
+      expect(result.error).toMatch(/^Health was locked: no step samples \(body \d+ chars, "steps" keys 1, keys: /);
+      expect(result.error).toContain('schemaVersion:number');
+      expect(result.error).toContain('steps:string(0)');
+      expect(result.error).toContain('distance:string(56)');
+      expect(result.error).not.toContain('2026-09-29T08');
+    }
     expect(store.writeCalls).toBe(0);
+  });
+
+  it('diagnoses a duplicate or non-string steps key by shape only', () => {
+    const dup = '{"steps":"2026-09-29T08:00:00+02:00|x|5|count","steps":""}';
+    expect(bodyShape(dup)).toBe(`body ${dup.length} chars, "steps" keys 2, keys: steps:string(0)`);
+    expect(bodyShape('{"steps":["a","b"],"x":{"y":1},"n":null}')).toContain('steps:array(2), x:object(1), n:null');
+    expect(bodyShape('not json')).toBe('body 8 chars, "steps" keys 0, not JSON');
   });
 
   it('refuses a grouped integer without echoing the value', async () => {
