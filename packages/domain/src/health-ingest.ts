@@ -97,7 +97,7 @@ function parseIso(value: unknown): Date | null {
  * how often a `"steps"` key appears in the raw body (JSON.parse keeps only the last duplicate). Response only, not logs.
  */
 export function bodyShape(body: string): string {
-  const stepsKeys = (body.match(/"steps"\s*:/g) ?? []).length;
+  const stepsKeys = (body.match(/"\s*steps\s*"\s*:/g) ?? []).length;
   const head = `body ${body.length} chars, "steps" keys ${stepsKeys}`;
   let raw: unknown;
   try {
@@ -129,7 +129,13 @@ function parsePayload(body: string, now: Date): { ok: true; payload: Payload } |
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     return { ok: false, status: 400, error: 'invalid health ingest payload' };
   }
-  const obj = raw as Record<string, unknown>;
+  // iOS Shortcuts dictionaries can carry spaces around key names; the Shortcut is fixed, so trim them here.
+  const obj: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const name = key.trim();
+    if (Object.hasOwn(obj, name)) return { ok: false, status: 400, error: `duplicate key ${name.slice(0, 40)}` };
+    obj[name] = value;
+  }
   if (obj.schemaVersion !== 1) return { ok: false, status: 400, error: 'invalid schemaVersion' };
   const from = parseIso(obj.from);
   if (!from) return { ok: false, status: 400, error: 'invalid from' };
