@@ -27,25 +27,24 @@ appending amendments. History: Git and branch `archive/codex-lead-2026-10-01`.
 | Worker | Use for | Cost |
 |---|---|---|
 | **Gemini CLI** (Flash-Lite) | tiny, idempotent: docs, copy, rename, one-file tweak | free tier |
-| **Scaleway GLM-5.2** (OpenCode) | ordinary bounded implementation — **trial**: first tasks small, compare with Flash | free allocation (~1M tokens) |
 | **DeepSeek Flash**, effort high | **default** ordinary implementation: UI, tests, bounded features, bug batches | cheap; half price off-peak |
-| **DeepSeek Pro**, effort **medium** | high-risk implementation only (see Review by risk) | ~4× Flash |
+| **DeepSeek Pro**, effort **medium** | high-risk implementation only (see Review by risk) | ~4x Flash |
 
-Launch every worker visibly from inside Herdr; keys are read at run time, never printed:
+**Scaleway GLM-5.2 is not an implementation worker (2026-10-02):** Codex CLI needs the Responses API, which Scaleway
+does not serve for GLM-5.2 (chat completions only), and OpenCode exited silently twice. Use GLM only for one-shot
+public-repo questions over the plain API (e.g. a fallback diff review when CodeRabbit is down), not for edits.
+
+Launch every worker with **one command**, from inside Herdr (it opens a visible pane in the Agents tab):
 
 ```sh
-# DeepSeek (Flash shown; Pro: -m deepseek-v4-pro -c model_reasoning_effort=medium)
-AGENT_STDIN=<clone>/.agent/brief.md AGENT_USER_ENV=DEEPSEEK_API_KEY bash tools/agent-pane.sh "flash · <task>" <clone> <clone>/.agent/run.log \
-  env CODEX_HOME=C:/Dev/tools/vault-companion-deepseek-home codex exec -m deepseek-flash -c model_provider=deepseek \
-  -c model_reasoning_effort=high -c model_reasoning_summary=concise -c model_verbosity=low -c features.memories=false \
-  -c memories.use_memories=false -c memories.generate_memories=false --dangerously-bypass-approvals-and-sandbox -C <clone> -
-# Scaleway GLM-5.2
-AGENT_USER_ENV=SCW_SECRET_KEY bash tools/agent-pane.sh "glm · <task>" <clone> <clone>/.agent/run.log \
-  opencode run --standalone --model scaleway/glm-5.2 "Read .agent/brief.md and carry out that task exactly as written."
-# Gemini
-AGENT_USER_ENV=GEMINI_API_KEY bash tools/agent-pane.sh "gemini · <task>" <clone> <clone>/.agent/run.log bash tools/gemini-worker.sh <clone>
+pwsh -NoProfile -File tools/launch-worker.ps1 -Tier flash|pro|gemini -Clone <clone> -Task <task>        # brief: <clone>/.agent/brief.md
+pwsh -NoProfile -File tools/launch-worker.ps1 -Tier flash|pro -Clone <clone> -Task <task> -Fix          # resumes the same session with .agent/fix-<task>.md
 ```
 
+DeepSeek workers run **sandboxed** (Codex `workspace-write` + elevated Windows sandbox, set up by the owner
+2026-10-02): they edit and run tests inside their clone only; writes elsewhere are denied and their commands have no
+network (the launcher runs `pnpm install` first). Never launch workers with `--dangerously-bypass-approvals-and-sandbox`:
+it is unsafe and Claude Code's auto mode blocks it. Keys are read at run time, never printed.
 Verify the model in the log header and real activity before waiting. Wait on the log's last line, not by polling.
 
 ## Delivery loop (every slice)
@@ -60,7 +59,7 @@ Verify the model in the log header and real activity before waiting. Wait on the
    It commits the candidate (never `.agent/`), runs the tests, reviews the complete delta with the CodeRabbit CLI
    and triages each finding with Jev. Exit 0 clean · 10 fixes needed · 20 tests failed · 30 review unavailable ·
    40 boundary refused.
-5. **At most one correction round**, by the same worker session (`codex exec resume …` with `.agent/fix-<task>.md`),
+5. **At most one correction round**, by the same worker session (`tools/launch-worker.ps1 … -Fix`),
    then the check once more. Still failing ⇒ the Lead fixes it itself or re-slices. Never a third worker round.
 6. **Lead acceptance:** read the diff (not the logs), run `pnpm check` + e2e **once** on the final candidate, push the
    branch, open the PR, merge when CI is green. One PR per slice; small fixes/docs batch into one PR per round.
@@ -84,7 +83,7 @@ question is a typed choice/score/yes-no over **public repo** material. Owner wan
 - **Before every dispatch (required):** choose the worker tier; state the brief's outcome, size and risk in a few
   lines. Follow Jev's pick unless the deterministic floor says otherwise (high-risk ⇒ Pro or Lead review), and say
   which in the STATUS line:
-  `pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,glm,flash,pro,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks?" -Json`
+  `pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,flash,pro,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks?" -Json`
 - **Instead of deliberating:** "is this in scope?", "is this handoff claim supported by the test output?", "real
   failure or flaky?", "which backlog item is smallest?" — ask Jev (`-Ask` / `-Choose` / `-Rate`) first.
 Never send private vault text or raw logs to Jev. Receipts land in `.agent/jev-receipts.jsonl`; the Lead notes
@@ -124,7 +123,7 @@ line: free RAM, DeepSeek balance, Scaleway GLM estimate) and post a short update
 - **Low RAM:** before launching a worker, `pnpm install` or e2e, run the script; exit 1 (< 3 GB free) ⇒ post
   `ACTION NEEDED: free RAM — <x> GB free, need ~3 GB for <job>` and wait instead of launching.
 - **Credits:** after every paid DeepSeek run, include the balance; below $2 ⇒ `ACTION NEEDED:` with the remaining
-  planned work, and switch to GLM/Gemini where the risk allows. After a GLM run, append `{"tokens":N}` (from its
+  planned work, and switch to Gemini where the risk allows. After a GLM run, append `{"tokens":N}` (from its
   log) to `.agent/budget/scaleway.jsonl`; above ~800k ⇒ tell the owner and stop GLM at 900k.
 - **CodeRabbit:** if `cr usage` shows 0 reviews left in the hour, say so instead of waiting silently.
 - Lines starting `ACTION NEEDED:` are the only ones that require the owner to act; everything else is information.

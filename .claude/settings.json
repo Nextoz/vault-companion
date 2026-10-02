@@ -1,8 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(herdr pane run * cmd /c \"cd /d C:\\\\Dev\\\\vault-companion-clones\\\\*agy.exe -p *)",
-      "Bash(AGENT_STDIN=* bash tools/agent-pane.sh *)"
+      "Bash(pwsh -NoProfile -File tools/launch-worker.ps1 *)",
+      "Bash(pwsh -NoProfile -File tools/handoff-check.ps1 *)",
+      "Bash(pwsh -NoProfile -File tools/owner-status.ps1*)"
     ]
   }
 }
