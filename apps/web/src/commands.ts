@@ -100,6 +100,8 @@ export function exportText(envelope: Command): string {
   switch (envelope.type) {
     case 'LogTraining': return JSON.stringify(envelope.payload.session, null, 2);
     case 'UndoLogTraining': return exportText(envelope.payload.target);
+    case 'MoodCheckin': return JSON.stringify(envelope.payload, null, 2);
+    case 'UndoMoodCheckin': return exportText(envelope.payload.target);
     case 'TriageDecide':
       return JSON.stringify(envelope.payload, null, 2);
     case 'CaptureActiveWork':

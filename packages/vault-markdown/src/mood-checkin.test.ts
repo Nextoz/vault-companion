@@ -1,6 +1,6 @@
 // Daily-note mood check-in: exact golden bytes. Synthetic notes only.
 import { describe, expect, it } from 'vitest';
-import { applyMoodCheckin, renderDailyNote } from './mood-checkin.ts';
+import { applyMoodCheckin, renderDailyNote, revertMoodCheckin } from './mood-checkin.ts';
 import type { MoodCheckinInput } from './mood-checkin.ts';
 
 const BOM = '\uFEFF';
@@ -98,6 +98,34 @@ describe('applyMoodCheckin refusals', () => {
     const source = ['---', 'mood:', 'energy:', 'sleep:', 'checkin_at:', '---', ''].join('\n');
     expect(applied(source, { mood: -3, energy: 3, sleep: 0.5, checkinAt: ISO })).toBe(['---', 'mood: -3', 'energy: 3', 'sleep: 0.5', 'checkin_at: 2026-10-01T06:14:00.000Z', '---', ''].join('\n'));
     expect(applied(source, { mood: 0, energy: 0, sleep: 24, checkinAt: ISO })).toBe(['---', 'mood: 0', 'energy: 0', 'sleep: 24', 'checkin_at: 2026-10-01T06:14:00.000Z', '---', ''].join('\n'));
+  });
+});
+
+describe('revertMoodCheckin golden bytes', () => {
+  it('restores exactly the previous four value spans and keeps CRLF, BOM and the body', () => {
+    const previous = `${BOM}---\r\nmood: -1\r\nenergy: 2\r\nsleep: 7\r\ncheckin_at: "06:14"\r\n---\r\nBody\r\n`;
+    const source = previous;
+    const checkin = applyMoodCheckin(source, valid);
+    if (!checkin.ok) throw new Error(`refused: ${checkin.code}`);
+    expect(revertMoodCheckin(checkin.text, checkin.text, previous)).toMatchObject({ ok: true, text: previous, effect: { kind: 'mood-checkin' } });
+  });
+
+  it('keeps a later body edit and restores only the four value spans', () => {
+    const previous = '---\nmood: -1\nenergy: 2\nsleep: 7\ncheckin_at: 06:14\n---\nBody\n';
+    const checkin = applyMoodCheckin(previous, valid);
+    if (!checkin.ok) throw new Error(`refused: ${checkin.code}`);
+    const changed = checkin.text.replace('Body\n', 'Edited body\n');
+    const result = revertMoodCheckin(changed, checkin.text, previous);
+    expect(result).toMatchObject({ ok: true, text: '---\nmood: -1\nenergy: 2\nsleep: 7\ncheckin_at: 06:14\n---\nEdited body\n' });
+  });
+
+  it('refuses when any current value no longer matches the applied check-in', () => {
+    const previous = '---\nmood: -1\nenergy: 2\nsleep: 7\ncheckin_at: 06:14\n---\n';
+    const checkin = applyMoodCheckin(previous, valid);
+    if (!checkin.ok) throw new Error(`refused: ${checkin.code}`);
+    const changed = checkin.text.replace('mood: -1', 'mood: 3');
+    const result = revertMoodCheckin(changed, checkin.text, previous);
+    expect(result).toMatchObject({ ok: false, code: 'conflict:mood-changed' });
   });
 });
 

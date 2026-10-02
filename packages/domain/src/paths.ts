@@ -9,6 +9,8 @@ export const EXPLAINED_DIR = 'Research/Explained';
 export const EXPLAINER_STATUS_PATH = `${SCOUT_STATUS_DIR}/research-explainer.json`;
 export const RADAR_DIR = 'Research/Radar';
 export const RADAR_DECISIONS_DIR_LOCAL = RADAR_DECISIONS_DIR;
+/** ADR-0036: the only vault path a mood check-in may create or update. */
+export const DAILY_JOURNAL_TEMPLATE_PATH = 'Templates/Daily Journal Template.md';
 
 const DENIED_ROOTS = new Set(['.git', '.obsidian', '.trash', 'Tools', 'tmp', 'output']);
 // Case-folded: the owner's desktop (Windows) treats `TMP/` and `tmp/` as the same folder.
@@ -17,6 +19,25 @@ const isDenied = (segment: string): boolean => DENIED_FOLDED.has(segment.toLower
 export const isTriageDecisionPath = (path: string): boolean => /^Events\/Triage\/Decisions\/\d{4}-(0[1-9]|1[0-2])\.jsonl$/.test(path);
 export const isRadarDecisionPath = (path: string): boolean => /^Research\/Radar\/Decisions\/\d{4}-(0[1-9]|1[0-2])\.jsonl$/.test(path);
 export const isRadarAppliedPath = (path: string): boolean => path === RADAR_APPLIED_PATH;
+const DAILY_JOURNAL_RE = /^Journal\/Daily\/\d{4}-\d{2}-\d{2}\.md$/;
+
+function isValidDailyDate(date: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const midnight = `${date}T00:00:00.000Z`;
+  return Number.isFinite(Date.parse(midnight)) && new Date(midnight).toISOString().slice(0, 10) === date;
+}
+
+/** ADR-0036: `Journal/Daily/YYYY-MM-DD.md` for a valid calendar date; `null` for anything else. */
+export function dailyJournalPath(date: string): VaultPath | null {
+  if (!isValidDailyDate(date)) return null;
+  return `Journal/Daily/${date}.md` as VaultPath;
+}
+
+/** ADR-0036: exactly a `Journal/Daily/` note for a valid calendar date — no traversal, no other folders. */
+export function isDailyJournalPath(path: string): boolean {
+  if (!DAILY_JOURNAL_RE.test(path) || !isStructurallySafePath(path)) return false;
+  return isValidDailyDate(path.slice('Journal/Daily/'.length, -'.md'.length));
+}
 /** Owner decision D2 default: linked notes are readable only under these roots (vault-contract §1, review A8). */
 const LINKED_NOTE_ALLOWED_ROOTS = new Set(['Projects', 'Tasks', 'Inbox']);
 
@@ -76,6 +97,7 @@ export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
   if (path === EXPLAINER_STATUS_PATH) return true;
   // Create; update only replaces this job's own pending note (blob-SHA checked by the job, ADR-0029 amendment 2).
   if (isExplainedNotePath(path)) return true;
+  if (isDailyJournalPath(path)) return true;
   if (path === TRAINING_PATH || path === TODO_LIST_PATH || path === 'Tasks/Active Work Now.md') return kind === 'update';
   if (kind === 'update') return isInboxNotePath(path);
   const segments = path.split('/');

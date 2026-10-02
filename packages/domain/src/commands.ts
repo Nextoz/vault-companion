@@ -6,7 +6,7 @@ import { executeWrite, findInOnePage, replayOnParent, type Planned, type Refused
 import { MAX_NOTE_BYTES } from '@vault-companion/contracts';
 import { appendDecisionLine, hasDecisionId, parseDecisionLines, type DecisionLine } from './triage-format.ts';
 import { readTriageText, TRIAGE_DIR, triageDecisionPath } from './triage.ts';
-import { canWrite, INBOX_DIR, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
+import { canWrite, DAILY_JOURNAL_TEMPLATE_PATH, dailyJournalPath, INBOX_DIR, isDailyJournalPath, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 import { payloadHash } from './payload-hash.ts';
 import { researchRadarDecidePlan } from './research-radar-command.ts';
 import { FileTooLarge, gitBlobSha, TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type CommitInfo, type VaultPath, type VaultStore } from './store.ts';
@@ -464,6 +464,167 @@ function undoTrainingPlan(cmd: Extract<Command, { type: 'UndoLogTraining' }>, ra
   };
 }
 
+type MoodCheckinCommand = Extract<Command, { type: 'MoodCheckin' }>;
+type MoodWriteEffect = { readonly kind: 'mood'; readonly op: 'checked-in' | 'undone' };
+const DAILY_TEMPLATE = DAILY_JOURNAL_TEMPLATE_PATH as VaultPath;
+
+type DailyFile =
+  | { readonly found: true; readonly text: string; readonly bytes: Uint8Array }
+  | { readonly found: false }
+  | { readonly refused: Planned<never> };
+
+async function readDailyFile(store: VaultStore, at: string, path: VaultPath): Promise<DailyFile> {
+  let file;
+  try {
+    file = await store.readFile(path, at);
+  } catch (e) {
+    if (e instanceof FileTooLarge) return { refused: refuse('refused:too-large', 'the note is too large to edit safely') };
+    throw e;
+  }
+  if (!file) return { found: false };
+  const text = decodeUtf8(file.bytes);
+  if (text === null) return { refused: refuse('refused:encoding', 'the note is not valid UTF-8') };
+  return { found: true, text, bytes: file.bytes };
+}
+
+type MoodContext =
+  | { readonly ok: true; readonly previous: string; readonly applied: string; readonly bytes: Uint8Array; readonly expect: 'absent' | 'regular-file'; readonly effect: MoodWriteEffect }
+  | { readonly ok: false; readonly planned: Planned<never> };
+
+async function moodCheckinContext(store: VaultStore, at: string, path: VaultPath, date: string, input: md.MoodCheckinInput): Promise<MoodContext> {
+  if (!isDailyJournalPath(path) || !canWrite(path, 'create') || !canWrite(path, 'update')) {
+    return { ok: false, planned: refuse('refused:path', 'daily journal path is not writable') };
+  }
+  const existing = await readDailyFile(store, at, path);
+  if ('refused' in existing) return { ok: false, planned: existing.refused };
+  if (existing.found) {
+    const r = md.applyMoodCheckin(existing.text, input);
+    if (!r.ok) return { ok: false, planned: refuse(r.code, r.message) };
+    const bytes = encoder.encode(r.text);
+    if (bytes.length > MAX_NOTE_BYTES) return { ok: false, planned: refuse('refused:too-large', 'daily journal would exceed 1 MB') };
+    return { ok: true, previous: existing.text, applied: r.text, bytes, expect: 'regular-file', effect: { kind: 'mood', op: 'checked-in' } };
+  }
+
+  const template = await readDailyFile(store, at, DAILY_TEMPLATE);
+  if ('refused' in template) return { ok: false, planned: template.refused };
+  if (!template.found) return { ok: false, planned: refuse('refused:daily-template-missing', 'the daily journal template was not found') };
+  const rendered = md.renderDailyNote(template.text, date);
+  if (!rendered.ok) return { ok: false, planned: refuse(rendered.code, rendered.message) };
+  const r = md.applyMoodCheckin(rendered.text, input);
+  if (!r.ok) return { ok: false, planned: refuse(r.code, r.message) };
+  const bytes = encoder.encode(r.text);
+  if (bytes.length > MAX_NOTE_BYTES) return { ok: false, planned: refuse('refused:too-large', 'daily journal would exceed 1 MB') };
+  return { ok: true, previous: rendered.text, applied: r.text, bytes, expect: 'absent', effect: { kind: 'mood', op: 'checked-in' } };
+}
+
+function moodInput(cmd: MoodCheckinCommand): md.MoodCheckinInput {
+  return { mood: cmd.payload.mood, energy: cmd.payload.energy, sleep: cmd.payload.sleep, checkinAt: cmd.payload.checkinAt };
+}
+
+function moodCheckinPlan(cmd: MoodCheckinCommand): WritePlan<MoodWriteEffect> {
+  const date = cmd.payload.date;
+  const path = dailyJournalPath(date);
+  const input = moodInput(cmd);
+  const message = 'Vault Companion: mood check-in';
+  if (!path) return { message, async compute() { return refuse('invalid', 'date must be a valid YYYY-MM-DD date'); } };
+  return {
+    message,
+    async compute(store, at) {
+      const c = await moodCheckinContext(store, at, path, date, input);
+      if (!c.ok) return c.planned;
+      return { ok: true, path, expect: c.expect, bytes: c.bytes, effect: c.effect };
+    },
+  };
+}
+
+async function verifiedMood(store: VaultStore, c: CommitInfo, target: MoodCheckinCommand) {
+  const path = dailyJournalPath(target.payload.date);
+  const changed = c.files.length === 1 ? c.files[0] : undefined;
+  if (!path || c.parent === null || changed?.path !== path || changed.blobSha === null) {
+    return { ok: false as const, planned: refuse('invalid', 'undo target does not match the recorded check-in') };
+  }
+  const replay = await moodCheckinContext(store, c.parent, path, target.payload.date, moodInput(target));
+  if (!replay.ok) return { ok: false as const, planned: replay.planned };
+  if ((await gitBlobSha(replay.bytes)) !== changed.blobSha) {
+    return { ok: false as const, planned: refuse('dedupe-unknown', 'the check-in cannot be verified') };
+  }
+  return { ok: true as const, path, previous: replay.previous, afterText: replay.applied, effect: replay.effect };
+}
+
+function undoMoodCheckinPlan(cmd: Extract<Command, { type: 'UndoMoodCheckin' }>, raw: unknown): WritePlan<MoodWriteEffect> {
+  const target = cmd.payload.target;
+  const token = cmd.payload.targetCommit;
+  const rawTarget = (raw as { payload: { target: unknown } }).payload.target;
+  let checked: { x: string; checkin: CommitInfo } | null = null;
+  let applied: { checkin: CommitInfo; undo: CommitInfo } | null = null;
+
+  const readToken = async (store: VaultStore): Promise<CommitInfo | Refused> => {
+    const c = await store.readCommit(token);
+    if (!c) return refused('conflict:mood-changed', 'that check-in is not in the vault');
+    if (c.trailers[TRAILER_OP] !== target.operationId || c.trailers[TRAILER_PAYLOAD] !== (await payloadHash(rawTarget))) {
+      return refused('invalid', 'undo target does not match the recorded check-in');
+    }
+    return c;
+  };
+
+  const inverseAt = async (store: VaultStore, v: Extract<Awaited<ReturnType<typeof verifiedMood>>, { ok: true }>, at: string): Promise<Planned<MoodWriteEffect>> => {
+    if (!canWrite(v.path, 'update')) return refuse('refused:path', 'daily journal path is not writable');
+    const f = await readDailyFile(store, at, v.path);
+    if ('refused' in f) return f.refused;
+    if (!f.found) return refuse('conflict:mood-changed', 'the daily journal was deleted since the check-in; undo it in Obsidian');
+    const r = md.revertMoodCheckin(f.text, v.afterText, v.previous);
+    if (!r.ok) return refuse(r.code, r.message);
+    return { ok: true, path: v.path, expect: 'regular-file', bytes: encoder.encode(r.text), effect: { kind: 'mood', op: 'undone' } };
+  };
+
+  return {
+    message: 'Vault Companion: undo mood check-in',
+    trailers: { [TRAILER_UNDOES]: target.operationId },
+    maxAttempts: UNDO_MAX_ATTEMPTS,
+    async findApplied(store, x, operationId) {
+      checked = null;
+      applied = null;
+      const c = await readToken(store);
+      if ('kind' in c) return c;
+      const since = await store.commitsSince(c.sha, x);
+      if (since.kind === 'not-ancestor' || since.kind === 'too-many') {
+        return refused('dedupe-unknown', 'this Undo may already have been applied; check the daily journal in Obsidian');
+      }
+      const own = since.commits.find((k) => k.trailers[TRAILER_OP] === operationId);
+      if (own) {
+        const info = await store.readCommit(own.sha);
+        if (info) applied = { checkin: c, undo: info };
+        return { kind: 'found', op: { commitSha: own.sha, payloadHash: own.trailers[TRAILER_PAYLOAD] ?? '', paths: (info?.files ?? []).map((f) => f.path) } };
+      }
+      if (since.commits.some((k) => k.trailers[TRAILER_UNDOES] === target.operationId)) {
+        return refused('conflict:mood-changed', 'that check-in was already undone');
+      }
+      checked = { x, checkin: c };
+      return { kind: 'not-found' };
+    },
+    async compute(store, at) {
+      if (checked?.x !== at) return refuse('dedupe-unknown', 'the check-in was not checked at this revision');
+      const v = await verifiedMood(store, checked.checkin, target);
+      if (!v.ok) return v.planned;
+      return inverseAt(store, v, at);
+    },
+    async deriveApplied(store, commitSha) {
+      const u = applied?.undo.sha === commitSha ? applied.undo : await store.readCommit(commitSha);
+      if (!u || u.trailers[TRAILER_UNDOES] !== target.operationId || u.parent === null) return { ok: false, reason: 'not an undo of this check-in' };
+      const path = dailyJournalPath(target.payload.date);
+      const changed = u.files.length === 1 ? u.files[0] : undefined;
+      if (!path || changed?.path !== path || changed.blobSha === null) return { ok: false, reason: 'the undo commit does not update the daily journal' };
+      const c = applied?.checkin ?? (await readToken(store));
+      if ('kind' in c) return { ok: false, reason: c.message };
+      const v = await verifiedMood(store, c, target);
+      if (!v.ok) return { ok: false, reason: 'the check-in cannot be verified' };
+      const rebuilt = await inverseAt(store, v, u.parent);
+      if (!rebuilt.ok || (await gitBlobSha(rebuilt.bytes)) !== changed.blobSha) return { ok: false, reason: 'the undo commit is not the inverse' };
+      return { ok: true, path, effect: rebuilt.effect };
+    },
+  };
+}
+
 export function triageDecidePlan(cmd: Extract<Command, { type: 'TriageDecide' }>, raw: unknown = cmd): WritePlan<Receipt['effect']> {
   const path = triageDecisionPath(cmd.occurredAt);
   const line: DecisionLine = { schemaVersion: 1, decisionId: cmd.operationId, at: cmd.occurredAt, ...cmd.payload };
@@ -528,6 +689,8 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
       return triageDecidePlan(cmd, raw);
     case 'LogTraining': return trainingPlan(cmd);
     case 'UndoLogTraining': return undoTrainingPlan(cmd, raw);
+    case 'MoodCheckin': return moodCheckinPlan(cmd);
+    case 'UndoMoodCheckin': return undoMoodCheckinPlan(cmd, raw);
     case 'CaptureActiveWork':
     case 'EditActiveWork':
     case 'ReviewActiveWork':

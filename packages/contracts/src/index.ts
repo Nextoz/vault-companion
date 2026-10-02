@@ -223,10 +223,43 @@ export type TrainingSession = z.infer<typeof TrainingSession>;
 export const LogTrainingCommand = envelope('LogTraining', z.strictObject({ session: TrainingSession }));
 export type LogTrainingCommand = z.infer<typeof LogTrainingCommand>;
 
+/** ADR-0036: a real calendar date, accepted only as strict `YYYY-MM-DD`. */
+const calendarDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD')
+  .refine((s) => {
+    const midnight = `${s}T00:00:00.000Z`;
+    return Number.isFinite(Date.parse(midnight)) && new Date(midnight).toISOString().slice(0, 10) === s;
+  }, 'must be a valid calendar date');
+const moodValue = z.number().int().min(-3).max(3);
+const moodSleep = z
+  .number()
+  .min(0)
+  .max(24)
+  .refine((n) => Math.abs(n * 2 - Math.round(n * 2)) < 1e-9, 'must be a 0.5-step hour count');
+const moodInstant = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, 'must be a millisecond UTC instant')
+  .refine((s) => Number.isFinite(Date.parse(s)) && new Date(s).toISOString() === s, 'must be a valid UTC instant');
+
+export const MoodCheckinPayload = z.strictObject({
+  date: calendarDate,
+  mood: moodValue,
+  energy: moodValue,
+  sleep: moodSleep,
+  checkinAt: moodInstant,
+});
+export type MoodCheckinPayload = z.infer<typeof MoodCheckinPayload>;
+
+export const MoodCheckinCommand = envelope('MoodCheckin', MoodCheckinPayload);
+export type MoodCheckinCommand = z.infer<typeof MoodCheckinCommand>;
+
 export const Command = z.discriminatedUnion('type', [
   CompleteTaskCommand,
   LogTrainingCommand,
   envelope('UndoLogTraining', z.strictObject({ target: LogTrainingCommand, targetCommit: commitSha })),
+  MoodCheckinCommand,
+  envelope('UndoMoodCheckin', z.strictObject({ target: MoodCheckinCommand, targetCommit: commitSha })),
   envelope('UndoCompleteTask', UndoCompleteTaskPayload),
   envelope('CaptureTask', CaptureTaskPayload),
   envelope('CaptureNote', CaptureNotePayload),
@@ -262,7 +295,9 @@ export const ActiveWorkEffect = z.strictObject({
   afterLineText: singleLine.nullable(),
 });
 export const TrainingEffect = z.strictObject({ kind: z.literal('training'), op: z.enum(['logged', 'undone']), lineText: singleLine });
-export const Effect = z.discriminatedUnion('kind', [TrainingEffect, CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect, ResearchRadarDecidedEffect]);
+export const MoodEffect = z.strictObject({ kind: z.literal('mood'), op: z.enum(['checked-in', 'undone']) });
+export type MoodEffect = z.infer<typeof MoodEffect>;
+export const Effect = z.discriminatedUnion('kind', [MoodEffect, TrainingEffect, CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect, ResearchRadarDecidedEffect]);
 export type Effect = z.infer<typeof Effect>;
 
 export const Receipt = z.strictObject({
@@ -292,6 +327,7 @@ export const ErrorCode = z.enum([
   /** ADR-0017: the edit would not round-trip as the requested task line, or changes nothing. */
   'refused:invalid-edit',
   'conflict:task-changed',
+  'conflict:mood-changed',
   'conflict:ambiguous',
   'conflict:stale',
   'no-frontmatter',
@@ -300,6 +336,7 @@ export const ErrorCode = z.enum([
   'checkin-field-unsupported',
   'checkin-invalid-input',
   'template-unsupported-placeholder',
+  'refused:daily-template-missing',
   /** Undo: more than one compare page (250 commits) since the completion (ADR-0013). Undo it in Obsidian. */
   'refused:undo-expired',
   'operation-id-reused',

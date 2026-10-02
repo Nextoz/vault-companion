@@ -9,6 +9,8 @@ import { StateChip } from './StateChip.tsx';
 const VERB: Record<CommandType, string> = {
   LogTraining: 'Training',
   UndoLogTraining: 'Undo training',
+  MoodCheckin: 'Mood check-in',
+  UndoMoodCheckin: 'Undo mood check-in',
   CompleteTask: 'Complete',
   EditTask: 'Edit',
   UndoCompleteTask: 'Undo',
