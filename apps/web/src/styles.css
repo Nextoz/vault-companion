@@ -215,7 +215,7 @@ textarea:focus-visible {
   top: 14px;
   width: 6px;
   height: 11px;
-  border: solid #000;
+  border: solid var(--ios-bg);
   border-width: 0 2.5px 2.5px 0;
   transform: rotate(45deg);
 }
@@ -425,7 +425,7 @@ textarea:focus-visible {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgb(0 0 0 / 0.35);
+  background: rgb(0 0 0 / 0.55);
 }
 
 .sheet {
@@ -621,7 +621,7 @@ textarea:focus-visible {
   padding: 8px;
 }
 
-.active-work-item { padding: 12px 0; border-bottom: 1px solid var(--border, #ddd); overflow-wrap: anywhere; }
+.active-work-item { padding: 12px 0; border-bottom: 0.5px solid var(--line); overflow-wrap: anywhere; }
 .active-work-item p { margin: 6px 0; }
 .active-work-item .chip { display: inline-block; margin: 8px 0; }
 .active-work-unknown pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
@@ -672,7 +672,7 @@ textarea:focus-visible {
 @media (max-width: 600px) {
   .scout-findings .scout-table-scroll .scout-table-cards, .scout-table-cards tbody { display: block; }
   .scout-table-cards thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .scout-table-cards tr { display: block; border: 1px solid #64748b; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+  .scout-table-cards tr { display: block; border: none; background: var(--surface); border-radius: 8px; padding: 10px; margin-bottom: 12px; }
   .scout-findings .scout-table-cards td { display: block; border: 0; padding: 4px 0; overflow-wrap: anywhere; }
   .scout-table-cards td::before { content: attr(data-label) ': '; font-weight: 650; }
   .scout-table-cards td:first-child { font-size: 1.1rem; font-weight: 650; }
@@ -924,3 +924,51 @@ textarea:focus-visible {
     animation: none !important;
   }
 }
+
+/* Dark iOS refresh, slice 5 — Notes in iPhone mode, sheets with a grabber, Radar in purple (ResearchRadar.css). */
+.app[data-tab='notes'] .notes > h1 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  margin: 8px 0 12px;
+}
+.app[data-tab='notes'] .note-list {
+  background: var(--surface);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.app[data-tab='notes'] .note-row {
+  align-items: center;
+  padding: 11px 16px;
+  border-radius: 0;
+  border-bottom: 0.5px solid var(--line);
+}
+.app[data-tab='notes'] .note-list li:last-child .note-row { border-bottom: none; }
+.app[data-tab='notes'] .note-row::after { content: '›'; color: var(--muted); font-size: 1.2rem; }
+.app[data-tab='notes'] .note-row-title { flex: 1; }
+.app[data-tab='notes'] .note-head { border-bottom: 0.5px solid var(--line); }
+.app[data-tab='notes'] .note-body {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-top: 12px;
+}
+
+.sheet { background: var(--raised); padding-top: 22px; position: relative; }
+.sheet::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 36px;
+  height: 5px;
+  margin-left: -18px;
+  border-radius: 3px;
+  background: var(--ios-secondary);
+  opacity: 0.6;
+}
+.sheet textarea,
+.edit-sheet input,
+.edit-sheet select,
+.sheet label input { background: var(--surface); border-color: transparent; }
