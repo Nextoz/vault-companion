@@ -9,7 +9,7 @@ export const EXPLAINED_DIR = 'Research/Explained';
 export const EXPLAINER_STATUS_PATH = `${SCOUT_STATUS_DIR}/research-explainer.json`;
 export const RADAR_DIR = 'Research/Radar';
 export const RADAR_DECISIONS_DIR_LOCAL = RADAR_DECISIONS_DIR;
-/** ADR-0036: the only vault path a mood check-in may create or update. */
+/** ADR-0036: the template a missing daily journal is rendered from (read-only). */
 export const DAILY_JOURNAL_TEMPLATE_PATH = 'Templates/Daily Journal Template.md';
 
 const DENIED_ROOTS = new Set(['.git', '.obsidian', '.trash', 'Tools', 'tmp', 'output']);
