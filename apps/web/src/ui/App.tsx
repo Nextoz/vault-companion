@@ -389,7 +389,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
 
-        {tab === 'dashboard' && !signedOut && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} />}
+        {tab === 'dashboard' && !signedOut && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
 
         {tab === 'history' && !signedOut && <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
           accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />}

@@ -4,7 +4,7 @@ import type { Fetched } from '../api.ts';
 import { displayTime } from '../freshness.ts';
 import { lastCopies, openView, settleView, type CopyView } from '../lastCopy.ts';
 
-export function useLastCopy<T>(account: string | null, key: string, read: () => Promise<Fetched<T>>, refreshKey: number | null): CopyView<T> {
+export function useLastCopy<T>(account: string | null, key: string, read: () => Promise<Fetched<T>>, refreshKey: number | string | null): CopyView<T> {
   const id = `${account ?? ''}\u0000${key}`;
   const [state, setState] = useState(() => ({ id, view: openView<T>(lastCopies, account, key) }));
   let current = state;

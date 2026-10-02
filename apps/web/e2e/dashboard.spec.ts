@@ -122,3 +122,31 @@ test('partial history failure and unavailable market leave honest overview cards
   await nav.getByRole('button', { name: 'Today', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
 });
+
+test('SP3c (ADR-0038): a range seen before reopens from its labelled copy when the read fails', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  // Copies are kept per account: open the Dashboard once the session has named it.
+  const session = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/session' && r.ok());
+  await page.goto('/');
+  await session;
+  const nav = page.getByRole('navigation', { name: 'Views' });
+  await nav.getByRole('button', { name: 'Dashboard', exact: true }).click();
+  const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
+  const market = dashboard.getByRole('article', { name: 'BTC / USD', exact: true });
+  await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
+  await expect(dashboard.getByTestId('copy-note')).toHaveCount(0);
+
+  await nav.getByRole('button', { name: 'Today', exact: true }).click();
+  api.network = 'down';
+  await nav.getByRole('button', { name: 'Dashboard', exact: true }).click();
+  await expect(dashboard.getByTestId('copy-note')).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
+  await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
+  await expect(market.locator('.dash-chip')).toHaveText('Stale');
+  await expect(market.locator('svg.dash-svg')).toHaveCount(1);
+  await page.screenshot({ path: test.info().outputPath('sp3c-dashboard-copy-390x844.png') });
+  // A range never seen has no copy: the failure is said plainly, the 1W copy stays labelled as stale.
+  await dashboard.getByRole('button', { name: '1M', exact: true }).click();
+  await expect(dashboard.getByTestId('copy-note')).toHaveCount(0);
+  await expect(market.locator('.dash-chip')).toHaveText('Stale');
+});
