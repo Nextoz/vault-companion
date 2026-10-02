@@ -254,12 +254,27 @@ export type MoodCheckinPayload = z.infer<typeof MoodCheckinPayload>;
 export const MoodCheckinCommand = envelope('MoodCheckin', MoodCheckinPayload);
 export type MoodCheckinCommand = z.infer<typeof MoodCheckinCommand>;
 
+/** ADR-0040: one line in the owner's Ready Backlog note; text is sanitised by the kernel, never logged. */
+export const ReportFeedbackPayload = z.strictObject({
+  kind: z.enum(['bug', 'wish']),
+  text: z.string().trim().min(1).max(1000),
+  screen: z.string().regex(/^[A-Za-z][A-Za-z0-9 -]{0,30}$/),
+  appVersion: z.string().regex(/^[0-9A-Za-z.+-]{1,40}$/),
+  date: calendarDate,
+});
+export type ReportFeedbackPayload = z.infer<typeof ReportFeedbackPayload>;
+
+export const ReportFeedbackCommand = envelope('ReportFeedback', ReportFeedbackPayload);
+export type ReportFeedbackCommand = z.infer<typeof ReportFeedbackCommand>;
+
 export const Command = z.discriminatedUnion('type', [
   CompleteTaskCommand,
   LogTrainingCommand,
   envelope('UndoLogTraining', z.strictObject({ target: LogTrainingCommand, targetCommit: commitSha })),
   MoodCheckinCommand,
   envelope('UndoMoodCheckin', z.strictObject({ target: MoodCheckinCommand, targetCommit: commitSha })),
+  ReportFeedbackCommand,
+  envelope('UndoReportFeedback', z.strictObject({ target: ReportFeedbackCommand, targetCommit: commitSha })),
   envelope('UndoCompleteTask', UndoCompleteTaskPayload),
   envelope('CaptureTask', CaptureTaskPayload),
   envelope('CaptureNote', CaptureNotePayload),
@@ -297,7 +312,9 @@ export const ActiveWorkEffect = z.strictObject({
 export const TrainingEffect = z.strictObject({ kind: z.literal('training'), op: z.enum(['logged', 'undone']), lineText: singleLine });
 export const MoodEffect = z.strictObject({ kind: z.literal('mood'), op: z.enum(['checked-in', 'undone']) });
 export type MoodEffect = z.infer<typeof MoodEffect>;
-export const Effect = z.discriminatedUnion('kind', [MoodEffect, TrainingEffect, CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect, ResearchRadarDecidedEffect]);
+export const ReportEffect = z.strictObject({ kind: z.literal('report'), op: z.enum(['reported', 'undone']) });
+export type ReportEffect = z.infer<typeof ReportEffect>;
+export const Effect = z.discriminatedUnion('kind', [ReportEffect, MoodEffect, TrainingEffect, CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect, ResearchRadarDecidedEffect]);
 export type Effect = z.infer<typeof Effect>;
 
 export const Receipt = z.strictObject({
@@ -328,6 +345,7 @@ export const ErrorCode = z.enum([
   'refused:invalid-edit',
   'conflict:task-changed',
   'conflict:mood-changed',
+  'conflict:report-changed',
   'conflict:ambiguous',
   'conflict:stale',
   'no-frontmatter',

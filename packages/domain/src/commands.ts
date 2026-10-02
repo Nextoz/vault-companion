@@ -6,7 +6,7 @@ import { executeWrite, findInOnePage, replayOnParent, type Planned, type Refused
 import { MAX_NOTE_BYTES } from '@vault-companion/contracts';
 import { appendDecisionLine, hasDecisionId, parseDecisionLines, type DecisionLine } from './triage-format.ts';
 import { readTriageText, TRIAGE_DIR, triageDecisionPath } from './triage.ts';
-import { canWrite, DAILY_JOURNAL_TEMPLATE_PATH, dailyJournalPath, INBOX_DIR, isDailyJournalPath, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
+import { canWrite, DAILY_JOURNAL_TEMPLATE_PATH, dailyJournalPath, FEEDBACK_BACKLOG_PATH, INBOX_DIR, isDailyJournalPath, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 import { payloadHash } from './payload-hash.ts';
 import { researchRadarDecidePlan } from './research-radar-command.ts';
 import { FileTooLarge, gitBlobSha, TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type CommitInfo, type VaultPath, type VaultStore } from './store.ts';
@@ -625,6 +625,126 @@ function undoMoodCheckinPlan(cmd: Extract<Command, { type: 'UndoMoodCheckin' }>,
   };
 }
 
+type ReportFeedbackCommand = Extract<Command, { type: 'ReportFeedback' }>;
+type ReportWriteEffect = { readonly kind: 'report'; readonly op: 'reported' | 'undone' };
+const FEEDBACK = FEEDBACK_BACKLOG_PATH as VaultPath;
+type ReportContext =
+  | { readonly ok: true; readonly bytes: Uint8Array; readonly lineText: string }
+  | { readonly ok: false; readonly planned: Planned<never> };
+async function reportContext(store: VaultStore, at: string, input: md.FeedbackReportInput): Promise<ReportContext> {
+  if (!canWrite(FEEDBACK, 'update')) {
+    return { ok: false, planned: refuse('refused:path', 'Ready Backlog note is not writable') };
+  }
+  const existing = await readDailyFile(store, at, FEEDBACK);
+  if ('refused' in existing) return { ok: false, planned: existing.refused };
+  if (!existing.found) return { ok: false, planned: refuse('refused:structure', 'the Ready Backlog note was not found') };
+  const r = md.applyFeedbackReport(existing.text, input);
+  if (!r.ok) return { ok: false, planned: refuse(r.code, r.message) };
+  const bytes = encoder.encode(r.text);
+  if (bytes.length > MAX_NOTE_BYTES) return { ok: false, planned: refuse('refused:too-large', 'Ready Backlog note would exceed 1 MB') };
+  return { ok: true, bytes, lineText: r.effect.lineText };
+}
+function reportInput(cmd: ReportFeedbackCommand): md.FeedbackReportInput {
+  return {
+    kind: cmd.payload.kind,
+    text: cmd.payload.text,
+    screen: cmd.payload.screen,
+    appVersion: cmd.payload.appVersion,
+    date: cmd.payload.date,
+  };
+}
+function reportFeedbackPlan(cmd: ReportFeedbackCommand): WritePlan<ReportWriteEffect> {
+  const input = reportInput(cmd);
+  return {
+    message: 'Vault Companion: report feedback',
+    async compute(store, at) {
+      const c = await reportContext(store, at, input);
+      if (!c.ok) return c.planned;
+      return { ok: true, path: FEEDBACK, expect: 'regular-file', bytes: c.bytes, effect: { kind: 'report', op: 'reported' } };
+    },
+  };
+}
+async function verifiedReport(store: VaultStore, c: CommitInfo, target: ReportFeedbackCommand) {
+  const changed = c.files.length === 1 ? c.files[0] : undefined;
+  if (c.parent === null || changed?.path !== FEEDBACK || changed.blobSha === null) {
+    return { ok: false as const, planned: refuse('invalid', 'undo target does not match the recorded report') };
+  }
+  const replay = await reportContext(store, c.parent, reportInput(target));
+  if (!replay.ok) return { ok: false as const, planned: replay.planned };
+  if ((await gitBlobSha(replay.bytes)) !== changed.blobSha) {
+    return { ok: false as const, planned: refuse('dedupe-unknown', 'the report cannot be verified') };
+  }
+  return { ok: true as const, path: FEEDBACK, lineText: replay.lineText };
+}
+function undoReportFeedbackPlan(cmd: Extract<Command, { type: 'UndoReportFeedback' }>, raw: unknown): WritePlan<ReportWriteEffect> {
+  const target = cmd.payload.target;
+  const token = cmd.payload.targetCommit;
+  const rawTarget = (raw as { payload: { target: unknown } }).payload.target;
+  let checked: { x: string; report: CommitInfo } | null = null;
+  let applied: { report: CommitInfo; undo: CommitInfo } | null = null;
+  const readToken = async (store: VaultStore): Promise<CommitInfo | Refused> => {
+    const c = await store.readCommit(token);
+    if (!c) return refused('conflict:report-changed', 'that report is not in the vault');
+    if (c.trailers[TRAILER_OP] !== target.operationId || c.trailers[TRAILER_PAYLOAD] !== (await payloadHash(rawTarget))) {
+      return refused('invalid', 'undo target does not match the recorded report');
+    }
+    return c;
+  };
+  const inverseAt = async (store: VaultStore, v: Extract<Awaited<ReturnType<typeof verifiedReport>>, { ok: true }>, at: string): Promise<Planned<ReportWriteEffect>> => {
+    if (!canWrite(v.path, 'update')) return refuse('refused:path', 'Ready Backlog note is not writable');
+    const f = await readDailyFile(store, at, v.path);
+    if ('refused' in f) return f.refused;
+    if (!f.found) return refuse('conflict:report-changed', 'the Ready Backlog note was deleted since the report; undo it in Obsidian');
+    const r = md.revertFeedbackReport(f.text, v.lineText);
+    if (!r.ok) return refuse(r.code, r.message);
+    return { ok: true, path: v.path, expect: 'regular-file', bytes: encoder.encode(r.text), effect: { kind: 'report', op: 'undone' } };
+  };
+  return {
+    message: 'Vault Companion: undo report',
+    trailers: { [TRAILER_UNDOES]: target.operationId },
+    maxAttempts: UNDO_MAX_ATTEMPTS,
+    async findApplied(store, x, operationId) {
+      checked = null;
+      applied = null;
+      const c = await readToken(store);
+      if ('kind' in c) return c;
+      const since = await store.commitsSince(c.sha, x);
+      if (since.kind === 'not-ancestor' || since.kind === 'too-many') {
+        return refused('dedupe-unknown', 'this Undo may already have been applied; check the Ready Backlog note in Obsidian');
+      }
+      const own = since.commits.find((k) => k.trailers[TRAILER_OP] === operationId);
+      if (own) {
+        const info = await store.readCommit(own.sha);
+        if (info) applied = { report: c, undo: info };
+        return { kind: 'found', op: { commitSha: own.sha, payloadHash: own.trailers[TRAILER_PAYLOAD] ?? '', paths: (info?.files ?? []).map((f) => f.path) } };
+      }
+      if (since.commits.some((k) => k.trailers[TRAILER_UNDOES] === target.operationId)) {
+        return refused('conflict:report-changed', 'that report was already undone');
+      }
+      checked = { x, report: c };
+      return { kind: 'not-found' };
+    },
+    async compute(store, at) {
+      if (checked?.x !== at) return refuse('dedupe-unknown', 'the report was not checked at this revision');
+      const v = await verifiedReport(store, checked.report, target);
+      if (!v.ok) return v.planned;
+      return inverseAt(store, v, at);
+    },
+    async deriveApplied(store, commitSha) {
+      const u = applied?.undo.sha === commitSha ? applied.undo : await store.readCommit(commitSha);
+      if (!u || u.trailers[TRAILER_UNDOES] !== target.operationId || u.parent === null) return { ok: false, reason: 'not an undo of this report' };
+      const changed = u.files.length === 1 ? u.files[0] : undefined;
+      if (changed?.path !== FEEDBACK || changed.blobSha === null) return { ok: false, reason: 'the undo commit does not update the Ready Backlog note' };
+      const c = applied?.report ?? (await readToken(store));
+      if ('kind' in c) return { ok: false, reason: c.message };
+      const v = await verifiedReport(store, c, target);
+      if (!v.ok) return { ok: false, reason: 'the report cannot be verified' };
+      const rebuilt = await inverseAt(store, v, u.parent);
+      if (!rebuilt.ok || (await gitBlobSha(rebuilt.bytes)) !== changed.blobSha) return { ok: false, reason: 'the undo commit is not the inverse' };
+      return { ok: true, path: FEEDBACK, effect: rebuilt.effect };
+    },
+  };
+}
 export function triageDecidePlan(cmd: Extract<Command, { type: 'TriageDecide' }>, raw: unknown = cmd): WritePlan<Receipt['effect']> {
   const path = triageDecisionPath(cmd.occurredAt);
   const line: DecisionLine = { schemaVersion: 1, decisionId: cmd.operationId, at: cmd.occurredAt, ...cmd.payload };
@@ -691,6 +811,8 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
     case 'UndoLogTraining': return undoTrainingPlan(cmd, raw);
     case 'MoodCheckin': return moodCheckinPlan(cmd);
     case 'UndoMoodCheckin': return undoMoodCheckinPlan(cmd, raw);
+    case 'ReportFeedback': return reportFeedbackPlan(cmd);
+    case 'UndoReportFeedback': return undoReportFeedbackPlan(cmd, raw);
     case 'CaptureActiveWork':
     case 'EditActiveWork':
     case 'ReviewActiveWork':

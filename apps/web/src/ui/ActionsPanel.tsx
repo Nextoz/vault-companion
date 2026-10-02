@@ -11,6 +11,8 @@ const VERB: Record<CommandType, string> = {
   UndoLogTraining: 'Undo training',
   MoodCheckin: 'Mood check-in',
   UndoMoodCheckin: 'Undo mood check-in',
+  ReportFeedback: 'Report',
+  UndoReportFeedback: 'Undo report',
   CompleteTask: 'Complete',
   EditTask: 'Edit',
   UndoCompleteTask: 'Undo',

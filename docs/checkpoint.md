@@ -1,36 +1,37 @@
-# Checkpoint — 2026-10-02 (HC2 Health panel merged)
+# Checkpoint — 2026-10-02 (FB1 Report command merged)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
 
-- **Live: `d9d3dff2`** (Mood M2+M3). Rollback target `35c44728`. HC1+HC2 merged, **deploy pending** (standing
-  approval: deploy after CI, then verify and log in `.agent/decisions.md`).
-- **HC1** — `GET /api/health` (ADR-0039): Worker reads only `Health/Data/Apple Health Daily.csv`; shown day = newest
-  row ≤ yesterday, `staleDays`, four metrics vs a 90-day median baseline, 30-day series. No values in logs.
-- **HC2** — `HealthPanel` on the Dashboard (cyan): four tiles (Steps, Headphones, First/Last move as HH:MM from
-  minutes after 03:00), "Usual <baseline>" + Above/Below/Usual/Not enough history, sparklines with gaps, "Data from
-  <day> — N days old" (stale style ≥ 3 days), missing/unreadable/failed messages, own last copy (key `health`).
-  Loads independently of the market read. The placeholder Health overview card is hidden on the web.
-- HC2: DeepSeek Pro one run (Jev pick, conf 0.19, $0.20); CodeRabbit 1 major (panel gated on the dashboard read)
-  fixed by the Lead; Lead also scoped the SP3c e2e copy-note locator (Health has its own copy note).
+- **Live: `4deb8252`** (HC1+HC2, main add6f49). Rollback target `d9d3dff2`. FB1 merged, API only: **deploy with FB2**.
+- **FB1** — `ReportFeedback` / `UndoReportFeedback` (ADR-0040): the only target is the Ready Backlog note (update
+  only, never create). Bug ⇒ row `| **B<n> - <first 6 words>** | <date> <screen> (app <ver>): <text> | | |` directly
+  under the Bug backlog table separator (n = 1 + max `B<digits>` in the note); wish ⇒ bullet after the last item of
+  the first list under "Candidates to refine next". Table/list must sit in its own section. Text whitespace-collapsed,
+  `|` escaped. Undo replays on the parent and removes exactly that line; edited/duplicated ⇒ `conflict:report-changed`.
+  Web has type plumbing only (labels "Report", "Undo report").
+- FB1: DeepSeek Pro one run (Jev pro 0.72 = high-risk floor). Check `-Reviewer both`: 7 majors, 1 valid (section
+  scope) fixed by the Lead with negative tests; 4 claimed invalid error codes were false (codes exist); whole-note
+  B-number scan is intentional (avoids reusing numbers mentioned in prose).
 - Launcher gotcha: in the Lead's PowerShell `bash` resolves to WSL; prepend Git's `bin` to PATH before
   `tools/launch-worker.ps1`, else `agent-pane.sh: No such file`.
 - Parked: stray `sp-read-latency.test.ts` change in `git stash@{0}` (origin unknown).
 
 ## Next actions (in order)
 
-1. **Deploy HC1+HC2** (standing approval) if not yet done — check `.agent/decisions.md`; verify, log.
-2. **FB Report button** — new vault write target (high-risk: Pro + `-Reviewer both`). Re-read the backlog note first.
-3. Then AB AI budget card → NY Needs You + Morning Review → SP phone measurement.
+1. **FB2** — web: "Report" action on every screen (header or More sheet) → sheet with one text field + Bug/Wish chips;
+   records screen name + app version automatically; queued like other captures (offline); Undo from Actions; e2e
+   covers offline save and a conflict. Ordinary risk (UI on an existing command) unless it touches queue internals.
+   Then deploy FB1+FB2 (standing approval) and log it.
+2. Then AB AI budget card → NY Needs You + Morning Review → SP phone measurement (re-read the backlog note first).
 
 ## Owner items
 
-- Phone: Dashboard → Health board shows your real numbers after the deploy (refresh the CSV with
-  `Tools/apple_health_daily.py` first if it is old).
+- Phone: Dashboard → Health board shows your real numbers (refresh the CSV with `Tools/apple_health_daily.py` first).
 - Phone: Mood check-in → Undo from Actions; SP1 read-speed list (Today → "Vault updated").
-- Review ADR-0036 (Mood), ADR-0037 (UI tokens), ADR-0038 (last copy), ADR-0039 (health); decide on `git stash@{0}`.
+- Review ADR-0036 (Mood), 0037 (UI tokens), 0038 (last copy), 0039 (health), 0040 (report button); decide on `git stash@{0}`.
 
 ## Budget
 
-DeepSeek $9.19. GLM ~100k/900k. RAM 2.8 GB free after e2e (below the 3 GB worker floor).
+DeepSeek $8.67. GLM ~140k/900k.
