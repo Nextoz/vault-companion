@@ -18,8 +18,14 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-1. UX2–UX5 (UX1b overrides them where they differ) → AB AI budget card → NY Needs You + Morning Review → SP
-   phone measurement (re-read the backlog).
+1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
+   (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the
+   Worker Google reader (Pro, `-Reviewer both`); day-8 re-run ≥ 2026-10-10 gates MB "done". MB1a (pure day model,
+   `packages/domain/src/morning-brief.ts`) running: Flash worker, clone `vault-companion-clones/mb1a`, base e80b8c5,
+   handoff `.agent/handoffs/mb1a.md`. Then MB1b gatherers + Scaleway writer, MB1c brief JSON write target (ADR) +
+   06:30 cron + email.
+2. UX2–UX5 (UX1b overrides them where they differ) → **MB2** right after UX2 → AB AI budget card → NY Needs You +
+   Morning Review → SP phone measurement (re-read the backlog).
 
 ## Owner items
 
