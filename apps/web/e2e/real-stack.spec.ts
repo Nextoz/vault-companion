@@ -39,6 +39,7 @@ async function load(page: Page, stack: RealStack, first: string): Promise<void> 
   // B2: the Actions list is collapsed by default; these checks read its rows (own origin, so not the config's storage).
   await page.addInitScript(() => localStorage.setItem('vc.actionsOpen', '1'));
   await page.goto(stack.origin);
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText(first)).toBeVisible();
 }
 

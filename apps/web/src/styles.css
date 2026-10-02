@@ -91,12 +91,42 @@ textarea:focus-visible {
 
 .top-actions {
   display: flex;
+  align-items: center;
+  gap: 4px;
   justify-content: flex-end;
 }
 
 .top-actions .link {
   min-height: 32px;
 }
+
+/* Small round status dot: a 44px target whose 12px circle carries the colour. */
+.status-dot {
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  min-width: var(--tap);
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.status-dot::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--status-dot, var(--muted));
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 12%);
+}
+
+.status-dot[data-state='red'] { --status-dot: var(--danger); }
+.status-dot[data-state='yellow'] { --status-dot: var(--warn); }
+.status-dot[data-state='green'] { --status-dot: var(--done); }
 
 /* Fixed bottom tab bar (ADR-0037 dark iOS tokens). Five icon+label buttons; the page and FAB clear it. */
 .tabbar {
@@ -142,48 +172,13 @@ textarea:focus-visible {
   color: var(--accent);
 }
 
-.back-to-more {
+.back {
   min-height: var(--tap);
   padding: 0;
   border: none;
   background: transparent;
   color: var(--accent);
   font-weight: 600;
-}
-
-.more-list {
-  display: flex;
-  flex-direction: column;
-  margin-top: 12px;
-  background: var(--surface);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.more-list button {
-  width: 100%;
-  min-height: var(--tap);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border: none;
-  border-bottom: 0.5px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  font-weight: 600;
-  text-align: left;
-}
-
-.more-list button:last-child {
-  border-bottom: none;
-}
-
-.more-list button::after {
-  content: '›' / '';
-  color: var(--muted);
-  font-size: 1.2rem;
 }
 
 .segmented {
@@ -211,6 +206,17 @@ textarea:focus-visible {
 
 .task-view {
   margin: 12px 0;
+}
+
+.log-view {
+  margin: 12px 0;
+}
+
+.today-tasks {
+  width: 100%;
+  margin: 8px 0 12px;
+  text-align: left;
+  font-weight: 600;
 }
 
 .content {
@@ -925,19 +931,39 @@ textarea:focus-visible {
   margin: 8px 0 4px;
 }
 
-.app[data-tab='today'] .tasks,
-.app[data-tab='today'] .action-list {
+.app[data-tab='tasks'] .content::before {
+  content: 'Tasks';
+  display: block;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  margin: 8px 0 4px;
+}
+
+.app[data-tab='all'] .content::before {
+  content: 'All tasks';
+  display: block;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  margin: 8px 0 4px;
+}
+
+.app:is([data-tab='tasks'], [data-tab='all']) .tasks,
+.app:is([data-tab='tasks'], [data-tab='all']) .action-list {
   border: none;
   border-radius: 12px;
   overflow: hidden;
 }
 
-.app[data-tab='today'] .task,
-.app[data-tab='today'] .action {
+.app:is([data-tab='tasks'], [data-tab='all']) .task,
+.app:is([data-tab='tasks'], [data-tab='all']) .action {
   border-top: 0.5px solid var(--line);
 }
 
-.app[data-tab='today'] .group h2 {
+.app:is([data-tab='tasks'], [data-tab='all']) .group h2 {
   font-size: 0.78rem;
   font-weight: 600;
   margin: 24px 0 6px 16px;
@@ -945,7 +971,7 @@ textarea:focus-visible {
 
 .app[data-tab='today'] .morning,
 .app[data-tab='today'] .weather-morning,
-.app[data-tab='today'] .active-work {
+.app[data-tab='tasks'] .active-work {
   background: var(--surface);
   border-radius: 12px;
   padding: 4px 16px 12px;
@@ -954,7 +980,7 @@ textarea:focus-visible {
 
 .app[data-tab='today'] .morning h2,
 .app[data-tab='today'] .weather-morning h2,
-.app[data-tab='today'] .active-work h2 {
+.app[data-tab='tasks'] .active-work h2 {
   margin: 4px 0;
   text-transform: none;
   letter-spacing: 0;
@@ -969,7 +995,7 @@ textarea:focus-visible {
 /* One rounded-square icon chip per source; colour carries meaning (orange weather, purple research, blue work). */
 .app[data-tab='today'] .morning h2::before,
 .app[data-tab='today'] .weather-morning h2::before,
-.app[data-tab='today'] .active-work h2::before,
+.app[data-tab='tasks'] .active-work h2::before,
 .app[data-tab='today'] .scouts > h1::before {
   content: '';
   flex: none;
@@ -985,7 +1011,7 @@ textarea:focus-visible {
 }
 .app[data-tab='today'] .weather-morning { --chip: var(--ios-orange); }
 .app[data-tab='today'] .morning { --chip: var(--ios-purple); }
-.app[data-tab='today'] .active-work { --chip: var(--ios-blue); }
+.app[data-tab='tasks'] .active-work { --chip: var(--ios-blue); }
 .app[data-tab='today'] .scouts { --chip: var(--ios-green); }
 
 .app[data-tab='today'] .morning > p,

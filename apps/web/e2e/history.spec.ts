@@ -8,6 +8,7 @@ test('History: two days newest first; Reopen only for this device’s completion
   api.open = [taskView(3, 'Water the plants')];
   await api.install(page);
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
   await expect.poll(() => api.applied.length).toBe(1);
   await expect(page.getByRole('region', { name: 'Done today' }).getByText('Saved to GitHub')).toBeVisible();

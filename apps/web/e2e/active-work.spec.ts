@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 for (const state of ['waiting', 'installed', 'installing', 'first-install'] as const) {
   test(`update banner retains ${state} registration readiness`, async ({ page }) => {
@@ -45,6 +46,7 @@ test('needs-review Done → queued Undo, then capture Active Work request body',
   api.commandMode = 'hold';
   await api.install(page);
   await page.goto('/');
+  await goTo(page, 'Tasks');
   const card = page.getByRole('region', { name: 'Active work', exact: true });
   await expect(card.getByText('Needs review', { exact: true })).toBeVisible();
   await expect(card).toContainText('edited in Obsidian');
@@ -100,6 +102,7 @@ test('C2: an item not yet due can be finished early — Done, Park, Drop shown, 
   api.commandMode = 'hold';
   await api.install(page);
   await page.goto('/');
+  await goTo(page, 'Tasks');
   const card = page.getByRole('region', { name: 'Active work', exact: true });
   await expect(card.getByText('Needs review', { exact: true })).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Keep: Bike repair', exact: true })).toHaveCount(0);

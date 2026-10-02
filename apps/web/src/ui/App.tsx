@@ -46,7 +46,7 @@ const STALE_REREADS = 3;
 /** Review O6: consecutive stale reads after which the device offers to reset its saved-actions history. */
 export const STALE_BEFORE_RESET = 3;
 
-const ACTION_TABS: ReadonlySet<string> = new Set(['today', 'all', 'notes', 'training', 'history']);
+const ACTION_TABS: ReadonlySet<string> = new Set(['today', 'tasks', 'all', 'notes', 'training', 'history']);
 const prefetcher = createPrefetcher(browserPrefetchDeps);
 
 export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: DraftStore; receipts: EventTarget }) {
@@ -59,6 +59,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const [sessionSignedOut, setSessionSignedOut] = useState(false);
   const [accountKey, setAccountKey] = useState<string | null>(() => prefs.lastAccountKey());
   const [tab, setTab] = useState<Tab>('today');
+  // Where the header's Status screen returns to (the tab that opened it).
+  const [statusReturn, setStatusReturn] = useState<Tab>('today');
   const [editing, setEditing] = useState<{ task: TaskView; account: string | null; revision: string } | null>(null);
   const [captureOpen, setCaptureOpen] = useState(false);
   // ADR-0040: one bug/wish report from any screen; enqueued like every capture, so it works offline.
@@ -304,11 +306,22 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const frozen = lock?.conflict ?? false;
   // Calm by default: the actions list sits below the tasks unless something needs the user.
   const needsAttention = snapshot.items.some((i) => i.state === 'attention');
+  // ADR-0037 tokens: red = cannot work, yellow = something to see, green = settled.
+  const statusDot = signedOut || readFailed || connection === 'error' || connection === 'offline'
+    ? 'red'
+    : needsAttention || readsInFlight > 0 || snapshot.items.length > 0
+      ? 'yellow'
+      : 'green';
+  const openStatus = () => {
+    setStatusReturn((prev) => (tab === 'status' ? prev : tab));
+    setTab('status');
+  };
 
   return (
     <div className="app" data-tab={tab}>
       <header className="top" inert={noteOpen || editing !== null}>
         <div className="top-actions">
+          <button type="button" className="status-dot" data-state={statusDot} aria-label="Status" onClick={openStatus} />
           <button type="button" className="link" aria-label="Report a bug or wish" disabled={signedOut || writeBlocked || frozen} onClick={() => setReportOpen(true)}>Report</button>
         </div>
       </header>
@@ -383,54 +396,54 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
 
-        {tab === 'more' && !signedOut && (
-          <nav className="more-list" aria-label="More">
-            <button type="button" onClick={() => setTab('history')}>Progress</button>
-            <button type="button" onClick={() => setTab('dashboard')}>Dashboard</button>
-            <button type="button" onClick={() => setTab('status')}>Status</button>
-            <button type="button" onClick={() => setTab('actions')}>Actions</button>
-          </nav>
-        )}
-
-        {tab === 'dashboard' && !signedOut && (
+        {tab === 'status' && !signedOut && (
           <>
-            <BackToMore onBack={() => setTab('more')} />
-            <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />
-          </>
-        )}
-
-        {tab === 'history' && !signedOut && (
-          <>
-            <BackToMore onBack={() => setTab('more')} />
-            <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
-              accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />
-          </>
-        )}
-
-        {/* Status is the vault-status block already shown above on every tab; the screen adds only the way back. */}
-        {tab === 'status' && !signedOut && <BackToMore onBack={() => setTab('more')} />}
-
-        {tab === 'actions' && !signedOut && (
-          <>
-            <BackToMore onBack={() => setTab('more')} />
+            <Back onBack={() => setTab(statusReturn)} />
             {!needsAttention && (
               <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
             )}
           </>
         )}
 
+        {tab === 'actions' && !signedOut && (
+          <>
+            <Back onBack={() => setTab('today')} />
+            {!needsAttention && (
+              <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
+            )}
+          </>
+        )}
+
+        {(tab === 'training' || tab === 'history') && !signedOut && (
+          <div className="segmented log-view" role="group" aria-label="Log view">
+            <button type="button" aria-pressed={tab === 'training'} onClick={() => setTab('training')}>Training</button>
+            <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')}>Progress</button>
+          </div>
+        )}
+
         {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} />}
+        {tab === 'history' && !signedOut && (
+          <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
+            accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />
+        )}
 
         {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
           accountKey={accountKey} baseRevision={revision} />}
 
-        {tab === 'today' && !signedOut && <Morning key={`morning:${accountKey}`} refreshKey={checkedAt} />}
-        {tab === 'today' && !signedOut && <MoodCard key={`mood:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} baseRevision={revision} blocked={writeBlocked || frozen} />}
-        {tab === 'today' && !signedOut && <WeatherMorning key={`weather-morning:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />}
-        {(tab === 'today' || tab === 'scouts') && !signedOut && <Scouts key={`scouts:${accountKey}`} page={tab === 'scouts'} onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />}
+        {tab === 'scouts' && !signedOut && <Scouts key={`scouts:${accountKey}`} page onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />}
 
-        {tab === 'today' && !signedOut && <ActiveWorkCard key={accountKey} revision={tasks?.revision ?? null} queue={queue} accountKey={accountKey} onOpenLink={openNote} />}
-        {tab === 'today' && !signedOut && <Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} />}
+        {/* Today is the cockpit: one line to the Tasks screen, then the morning/mood/weather/scouts/triage boards. */}
+        {tab === 'today' && !signedOut && (
+          <>
+            <button type="button" className="today-tasks" onClick={() => setTab('tasks')}>{tasksTodayText(view.today.length)}</button>
+            <Morning key={`morning:${accountKey}`} refreshKey={checkedAt} />
+            <MoodCard key={`mood:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} baseRevision={revision} blocked={writeBlocked || frozen} />
+            <WeatherMorning key={`weather-morning:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />
+            <Scouts key={`scouts:${accountKey}`} page={false} onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />
+            <Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} />
+            <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />
+          </>
+        )}
 
         {connection === 'loading' && !tasks && <p className="muted">Loading…</p>}
         {connection !== 'loading' && !tasks && (connection === 'refreshing' || rendered) && (
@@ -438,36 +451,37 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         )}
 
         {tasks && lock?.conflict && <p className="muted small">{FROZEN_NOTE}</p>}
-        {(tab === 'today' || tab === 'all') && (
+        {(tab === 'tasks' || tab === 'all') && !signedOut && (
           <div className="segmented task-view" role="group" aria-label="Task view">
-            <button type="button" aria-pressed={tab === 'today'} onClick={() => setTab('today')}>Today</button>
+            <button type="button" aria-pressed={tab === 'tasks'} onClick={() => setTab('tasks')}>Today</button>
             <button type="button" aria-pressed={tab === 'all'} onClick={() => setTab('all')}>All</button>
           </div>
         )}
-        {tasks && (tab === 'today' || tab === 'all') &&
-          (tab === 'today' ? (
-            <>
-              <TaskList title="Today" rows={view.today} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} empty="Nothing due today." />
-              <TaskList
-                title="Overdue"
-                rows={view.overdue}
-                tapped={tapped}
-                blocked={writeBlocked}
-                frozen={frozen}
-                onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })}
-                onOpenLink={openNote}
-                overdue
-                collapsible={{
-                  open: overdueOpen,
-                  summary: overdueSummary(view.overdue.length),
-                  onToggle: () => setOverdueOpen((open) => !open),
-                }}
-              />
-              <TaskList title="Done today" rows={view.doneToday} tapped={tapped} blocked frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onUndo={undo} onOpenLink={openNote} />
-            </>
-          ) : (
-            <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} empty="No open tasks." />
-          ))}
+        {tab === 'tasks' && !signedOut && <ActiveWorkCard key={accountKey} revision={tasks?.revision ?? null} queue={queue} accountKey={accountKey} onOpenLink={openNote} />}
+        {tasks && tab === 'tasks' && (
+          <>
+            <TaskList title="Today" rows={view.today} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} empty="Nothing due today." />
+            <TaskList
+              title="Overdue"
+              rows={view.overdue}
+              tapped={tapped}
+              blocked={writeBlocked}
+              frozen={frozen}
+              onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })}
+              onOpenLink={openNote}
+              overdue
+              collapsible={{
+                open: overdueOpen,
+                summary: overdueSummary(view.overdue.length),
+                onToggle: () => setOverdueOpen((open) => !open),
+              }}
+            />
+            <TaskList title="Done today" rows={view.doneToday} tapped={tapped} blocked frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onUndo={undo} onOpenLink={openNote} />
+          </>
+        )}
+        {tasks && tab === 'all' && (
+          <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} empty="No open tasks." />
+        )}
 
         {/* B2: on the tabs where actions are taken; an action needing attention shows on every tab (above). */}
         {!needsAttention && ACTION_TABS.has(tab) && (
@@ -520,11 +534,17 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   );
 }
 
-/** The one way back from a More sub-screen. */
-function BackToMore({ onBack }: { onBack: () => void }) {
+/** The one way back from a header screen (Status). */
+function Back({ onBack }: { onBack: () => void }) {
   return (
-    <button type="button" className="link back-to-more" onClick={onBack}>
-      ‹ More
+    <button type="button" className="link back" onClick={onBack}>
+      ‹ Back
     </button>
   );
+}
+
+/** The Today cockpit's one-line way into the Tasks screen. */
+function tasksTodayText(count: number): string {
+  if (count === 0) return 'No tasks today';
+  return count === 1 ? '1 task today' : `${count} tasks today`;
 }
