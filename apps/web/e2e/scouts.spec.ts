@@ -16,7 +16,8 @@ test('Today attention opens Scouts, compact rows and history lead to sanitised f
   await expect(failed).toContainText('— findings');
   await expect(healthy).toContainText('Healthy');
   await expect(healthy).toContainText('4 findings');
-  // The sparkline and source/AI chips moved into the detail view, so the list stays compact.
+  // Board tiles carry a decorative findings sparkline (the button label states the numbers); source/AI chips stay in the detail view.
+  await expect(healthy.locator('.scout-sparkline')).toHaveAttribute('aria-hidden', 'true');
   await expect(scouts.locator('.scout-list')).not.toContainText('Sources');
   await expect(scouts.getByRole('button', { name: /unreadable.json/ })).toContainText('No status yet');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

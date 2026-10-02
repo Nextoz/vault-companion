@@ -17,10 +17,12 @@ const stateLabel = (state: DisplayState) => state === 'Degraded' ? 'Ran with pro
 const entryState = (entry: ScoutEntry, now: string) => displayState(entry.state === 'ok' ? entry.status : null, now);
 const isTriageApplier = (entry: ScoutEntry) => entry.state === 'ok' && entry.status.scoutId === TRIAGE_APPLIER_ID;
 
-function Sparkline({ history }: { history: ScoutStatus['history'] }) {
+/** `decorative` hides the board-tile copy from assistive tech: the tile button's label already states the findings. */
+function Sparkline({ history, decorative = false }: { history: ScoutStatus['history']; decorative?: boolean }) {
   const ordered = [...history].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   const max = Math.max(1, ...ordered.map((run) => run.findings ?? 0));
-  return <svg className="scout-sparkline" viewBox="0 0 160 40" role="img" aria-label="Findings history">
+  const a11y = decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': 'Findings history' };
+  return <svg className="scout-sparkline" viewBox="0 0 160 40" {...a11y}>
     {ordered.map((run, i) => {
       if (run.findings === null) return null;
       const x = 4 + i * 152 / Math.max(1, ordered.length - 1);
@@ -138,8 +140,9 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, blocked }: {
               {' '}
               <span className="scout-row-meta">
                 <span className={stateClass(state)}>{stateLabel(state)}</span>
-                <span className="scout-row-findings"><strong>{status?.findings ?? '—'}</strong> findings</span>
+                <span className="scout-row-findings"><strong className={stateClass(state)}>{status?.findings ?? '—'}</strong> findings</span>
               </span>
+              {status && status.history.length > 1 && <span className={`scout-row-spark ${stateClass(state)}`}><Sparkline history={status.history} decorative /></span>}
             </button>
           </li>;
         })}
