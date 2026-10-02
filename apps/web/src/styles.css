@@ -628,30 +628,30 @@ textarea:focus-visible {
 .sheet label { display: block; margin: 8px 0; }
 .sheet label input { display: block; width: 100%; min-height: 44px; box-sizing: border-box; }
 /* Dark panels: AA text and state colours on both surfaces. */
-.scouts { background: #111827; color: #e5e7eb; border-radius: 12px; padding: 16px; }
+.scouts { background: var(--bg); color: var(--text); border-radius: 12px; padding: 16px; }
 .scouts h1 { margin-top: 0; }
 .scout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 14px; }
-.scout-panel { background: #1f2937; color: #e5e7eb; border: 1px solid #64748b; padding: 16px; text-align: left; display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.scout-panel { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 16px; text-align: left; display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
 .scout-panel:disabled { opacity: 1; }
 .scout-name { font-size: 1.15rem; font-weight: 650; }
 .scout-metric strong { font-size: 2.4rem; }
-.scout-sparkline { width: 100%; height: 40px; fill: #93c5fd; stroke: #93c5fd; stroke-width: 2; }
+.scout-sparkline { width: 100%; height: 40px; fill: var(--ios-blue); stroke: var(--ios-blue); stroke-width: 2; }
 .scout-chips { display: flex; flex-wrap: wrap; gap: 8px; font-size: .85rem; }
-.scout-chips span { border: 1px solid #64748b; border-radius: 6px; padding: 4px 8px; }
-.scout-state-healthy { color: #86efac; }
-.scout-state-failed { color: #fca5a5; }
-.scout-state-degraded, .scout-state-stale { color: #fcd34d; }
-.scout-state-running { color: #93c5fd; }
-.scout-state-no-status-yet { color: #cbd5e1; }
+.scout-chips span { border: 1px solid var(--line); background: var(--raised); border-radius: 6px; padding: 4px 8px; }
+.scout-state-healthy { color: var(--ios-green); }
+.scout-state-failed { color: var(--ios-red); }
+.scout-state-degraded, .scout-state-stale { color: var(--ios-yellow); }
+.scout-state-running { color: var(--ios-blue); }
+.scout-state-no-status-yet { color: var(--muted); }
 .scout-history { display: flex; gap: 4px; margin: 16px 0; }
 .scout-run { height: 30px; flex: 1; min-width: 0; background: currentColor; border-radius: 3px; }
 .scout-detail { overflow-wrap: anywhere; }
 .scout-detail dd { margin: 0 0 12px; }
 .scout-detail dt { font-weight: 650; }
-.scout-detail button { background: #1f2937; color: #e5e7eb; border-color: #64748b; }
-.scouts button:focus-visible { outline-color: #93c5fd; }
-.scouts .note-body { color: #e5e7eb; padding: 0; }
-.scouts .note-body a { color: #93c5fd; }
+.scout-detail button { background: var(--raised); color: var(--text); border-color: var(--line); }
+.scouts button:focus-visible { outline-color: var(--ios-blue); }
+.scouts .note-body { color: var(--text); padding: 0; }
+.scouts .note-body a { color: var(--ios-blue); }
 .scout-attention { margin-bottom: 16px; }
 
 /* Inbox notes (ADR-0022) */
