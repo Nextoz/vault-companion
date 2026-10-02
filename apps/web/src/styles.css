@@ -723,6 +723,70 @@ textarea:focus-visible {
 .triage-statuses li { margin-bottom: 8px; }
 .triage-indicator { margin: 12px 0; }
 .triage-checkin { max-width: 420px; margin: 12px auto; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); display: grid; gap: 14px; }
+/* Dark iOS refresh, slice 4 — Training and History in iPhone mode: large titles, inset cards, small bar charts. */
+.app[data-tab='training'] .training > h2,
+.app[data-tab='history'] .progress > h1 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  text-transform: none;
+  color: var(--text);
+  margin: 8px 0 12px;
+}
+.app[data-tab='training'] { --chart: var(--ios-cyan); }
+.app[data-tab='history'] { --chart: var(--ios-green); }
+
+.app[data-tab='training'] .training-list,
+.app[data-tab='history'] .progress-earlier > ul,
+.app[data-tab='history'] .history .tasks {
+  background: var(--surface);
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.app[data-tab='training'] .training-list li {
+  min-height: var(--tap);
+  padding: 10px 16px;
+  border-bottom: 0.5px solid var(--line);
+}
+.app[data-tab='training'] .training-list li:last-child,
+.app[data-tab='history'] .progress-earlier > ul > li:last-child { border-bottom: none; }
+.app[data-tab='history'] .progress-card { border: none; padding: 4px 16px 12px; }
+.app[data-tab='history'] .progress-earlier > ul > li { padding: 0 16px; border-bottom: 0.5px solid var(--line); }
+.app[data-tab='history'] .progress h2 {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 24px 0 6px 16px;
+}
+.app[data-tab='history'] .progress-card h2 {
+  margin: 10px 0 4px;
+  font-size: 1rem;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+.app[data-tab='history'] .history .task { border-top: 0.5px solid var(--line); }
+.app[data-tab='history'] .history .task:first-child { border-top: none; }
+
+.bar-chart {
+  margin: 12px 0;
+  padding: 10px 12px 4px;
+  background: var(--surface);
+  border-radius: 12px;
+}
+.progress-card .bar-chart { padding: 6px 0 0; }
+.bar-chart figcaption { font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
+.bar-chart svg { display: block; width: 100%; height: auto; }
+.bar rect { fill: var(--chart, var(--accent)); opacity: 0.4; }
+.bar-current rect { opacity: 1; }
+.bar text { font-size: 11px; text-anchor: middle; fill: var(--muted); }
+.bar-current .bar-label { fill: var(--text); font-weight: 600; }
+.bar .bar-value { fill: var(--text); }
+
 @media (prefers-reduced-motion: reduce) {
   .triage-card { transition: none; transform: translate(var(--triage-x, 0px), var(--triage-y, 0px)); }
   .triage-stamp.triage-go, .triage-stamp.triage-skip { transform: none; }
