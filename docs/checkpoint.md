@@ -37,5 +37,4 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Budget
 
-DeepSeek: $9.80 (owner-status 03:00). GLM-5.2: ~24k/900k local estimate.
-CodeRabbit CLI: reviews at ~04:35 and ~05:08. Jev: one call hung >15 min at 04:55 (SP3b scope); decided without it.
+DeepSeek: $9.80 (05:15). GLM-5.2: ~24k/900k local estimate. CodeRabbit CLI: reviews at ~04:35 and ~05:08. Jev: one call hung >15 min at 04:55 (SP3b scope); decided without it.
