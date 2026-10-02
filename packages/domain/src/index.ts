@@ -21,3 +21,4 @@ export * from './research-explainer.ts';
 export * from './research-radar.ts';
 export * from './research-radar-format.ts';
 export * from './morning-brief.ts';
+export * from './morning-brief-writer.ts';
