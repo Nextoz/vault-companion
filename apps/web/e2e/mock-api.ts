@@ -8,6 +8,7 @@ import {
   DASHBOARD_RANGE_PLAN,
   DashboardRange,
   DashboardResponse,
+  HealthResponse,
   MarketTickerResponse,
   decodeLinkedNoteHeader,
   decodeNoteHeader,
@@ -84,6 +85,9 @@ const weatherPoint = (hour: number, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const healthSeries = (base: number, spread: number) => Array.from({ length: 30 }, (_, index) =>
+  index === 12 ? null : base + ((index * 13) % 7) - 3 + Math.round(spread * Math.sin(index)));
+
 export const sampleWeather = (partial = false): WeatherResponse => WeatherResponse.parse({
   status: 'ok',
   projection: {
@@ -136,6 +140,18 @@ export class MockApi {
   weatherReads = 0;
   weatherLocationReads = 0;
   readonly weatherLocationBodies: string[] = [];
+  /** Health daily card (HC2): synthetic numbers only, served to the Dashboard board. */
+  health = HealthResponse.parse({
+    revision: 'a'.repeat(40), now: '2026-09-30T12:00:00Z', status: 'ok',
+    day: '2026-09-29', staleDays: 0,
+    metrics: [
+      { key: 'steps', value: 12345, baseline: 10000, compare: 'above', series: healthSeries(10000, 200) },
+      { key: 'headphone_min', value: 45.6, baseline: 30, compare: 'above', series: healthSeries(30, 4) },
+      { key: 'first_move', value: 1290, baseline: 180, compare: 'below', series: healthSeries(180, 10) },
+      { key: 'last_move', value: 900, baseline: 900, compare: 'usual', series: healthSeries(900, 12) },
+    ],
+  });
+  healthReads = 0;
   trainingRows: TrainingRow[] = [];
   /** `error`: /api/training answers 503 (Progress then shows "Training unavailable"). */
   trainingMode: 'ok' | 'error' | 'hang' = 'ok';
@@ -289,6 +305,7 @@ export class MockApi {
     });
     await on('**/api/weather/location', (route) => this.#weatherLocation(route));
     await on('**/api/weather', (route) => this.#weather(route));
+    await on('**/api/health', (route) => this.#health(route));
     await on('**/api/morning', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, MorningResponse.parse(this.morning ?? { revision: 'a'.repeat(40), date: '2026-09-30', brief: null, explained: [] })));
     await on('**/api/scouts', (route) => this.session === 'signed-out'
@@ -341,6 +358,12 @@ export class MockApi {
     return this.#json(route, 200, WeatherResponse.parse(this.weather));
   }
 
+  #health(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    this.healthReads++;
+    return this.#json(route, 200, HealthResponse.parse(this.health));
+  }
+
   #dashboard(route: Route) {
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     const parsed = DashboardRange.safeParse(new URL(route.request().url()).searchParams.get('range') ?? '1W');
@@ -373,8 +396,6 @@ export class MockApi {
     return this.#json(route, 200, DashboardResponse.parse({ now: this.dashboardNow, cards: [market, weather,
       { id: 'ai-usage', status: 'not-configured', title: 'AI usage', provenance: 'Not configured',
         observedAt: null, fetchedAt: null, drillthrough: null, note: 'No approved usage source is connected yet.' },
-      { id: 'health', status: 'not-configured', title: 'Health', provenance: 'Not configured',
-        observedAt: null, fetchedAt: null, drillthrough: null, note: 'No approved health source is connected yet.' },
     ] }));
   }
 

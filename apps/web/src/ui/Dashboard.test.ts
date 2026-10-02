@@ -1,13 +1,13 @@
-import { DashboardResponse, MarketTickerResponse, type DashboardCard } from '@vault-companion/contracts';
+import { DashboardResponse, HealthResponse, MarketTickerResponse, type DashboardCard } from '@vault-companion/contracts';
 import { JSDOM } from 'jsdom';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getDashboard, getMarketTicker, type Fetched } from '../api.ts';
+import { getDashboard, getHealth, getMarketTicker, type Fetched } from '../api.ts';
 import { lastCopies } from '../lastCopy.ts';
 import { Dashboard, MARKET_STALE_MS, mergeTicker, seriesSegments } from './Dashboard.tsx';
 
-vi.mock('../api.ts', () => ({ getDashboard: vi.fn(), getMarketTicker: vi.fn() }));
+vi.mock('../api.ts', () => ({ getDashboard: vi.fn(), getHealth: vi.fn(), getMarketTicker: vi.fn() }));
 
 const NOW = '2026-09-30T12:00:00Z';
 const TICKER = { base: 'BTC' as const, quote: 'USD' as const, provider: 'coinbase' as const, price: 60123.45, providerTime: NOW };
@@ -24,6 +24,7 @@ const overviewCards: DashboardCard[] = [
 ];
 const response = (cards: DashboardCard[] = [market(), ...overviewCards]) => DashboardResponse.parse({ now: NOW, cards });
 const ok = (cards?: DashboardCard[]) => ({ kind: 'ok' as const, data: response(cards) });
+const healthMissing = () => ({ kind: 'ok' as const, data: HealthResponse.parse({ revision: 'a'.repeat(40), now: NOW, status: 'missing', metrics: [] }) });
 const tickerOk = () => ({ kind: 'ok' as const, data: MarketTickerResponse.parse({ status: 'ok', now: NOW, ticker: TICKER, fetchedAt: NOW }) });
 
 const deferred = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((r) => { resolve = r; }); return { promise, resolve }; };
@@ -38,6 +39,7 @@ beforeEach(() => {
   Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
   Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { value: true, configurable: true });
   vi.mocked(getMarketTicker).mockResolvedValue({ kind: 'offline' });
+  vi.mocked(getHealth).mockResolvedValue(healthMissing());
 });
 afterEach(async () => {
   if (root) await act(async () => root!.unmount());
@@ -79,6 +81,7 @@ describe('BTC/USD market card (DASH1)', () => {
     expect(text()).toContain('Health');
     expect(text()).toContain('Not configured');
     expect(text()).toContain('No approved usage source is connected yet.');
+    expect(text()).not.toContain('No approved health source is connected yet.');
     const overviewText = [...document.querySelectorAll('.dash-card')].filter((card) => !card.classList.contains('dash-market')).map((card) => card.textContent ?? '').join(' ');
     expect(overviewText).not.toMatch(/\$\d/);
     expect(overviewText).not.toMatch(/\d+ ?(quota|spend|reset)/i);

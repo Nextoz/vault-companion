@@ -1,10 +1,10 @@
 import { expect, test, type Locator } from '@playwright/test';
+import { HealthResponse } from '@vault-companion/contracts';
 import { MockApi } from './mock-api.ts';
 
 async function expectUnconfigured(dashboard: Locator) {
   for (const [title, note] of [
     ['AI usage', 'No approved usage source is connected yet.'],
-    ['Health', 'No approved health source is connected yet.'],
   ] as const) {
     const card = dashboard.getByRole('article', { name: title, exact: true });
     await expect(card).toContainText('Not configured');
@@ -65,6 +65,47 @@ test('Dashboard keeps Today default and supports mobile ranges, touch and keyboa
   await nav.getByRole('button', { name: 'Today', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
   await expect(dashboard).toHaveCount(0);
+});
+
+test('Health board shows four formatted tiles with gap-aware sparklines', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  await page.goto('/');
+  await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Dashboard' }).click();
+  const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
+  const health = dashboard.getByRole('article', { name: 'Health', exact: true });
+  await expect(health).toContainText('Data from 29 Sept 2026');
+  await expect(health.locator('.health-tile')).toHaveCount(4);
+  await expect(health.locator('.health-tile').nth(0)).toContainText('12,345');
+  await expect(health.locator('.health-tile').nth(0)).toContainText('Above usual');
+  await expect(health.locator('.health-tile').nth(1)).toContainText('46');
+  await expect(health.locator('.health-tile').nth(2)).toContainText('00:30');
+  await expect(health.locator('.health-tile').nth(3)).toContainText('18:00');
+  await expect(health.locator('svg.health-spark')).toHaveCount(4);
+  await expect(health.locator('svg.health-spark').first()).toHaveAttribute('aria-hidden', 'true');
+  expect(api.healthReads).toBe(1);
+});
+
+test('Health board labels old data and uses the stale styling at three days', async ({ page }) => {
+  const api = new MockApi();
+  api.health = HealthResponse.parse({ ...api.health, day: '2026-09-26', staleDays: 3 });
+  await api.install(page);
+  await page.goto('/');
+  await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Dashboard' }).click();
+  const health = page.getByRole('region', { name: 'Dashboard', exact: true }).getByRole('article', { name: 'Health', exact: true });
+  await expect(health).toContainText('Data from 26 Sept 2026 — 3 days old');
+  await expect(health.locator('.dash-stale')).toHaveCount(1);
+});
+
+test('Health board reports a missing export without tiles or sparklines', async ({ page }) => {
+  const api = new MockApi();
+  api.health = HealthResponse.parse({ revision: 'a'.repeat(40), now: '2026-09-30T12:00:00Z', status: 'missing', metrics: [] });
+  await api.install(page);
+  await page.goto('/');
+  await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Dashboard' }).click();
+  const health = page.getByRole('region', { name: 'Dashboard', exact: true }).getByRole('article', { name: 'Health', exact: true });
+  await expect(health).toContainText('No Apple Health export in the vault yet.');
+  await expect(health.locator('.health-tile, svg')).toHaveCount(0);
 });
 
 test('stale market times stay honest and ticker-only polling preserves history on failure', async ({ page }) => {
@@ -134,19 +175,21 @@ test('SP3c (ADR-0038): a range seen before reopens from its labelled copy when t
   await nav.getByRole('button', { name: 'Dashboard', exact: true }).click();
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
   const market = dashboard.getByRole('article', { name: 'BTC / USD', exact: true });
+  // The Health panel keeps its own copy note; this test is about the Dashboard's.
+  const dashNote = dashboard.locator(':scope > [data-testid="copy-note"]');
   await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
-  await expect(dashboard.getByTestId('copy-note')).toHaveCount(0);
+  await expect(dashNote).toHaveCount(0);
 
   await nav.getByRole('button', { name: 'Today', exact: true }).click();
   api.network = 'down';
   await nav.getByRole('button', { name: 'Dashboard', exact: true }).click();
-  await expect(dashboard.getByTestId('copy-note')).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
+  await expect(dashNote).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
   await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
   await expect(market.locator('.dash-chip')).toHaveText('Stale');
   await expect(market.locator('svg.dash-svg')).toHaveCount(1);
   await page.screenshot({ path: test.info().outputPath('sp3c-dashboard-copy-390x844.png') });
   // A range never seen has no copy: the failure is said plainly, the 1W copy stays labelled as stale.
   await dashboard.getByRole('button', { name: '1M', exact: true }).click();
-  await expect(dashboard.getByTestId('copy-note')).toHaveCount(0);
+  await expect(dashNote).toHaveCount(0);
   await expect(market.locator('.dash-chip')).toHaveText('Stale');
 });
