@@ -7,9 +7,12 @@ export const TRAINING_HEADER = '| Date | Time | Type | Distance | Duration | Wei
 export type TrainingRow = { date: string; time: string; type: string; distance: string; duration: string; weight: string; split: string; note: string };
 export type TrainingEffect = { kind: 'training'; op: 'logged' | 'undone'; lineText: string };
 export type TrainingSession = { when: string; duration: number; note?: string | undefined } & (
-  { type: 'Run'; distance: number } | { type: 'Gym'; split: 'Bicep' | 'Tricep' | 'Legs'; weight?: number | undefined }
+  { type: 'Run'; distance: number } | { type: 'Gym'; split: 'Bicep' | 'Tricep' | 'Legs' | 'Group'; className?: string | undefined; weight?: number | undefined }
 );
 const missing = () => refuse('refused:training-table-missing', 'Training log table not found — fix it in Obsidian');
+
+/** A table cell escapes backslash first, then pipe — the same bytes the Note cell has always used. */
+const escapeCell = (value: string) => value.replaceAll('\\', '\\\\').replaceAll('|', '\\|');
 
 /** Escaped pipes belong to a cell; backslashes are decoded only when escaping a pipe or another backslash. */
 function cells(line: string): string[] {
@@ -71,14 +74,16 @@ export function parseTraining(source: string) {
 export function formatTrainingRow(session: TrainingSession): string {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(session.when));
   const part = (type: string) => parts.find((p) => p.type === type)!.value;
-  const note = (session.note ?? '').replace(/[\r\n\u2028\u2029]+/g, ' ').trim().replaceAll('\\', '\\\\').replaceAll('|', '\\|');
+  const note = escapeCell((session.note ?? '').replace(/[\r\n\u2028\u2029]+/g, ' ').trim());
+  const split = session.type === 'Gym' && session.split === 'Group' ? `Group: ${escapeCell(session.className ?? '')}` : session.type === 'Gym' ? session.split : '';
   const values = [`${part('year')}-${part('month')}-${part('day')}`, `${part('hour')}:${part('minute')}`, session.type,
     session.type === 'Run' ? `${session.distance.toFixed(1)} km` : '', `${session.duration} min`,
-    session.type === 'Gym' && session.weight !== undefined ? `${session.weight.toFixed(1)} kg` : '', session.type === 'Gym' ? session.split : '', note];
+    session.type === 'Gym' && session.weight !== undefined ? `${session.weight.toFixed(1)} kg` : '', split, note];
   return '|' + values.map((v) => v ? ` ${v} ` : ' ').join('|') + '|';
 }
 
 export function insertTrainingRow(source: string, session: TrainingSession): MutationOk<TrainingEffect> | Refusal {
+  if (session.type === 'Gym' && session.split === 'Group' && !session.className?.trim()) return refuse('refused:invalid-edit', 'A group class needs a class name.');
   const parsed = parseTraining(source);
   if (!parsed.ok) return parsed;
   const lineText = formatTrainingRow(session);

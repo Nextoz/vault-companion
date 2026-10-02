@@ -1,11 +1,11 @@
-# Checkpoint — 2026-10-02 (B9)
+# Checkpoint — 2026-10-02 (B11)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
 
 - **B9** (Lead, ~5 lines): BTC history was blank because Coinbase `/candles` returns 400 without a User-Agent (`/ticker` does not); market fetches now send `User-Agent: vault-companion`; test asserts it.
-- **B11 in flight:** DeepSeek Flash worker in `C:\Dev\vault-companion-clones\b11` (base 248e97a, brief `.agent/brief.md`). Format decided: Type `Gym`, Split cell `Group: <class>` (`.agent/decisions.md`). Next Lead: if `.agent/handoffs/b11.md` exists run handoff-check (task b11), else wait on `run-b11.log`.
+- **B11** (worker + Lead fix; ADR-0041): Log training → Workout select gains "Group training" with a required free-text Class name and up to 6 one-tap suggestions from logged rows. Row stays Type `Gym`, Split cell `Group: <class>` (pipe/backslash escaped); Group without a name ⇒ `refused:invalid-edit`.
 - **Live before UX1: `f0580812`** (B5+B6, main 6dc275c). UX1 is deployed right after its merge; the new version ID
   and rollback target are in `.agent/decisions.md`.
 - **UX1** (worker, check clean; pnpm check 1819 + e2e 102): bottom tab bar Today · Scouts · Notes · Log · More
@@ -24,11 +24,12 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-1. Owner bug order (2026-10-02): **B11 (worker running) → B12** (same training files: start after B11 merges), before any new UX slice.
+1. Owner bug order (2026-10-02): **B12** (edit a logged workout, high-risk write ⇒ Pro + `-Reviewer both`), before any new UX slice.
 2. Then UX2–UX5 → AB AI budget card → NY Needs You + Morning Review → SP phone measurement (re-read the backlog).
 
 ## Owner items
 
+- Phone: Log training → Workout → Group training → type a class → Save; next time it is offered as a suggestion (B11). BTC card shows 1W/1M/3M history (B9).
 - Phone: bottom bar → More → each sub-screen and back; bar clears the home indicator (UX1).
 - Phone: Today → mood check-in on a day with no journal note yet → saves (B7); rows labelled (B8).
 - Phone: Dashboard → Health board; Report button → test Bug → Undo from Actions.

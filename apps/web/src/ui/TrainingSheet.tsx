@@ -1,9 +1,11 @@
-import { TrainingSession } from '@vault-companion/contracts';
+import { TrainingSession, type TrainingResponse } from '@vault-companion/contracts';
 import { useRef, useState } from 'react';
+import { getTraining } from '../api.ts';
 import { logTraining } from '../commands.ts';
 import type { PendingQueue } from '../queue/queue.ts';
 import { isoWithOffset } from '../time.ts';
-import { trainingLocalTime } from '../training.ts';
+import { groupClassSuggestions, trainingLocalTime } from '../training.ts';
+import { useLastCopy } from './useLastCopy.tsx';
 
 /**
  * B1: a kilo or kilometre value with at most one decimal, typed with a dot or a Danish comma (`84.5`, `84,5`).
@@ -22,14 +24,18 @@ export function TrainingSheet({ queue, accountKey, baseRevision, onClose }: {
   const [duration, setDuration] = useState('');
   const [distance, setDistance] = useState('');
   const [weight, setWeight] = useState('');
-  const [split, setSplit] = useState<'Bicep' | 'Tricep' | 'Legs'>('Bicep');
+  const [split, setSplit] = useState<'Bicep' | 'Tricep' | 'Legs' | 'Group'>('Bicep');
+  const [className, setClassName] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const guard = useRef(false);
+  const view = useLastCopy<TrainingResponse>(accountKey, 'training', getTraining, null);
+  const read = view.res?.kind === 'ok' ? view.res.data : null;
+  const suggestions = read?.status === 'ok' ? groupClassSuggestions(read.rows) : [];
   const date = new Date(when);
   const parsed = TrainingSession.safeParse({ type, when: Number.isFinite(date.getTime()) ? isoWithOffset(date) : '', duration: Number(duration), note,
-    ...(type === 'Run' ? { distance: parseDecimal(distance) } : { split, ...(weight === '' ? {} : { weight: parseDecimal(weight) }) }) });
+    ...(type === 'Run' ? { distance: parseDecimal(distance) } : { split, ...(split === 'Group' ? { className } : {}), ...(weight === '' ? {} : { weight: parseDecimal(weight) }) }) });
   const save = async () => {
     if (!parsed.success || !accountKey || !baseRevision || guard.current) return;
     guard.current = true; setSaving(true); setError(null);
@@ -47,7 +53,13 @@ export function TrainingSheet({ queue, accountKey, baseRevision, onClose }: {
     </div>
     <label>When<input type="datetime-local" required value={when} onChange={(e) => setWhen(e.target.value)} /></label>
     {type === 'Run' ? <label>Distance (km)<input type="text" inputMode="decimal" required value={distance} onChange={(e) => setDistance(e.target.value)} /></label> : <>
-      <label>Split<select value={split} onChange={(e) => setSplit(e.target.value as typeof split)}>{['Bicep', 'Tricep', 'Legs'].map((s) => <option key={s}>{s}</option>)}</select></label>
+      <label>Workout<select value={split} onChange={(e) => setSplit(e.target.value as typeof split)}>{(['Bicep', 'Tricep', 'Legs', 'Group'] as const).map((s) => <option key={s} value={s}>{s === 'Group' ? 'Group training' : s}</option>)}</select></label>
+      {split === 'Group' && <>
+        <label>Class name<input type="text" required maxLength={60} value={className} onChange={(e) => setClassName(e.target.value)} /></label>
+        {suggestions.length > 0 && <div className="class-suggestions" role="group" aria-label="Class name suggestions">
+          {suggestions.map((s) => <button key={s} type="button" onClick={() => setClassName(s)}>{s}</button>)}
+        </div>}
+      </>}
       <label>Weight (kg, optional)<input type="text" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} /></label>
     </>}
     <label>Duration (min)<input type="number" inputMode="numeric" required min="1" max="600" step="1" value={duration} onChange={(e) => setDuration(e.target.value)} /></label>

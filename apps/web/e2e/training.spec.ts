@@ -21,7 +21,7 @@ test('run and gym logging, newest-first list, notes, yesterday placement and exa
   await expect(sheet.getByLabel('Weight (kg, optional)')).toHaveValue('');
   await sheet.getByRole('button', { name: 'Run', exact: true }).click();
   await expect(sheet.getByLabel('Weight (kg, optional)')).toHaveCount(0);
-  await expect(sheet.getByLabel('Split', { exact: true })).toHaveCount(0);
+  await expect(sheet.getByLabel('Workout', { exact: true })).toHaveCount(0);
   await sheet.getByLabel('When', { exact: true }).fill('2026-09-28T10:00');
   await sheet.getByLabel('Distance (km)').fill('5.2');
   await sheet.getByLabel('Duration (min)').fill('28');
@@ -47,7 +47,7 @@ test('run and gym logging, newest-first list, notes, yesterday placement and exa
   sheet = await openSheet(page);
   await expect(sheet.getByLabel('Weight (kg, optional)')).toHaveValue('');
   await sheet.getByLabel('When', { exact: true }).fill('2026-09-27T17:00');
-  await sheet.getByRole('combobox', { name: 'Split', exact: true }).selectOption({ label: 'Legs' });
+  await sheet.getByRole('combobox', { name: 'Workout', exact: true }).selectOption({ label: 'Legs' });
   await sheet.getByLabel('Duration (min)').fill('45');
   await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(list.getByTestId('training-row')).toHaveCount(3);
@@ -58,6 +58,27 @@ test('run and gym logging, newest-first list, notes, yesterday placement and exa
   expect(api.applied.map((c) => c.type)).toEqual(['LogTraining', 'LogTraining', 'LogTraining', 'UndoLogTraining']);
   const gym = api.applied[1];
   expect(gym?.type === 'LogTraining' && gym.payload.session).toMatchObject({ type: 'Gym', weight: 82.4, duration: 60 });
+});
+
+test('group class uses a suggested name and shows it in the Workout cell', async ({ page }) => {
+  const api = new MockApi();
+  api.trainingRows = [{ date: '2026-09-20', time: '08:00', type: 'Gym', distance: '', duration: '45', weight: '', split: 'Group: Functional Express', note: '' }];
+  await api.install(page);
+  await page.goto('/');
+  await goTo(page, 'Log');
+  const list = page.getByRole('region', { name: 'Training sessions' });
+  const sheet = await openSheet(page);
+  await sheet.getByRole('combobox', { name: 'Workout', exact: true }).selectOption({ label: 'Group training' });
+  await expect(sheet.getByLabel('Class name', { exact: true })).toHaveValue('');
+  await sheet.getByRole('button', { name: 'Functional Express', exact: true }).click();
+  await expect(sheet.getByLabel('Class name', { exact: true })).toHaveValue('Functional Express');
+  await sheet.getByLabel('When', { exact: true }).fill('2026-09-28T07:00');
+  await sheet.getByLabel('Duration (min)').fill('45');
+  await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(list.getByTestId('training-row')).toHaveCount(2);
+  await expect(list.getByTestId('training-row').first()).toContainText('Group: Functional Express');
+  const logged = api.applied[0];
+  expect(logged?.type === 'LogTraining' && logged.payload.session).toMatchObject({ type: 'Gym', split: 'Group', className: 'Functional Express', duration: 45 });
 });
 
 test('offline save survives reload and dependent Undo waits for the receipt', async ({ page }) => {

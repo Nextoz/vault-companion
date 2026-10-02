@@ -217,7 +217,10 @@ const trainingCommon = {
 };
 export const TrainingSession = z.discriminatedUnion('type', [
   z.strictObject({ ...trainingCommon, type: z.literal('Run'), distance: z.number().min(0.1).max(100) }),
-  z.strictObject({ ...trainingCommon, type: z.literal('Gym'), split: z.enum(['Bicep', 'Tricep', 'Legs']), weight: z.number().min(30).max(250).optional() }),
+  z.strictObject({ ...trainingCommon, type: z.literal('Gym'), split: z.enum(['Bicep', 'Tricep', 'Legs', 'Group']), className: z.string().trim().min(1).max(60).refine((s) => !/[\r\n\u2028\u2029]/.test(s), 'must not contain a line break').optional(), weight: z.number().min(30).max(250).optional() }).superRefine((session, ctx) => {
+    if (session.split === 'Group' && session.className === undefined) ctx.addIssue({ code: 'custom', message: 'class name is required when the split is Group' });
+    if (session.split !== 'Group' && session.className !== undefined) ctx.addIssue({ code: 'custom', message: 'class name is only allowed when the split is Group' });
+  }),
 ]);
 export type TrainingSession = z.infer<typeof TrainingSession>;
 export const LogTrainingCommand = envelope('LogTraining', z.strictObject({ session: TrainingSession }));

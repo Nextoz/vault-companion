@@ -73,6 +73,15 @@ it('formats Gym, blank optional weight, backslash plus pipe and Copenhagen DST',
   const r = kernel.insertTrainingRow(fixture, { ...session, note: 'slash \\| pipe' });
   expect(r.ok && kernel.parseTraining(r.text)).toMatchObject({ rows: [{}, { note: 'slash \\| pipe' }, {}, {}] });
 });
+it('formats a Group class name and round-trips pipe/backslash escapes through parseTraining', () => {
+  expect(kernel.formatTrainingRow({ type: 'Gym', split: 'Group', className: 'Functional Express', duration: 45, when: '2026-09-28T16:00:00Z' }))
+    .toBe('| 2026-09-28 | 18:00 | Gym | | 45 min | | Group: Functional Express | |');
+  const group: kernel.TrainingSession = { type: 'Gym', split: 'Group', className: 'A|B \\ C', duration: 45, when: '2026-09-28T16:00:00Z' };
+  const r = kernel.insertTrainingRow(fixture, group);
+  expect(r).toMatchObject({ ok: true, effect: { lineText: '| 2026-09-28 | 18:00 | Gym | | 45 min | | Group: A\\|B \\\\ C | |' } });
+  if (!r.ok) throw new Error(r.code);
+  expect(kernel.parseTraining(r.text)).toMatchObject({ rows: [{}, { split: 'Group: A|B \\ C' }, {}, {}] });
+});
 it.each([
   fixture.replace('## Sessions', '## Other'), '## Sessions\nNo table\n', fixture.replace('Distance', 'distance'),
   fixture.replace('## Week summaries', header + '\n## Week summaries'), fixture.replace('| --- |', '| xx |'),
@@ -117,4 +126,11 @@ it('mutation kills pipe escaping removal', () => {
   const assertion = (k: typeof kernel) => expect(k.insertTrainingRow(fixture, session)).toMatchObject({ text: fixture.replace(legacy, line + '\n' + legacy) });
   assertion(kernel);
   expect(() => assertion(mutant(".replaceAll('|', '\\\\|')", ''))).toThrow();
+});
+
+it('refuses a Group session without a class name instead of writing an empty one', () => {
+  for (const className of [undefined, '', '   ']) {
+    const r = kernel.insertTrainingRow(fixture, { type: 'Gym', split: 'Group', className, duration: 45, when: '2026-09-28T16:00:00Z' });
+    expect(r).toMatchObject({ ok: false, code: 'refused:invalid-edit' });
+  }
 });
