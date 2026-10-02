@@ -9,6 +9,8 @@ import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { plainWikilinks, taskSegments } from '../text.ts';
 import { trainingSummary } from '../training.ts';
 import { copenhagenDay } from '../triage.ts';
+import { weekdayBars } from '../week-chart.ts';
+import { BarChart } from './BarChart.tsx';
 import { History } from './History.tsx';
 import { NoteScreen } from './Notes.tsx';
 import type { OpenLink } from './NoteView.tsx';
@@ -68,6 +70,7 @@ export function Progress({ refreshKey, queue, queued, accountKey, baseRevision, 
     {week && <section aria-label="This week" className="progress-card">
       <h2>This week <span className="muted small">{weekRange(week)}</span></h2>
       <p className="progress-summary" data-testid="week-summary">{weekSummary(week, true, missing)}</p>
+      {h && <BarChart title="Tasks done this week" testId="week-tasks-chart" bars={weekdayBars(h.items.map((i) => i.doneDate), today)} />}
       <Expandable label="Show what happened" closeLabel="Hide what happened"><Evidence week={week} {...evidence} /></Expandable>
     </section>}
     {earlier.length > 0 && <section aria-label="Earlier weeks" className="progress-earlier">

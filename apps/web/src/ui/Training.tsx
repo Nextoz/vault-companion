@@ -2,6 +2,9 @@ import type { TrainingResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
 import { getTraining, type Fetched } from '../api.ts';
 import { trainingRowKeys, trainingSummary } from '../training.ts';
+import { copenhagenDay } from '../triage.ts';
+import { weekBars } from '../week-chart.ts';
+import { BarChart } from './BarChart.tsx';
 
 export function Training({ refreshKey }: { refreshKey: number | null }) {
   const [res, setRes] = useState<Fetched<TrainingResponse> | null>(null);
@@ -20,6 +23,7 @@ export function Training({ refreshKey }: { refreshKey: number | null }) {
     {read?.status === 'refused' && <p className="error">{read.message}</p>}
     {read?.status === 'ok' && <>
       {read.rows.length === 0 && <p className="muted">No sessions yet.</p>}
+      {read.rows.length > 0 && <BarChart title="Sessions per week" testId="training-chart" bars={weekBars(read.rows.map((r) => r.date), copenhagenDay(new Date().toISOString()))} />}
       <ul className="training-list">{read.rows.map((row, i) => <li key={keys[i]} data-testid="training-row">
         <p className="muted small">{row.date}{row.time && ` · ${row.time}`}</p>
         <p><span aria-hidden="true">{row.type === 'Run' ? '🏃' : row.type === 'Gym' ? '🏋️' : '●'}</span> <strong>{row.type}</strong> {trainingSummary(row)}</p>
