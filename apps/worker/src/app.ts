@@ -114,7 +114,10 @@ export function createApp(deps: AppDeps) {
     const started = Date.now();
     c.set('logMeta', {});
     await next();
+    const durationMs = Date.now() - started;
     for (const [k, v] of Object.entries(SECURITY_HEADERS)) c.header(k, v);
+    // SP step 1 (measure): the phone subtracts this from its own read time to see Access + network overhead.
+    c.header('Server-Timing', `app;dur=${durationMs}`);
     const meta = c.get('logMeta');
     deps.log(
       sanitize({
@@ -122,7 +125,7 @@ export function createApp(deps: AppDeps) {
         method: c.req.method,
         route: c.req.routePath,
         status: c.res.status,
-        durationMs: Date.now() - started,
+        durationMs,
         ...meta,
       }),
     );

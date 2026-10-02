@@ -27,6 +27,7 @@ import {
   type WeatherLocationRequest,
 } from '@vault-companion/contracts';
 import { z } from 'zod';
+import { recordRead } from './timings.ts';
 
 export type Fetched<T> =
   | { kind: 'ok'; data: T }
@@ -48,6 +49,7 @@ export async function getJson<S extends z.ZodType>(url: string, schema: S, heade
   // A timer rather than AbortSignal.timeout: it bounds the body as well as the headers, and tests can drive it.
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), READ_TIMEOUT_MS);
+  const started = performance.now();
   try {
     let res: Response;
     try {
@@ -61,6 +63,7 @@ export async function getJson<S extends z.ZodType>(url: string, schema: S, heade
     const aborted = new Promise<undefined>((resolve) => abort.signal.addEventListener('abort', () => resolve(undefined)));
     const body: unknown = await Promise.race([res.json().catch(() => undefined), aborted]);
     if (abort.signal.aborted) return { kind: 'error', message: TIMED_OUT };
+    recordRead(url, performance.now() - started, res.headers.get('Server-Timing'));
     const parsed = schema.safeParse(body);
     return parsed.success ? { kind: 'ok', data: parsed.data } : { kind: 'error', message: 'Unexpected reply from the server.' };
   } finally {

@@ -1,11 +1,13 @@
 import type { TasksResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
 import { FRESH_FOR_MS, vaultFreshness } from '../freshness.ts';
+import { readTimings } from '../timings.ts';
 
 export function VaultStatus({ read, checkedAt, failed, busy, onRefresh }: {
   read: TasksResponse | null; checkedAt: number | null; failed: boolean; busy: boolean; onRefresh: () => Promise<void>;
 }) {
   const [now, setNow] = useState(Date.now);
+  const [timings, setTimings] = useState(readTimings);
   useEffect(() => {
     setNow(Date.now());
     if (checkedAt === null) return;
@@ -18,12 +20,20 @@ export function VaultStatus({ read, checkedAt, failed, busy, onRefresh }: {
   const builtAt = build.builtAt ? new Intl.DateTimeFormat('en-GB', { timeZone: read?.timeZone ?? 'Europe/Copenhagen', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(build.builtAt)) : 'unknown';
   return (
     <section className="vault-status" aria-label="Vault status">
-      <details>
+      <details onToggle={() => setTimings(readTimings())}>
         <summary>
           <span>{status?.updated ?? 'Vault not loaded'}</span>
           <span className={status?.warning || failed ? 'chip chip-attention' : 'muted'}>{status?.checked ?? 'Not refreshed yet'}</span>
         </summary>
-        <div className="muted">{read && <div>Vault {read.revision.slice(0, 12)}</div>}<div>App {build.commit} · built {builtAt}</div></div>
+        <div className="muted">{read && <div>Vault {read.revision.slice(0, 12)}</div>}<div>App {build.commit} · built {builtAt}</div>
+          {timings.length > 0 && (
+            <ul className="read-speed" aria-label="Read speed">
+              {timings.map((t) => (
+                <li key={t.route}>{t.route.replace(/^\/api\//, '')} {t.totalMs} ms{t.serverMs !== null && ` · server ${t.serverMs} ms`}</li>
+              ))}
+            </ul>
+          )}
+        </div>
       </details>
       <button type="button" aria-label="Refresh vault" aria-busy={busy} disabled={busy} onClick={() => void onRefresh()}>Refresh</button>
     </section>
