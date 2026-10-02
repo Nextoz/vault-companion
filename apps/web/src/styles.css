@@ -204,6 +204,10 @@ textarea:focus-visible {
   color: var(--accent);
 }
 
+.scale-row { display: grid; gap: 4px; margin-bottom: 10px; }
+.scale-label { font-weight: 600; }
+.scale-ends { display: flex; justify-content: space-between; margin: 0; }
+
 .task-view {
   margin: 12px 0;
 }

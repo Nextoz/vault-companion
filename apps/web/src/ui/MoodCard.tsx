@@ -53,6 +53,21 @@ export function latestCheckin(items: readonly QueueItem[], date: string): MoodCh
   return best?.payload ?? null;
 }
 
+/** What the ends of each −3…+3 scale mean (B8: the rows were unlabelled numbers). */
+const SCALE_ENDS = { Mood: ['low', 'great'], Energy: ['drained', 'energised'] } as const;
+
+/** One labelled chip row; the visible label and end hints sit outside the group so its accessible name stays `kind`. */
+function ScaleRow({ kind, value, onPick }: { kind: 'Mood' | 'Energy'; value: number | null; onPick: (v: number) => void }) {
+  const chip = (v: number) => chipLabel(kind, v).slice(kind.length + 1);
+  return <div className="scale-row">
+    <span className="scale-label">{kind}</span>
+    <div className="segmented" role="group" aria-label={kind}>
+      {SCALE.map((v) => <button key={v} type="button" aria-label={chipLabel(kind, v)} aria-pressed={value === v} onClick={() => onPick(v)}>{chip(v)}</button>)}
+    </div>
+    <p className="muted small scale-ends"><span>{chip(SCALE[0])} {SCALE_ENDS[kind][0]}</span><span>{chip(SCALE[6])} {SCALE_ENDS[kind][1]}</span></p>
+  </div>;
+}
+
 /** One-minute mood/energy/sleep check-in on Today (ADR-0036). Collapses to the last check-in's time. */
 export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
   queue: PendingQueue;
@@ -99,12 +114,8 @@ export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
   return <div className="group mood" role="region" aria-label="Mood check-in">
     <h2>Mood check-in</h2>
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
-      <div className="segmented" role="group" aria-label="Mood">
-        {SCALE.map((v) => <button key={v} type="button" aria-label={chipLabel('Mood', v)} aria-pressed={mood === v} onClick={() => setMood(v)}>{chipLabel('Mood', v).slice(5)}</button>)}
-      </div>
-      <div className="segmented" role="group" aria-label="Energy">
-        {SCALE.map((v) => <button key={v} type="button" aria-label={chipLabel('Energy', v)} aria-pressed={energy === v} onClick={() => setEnergy(v)}>{chipLabel('Energy', v).slice(7)}</button>)}
-      </div>
+      <ScaleRow kind="Mood" value={mood} onPick={setMood} />
+      <ScaleRow kind="Energy" value={energy} onPick={setEnergy} />
       <label>Sleep (hours)<input type="text" inputMode="decimal" value={sleepText} onChange={(e) => setSleepText(e.target.value)} /></label>
       {(!accountKey || !baseRevision) && <p className="muted small">Connect once to set up this device before checking in.</p>}
       {blocked && <p className="muted small">The vault is locked until the conflict is resolved in Obsidian.</p>}
