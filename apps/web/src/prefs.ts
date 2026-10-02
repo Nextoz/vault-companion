@@ -4,7 +4,7 @@ export type CaptureKind = 'task' | 'note' | 'active-work';
 /** Fresh captures follow the invoking view; other views keep the device preference. */
 export function captureDefaultForTab(tab: string): CaptureKind | undefined {
   if (tab === 'notes') return 'note';
-  if (tab === 'today' || tab === 'all') return 'task';
+  if (tab === 'today' || tab === 'tasks' || tab === 'all') return 'task';
   return undefined;
 }
 

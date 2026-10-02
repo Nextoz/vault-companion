@@ -2,34 +2,39 @@ import type { ReactNode } from 'react';
 
 /** Every internal screen. The bottom bar groups them into five buttons. */
 export type Tab =
-  | 'dashboard'
   | 'today'
+  | 'tasks'
   | 'all'
   | 'notes'
   | 'training'
   | 'scouts'
   | 'history'
-  | 'more'
-  | 'status'
-  | 'actions';
+  | 'status';
 
 /** The five bottom-bar buttons. */
-export type BarKey = 'today' | 'scouts' | 'notes' | 'log' | 'more';
+export type BarKey = 'today' | 'tasks' | 'scouts' | 'notes' | 'log';
 
-/** Which bottom-bar button is pressed for a screen; 'all' shares Today, the More screens share More. */
-export function barKey(tab: Tab): BarKey {
+/**
+ * Which bottom-bar button is pressed for a screen; 'all' shares Tasks, both Log views share Log.
+ * The header's Status screen belongs to no bar button: nothing is pressed.
+ */
+export function barKey(tab: Tab): BarKey | null {
   switch (tab) {
     case 'all':
-      return 'today';
+      return 'tasks';
     case 'training':
-      return 'log';
-    case 'dashboard':
     case 'history':
+      return 'log';
+    case 'today':
+      return 'today';
+    case 'tasks':
+      return 'tasks';
+    case 'scouts':
+      return 'scouts';
+    case 'notes':
+      return 'notes';
     case 'status':
-    case 'actions':
-      return 'more';
-    default:
-      return tab;
+      return null;
   }
 }
 
@@ -57,6 +62,12 @@ const ICONS: Record<BarKey, ReactNode> = {
       <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
     </>
   ),
+  tasks: (
+    <>
+      <path d="m4 6 1.6 1.6L8.5 4.7M4 12.5l1.6 1.6L8.5 11.2M4 19l1.6 1.6L8.5 17.7" />
+      <path d="M12 6.5h8M12 13h8M12 19.5h8" />
+    </>
+  ),
   scouts: (
     <>
       <circle cx="11" cy="11" r="6" />
@@ -70,24 +81,17 @@ const ICONS: Record<BarKey, ReactNode> = {
     </>
   ),
   log: <path d="M4 9v6M20 9v6M7 7v10M17 7v10M7 12h10" />,
-  more: (
-    <>
-      <circle cx="5" cy="12" r="1.4" />
-      <circle cx="12" cy="12" r="1.4" />
-      <circle cx="19" cy="12" r="1.4" />
-    </>
-  ),
 };
 
 const ITEMS: ReadonlyArray<{ key: BarKey; label: string; to: Tab }> = [
   { key: 'today', label: 'Today', to: 'today' },
+  { key: 'tasks', label: 'Tasks', to: 'tasks' },
   { key: 'scouts', label: 'Scouts', to: 'scouts' },
   { key: 'notes', label: 'Notes', to: 'notes' },
   { key: 'log', label: 'Log', to: 'training' },
-  { key: 'more', label: 'More', to: 'more' },
 ];
 
-/** Fixed bottom tab bar: five icon+label buttons, one pressed per screen (Today also covers All). */
+/** Fixed bottom tab bar: five icon+label buttons, one pressed per screen (All shares Tasks, both Log views share Log). */
 export function TabBar({ tab, onSelect, inert }: { tab: Tab; onSelect: (tab: Tab) => void; inert?: boolean }) {
   const active = barKey(tab);
   return (

@@ -22,6 +22,7 @@ const toast = (page: Page) => page.locator('.toast');
 
 test('complete a task, then Undo it from the toast', async ({ page }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
 
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
@@ -47,6 +48,7 @@ test('complete a task, then Undo it from the toast', async ({ page }) => {
 
 test('capture offline, then send the identical envelope once back online', async ({ page, context }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
 
   api.commandMode = 'offline';
@@ -71,7 +73,7 @@ test('capture offline, then send the identical envelope once back online', async
   // Any attempt made while offline carried exactly the same bytes as the one that landed.
   expect(new Set(api.bodies).size).toBe(1);
 
-  // C3: a fresh Add follows the tab (Today → Task), not the kind chosen in the previous sheet.
+  // C3: a fresh Add follows the tab (Tasks → Task), not the kind chosen in the previous sheet.
   await page.getByRole('button', { name: 'Capture' }).click();
   await expect(page.getByRole('button', { name: 'Task', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Note', exact: true })).toHaveAttribute('aria-pressed', 'false');
@@ -80,6 +82,7 @@ test('capture offline, then send the identical envelope once back online', async
 test('a changed-task refusal moves back with the error and offers Refresh / Copy / Discard, never Retry', async ({ page }) => {
   api.commandMode = { refuse: { code: 'conflict:task-changed', message: 'This task changed on another device.', retryable: false } };
   await page.goto('/');
+  await goTo(page, 'Tasks');
 
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
 
@@ -108,7 +111,7 @@ test('a pending action survives a reload and is sent afterwards, byte-for-byte',
   api.commandMode = 'unavailable';
   await page.goto('/');
   await page.getByRole('button', { name: 'Capture' }).click();
-  await page.getByRole('button', { name: 'Task' }).click();
+  await page.getByRole('button', { name: 'Task', exact: true }).click();
   await page.getByLabel('Task text').fill('Buy seed potatoes');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => api.bodies.length).toBeGreaterThan(0);
@@ -131,6 +134,7 @@ test('a pending action survives a reload and is sent afterwards, byte-for-byte',
 test('read-only tasks have no active checkbox and show a short reason', async ({ page }) => {
   api.open = [taskView(12, 'Take out the recycling', { recurring: true, readOnlyReason: 'refused:recurring' })];
   await page.goto('/');
+  await goTo(page, 'Tasks');
   const row = region(page, 'Today').getByTestId('task');
   await expect(row).toContainText('Recurring — complete in Obsidian');
   await expect(row.getByRole('button', { name: /^Complete:/ })).toHaveCount(0);
@@ -141,6 +145,7 @@ test('read-only tasks have no active checkbox and show a short reason', async ({
 test('task text is rendered as text, and wikilinks as plain text', async ({ page }) => {
   api.open = [taskView(13, '<img src=x onerror="window.pwned=1"> ask [[People/Ana|Ana]] about [[Seeds]]')];
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today')).toContainText('<img src=x onerror="window.pwned=1"> ask Ana about Seeds');
   expect(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned)).toBeUndefined();
   await expect(page.locator('main img')).toHaveCount(0);
@@ -158,6 +163,7 @@ test('a second tab never re-sends a completion in flight in the first, and Undo 
   // toast's 8-second Undo window or expire the deliberately held request/lease under CPU load.
   await page.clock.pauseAt(new Date('2026-09-24T10:01:00Z'));
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
 
   api.commandMode = 'hold';
@@ -168,6 +174,7 @@ test('a second tab never re-sends a completion in flight in the first, and Undo 
   const second = await context.newPage();
   await api.install(second);
   await second.goto('/');
+  await goTo(second, 'Tasks');
   await expect(region(second, 'Done today').getByText('Water the plants')).toBeVisible();
   await second.evaluate(() => window.dispatchEvent(new Event('online')));
 
@@ -200,6 +207,7 @@ test('a second tab never re-sends a completion in flight in the first, and Undo 
 test('two identical open tasks: completing one leaves the other, which can then be completed too', async ({ page }) => {
   api.open = [taskView(10, 'Water the plants'), taskView(12, 'Water the plants'), taskView(14, 'Call the bike shop')];
   await page.goto('/');
+  await goTo(page, 'Tasks');
   const today = region(page, 'Today');
   const twins = today.getByTestId('task').filter({ hasText: 'Water the plants' });
   await expect(twins).toHaveCount(2);
@@ -214,6 +222,7 @@ test('two identical open tasks: completing one leaves the other, which can then 
   await waitForSettledRetry(page);
   await expect(region(page, 'Actions on this device').getByTestId('action')).toContainText('On this device');
   await page.reload();
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Done today').getByText('Water the plants')).toHaveCount(1);
   await expect(twins).toHaveCount(1);
 
@@ -236,6 +245,7 @@ test('two identical open tasks: completing one leaves the other, which can then 
 test('a stale read with shifted identical lines shows the pending completion on its own row, hiding no task', async ({ page }) => {
   api.open = [taskView(10, 'Water the plants'), taskView(12, 'Water the plants')];
   await page.goto('/');
+  await goTo(page, 'Tasks');
   const twins = region(page, 'Today').getByTestId('task').filter({ hasText: 'Water the plants' });
   await expect(twins).toHaveCount(2);
 
@@ -253,6 +263,7 @@ test('a stale read with shifted identical lines shows the pending completion on 
 
 test('Undo from Done today after the toast expired sends exactly one valid UndoCompleteTask', async ({ page }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
   await expect.poll(() => api.applied.length).toBe(1);
   await expect(toast(page)).toBeVisible();
@@ -277,6 +288,7 @@ test('Undo from Done today after the toast expired sends exactly one valid UndoC
 test('no Undo in Done today for a completion this device did not make', async ({ page }) => {
   api.doneToday = [{ ...taskView(30, 'Sweep the porch'), status: 'done', section: 'done', done: '2026-09-24' }];
   await page.goto('/');
+  await goTo(page, 'Tasks');
   const done = region(page, 'Done today').getByTestId('task');
   await expect(done).toContainText('Sweep the porch');
   await expect(done.getByRole('button')).toHaveCount(0);
@@ -285,6 +297,7 @@ test('no Undo in Done today for a completion this device did not make', async ({
 test('a conflict: Refresh tasks, then complete the current row', async ({ page }) => {
   api.commandMode = { refuse: { code: 'conflict:task-changed', message: 'Changed.', retryable: false } };
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
   const actions = region(page, 'Actions on this device');
   await expect(actions).toContainText('This task changed on another device.');
@@ -309,6 +322,7 @@ for (const [what, set] of [
   test(`${what}: "Couldn't reach your vault" with Try again, which recovers`, async ({ page }) => {
     set();
     await page.goto('/');
+    await goTo(page, 'Tasks');
     const banner = page.getByRole('status').filter({ hasText: "Couldn't reach your vault" });
     await expect(banner).toBeVisible();
     await expect(page.getByText('Loading…')).toHaveCount(0);
@@ -327,6 +341,7 @@ for (const which of ['session', 'tasks'] as const) {
     else api.tasksMode = 'hang';
     const hung = page.waitForRequest(which === 'session' ? '**/api/session' : '**/api/tasks**');
     await page.goto('/');
+    await goTo(page, 'Tasks');
     await hung;
     // Active work can still be loading too; this assertion is about the main task/session read.
     await expect(page.locator('main > p').filter({ hasText: /^Loading…$/ })).toBeVisible();
@@ -343,6 +358,7 @@ for (const which of ['session', 'tasks'] as const) {
 
 test('a sync conflict in the task list: banner first, no task writes, notes still work', async ({ page }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
   await expect.poll(() => api.applied.length).toBe(1);
   await expect(region(page, 'Done today').getByText('Saved to GitHub')).toBeVisible();
@@ -376,6 +392,7 @@ test('Today comes first; Overdue is a collapsed group below it, with its count, 
     taskView(12, 'Return the drill', { due: '2026-09-22' }),
   ];
   await page.goto('/');
+  await goTo(page, 'Tasks');
   const groups = page.locator('main section.group');
   await expect(groups.first()).toHaveAttribute('aria-label', 'Today');
   await expect(groups.nth(1)).toHaveAttribute('aria-label', 'Overdue');
@@ -397,6 +414,7 @@ test('Today comes first; Overdue is a collapsed group below it, with its count, 
 test('discarding a refused completion does not resolve the task: its row keeps a needs-attention note', async ({ page }) => {
   api.commandMode = { refuse: { code: 'conflict:task-changed', message: 'Changed.', retryable: false } };
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
   const actions = region(page, 'Actions on this device');
   await expect(actions).toContainText('the task will still need attention');
@@ -419,6 +437,7 @@ test('discarding a refused completion does not resolve the task: its row keeps a
 test('a discarded refusal is settled by a fresh read that shows the task changed on the desktop', async ({ page }) => {
   api.commandMode = { refuse: { code: 'conflict:task-changed', message: 'Changed.', retryable: false } };
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
   await region(page, 'Actions on this device').getByRole('button', { name: 'Discard' }).click();
   await expect(page.getByText('still needs attention')).toHaveCount(1);
@@ -471,6 +490,7 @@ test('a clock-skew refusal: check the date and time, then redo; no Retry, Copy t
 
 test('a vault-conflict refusal offers Retry only once a fresh read is no longer write-blocked', async ({ page }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
 
   // The desktop commits a conflict after this read: the completion is refused.
@@ -506,6 +526,7 @@ test('open a linked note from a task: read-only, sanitised, and nothing about it
     ].join('\n'),
   });
   await page.goto('/');
+  await goTo(page, 'Tasks');
 
   await page.getByRole('button', { name: 'Open note: the garden plan' }).click();
   const dialog = page.getByRole('dialog');
@@ -573,6 +594,7 @@ test('Active work card: above Today, sanitised, collapse remembered, nothing sto
   api.activeWork = '## Now';
   api.unknownNowLines = ['<img src=x onerror="window.pwned=2"> [bad](javascript:window.pwned=3)'];
   await page.goto('/');
+  await goTo(page, 'Tasks');
 
   const card = region(page, 'Active work');
   const body = card.getByTestId('active-work-body');
@@ -592,6 +614,7 @@ test('Active work card: above Today, sanitised, collapse remembered, nothing sto
   await card.getByRole('button', { name: 'Active work' }).click();
   await expect(body).toHaveCount(0);
   await page.reload();
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   await expect(card.getByRole('button', { name: 'Active work' })).toHaveAttribute('aria-expanded', 'false');
   await expect(card.getByTestId('active-work-body')).toHaveCount(0);
@@ -627,12 +650,14 @@ test('Active work card: above Today, sanitised, collapse remembered, nothing sto
 test('Active work failures are quiet: the task lists still render; an absent file shows no card', async ({ page }) => {
   api.activeWork = 'error';
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   await expect(region(page, 'Active work')).toContainText('Not available right now.');
   await expect(page.getByRole('alert')).toHaveCount(0);
 
   api.activeWork = null;
   await page.reload();
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   await expect(region(page, 'Active work')).toHaveCount(0);
 });
@@ -644,6 +669,7 @@ test.describe('linked note dialog: session binding and modal focus', () => {
     api.open = [taskView(15, 'Prepare [[Projects/Garden/Plan|the garden plan]]', { links: ['Projects/Garden/Plan'] })];
     api.notes.set('Projects/Garden/Plan', NOTE);
     await page.goto('/');
+    await goTo(page, 'Tasks');
     await page.getByRole('button', { name: 'Open note: the garden plan' }).click();
     await expect(page.getByTestId('note-body')).toContainText('Beds');
   });
@@ -698,6 +724,7 @@ test.describe('linked note dialog: session binding and modal focus', () => {
 
 test('review O6: reads that stay stale offer "Reset saved-actions history", which keeps pending actions', async ({ page }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
   await expect(region(page, 'Done today').getByText('Saved to GitHub')).toBeVisible();
   await page.evaluate(() => window.dispatchEvent(new Event('focus'))); // a read acknowledges it: watermark set
@@ -730,6 +757,7 @@ test('review O6: reads that stay stale offer "Reset saved-actions history", whic
 
 test('review O1: after a burst of captures made offline, every task read asks about at most 8 commits', async ({ page, context }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   api.commandMode = 'offline';
   await context.setOffline(true);

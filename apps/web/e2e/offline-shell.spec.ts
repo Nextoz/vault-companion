@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { build, type Plugin } from 'vite';
 import { MockApi, taskView } from './mock-api.ts';
+import { goTo } from './nav.ts';
 import { StaticServer } from './static-server.ts';
 
 let api: MockApi;
@@ -88,6 +89,7 @@ async function buildTagged(outDir: string, tag: string): Promise<void> {
 
 test('after one online visit the shell loads offline and shows the offline state', async ({ page, context }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   await controlled(page);
 
@@ -100,6 +102,7 @@ test('after one online visit the shell loads offline and shows the offline state
 
 test('a completion made offline stays queued in IndexedDB through an offline reload, then is sent once', async ({ page, context }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   await controlled(page);
 
@@ -131,6 +134,7 @@ test('a completion made offline stays queued in IndexedDB through an offline rel
 
 test('/api/* is never answered from the service-worker cache', async ({ page, context }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   await controlled(page);
 
@@ -198,6 +202,7 @@ test.describe('a new build', () => {
 
     server.root = dirs.a;
     await page.goto(`${origin}/`);
+    await goTo(page, 'Tasks');
     await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
     await controlled(page);
     expect(await buildOf(page)).toBe('a');
@@ -206,6 +211,7 @@ test.describe('a new build', () => {
     // Deploy build B to the same origin. The very next load runs it (the shell is network-first) ...
     server.root = dirs.b;
     await page.reload();
+    await goTo(page, 'Tasks');
     await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
     expect(await buildOf(page)).toBe('b');
     // ... and the new worker takes over without waiting for every tab to close, dropping the old cache.
@@ -243,6 +249,7 @@ test.describe('a host that sends Vary: Origin', () => {
 
   test('a precached asset requested with an Origin header is still served offline', async ({ page, context }) => {
     await page.goto(`${origin}/`);
+    await goTo(page, 'Tasks');
     await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
     await controlled(page);
 

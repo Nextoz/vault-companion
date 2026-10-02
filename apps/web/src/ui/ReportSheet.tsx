@@ -17,16 +17,14 @@ export function appVersion(): string {
 
 /** The visible name of each tab, matching the `screen` field's `/^[A-Za-z][A-Za-z0-9 -]{0,30}$/`. */
 const SCREEN: Record<string, string> = {
-  dashboard: 'Dashboard',
   today: 'Today',
+  tasks: 'Tasks',
   all: 'All',
   notes: 'Notes',
   training: 'Log',
   scouts: 'Scouts',
   history: 'Progress',
-  more: 'More',
   status: 'Status',
-  actions: 'Actions',
 };
 
 export function screenName(tab: string): string {

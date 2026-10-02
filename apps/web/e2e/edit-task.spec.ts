@@ -8,6 +8,7 @@ test('edit text and due, queue only changed fields, then show the reflected task
   api.commandMode = 'hold';
   await api.install(page);
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await page.getByRole('button', { name: 'Edit: Water the plants', exact: true }).click();
   const sheet = page.getByRole('dialog', { name: 'Edit task' });
   await expect(sheet.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
@@ -37,6 +38,7 @@ test('a trailing space from the keyboard is trimmed before the edit is sent', as
   api.commandMode = 'hold';
   await api.install(page);
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await page.getByRole('button', { name: 'Edit: Water the plants', exact: true }).click();
   const sheet = page.getByRole('dialog', { name: 'Edit task' });
   await sheet.getByLabel('Task text').fill('Water the herbs  ');
@@ -50,6 +52,7 @@ test('a task made only of note links still has an Edit button', async ({ page })
   api.open = [taskView(12, '[[Garden Plan]]', { links: ['Garden Plan'] })];
   await api.install(page);
   await page.goto('/');
+  await goTo(page, 'Tasks');
   const row = page.getByRole('region', { name: 'Today', exact: true }).getByTestId('task');
   await expect(row.getByRole('button', { name: /^Open note:/ })).toHaveCount(1);
   await row.getByRole('button', { name: /^Edit:/ }).click();

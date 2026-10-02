@@ -4,6 +4,7 @@ import { captureDefaultForTab } from './prefs.ts';
 it.each([
   ['notes', 'note'],
   ['today', 'task'],
+  ['tasks', 'task'],
   ['all', 'task'],
   ['scouts', undefined],
   ['history', undefined],

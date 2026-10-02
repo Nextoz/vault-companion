@@ -81,9 +81,9 @@ it('Cancel closes without enqueuing', async () => {
 });
 
 it('names every tab the way the screen field requires', () => {
-  expect(screenName('dashboard')).toBe('Dashboard');
+  expect(screenName('tasks')).toBe('Tasks');
   expect(screenName('history')).toBe('Progress');
-  for (const tab of ['dashboard', 'today', 'all', 'notes', 'training', 'scouts', 'history']) {
+  for (const tab of ['today', 'tasks', 'all', 'notes', 'training', 'scouts', 'history']) {
     expect(screenName(tab)).toMatch(/^[A-Za-z][A-Za-z0-9 -]{0,30}$/);
   }
 });

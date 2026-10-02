@@ -15,7 +15,7 @@ const region = (page: Page, name: string) => page.getByRole('region', { name, ex
 
 for (const [tab, kind, field] of [
   ['Notes', 'Note', 'Note text'],
-  ['Today', 'Task', 'Task text'],
+  ['Tasks', 'Task', 'Task text'],
   ['All', 'Task', 'Task text'],
 ] as const) {
   test(`${tab} Add overrides the remembered kind and focuses ${kind}`, async ({ page }) => {
@@ -40,7 +40,7 @@ test('a fresh reopen follows the new tab; views without a default remember the c
   await expect(page.getByLabel('Note text')).toBeFocused();
   await page.getByRole('button', { name: 'Active Work', exact: true }).click();
   await page.getByRole('button', { name: 'Close' }).click();
-  await goTo(page, 'Today');
+  await goTo(page, 'Tasks');
   await page.getByRole('button', { name: 'Capture' }).click();
   await expect(page.getByLabel('Task text')).toBeFocused();
   await page.getByRole('button', { name: 'Close' }).click();
@@ -51,12 +51,13 @@ test('a fresh reopen follows the new tab; views without a default remember the c
 
 test('Notes uses Note for a fresh Add but restores an Active Work draft with all its fields', async ({ page }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   await goTo(page, 'Notes');
   await page.getByRole('button', { name: 'Capture' }).click();
   await expect(page.getByLabel('Note text')).toBeFocused();
   await page.getByRole('button', { name: 'Close' }).click();
-  await goTo(page, 'Today');
+  await goTo(page, 'Tasks');
   await page.getByRole('button', { name: 'Capture' }).click();
   await page.getByRole('button', { name: 'Active Work', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill('Synthetic garden project');
@@ -99,6 +100,7 @@ const storedDrafts = (page: Page) =>
 
 test('an unsaved capture survives a reload, is restored with its type, and is sent exactly once', async ({ page }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
 
   await page.getByRole('button', { name: 'Capture' }).click();
@@ -107,6 +109,7 @@ test('an unsaved capture survives a reload, is restored with its type, and is se
   // The debounced write; then leave without saving.
   await expect.poll(() => storedDrafts(page)).toHaveLength(1);
   await page.reload();
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   expect(api.bodies).toHaveLength(0); // typing and reloading sent nothing
 
@@ -139,7 +142,7 @@ test('an unsaved capture survives a reload, is restored with its type, and is se
 test('closing keeps the draft; Discard draft removes it', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Capture' }).click();
-  await page.getByRole('button', { name: 'Task' }).click();
+  await page.getByRole('button', { name: 'Task', exact: true }).click();
   await page.getByLabel('Task text').fill('Synthetic task draft');
   await page.getByRole('button', { name: 'Close' }).click();
 
@@ -157,6 +160,7 @@ test('closing keeps the draft; Discard draft removes it', async ({ page }) => {
 
 test('two windows with the same draft: exactly one Save sends it, and the other cannot bring it back', async ({ page, context }) => {
   await page.goto('/');
+  await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
   await page.getByRole('button', { name: 'Capture' }).click();
   await page.getByRole('button', { name: 'Note', exact: true }).click();
@@ -167,6 +171,7 @@ test('two windows with the same draft: exactly one Save sends it, and the other 
   const second = await context.newPage();
   await api.install(second);
   await second.goto('/');
+  await goTo(second, 'Tasks');
   await expect(region(second, 'Today').getByText('Water the plants')).toBeVisible();
   await second.getByRole('button', { name: 'Capture' }).click();
   await expect(second.getByLabel('Note text')).toHaveValue('A synthetic shared thought');

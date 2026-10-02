@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import { MockApi, taskView } from './mock-api.ts';
+import { goTo } from './nav.ts';
 import { StaticServer } from './static-server.ts';
 
 const DIST = fileURLToPath(new URL('../dist', import.meta.url));
@@ -119,6 +120,7 @@ test.describe('production CSP headers', () => {
     expect(response?.headers()['content-security-policy']).toBe(expectedHeaders['Content-Security-Policy']);
 
     // The app shell loads and shows the task
+    await goTo(page, 'Tasks');
     const openNoteButton = page.getByRole('button', { name: 'Open note: the garden plan' });
     await expect(openNoteButton).toBeVisible();
 
