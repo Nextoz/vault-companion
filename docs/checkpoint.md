@@ -15,9 +15,6 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 - **B8** (Lead, ~20 lines): Mood/Energy chip rows get a visible label and scale-end hints (−3 low/drained,
   +3 great/energised); e2e `mood.spec` asserts them. Accessible group names unchanged.
 - **B7** live: `renderDailyNote` formats `{{date:<fmt>}}` (YYYY MMMM MM dddd DD D, separators ` ,./-`); else refusal.
-- **B5+B6** (worker, handoff-check clean; pnpm check 1819 + e2e 102): a newer prefetch key aborts the running warm
-  sequence (one sequence at a time); `ScoutStatus.runStatus`/`aiHealth` turn an unknown enum into `null` instead of
-  dropping the whole scout record.
 - FB1/FB2 (Report button, ADR-0040) live. Launcher gotcha: prepend Git's `bin` to PATH before
   `tools/launch-worker.ps1`, else `agent-pane.sh: No such file`.
 - `pnpm -r exec tsc --noEmit` reads stale `dist` d.ts via project references; use `pnpm typecheck` (`tsc -b`).
