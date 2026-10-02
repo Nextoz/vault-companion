@@ -266,7 +266,9 @@ function formatHm(ms: number, timeZone: string): string {
 
 function weekday(date: string, timeZone: string): string {
   const instant = new Date(`${date}T00:00:00Z`);
-  return new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(instant);
+  // The date string is a calendar date, so its weekday is timezone-independent; format the UTC-midnight
+  // instant as UTC, never in the user zone (behind-UTC zones would otherwise get the previous day).
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short' }).format(instant);
 }
 
 /** Python-style banker's rounding, then formatting with no trailing zeros. */
@@ -510,7 +512,7 @@ export function createHealthIngestService(deps: HealthIngestDeps) {
   const store = deps.store;
 
   return {
-    async ingest(body: string): Promise<HealthIngestOutcome> {
+    async ingestHealth(body: string): Promise<HealthIngestOutcome> {
       const parsed = parsePayload(body, now());
       if (!parsed.ok) return err(parsed.status, parsed.error);
       const payload = parsed.payload;

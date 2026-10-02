@@ -35,7 +35,7 @@ function payload(overrides: Record<string, string> = {}) {
 async function ingest(seed: string, body: string) {
   const store = await InMemoryStore.create({ [HEALTH_DAILY_CSV]: seed });
   const service = createHealthIngestService({ store, now: () => NOW, timeZone: TZ });
-  return { store, result: await service.ingest(body) };
+  return { store, result: await service.ingestHealth(body) };
 }
 
 describe('health ingest aggregation and merge', () => {
@@ -127,7 +127,7 @@ describe('health ingest aggregation and merge', () => {
     const before = store.text(HEALTH_DAILY_CSV);
     const writesAfterFirst = store.writeCalls;
     const service = createHealthIngestService({ store, now: () => NOW, timeZone: TZ });
-    const second = await service.ingest(payload());
+    const second = await service.ingestHealth(payload());
     expect(second).toMatchObject({ ok: true, days: ['2026-09-29'] });
     expect(store.writeCalls).toBe(writesAfterFirst);
     expect(store.text(HEALTH_DAILY_CSV)).toBe(before);
