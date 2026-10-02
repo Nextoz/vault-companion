@@ -1,13 +1,13 @@
-import { HealthResponse, type HealthMetric } from '@vault-companion/contracts';
+import { HealthHistoryResponse, HealthResponse, type HealthMetric } from '@vault-companion/contracts';
 import { JSDOM } from 'jsdom';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getHealth } from '../api.ts';
+import { getHealth, getHealthHistory } from '../api.ts';
 import { lastCopies } from '../lastCopy.ts';
 import { formatHealthValue, formatMove, healthSegments, HealthPanel } from './HealthPanel.tsx';
 
-vi.mock('../api.ts', () => ({ getHealth: vi.fn() }));
+vi.mock('../api.ts', () => ({ getHealth: vi.fn(), getHealthHistory: vi.fn() }));
 
 const NOW = '2026-09-30T12:00:00Z';
 const series = [10, 12, null, 14, 16];
@@ -151,5 +151,25 @@ describe('Health board (HC2)', () => {
     expect(getHealth).toHaveBeenCalledTimes(2);
     expect(text()).toContain('Steps');
     expect(text()).not.toContain('Health could not be loaded.');
+  });
+
+  it('opens the history view lazily only when the History toggle is pressed', async () => {
+    vi.mocked(getHealthHistory).mockResolvedValue({
+      kind: 'ok',
+      data: HealthHistoryResponse.parse({
+        revision: 'a'.repeat(40), now: NOW, status: 'ok',
+        days: [{ date: '2026-09-29', steps: 5000, headphone_min: 40, first_move: 300, last_move: 1300 }],
+      }),
+    });
+    await renderHealth();
+    expect(getHealthHistory).not.toHaveBeenCalled();
+    expect(document.querySelector('[aria-label="Health history"]')).toBeNull();
+    expect(button('History').getAttribute('aria-expanded')).toBe('false');
+
+    await click(button('History'));
+    expect(getHealthHistory).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[aria-label="Health history"]')).not.toBeNull();
+    expect(button('History').getAttribute('aria-expanded')).toBe('true');
+    expect(text()).toContain('Range median');
   });
 });

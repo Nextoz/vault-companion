@@ -108,15 +108,19 @@ describe('POST /api/health/ingest route', () => {
 
 describe('health ingest auth invariants', () => {
   it.each([
-    ['ingest token cannot read tasks', 'ingest'],
-    ['user email token cannot ingest', 'user'],
-    ['main-AUD access token cannot ingest', 'main-aud'],
-  ])('%s', async (_name, token) => {
-    const path = token === 'ingest' ? '/api/tasks' : '/api/health/ingest';
-    const res = await post(path, token);
+    ['ingest token cannot read tasks', 'ingest', 'POST', '/api/tasks'],
+    ['ingest token cannot read health history', 'ingest', 'GET', '/api/health/history'],
+    ['user email token cannot ingest', 'user', 'POST', '/api/health/ingest'],
+    ['main-AUD access token cannot ingest', 'main-aud', 'POST', '/api/health/ingest'],
+  ])('%s', async (_name, token, method, path) => {
+    const res = await makeApp().request(path, {
+      method,
+      headers: { 'Cf-Access-Jwt-Assertion': token, 'Content-Type': 'application/json' },
+      ...(method === 'POST' ? { body: '{}' } : {}),
+    });
     expect(res.status).toBe(401);
     const json = await res.json();
-    if (token === 'ingest') expect(json).toEqual({ code: 'unauthorized', message: 'sign in required', retryable: false });
+    if (path !== '/api/health/ingest') expect(json).toEqual({ code: 'unauthorized', message: 'sign in required', retryable: false });
     else expect(json).toEqual({ ok: false, error: 'sign in required' });
     expect(calls).toHaveLength(0);
   });

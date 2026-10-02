@@ -8,6 +8,7 @@ import {
   encodeLinkedNoteHeader,
   encodeNoteHeader,
   HistoryResponse,
+  HealthHistoryResponse,
   HealthResponse,
   LINKED_NOTE_HEADER,
   LinkedNoteResponse,
@@ -147,6 +148,9 @@ export const getWeather = () => getJson('/api/weather', WeatherResponse);
 
 /** Health daily card (HC1/HC2): read-only projection of the one fixed Apple Health export. */
 export const getHealth = () => getJson('/api/health', HealthResponse);
+
+/** Health history view (HC3b): the same fixed export, other than the card's shown day and baseline. */
+export const getHealthHistory = () => getJson('/api/health/history', HealthHistoryResponse);
 
 /** Precise device location only after explicit foreground consent, sent as a bounded same-origin JSON POST. */
 export async function postWeatherLocation(location: WeatherLocationRequest, accountKey: string): Promise<Fetched<WeatherResponse>> {

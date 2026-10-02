@@ -8,6 +8,7 @@ import {
   DASHBOARD_RANGE_PLAN,
   DashboardRange,
   DashboardResponse,
+  HealthHistoryResponse,
   HealthResponse,
   MarketTickerResponse,
   decodeLinkedNoteHeader,
@@ -93,6 +94,19 @@ const weatherPoint = (hour: number, over: Record<string, unknown> = {}) => ({
 const healthSeries = (base: number, spread: number) => Array.from({ length: 30 }, (_, index) =>
   index === 12 ? null : base + ((index * 13) % 7) - 3 + Math.round(spread * Math.sin(index)));
 
+/** Synthetic history rows (no real health text): ~400 days ending yesterday, with a few null gaps. */
+const healthHistoryDays = () => Array.from({ length: 400 }, (_, index) => {
+  const date = new Date(Date.UTC(2026, 8, 29) - (399 - index) * 86_400_000).toISOString().slice(0, 10);
+  const gap = index % 97 === 0;
+  return {
+    date,
+    steps: gap ? null : 9000 + (index % 7) * 150,
+    headphone_min: gap ? null : 40 + (index % 5),
+    first_move: 300 + (index % 60),
+    last_move: 1250 + (index % 40),
+  };
+});
+
 export const sampleWeather = (partial = false): WeatherResponse => WeatherResponse.parse({
   status: 'ok',
   projection: {
@@ -157,6 +171,11 @@ export class MockApi {
     ],
   });
   healthReads = 0;
+  /** Health history view (HC3b): synthetic numbers only, fetched lazily by the History toggle. */
+  healthHistory = HealthHistoryResponse.parse({
+    revision: 'a'.repeat(40), now: '2026-09-30T12:00:00Z', status: 'ok', days: healthHistoryDays(),
+  });
+  healthHistoryReads = 0;
   trainingRows: TrainingRow[] = [];
   /** `error`: /api/training answers 503 (Progress then shows "Training unavailable"). */
   trainingMode: 'ok' | 'error' | 'hang' = 'ok';
@@ -312,6 +331,7 @@ export class MockApi {
     });
     await on('**/api/weather/location', (route) => this.#weatherLocation(route));
     await on('**/api/weather', (route) => this.#weather(route));
+    await on('**/api/health/history', (route) => this.#healthHistory(route));
     await on('**/api/health', (route) => this.#health(route));
     await on('**/api/morning', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, MorningResponse.parse(this.morning ?? { revision: 'a'.repeat(40), date: '2026-09-30', brief: null, explained: [] })));
@@ -369,6 +389,12 @@ export class MockApi {
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     this.healthReads++;
     return this.#json(route, 200, HealthResponse.parse(this.health));
+  }
+
+  #healthHistory(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    this.healthHistoryReads++;
+    return this.#json(route, 200, HealthHistoryResponse.parse(this.healthHistory));
   }
 
   #dashboard(route: Route) {

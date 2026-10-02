@@ -1,9 +1,11 @@
-// HC1: read-only health card over ONE fixed Apple Health daily export. Nothing here accepts a path, and no cell text
-// ever leaves this module in an error, log or message (privacy invariant). Values are derived numbers only.
+// HC1/HC3b: read-only health card and history over ONE fixed Apple Health daily export. Nothing here accepts a path,
+// and no cell text ever leaves this module in an error, log or message (privacy invariant). Values are derived numbers only.
 import {
   HEALTH_DAILY_CSV,
   type ApiError,
   type HealthCompare,
+  type HealthHistoryDay,
+  type HealthHistoryResponse,
   type HealthMetric,
   type HealthMetricKey,
   type HealthResponse,
@@ -138,41 +140,61 @@ function parseRows(text: string): Map<string, DayRow> | null {
   return rows;
 }
 
-async function readHealth(deps: Required<Pick<HealthServiceDeps, 'store' | 'now' | 'timeZone'>>): Promise<HealthResponse | ApiError> {
-  const { store } = deps;
-  try {
-    const { commitSha: revision } = await store.head();
-    const at = deps.now();
-    const now = at.toISOString();
-    const unreadable: HealthResponse = { revision, now, status: 'unreadable', metrics: [] };
-    const missing: HealthResponse = { revision, now, status: 'missing', metrics: [] };
-    if (!PATH) return unreadable;
+interface HealthSourceBase {
+  readonly revision: string;
+  readonly now: string;
+}
+type HealthSource =
+  | (HealthSourceBase & { readonly status: 'missing' })
+  | (HealthSourceBase & { readonly status: 'unreadable' })
+  | (HealthSourceBase & { readonly status: 'ok'; readonly at: Date; readonly rows: Map<string, DayRow> });
 
-    const listed = (await store.listFiles('Health/Data', revision)).find((f) => f.path === PATH);
-    if (!listed) return missing;
-    let file;
-    try {
-      file = await store.readFile(PATH, revision);
-    } catch (e) {
-      // The GitHub adapter refuses files above its byte bound: that is an unreadable export, not an outage.
-      if (e instanceof FileTooLarge) return unreadable;
-      throw e;
-    }
-    if (!file || file.blobSha !== listed.blobSha) return unreadable;
-    if (file.bytes.length > MAX_HEALTH_BYTES) return unreadable;
-    let text: string;
-    try {
-      text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(file.bytes);
-    } catch {
-      return unreadable;
-    }
-    const rows = parseRows(text);
-    if (!rows) return unreadable;
+/**
+ * The one fixed-file read shared by the card and the history view: HEAD, list, blob-SHA check, size bound, UTF-8
+ * decode and row parse. Store failures propagate (callers map them); a missing or unreadable export is a status.
+ */
+async function readSource(deps: Required<Pick<HealthServiceDeps, 'store' | 'now' | 'timeZone'>>): Promise<HealthSource> {
+  const { store } = deps;
+  const { commitSha: revision } = await store.head();
+  const at = deps.now();
+  const now = at.toISOString();
+  const base = { revision, now };
+  if (!PATH) return { ...base, status: 'unreadable' };
+
+  const listed = (await store.listFiles('Health/Data', revision)).find((f) => f.path === PATH);
+  if (!listed) return { ...base, status: 'missing' };
+  let file;
+  try {
+    file = await store.readFile(PATH, revision);
+  } catch (e) {
+    // The GitHub adapter refuses files above its byte bound: that is an unreadable export, not an outage.
+    if (e instanceof FileTooLarge) return { ...base, status: 'unreadable' };
+    throw e;
+  }
+  if (!file || file.blobSha !== listed.blobSha) return { ...base, status: 'unreadable' };
+  if (file.bytes.length > MAX_HEALTH_BYTES) return { ...base, status: 'unreadable' };
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(file.bytes);
+  } catch {
+    return { ...base, status: 'unreadable' };
+  }
+  const rows = parseRows(text);
+  if (!rows) return { ...base, status: 'unreadable' };
+  return { ...base, status: 'ok', at, rows };
+}
+
+async function readHealth(deps: Required<Pick<HealthServiceDeps, 'store' | 'now' | 'timeZone'>>): Promise<HealthResponse | ApiError> {
+  try {
+    const source = await readSource(deps);
+    const base = { revision: source.revision, now: source.now };
+    if (source.status !== 'ok') return { ...base, status: source.status, metrics: [] };
+    const { at, rows } = source;
 
     const yesterday = addDays(userDate(at, deps.timeZone), -1);
     let day: string | undefined;
     for (const date of rows.keys()) if (date <= yesterday && (day === undefined || date > day)) day = date;
-    if (day === undefined) return missing;
+    if (day === undefined) return { ...base, status: 'missing', metrics: [] };
 
     const metrics: HealthMetric[] = METRIC_KEYS.map((key) => {
       const value = valueOf(rows.get(day), key);
@@ -186,7 +208,30 @@ async function readHealth(deps: Required<Pick<HealthServiceDeps, 'store' | 'now'
       for (let i = SERIES_DAYS - 1; i >= 0; i--) series.push(valueOf(rows.get(addDays(day, -i)), key));
       return { key, value, baseline, compare: compare(value, baseline, key), series };
     });
-    return { revision, now, status: 'ok', day, staleDays: epochDay(yesterday) - epochDay(day), metrics };
+    return { ...base, status: 'ok', day, staleDays: epochDay(yesterday) - epochDay(day), metrics };
+  } catch (e) {
+    if (e instanceof StoreUnavailable || e instanceof StoreUnknownOutcome || e instanceof FileTooLarge) {
+      return { code: 'upstream-unavailable', message: 'GitHub is not reachable right now', retryable: true };
+    }
+    throw e;
+  }
+}
+
+/** Every day at or before yesterday (Copenhagen), ascending. No windowing: the client slices for the range chips. */
+async function readHealthHistory(deps: Required<Pick<HealthServiceDeps, 'store' | 'now' | 'timeZone'>>): Promise<HealthHistoryResponse | ApiError> {
+  try {
+    const source = await readSource(deps);
+    const base = { revision: source.revision, now: source.now };
+    if (source.status !== 'ok') return { ...base, status: source.status, days: [] };
+    const { at, rows } = source;
+    const yesterday = addDays(userDate(at, deps.timeZone), -1);
+    const days: HealthHistoryDay[] = [];
+    for (const [date, row] of rows) {
+      if (date > yesterday) continue;
+      days.push({ date, steps: row.steps, headphone_min: row.headphone, first_move: row.first, last_move: row.last });
+    }
+    days.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    return { ...base, status: 'ok', days };
   } catch (e) {
     if (e instanceof StoreUnavailable || e instanceof StoreUnknownOutcome || e instanceof FileTooLarge) {
       return { code: 'upstream-unavailable', message: 'GitHub is not reachable right now', retryable: true };
@@ -200,6 +245,9 @@ export function createHealthService(deps: HealthServiceDeps) {
   return {
     readHealth(): Promise<HealthResponse | ApiError> {
       return readHealth(resolved);
+    },
+    readHealthHistory(): Promise<HealthHistoryResponse | ApiError> {
+      return readHealthHistory(resolved);
     },
   };
 }

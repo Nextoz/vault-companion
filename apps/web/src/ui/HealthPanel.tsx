@@ -4,6 +4,7 @@ import type { HealthMetric, HealthMetricKey, HealthResponse } from '@vault-compa
 import { useId, useState } from 'react';
 import { getHealth } from '../api.ts';
 import './Dashboard.css';
+import { HealthHistory } from './HealthHistory.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 
 const stepNumber = new Intl.NumberFormat('en-US');
@@ -105,6 +106,7 @@ export function HealthPanel({ refreshKey, accountKey = null }: {
 }) {
   const headingId = useId();
   const [retryKey, setRetryKey] = useState(0);
+  const [showHistory, setShowHistory] = useState(false);
   const view = useLastCopy<HealthResponse>(accountKey, 'health', () => getHealth(), `${refreshKey}:${retryKey}`);
   const res = view.res;
   const failed = res !== null && res.kind !== 'ok';
@@ -113,6 +115,9 @@ export function HealthPanel({ refreshKey, accountKey = null }: {
     <article className="dash-card dash-health" aria-labelledby={headingId}>
       <header className="dash-card-head">
         <h2 id={headingId}>Health</h2>
+        <button type="button" className="link" aria-expanded={showHistory} onClick={() => setShowHistory((open) => !open)}>
+          History
+        </button>
       </header>
       <CopyNote view={view} />
       {!health && !failed && <p className="muted" role="status">Loading…</p>}
@@ -133,6 +138,7 @@ export function HealthPanel({ refreshKey, accountKey = null }: {
           {view.failed && <button type="button" className="link" onClick={() => setRetryKey((previous) => previous + 1)}>Retry health</button>}
         </>
       )}
+      {showHistory && <HealthHistory />}
     </article>
   );
 }
