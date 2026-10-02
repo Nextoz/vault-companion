@@ -84,10 +84,12 @@ export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
   const save = async () => {
     if (!ready || guard.current || mood === null || energy === null || !baseRevision || !accountKey) return;
     guard.current = true; setSaving(true); setError(null);
+    // The day of the tap, not of the last render: the app may have stayed open past midnight.
+    const day = localDate();
     try {
       await queue.enqueue(
-        moodCheckin({ baseRevision }, { date, mood, energy, sleep, checkinAt: new Date().toISOString() }),
-        { accountKey, label: `Mood \u00b7 ${date}`, taskKey: 'mood' },
+        moodCheckin({ baseRevision }, { date: day, mood, energy, sleep, checkinAt: new Date().toISOString() }),
+        { accountKey, label: `Mood \u00b7 ${day}`, taskKey: 'mood' },
       );
       setReopened(false);
     } catch { setError('Could not keep this check-in on the device.'); }
