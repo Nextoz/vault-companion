@@ -36,8 +36,9 @@ import {
   type WeatherResponse,
 } from '@vault-companion/contracts';
 import { Hono } from 'hono';
-import type { Identity } from './auth.ts';
+import type { Identity, ServiceTokenIdentity } from './auth.ts';
 import { diagnosticDetail, hashPath, sanitize, type LogSink } from './log.ts';
+import type { HealthIngestOutcome } from '@vault-companion/domain';
 
 export interface Services {
   readTasks(known: readonly string[]): Promise<TasksResponse | ApiError>;
@@ -72,10 +73,14 @@ export interface Services {
   readWeatherAtLocation?(request: WeatherLocationRequest): Promise<WeatherResponse | ApiError>;
   /** Health daily card (HC1). Read-only. Optional: without it the route answers 404. */
   readHealth?(): Promise<HealthResponse | ApiError>;
+  /** Health sample ingest (HC3a). Optional: without it the route answers 404. */
+  ingestHealth?(body: string): Promise<HealthIngestOutcome>;
 }
 
 export interface AppDeps {
   readonly verify: (token: string | undefined) => Promise<Identity>;
+  /** Scoped service-token verifier for POST /api/health/ingest. Optional: without it the route answers 404. */
+  readonly verifyIngest?: ((token: string | undefined) => Promise<ServiceTokenIdentity>) | undefined;
   readonly appOrigin: string;
   readonly services: Services;
   readonly log: LogSink;
@@ -83,6 +88,7 @@ export interface AppDeps {
 }
 
 const MAX_BODY_BYTES = 64 * 1024;
+const MAX_HEALTH_INGEST_BYTES = 1024 * 1024;
 const SHA = /^[0-9a-f]{40}$/;
 
 export function statusFor(code: ErrorCode): number {
@@ -135,6 +141,11 @@ export function createApp(deps: AppDeps) {
   });
 
   app.use('/api/*', async (c, next) => {
+    // The ingest route has its own scoped service-token verifier; only that exact POST skips user auth.
+    if (c.req.method === 'POST' && c.req.path === '/api/health/ingest') {
+      await next();
+      return;
+    }
     const identity = await deps.verify(c.req.header('Cf-Access-Jwt-Assertion'));
     if (!identity.ok) return c.json(err('unauthorized', 'sign in required'), 401);
     c.set('identity', identity);
@@ -297,6 +308,29 @@ export function createApp(deps: AppDeps) {
     }
     meta.commitSha = result.revision;
     return c.json(result);
+  });
+
+  // Health sample ingest (HC3a): scoped service-token auth, no origin/account CSRF guards (a Shortcut calls it
+  // directly). The domain service validates everything else; no health value, line or row is ever logged here.
+  app.post('/api/health/ingest', async (c) => {
+    const ingest = deps.services.ingestHealth;
+    const verifyIngest = deps.verifyIngest;
+    if (!ingest || !verifyIngest) return c.json({ ok: false, error: 'not found' }, 404);
+    const identity = await verifyIngest(c.req.header('Cf-Access-Jwt-Assertion'));
+    if (!identity.ok) return c.json({ ok: false, error: 'sign in required' }, 401);
+
+    const text = await c.req.text();
+    if (new TextEncoder().encode(text).length > MAX_HEALTH_INGEST_BYTES) {
+      return c.json({ ok: false, error: 'body too large' }, 413);
+    }
+    const result = await ingest(text);
+    const meta = c.get('logMeta');
+    if (!result.ok) {
+      meta.errorCode = `health-ingest:${result.status}`;
+      return c.json({ ok: false, error: result.error }, result.status as 400);
+    }
+    meta.commitSha = result.commitSha;
+    return c.json({ ok: true, days: [...result.days] });
   });
 
   // Inbox notes (ADR-0022). Logs carry neither note text, titles nor paths.

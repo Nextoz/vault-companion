@@ -1,6 +1,6 @@
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
-import { createTrainingService, createActiveWorkService, createCommandService, createHealthService, createHistoryService, createLinkedNoteService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE } from '@vault-companion/domain';
+import { createTrainingService, createActiveWorkService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
 import { WEATHER_TIME_ZONE } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
@@ -8,7 +8,7 @@ import { createApp } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
 import { createMarketSource } from './market.ts';
 import { createWeatherProvider } from './weather-provider.ts';
-import { createAccessVerifier } from './auth.ts';
+import { createAccessVerifier, createServiceTokenVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
 import type { LogRecord } from './log.ts';
 import { EXPLAINER_ROUTE, runExplainerJob } from './research-explainer.ts';
@@ -26,6 +26,8 @@ export interface Env {
   VAULT_REPO: string;
   VAULT_BRANCH?: string;
   USER_TIME_ZONE?: string;
+  /** HC3a service token audience. Optional: unset disables POST /api/health/ingest. */
+  HEALTH_INGEST_AUD?: string;
   /** ADR-0029: only the research-explainer cron uses it; optional so the API never depends on it. Never logged. */
   GEMINI_API_KEY?: string;
 }
@@ -72,12 +74,16 @@ function isValidTimeZone(zone: string): boolean {
 /** Production composition. `keys` is injectable so tests can prove the real wiring with a local JWKS (review R10). */
 export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis)) {
   const teamDomain = env.ACCESS_TEAM_DOMAIN.replace(/\/$/, '');
+  const jwks = keys ?? createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`));
   const verify = createAccessVerifier({
-    keys: keys ?? createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`)),
+    keys: jwks,
     issuer: teamDomain,
     audience: env.ACCESS_AUD,
     allowedEmails: env.ALLOWED_EMAILS.split(',').map((e) => e.trim()).filter(Boolean),
   });
+  const verifyIngest = env.HEALTH_INGEST_AUD
+    ? createServiceTokenVerifier({ keys: jwks, issuer: teamDomain, audience: env.HEALTH_INGEST_AUD })
+    : undefined;
   const store = new GitHubContentsStore({
     owner: env.VAULT_OWNER,
     repo: env.VAULT_REPO,
@@ -98,13 +104,14 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...createResearchRadarService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createScoutService({ store }),
     ...createHealthService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
+    ...(env.HEALTH_INGEST_AUD ? createHealthIngestService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }) : {}),
     ...createMorningService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createHistoryService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createNotesService({ store }),
     ...createDashboardService({ market: createMarketSource({ fetch: fetchImpl, now: () => Date.now() }), weather: weatherService, now: () => new Date() }),
     ...weatherService,
   };
-  return createApp({ verify, appOrigin: env.APP_ORIGIN, services, log });
+  return createApp({ verify, verifyIngest, appOrigin: env.APP_ORIGIN, services, log });
 }
 
 /**
