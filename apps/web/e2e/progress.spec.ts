@@ -92,7 +92,9 @@ test('SP3 (ADR-0038): Progress seen before reopens from its labelled copy when t
   const api = seeded();
   await openProgress(page, api);
   const progress = page.getByRole('region', { name: 'Progress', exact: true });
-  await expect(progress.getByTestId('week-summary')).toBeVisible();
+  // Every source counts in the summary, so it names each copied source (tasks, training, events, notes).
+  const summary = '2 tasks · 1 Active Work · 2 runs (9.2 km) · 1 gym · 2 events (1 attended) · 1 note';
+  await expect(progress.getByTestId('week-summary')).toHaveText(summary);
   await expect(progress.getByTestId('copy-note')).toHaveCount(0);
   const days = await progress.getByTestId('history-item').count();
   expect(days).toBeGreaterThan(0);
@@ -101,7 +103,7 @@ test('SP3 (ADR-0038): Progress seen before reopens from its labelled copy when t
   api.network = 'down';
   await page.getByRole('button', { name: 'Progress', exact: true }).click();
   await expect(progress.getByTestId('copy-note')).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
-  await expect(progress.getByTestId('week-summary')).toBeVisible();
+  await expect(progress.getByTestId('week-summary')).toHaveText(summary);
   await expect(progress.getByTestId('history-item')).toHaveCount(days);
   await expect(progress.getByRole('button', { name: /^Reopen/ })).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('sp3b-progress-copy-390x844.png') });
