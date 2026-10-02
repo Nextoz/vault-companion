@@ -1,25 +1,26 @@
-# Checkpoint — 2026-10-02 08:35 (Mood M2+M3 merged #91 and deployed)
+# Checkpoint — 2026-10-02 (HC1 health API merged)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
 
-- **Live: `d9d3dff2`** (main `89437c5`: Mood M2+M3, deployed by the Lead 08:31, standing approval). Rollback target
-  `35c44728`. Anonymous 302-to-Access check not run (host not in repo): owner's phone test confirms.
-- **Mood M3 (#91)** — Today "Mood check-in" card (mood/energy −3…+3 chips, sleep hours with `7,5`, "Check in"),
-  collapses to "Checked in HH:MM" from this device's queue; Undo from the Actions panel (queue Undo lists include
-  `UndoMoodCheckin`). With M2 (#87) the mood write target is complete and live.
-- Owner standing decisions now live in `.agent/owner-instructions.md` (local); decisions log `.agent/decisions.md`.
-- M3: DeepSeek Flash one run; CodeRabbit 0 findings; GLM 6 findings → 1 real (date at tap, fixed by Lead), rest
-  skipped (logged). Lead fixes: chip text = value only; button "Check in" and region `div` (existing e2e matched
-  `Save` non-exactly and ADR-0012 counts `section.group`).
-- `handoff-check.ps1 -Reviewer` landed (#90) mid-slice; GLM review ran as a second pass.
+- **Live: `d9d3dff2`** (Mood M2+M3). Rollback target `35c44728`. HC1 is API-only: deploy together with HC2.
+- **HC1 merged** — `GET /api/health` (ADR-0039): Worker reads only `Health/Data/Apple Health Daily.csv`; shown day =
+  newest row ≤ yesterday (Copenhagen), `staleDays`; steps, headphone min, first/last move vs median of the 90 days
+  before (≥ 14 values, "usual" ±10 % / ±30 min), 30-day series; missing/unreadable statuses. No values in logs.
+- HC1: DeepSeek Flash one run (80k tokens); CodeRabbit 2 + GLM 4 findings → 1 real (time zone not wired); Lead also
+  fixed `FileTooLarge` reported as "GitHub unreachable" (now `unreadable`, tested).
+- FB Report button is ahead of HC on the backlog priority line but was not in Next actions; do it after HC2 unless
+  the owner says otherwise. It is a new vault write target (high-risk).
 - Parked: stray `sp-read-latency.test.ts` change in `git stash@{0}` (origin unknown).
 
 ## Next actions (in order)
 
-1. **HC — Health card (Phase 1)**: brief in the vault Ready Backlog (priority line 2026-10-02).
-2. Then AB AI budget card → NY Needs You + Morning Review → SP phone measurement (re-read the backlog note).
+1. **HC2 — Health panel on the Dashboard** (cyan board): stat tiles for steps, headphone min, first/last movement vs
+   baseline with above/below/usual label, 30-day sparklines, "Data from <date>" line honest when stale; missing /
+   unreadable messages; e2e with a synthetic CSV. Then deploy HC1+HC2.
+2. Then FB Report button → AB AI budget card → NY Needs You + Morning Review → SP phone measurement (re-read the
+   backlog note).
 
 ## Owner items
 
@@ -30,4 +31,4 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Budget
 
-DeepSeek $9.42 (08:10). GLM ~85k/900k. RAM 5.0 GB free at 08:10.
+DeepSeek $9.39. GLM ~100k/900k. RAM 4.5 GB free.
