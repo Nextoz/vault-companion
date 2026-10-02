@@ -54,3 +54,49 @@ export function groupClassSuggestions(rows: readonly TrainingRow[], limit = 6): 
   }
   return names;
 }
+
+/** What the training sheet's controlled inputs hold; every field is a string, so an unparseable cell stays empty. */
+export interface TrainingDraft {
+  type: 'Gym' | 'Run';
+  /** `YYYY-MM-DDTHH:MM` for the datetime-local input; empty means the sheet keeps its own default (now). */
+  when: string;
+  distance: string;
+  duration: string;
+  weight: string;
+  split: 'Bicep' | 'Tricep' | 'Legs' | 'Group';
+  className: string;
+  note: string;
+}
+
+/** Inverse of the writer's cell escaping: `\\` and `\|` decode; any other backslash stays literal. */
+function unescapeCell(value: string): string {
+  let out = '';
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] === '\\' && (value[i + 1] === '|' || value[i + 1] === '\\')) out += value[++i];
+    else out += value[i];
+  }
+  return out;
+}
+
+const text = (value: number | null): string => (value === null ? '' : String(value));
+
+/**
+ * B12: a read row to the sheet's draft. Only Run and Gym rows are tappable, so any other type prefills as Gym.
+ * A cell the summary parser cannot read (or a split that is not a known value) stays empty for the owner to fill.
+ */
+export function rowToDraft(row: TrainingRow): TrainingDraft {
+  const group = row.split.startsWith('Group: ') ? row.split.slice('Group: '.length) : null;
+  const split = row.split === 'Bicep' || row.split === 'Tricep' || row.split === 'Legs' || group !== null
+    ? (group !== null ? 'Group' : (row.split as 'Bicep' | 'Tricep' | 'Legs'))
+    : 'Bicep';
+  return {
+    type: row.type === 'Run' ? 'Run' : 'Gym',
+    when: row.time ? `${row.date}T${row.time}` : '',
+    distance: text(numberWithUnit(row.distance, 'km')),
+    duration: text(numberWithUnit(row.duration, 'min')),
+    weight: text(numberWithUnit(row.weight, 'kg')),
+    split,
+    className: group === null ? '' : unescapeCell(group),
+    note: unescapeCell(row.note),
+  };
+}

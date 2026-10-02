@@ -419,7 +419,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           </>
         )}
 
-        {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
+        {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} />}
 
         {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
           accountKey={accountKey} baseRevision={revision} />}

@@ -1,10 +1,10 @@
-import { TrainingSession, type TrainingResponse } from '@vault-companion/contracts';
+import { TrainingSession, type TrainingResponse, type TrainingRow } from '@vault-companion/contracts';
 import { useRef, useState } from 'react';
 import { getTraining } from '../api.ts';
-import { logTraining } from '../commands.ts';
+import { editTraining, logTraining } from '../commands.ts';
 import type { PendingQueue } from '../queue/queue.ts';
 import { isoWithOffset } from '../time.ts';
-import { groupClassSuggestions, trainingLocalTime } from '../training.ts';
+import { groupClassSuggestions, rowToDraft, trainingLocalTime, type TrainingDraft } from '../training.ts';
 import { useLastCopy } from './useLastCopy.tsx';
 
 /**
@@ -16,17 +16,20 @@ export function parseDecimal(text: string): number {
   return /^\d{1,3}(?:[.,]\d)?$/.test(t) ? Number(t.replace(',', '.')) : Number.NaN;
 }
 
-export function TrainingSheet({ queue, accountKey, baseRevision, onClose }: {
+export function TrainingSheet({ queue, accountKey, baseRevision, onClose, edit }: {
   queue: PendingQueue; accountKey: string | null; baseRevision: string | null; onClose: () => void;
+  /** B12: editing an existing Run/Gym row; absent for a new session. */
+  edit?: { row: TrainingRow } | undefined;
 }) {
-  const [type, setType] = useState<'Gym' | 'Run'>('Gym');
-  const [when, setWhen] = useState(trainingLocalTime);
-  const [duration, setDuration] = useState('');
-  const [distance, setDistance] = useState('');
-  const [weight, setWeight] = useState('');
-  const [split, setSplit] = useState<'Bicep' | 'Tricep' | 'Legs' | 'Group'>('Bicep');
-  const [className, setClassName] = useState('');
-  const [note, setNote] = useState('');
+  const draft: TrainingDraft | null = edit ? rowToDraft(edit.row) : null;
+  const [type, setType] = useState<'Gym' | 'Run'>(draft?.type ?? 'Gym');
+  const [when, setWhen] = useState(draft?.when || trainingLocalTime);
+  const [duration, setDuration] = useState(draft?.duration ?? '');
+  const [distance, setDistance] = useState(draft?.distance ?? '');
+  const [weight, setWeight] = useState(draft?.weight ?? '');
+  const [split, setSplit] = useState<'Bicep' | 'Tricep' | 'Legs' | 'Group'>(draft?.split ?? 'Bicep');
+  const [className, setClassName] = useState(draft?.className ?? '');
+  const [note, setNote] = useState(draft?.note ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const guard = useRef(false);
@@ -40,14 +43,15 @@ export function TrainingSheet({ queue, accountKey, baseRevision, onClose }: {
     if (!parsed.success || !accountKey || !baseRevision || guard.current) return;
     guard.current = true; setSaving(true); setError(null);
     try {
-      await queue.enqueue(logTraining({ baseRevision }, parsed.data), { accountKey, label: `${type} · ${when.replace('T', ' ')}`, taskKey: 'training' });
+      const envelope = edit ? editTraining({ baseRevision }, edit.row, parsed.data) : logTraining({ baseRevision }, parsed.data);
+      await queue.enqueue(envelope, { accountKey, label: `${type} · ${when.replace('T', ' ')}`, taskKey: 'training' });
       onClose();
     } catch { setError('Could not keep this on the device. Your session is still here.'); }
     finally { guard.current = false; setSaving(false); }
   };
-  return <div className="sheet-backdrop" role="presentation"><form className="sheet training-sheet" role="dialog" aria-modal="true" aria-label="Log training"
+  return <div className="sheet-backdrop" role="presentation"><form className="sheet training-sheet" role="dialog" aria-modal="true" aria-label={edit ? 'Edit session' : 'Log training'}
     onSubmit={(e) => { e.preventDefault(); void save(); }}>
-    <h2>Log training</h2>
+    <h2>{edit ? 'Edit session' : 'Log training'}</h2>
     <div className="segmented" role="group" aria-label="Training type">
       {(['Gym', 'Run'] as const).map((t) => <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)}>{t}</button>)}
     </div>
@@ -67,6 +71,6 @@ export function TrainingSheet({ queue, accountKey, baseRevision, onClose }: {
     {(!accountKey || !baseRevision) && <p>Connect once to set up this device before logging training.</p>}
     {error && <p className="error" role="alert">{error}</p>}
     <div className="sheet-buttons"><button type="button" disabled={saving} onClick={onClose}>Close</button>
-      <button type="submit" className="primary" disabled={saving || !parsed.success || !accountKey || !baseRevision}>Save</button></div>
+      <button type="submit" className="primary" disabled={saving || !parsed.success || !accountKey || !baseRevision}>{edit ? 'Save changes' : 'Save'}</button></div>
   </form></div>;
 }

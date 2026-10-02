@@ -1,8 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { completeTask } from '../commands.ts';
-import type { QueueItem } from '../queue/queue.ts';
+import type { Receipt } from '@vault-companion/contracts';
+import { JSDOM } from 'jsdom';
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { completeTask, editTraining } from '../commands.ts';
+import { prefs } from '../prefs.ts';
+import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { knownNotApplied } from '../queue/classify.ts';
-import { attentionText, canRetry, CLOCK_SKEW_TEXT, UNDO_UNKNOWN_TEXT } from './ActionsPanel.tsx';
+import { ActionsPanel, attentionText, canRetry, CLOCK_SKEW_TEXT, UNDO_UNKNOWN_TEXT } from './ActionsPanel.tsx';
 
 const envelope = completeTask({ baseRevision: '1'.repeat(40) }, {
   path: 'Tasks/To-Do List.md',
@@ -76,10 +81,57 @@ describe('attention next steps (P4-B)', () => {
     expect(knownNotApplied(undo.error)).toBe(false);
   });
 
-  it('explains a changed task in plain words; other errors keep the server message', () => {
+it('explains a changed task in plain words; other errors keep the server message', () => {
     expect(attentionText(attention('conflict:task-changed'))).toBe('This task changed on another device.');
     expect(attentionText(attention('refused:recurring'))).toBe('Server words.');
     expect(attentionText(attention('clock-skew'))).toBe("Check your phone's date and time, then redo the action.");
-    expect(CLOCK_SKEW_TEXT).toBe("Check your phone's date and time, then redo the action.");
+  expect(CLOCK_SKEW_TEXT).toBe("Check your phone's date and time, then redo the action.");
+});
+
+describe('EditTraining action (B12)', () => {
+  let dom: JSDOM;
+  let root: Root | null = null;
+
+  beforeEach(() => {
+    dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'https://example.test/' });
+    Object.defineProperty(globalThis, 'window', { value: dom.window, configurable: true });
+    Object.defineProperty(globalThis, 'document', { value: dom.window.document, configurable: true });
+    Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
+    Object.defineProperty(globalThis, 'localStorage', { value: dom.window.localStorage, configurable: true });
+    Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { value: true, configurable: true });
+    prefs.setActionsOpen(true);
   });
+  afterEach(async () => {
+    if (root) await act(async () => root!.unmount());
+    root = null;
+  });
+
+  it('labels the verb, offers Undo, and mints an UndoEditTraining aimed at the original edit', async () => {
+    const row = { date: '2026-09-20', time: '08:00', type: 'Gym', distance: '', duration: '52', weight: '', split: 'Group: Yoga Flow', note: '' };
+    const envelope = editTraining({ baseRevision: '1'.repeat(40), now: new Date('2026-10-01T10:00:00Z') },
+      row, { type: 'Gym', when: '2026-09-20T08:00:00+02:00', duration: 52, split: 'Group', className: 'Yoga Flow' });
+    const receipt: Receipt = { operationId: envelope.operationId, status: 'applied', path: 'Health/Training Log.md',
+      commitSha: '3'.repeat(40), blobSha: '2'.repeat(40), effect: { kind: 'training', op: 'edited', lineText: '| x |' } };
+    const item: QueueItem = { ...attention('conflict:task-changed'), operationId: envelope.operationId, type: 'EditTraining', envelope,
+      label: 'Gym edit', taskKey: 'training', state: 'saved', error: null, receipt, acknowledged: true };
+    const calls: unknown[][] = [];
+    const queue = {
+      undoCompletion: (...args: unknown[]) => { calls.push(args); return Promise.resolve('queued'); },
+      forgetSaved: () => Promise.resolve(),
+      retry: () => Promise.resolve(),
+    } as unknown as PendingQueue;
+    root = createRoot(document.getElementById('root')!);
+    await act(async () => {
+      root!.render(createElement(ActionsPanel, { queue, items: [item], read: { revision: '1'.repeat(40), known: {}, writeBlock: null },
+        onRefresh: () => {}, onDiscard: () => {} }));
+    });
+    expect(document.body.textContent).toContain('Edit training');
+    const undo = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Undo');
+    expect(undo).toBeTruthy();
+    await act(async () => { undo!.click(); });
+    expect(calls).toHaveLength(1);
+    expect((calls[0]![1] as { type: string }).type).toBe('UndoEditTraining');
+    expect((calls[0]![1] as { payload: { target: unknown } }).payload.target).toEqual(envelope);
+  });
+});
 });

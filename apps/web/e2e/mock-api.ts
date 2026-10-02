@@ -43,6 +43,11 @@ const TODAY = '2026-09-24';
 let counter = 0;
 const sha = () => (++counter).toString(16).padStart(40, '0');
 
+/** B12: the eight cells that identify a session row; the mock matches an edit on all of them. */
+const sameTrainingRow = (a: TrainingRow, b: TrainingRow): boolean =>
+  a.date === b.date && a.time === b.time && a.type === b.type && a.distance === b.distance &&
+  a.duration === b.duration && a.weight === b.weight && a.split === b.split && a.note === b.note;
+
 export function taskView(lineIndex: number, description: string, extra: Partial<TaskView> = {}): TaskView {
   return {
     locator: {
@@ -570,8 +575,12 @@ export class MockApi {
     if (typeof mode === 'object') return this.#json(route, 409, ApiError.parse({ ...mode.refuse, operationId: command.operationId }));
 
     // Like the Worker (ADR-0013): an Undo's token must be its completion's commit.
-    if ((command.type === 'UndoCompleteTask' || command.type === 'UndoActiveWork') && this.#receipts.get(command.payload.target.operationId)?.commitSha !== command.payload.targetCommit) {
+    if ((command.type === 'UndoCompleteTask' || command.type === 'UndoActiveWork' || command.type === 'UndoEditTraining') && this.#receipts.get(command.payload.target.operationId)?.commitSha !== command.payload.targetCommit) {
       return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'Undo target does not match.', retryable: false }));
+    }
+    // B12: an edit locates its row by exact cells; a row that moved in Obsidian is a conflict, never a guess.
+    if (command.type === 'EditTraining' && !this.trainingRows.some((r) => sameTrainingRow(r, command.payload.row))) {
+      return this.#json(route, 409, ApiError.parse({ code: 'conflict:training-changed', message: 'That session changed in Obsidian.', retryable: false }));
     }
     const previous = this.#receipts.get(command.operationId);
     if (previous) return this.#json(route, 200, { ...previous, status: 'already-applied' });
@@ -620,6 +629,25 @@ export class MockApi {
       case 'UndoLogTraining': {
         const before = this.#trainingBefore.get(command.payload.target.operationId);
         if (!before) throw new Error('mock: unknown training undo');
+        this.trainingRows = before;
+        return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'undone', lineText: '| synthetic session |' } };
+      }
+      case 'EditTraining': {
+        const { row, session } = command.payload;
+        this.#trainingBefore.set(command.operationId, structuredClone(this.trainingRows));
+        const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(session.when));
+        const replacement: TrainingRow = { date: copenhagenDay(session.when), time: parts, type: session.type,
+          distance: session.type === 'Run' ? session.distance.toFixed(1) : '', duration: String(session.duration),
+          weight: session.type === 'Gym' && session.weight !== undefined ? session.weight.toFixed(1) : '',
+          split: session.type === 'Gym' ? (session.split === 'Group' ? `Group: ${session.className ?? ''}` : session.split) : '',
+          note: session.note ?? '' };
+        this.trainingRows = this.trainingRows.map((r) => (sameTrainingRow(r, row) ? replacement : r));
+        this.trainingRows.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+        return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'edited', lineText: '| synthetic session |' } };
+      }
+      case 'UndoEditTraining': {
+        const before = this.#trainingBefore.get(command.payload.target.operationId);
+        if (!before) throw new Error('mock: unknown training edit undo');
         this.trainingRows = before;
         return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'undone', lineText: '| synthetic session |' } };
       }
