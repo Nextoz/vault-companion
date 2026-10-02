@@ -1,9 +1,10 @@
-# Checkpoint — 2026-10-02 (B11)
+# Checkpoint — 2026-10-02 (B12)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
 
+- **B12** (Lead contract + 2 parallel workers: kernel Pro, web Flash; ADR-0042; pnpm check 1855 + e2e 104): tap a Run/Gym row in Training → sheet prefilled → `EditTraining {row, session}` replaces the row with exact cells (moves on date change); `UndoEditTraining` = exact inverse. GLM raised 8 majors over 2 passes, all verified invalid by the Lead.
 - **B9** (Lead, ~5 lines): BTC history was blank because Coinbase `/candles` returns 400 without a User-Agent (`/ticker` does not); market fetches now send `User-Agent: vault-companion`; test asserts it.
 - **B11** (worker + Lead fix; ADR-0041): Log training → Workout select gains "Group training" with a required free-text Class name and up to 6 one-tap suggestions from logged rows. Row stays Type `Gym`, Split cell `Group: <class>` (pipe/backslash escaped); Group without a name ⇒ `refused:invalid-edit`.
 - **Live before UX1: `f0580812`** (B5+B6, main 6dc275c). UX1 is deployed right after its merge; the new version ID
@@ -24,11 +25,13 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-1. Owner bug order (2026-10-02): **B12** (edit a logged workout, high-risk write ⇒ Pro + `-Reviewer both`), before any new UX slice.
-2. Then UX2–UX5 → AB AI budget card → NY Needs You + Morning Review → SP phone measurement (re-read the backlog).
+1. **UX1b** navigation revision (owner 2026-10-02, Ready Backlog 'Navigation revised by Evgeny'): bar Today · Tasks · Scouts · Notes · Log, no More; overrides UX1–UX3. Deploy when green.
+2. **HC3** fresh health data (owner step 1 done: Access app + AUD on /api/health/ingest only; security ADR, `-Reviewer both`, deploy, ACTION NEEDED when live).
+3. Then UX2–UX5 → AB AI budget card → NY Needs You + Morning Review → SP phone measurement (re-read the backlog).
 
 ## Owner items
 
+- Phone: Progress → Training → tap a session → change a value → Save changes; Actions → Undo restores it (B12).
 - Phone: Log training → Workout → Group training → type a class → Save; next time it is offered as a suggestion (B11). BTC card shows 1W/1M/3M history (B9).
 - Phone: bottom bar → More → each sub-screen and back; bar clears the home indicator (UX1).
 - Phone: Today → mood check-in on a day with no journal note yet → saves (B7); rows labelled (B8).
@@ -37,4 +40,4 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Budget
 
-DeepSeek $8.51. GLM ~140k/900k.
+DeepSeek $8.23. GLM ~225k/900k.
