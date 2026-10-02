@@ -10,6 +10,7 @@ import {
 import { InMemoryStore } from '@vault-companion/domain/testing';
 import type { LogRecord } from './log.ts';
 import type { MorningBriefCandidates } from './morning-brief-gather.ts';
+import type { BriefEmail, BriefMailer } from './morning-brief-email.ts';
 import { BRIEF_CRONS, runBriefJob } from './morning-brief-job.ts';
 import type { ScalewayChat } from './scaleway-chat.ts';
 
@@ -56,18 +57,24 @@ const modelChat: ScalewayChat = {
 
 async function run(
   store: InMemoryStore,
-  opts: { cron?: string; now?: string; chat?: ScalewayChat; gather?: (day: string) => Promise<MorningBriefCandidates> } = {},
+  opts: { cron?: string; now?: string; chat?: ScalewayChat; mailer?: BriefMailer; gather?: (day: string) => Promise<MorningBriefCandidates> } = {},
 ) {
   const logs: LogRecord[] = [];
   await runBriefJob(opts.cron ?? BRIEF_CRONS.summer, {
     store,
     gather: opts.gather ?? (async () => candidates()),
     ...(opts.chat ? { chat: opts.chat } : {}),
+    ...(opts.mailer ? { mailer: opts.mailer } : {}),
     now: () => new Date(opts.now ?? NOW),
     timeZone: TZ,
     log: (r) => logs.push(r),
   });
   return logs;
+}
+
+function spyMailer(): { mailer: BriefMailer; sent: BriefEmail[] } {
+  const sent: BriefEmail[] = [];
+  return { mailer: { send: async (message) => { sent.push(message); } }, sent };
 }
 
 describe('morning brief job (ADR-0046)', () => {
@@ -152,5 +159,57 @@ describe('morning brief job (ADR-0046)', () => {
     expect(store.calls).toEqual([]);
     expect(store.writeCalls).toBe(0);
     expect(logs).toMatchObject([{ status: 400, errorCode: 'unknown-cron' }]);
+  });
+
+  it('emails the committed brief exactly once with the date subject and the brief body', async () => {
+    const store = await InMemoryStore.create({});
+    const { mailer, sent } = spyMailer();
+    const logs = await run(store, { mailer });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.subject).toBe(`Morning Brief - ${DATE}`);
+    expect(sent[0]!.text).toContain(`${DATE}: 0 free block(s), 1 todo candidate(s).`);
+    expect(logs).toMatchObject([{ status: 200, operationId: await morningBriefOperationId(DATE) }]);
+  });
+
+  it('never emails on already-written, skipped, or not-written runs', async () => {
+    const already = await InMemoryStore.create({ [MORNING_BRIEF_PATH]: serializeBriefFile(seedFile) });
+    const existing = spyMailer();
+    await run(already, { mailer: existing.mailer });
+    expect(existing.sent).toEqual([]);
+
+    const skipped = await InMemoryStore.create({});
+    const early = spyMailer();
+    await run(skipped, { mailer: early.mailer, now: `${DATE}T03:30:05Z` });
+    expect(early.sent).toEqual([]);
+
+    const conflict = await InMemoryStore.create({});
+    conflict.writeFile = async () => ({ ok: false, reason: 'precondition-failed' });
+    const refused = spyMailer();
+    await run(conflict, { mailer: refused.mailer });
+    expect(refused.sent).toEqual([]);
+  });
+
+  it('keeps the commit when the email send throws and logs only email-failed', async () => {
+    const store = await InMemoryStore.create({});
+    const boom = 'BOOM-BODY-TEXT';
+    const mailer: BriefMailer = { send: async () => { throw new Error(boom); } };
+    const logs = await run(store, { mailer });
+    expect(store.writeCalls).toBe(1);
+    expect(store.text(MORNING_BRIEF_PATH)).not.toBeNull();
+    expect(logs).toMatchObject([
+      { status: 200, operationId: await morningBriefOperationId(DATE) },
+      { status: 200, errorCode: 'email-failed' },
+    ]);
+    expect(JSON.stringify(logs)).not.toContain(boom);
+  });
+
+  it('never puts the email subject, body, or candidate text in the log', async () => {
+    const store = await InMemoryStore.create({});
+    const { mailer, sent } = spyMailer();
+    const logs = await run(store, { mailer });
+    const logged = JSON.stringify(logs);
+    expect(logged).not.toContain(sent[0]!.subject);
+    expect(logged).not.toContain('free block(s)');
+    expect(logged).not.toContain(TODO_TEXT);
   });
 });

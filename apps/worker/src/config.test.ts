@@ -38,6 +38,7 @@ interface WranglerConfig {
   secrets?: { required?: string[] };
   triggers?: { crons?: string[] };
   assets?: { directory?: string; run_worker_first?: boolean | string[] };
+  send_email?: { name?: string; destination_address?: string; allowed_destination_addresses?: string[] }[];
 }
 
 const config = JSON.parse(stripJsonc(raw)) as WranglerConfig;
@@ -89,6 +90,10 @@ describe('wrangler.jsonc', () => {
   it('routes /api/* to the Worker and serves the web build from the same origin', () => {
     expect(config.assets?.directory).toBe('../web/dist');
     expect(config.assets?.run_worker_first).toEqual(['/api/*']);
+  });
+
+  it('declares exactly one address-free send_email binding for the Morning Brief email', () => {
+    expect(config.send_email).toEqual([{ name: 'BRIEF_EMAIL' }]);
   });
 
   it('allows only same-origin device geolocation while keeping other asset permissions disabled', () => {

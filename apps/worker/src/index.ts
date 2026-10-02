@@ -12,6 +12,7 @@ import { createAccessVerifier, createServiceTokenVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
 import { createScalewayChat } from './scaleway-chat.ts';
 import { gatherCandidates } from './morning-brief-gather.ts';
+import { cloudflareMailer, type BriefEmailBinding } from './morning-brief-email.ts';
 import { BRIEF_ROUTE, briefSlotForCron, runBriefJob } from './morning-brief-job.ts';
 import { diagnosticDetail, type LogRecord } from './log.ts';
 import { EXPLAINER_ROUTE, runExplainerJob } from './research-explainer.ts';
@@ -38,6 +39,11 @@ export interface Env {
   GEMINI_API_KEY?: string;
   /** ADR-0045/0046: only the morning-brief cron uses it; optional, so an unset key falls back. Never logged. */
   SCALEWAY_API_KEY?: string;
+  /** MB1d: Workers `send_email` binding; optional, so an absent binding simply skips the email. */
+  BRIEF_EMAIL?: BriefEmailBinding;
+  /** MB1d: owner from/to addresses; optional secrets, never logged or committed. Email requires both. */
+  BRIEF_EMAIL_FROM?: string;
+  BRIEF_EMAIL_TO?: string;
 }
 
 /** The two members of Cloudflare's ScheduledController/ExecutionContext the cron handler uses. */
@@ -194,6 +200,12 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
         store,
         gather,
         ...(env.SCALEWAY_API_KEY ? { chat: createScalewayChat({ apiKey: env.SCALEWAY_API_KEY, fetch: counted }) } : {}),
+        ...(env.BRIEF_EMAIL && env.BRIEF_EMAIL_FROM && env.BRIEF_EMAIL_TO
+          ? { mailer: cloudflareMailer(env.BRIEF_EMAIL, env.BRIEF_EMAIL_FROM, env.BRIEF_EMAIL_TO, async (f, t, raw) => {
+            const { EmailMessage } = await import('cloudflare:email');
+            return new EmailMessage(f, t, raw);
+          }) }
+          : {}),
         now,
         timeZone,
         log,
