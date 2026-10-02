@@ -29,9 +29,12 @@ describe('getJson: bounded session and task reads (P4-B)', () => {
     clearReadTimings();
     const res = json(ok);
     res.headers.set('Server-Timing', 'app;dur=42');
-    vi.stubGlobal('fetch', vi.fn(async () => res));
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      vi.advanceTimersByTime(250); // the phone's view of the round trip
+      return res;
+    }));
     await getJson('/api/session?known=secret', SessionResponse);
-    expect(readTimings()).toEqual([expect.objectContaining({ route: '/api/session', serverMs: 42 })]);
+    expect(readTimings()).toEqual([expect.objectContaining({ route: '/api/session', totalMs: 250, serverMs: 42 })]);
   });
 
   it('gives up on a read the server never answers after the fixed timeout, as an error', async () => {
