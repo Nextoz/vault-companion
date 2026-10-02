@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { editTask, exportText } from './commands.ts';
-import type { TaskLocator } from '@vault-companion/contracts';
+import { bindUndoTarget, editTask, exportText, isUndoDraft, reportFeedback, undoReportFeedback, undoReportFeedbackDraft } from './commands.ts';
+import { Command, type TaskLocator } from '@vault-companion/contracts';
 
 const task: TaskLocator = { path: 'Tasks/To-Do List.md', blobSha: '2'.repeat(40), lineIndex: 10,
   lineText: '- [ ] Water the plants', occurrencesAtRead: 1 };
@@ -23,5 +23,38 @@ describe('editTask', () => {
     expect(() => editTask(ctx, task, {})).toThrow();
     expect(() => editTask(ctx, task, { text: 'one\ntwo' })).toThrow();
     expect(() => editTask(ctx, task, { due: '2026-02-30' })).toThrow();
+  });
+});
+
+const report = () => reportFeedback(ctx, { kind: 'bug', text: 'A synthetic thing broke', screen: 'Today', appVersion: 'dev', date: '2026-10-02' });
+
+describe('reportFeedback (ADR-0040)', () => {
+  it('mints a validated bug/wish envelope', () => {
+    const command = report();
+    expect(command).toMatchObject({ type: 'ReportFeedback', operationId: ctx.newId(), baseRevision: ctx.baseRevision, schemaVersion: 1 });
+    expect(command.payload).toEqual({ kind: 'bug', text: 'A synthetic thing broke', screen: 'Today', appVersion: 'dev', date: '2026-10-02' });
+  });
+  it('rejects blank text, an oversized body and a screen the contract refuses', () => {
+    expect(() => reportFeedback(ctx, { kind: 'bug', text: '   ', screen: 'Today', appVersion: 'dev', date: '2026-10-02' })).toThrow();
+    expect(() => reportFeedback(ctx, { kind: 'wish', text: 'x'.repeat(1001), screen: 'Today', appVersion: 'dev', date: '2026-10-02' })).toThrow();
+    expect(() => reportFeedback(ctx, { kind: 'wish', text: 'ok', screen: '1 screen', appVersion: 'dev', date: '2026-10-02' })).toThrow();
+  });
+  it('queues an Undo as an unsendable draft, then binds and tokens it to the durable target', () => {
+    const target = report();
+    const draft = undoReportFeedbackDraft(ctx, target);
+    expect(draft).toMatchObject({ type: 'UndoReportFeedback', payload: { target } });
+    expect(isUndoDraft(draft)).toBe(true);
+    expect(() => Command.parse(draft)).toThrow(); // no targetCommit yet: never sent as-is
+
+    const bound = bindUndoTarget(draft, target);
+    expect(bound).toMatchObject({ type: 'UndoReportFeedback', payload: { target } });
+    const other = reportFeedback(ctx, { kind: 'wish', text: 'other', screen: 'Notes', appVersion: 'dev', date: '2026-10-02' });
+    expect(bindUndoTarget(draft, other)).toMatchObject({ payload: { target: other } });
+
+    const token = 'a'.repeat(40);
+    const undo = undoReportFeedback(ctx, target, token);
+    expect(undo).toMatchObject({ type: 'UndoReportFeedback', payload: { target, targetCommit: token } });
+    expect(Command.safeParse(undo).success).toBe(true);
+    expect(exportText(undo)).toBe(exportText(target));
   });
 });

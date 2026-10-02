@@ -5,6 +5,7 @@ import {
   type ReviewActiveWorkCommand,
   type LogTrainingCommand,
   type MoodCheckinCommand,
+  type ReportFeedbackCommand,
   type TrainingSession,
   type ActiveWorkLocator,
   type Priority,
@@ -65,13 +66,14 @@ export function undoDraft(ctx: MintContext, target: CompleteTaskCommand): Comman
 
 /** An Undo draft (no token yet), as the queue stores it. */
 export function isUndoDraft(envelope: Command): boolean {
-  return (envelope.type === 'UndoCompleteTask' || envelope.type === 'UndoActiveWork' || envelope.type === 'UndoLogTraining' || envelope.type === 'UndoMoodCheckin') && !('targetCommit' in envelope.payload);
+  return (envelope.type === 'UndoCompleteTask' || envelope.type === 'UndoActiveWork' || envelope.type === 'UndoLogTraining' || envelope.type === 'UndoMoodCheckin' || envelope.type === 'UndoReportFeedback') && !('targetCommit' in envelope.payload);
 }
 
 /** The draft with its token: a checked, sendable Undo whose other fields are unchanged. */
 export function withTargetCommit(draft: Command, targetCommit: string): Command {
   if (draft.type === 'UndoLogTraining') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type === 'UndoMoodCheckin') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
+  if (draft.type === 'UndoReportFeedback') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type === 'UndoActiveWork') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type !== 'UndoCompleteTask') throw new TypeError('not an Undo');
   return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
@@ -158,6 +160,8 @@ export function bindUndoTarget(undo: Command, target: Command): Command | null {
     return { ...undo, payload: { ...undo.payload, target } };
   if (undo.type === 'UndoMoodCheckin' && target.type === 'MoodCheckin')
     return { ...undo, payload: { ...undo.payload, target } };
+  if (undo.type === 'UndoReportFeedback' && target.type === 'ReportFeedback')
+    return { ...undo, payload: { ...undo.payload, target } };
   return null;
 }
 
@@ -181,6 +185,19 @@ export function undoMoodCheckin(ctx: MintContext, target: MoodCheckinCommand, ta
 }
 export function undoMoodCheckinDraft(ctx: MintContext, target: MoodCheckinCommand): Command {
   const draft = { ...base(ctx), type: 'UndoMoodCheckin' as const, payload: { target } };
+  checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
+  return draft as Command;
+}
+
+/** ADR-0040: one line in the Ready Backlog note; the text travels only in the envelope, never in a log or label. */
+export function reportFeedback(ctx: MintContext, payload: ReportFeedbackCommand['payload']): ReportFeedbackCommand {
+  return checked({ ...base(ctx), type: 'ReportFeedback', payload });
+}
+export function undoReportFeedback(ctx: MintContext, target: ReportFeedbackCommand, targetCommit: string): Command {
+  return checked({ ...base(ctx), type: 'UndoReportFeedback', payload: { target, targetCommit } });
+}
+export function undoReportFeedbackDraft(ctx: MintContext, target: ReportFeedbackCommand): Command {
+  const draft = { ...base(ctx), type: 'UndoReportFeedback' as const, payload: { target } };
   checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
   return draft as Command;
 }

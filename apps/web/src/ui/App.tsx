@@ -25,6 +25,7 @@ import { VaultStatus } from './VaultStatus.tsx';
 import { Progress } from './Progress.tsx';
 import { Morning } from './Morning.tsx';
 import { MoodCard } from './MoodCard.tsx';
+import { ReportSheet, screenName } from './ReportSheet.tsx';
 import { WeatherMorning } from './WeatherLab.tsx';
 import { Notes } from './Notes.tsx';
 import { Scouts } from './Scouts.tsx';
@@ -60,6 +61,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const [tab, setTab] = useState<Tab>('today');
   const [editing, setEditing] = useState<{ task: TaskView; account: string | null; revision: string } | null>(null);
   const [captureOpen, setCaptureOpen] = useState(false);
+  // ADR-0040: one bug/wish report from any screen; enqueued like every capture, so it works offline.
+  const [reportOpen, setReportOpen] = useState(false);
   // The open note is bound to the account it was opened under: signing out or switching account closes it (the
   // render guard below hides it in the same frame; the effect drops the state).
   const [openLink, setOpenLink] = useState<(OpenLink & { account: string | null }) | null>(null);
@@ -318,6 +321,9 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <button type="button" aria-pressed={tab === 'scouts'} onClick={() => setTab('scouts')}>Scouts</button>
           <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')}>Progress</button>
         </nav>
+        <div className="top-actions">
+          <button type="button" className="link" aria-label="Report a bug or wish" disabled={signedOut || writeBlocked || frozen} onClick={() => setReportOpen(true)}>Report</button>
+        </div>
       </header>
 
       <main className="content" inert={noteOpen || editing !== null}>
@@ -454,6 +460,9 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           blocked={writeBlocked} onClose={() => setEditing(null)} />
       )}
       {captureOpen && tab === 'training' && !signedOut && <TrainingSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} onClose={() => setCaptureOpen(false)} />}
+      {reportOpen && !signedOut && (
+        <ReportSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} screen={screenName(tab)} onClose={() => setReportOpen(false)} />
+      )}
       {captureOpen && tab !== 'training' && (
         <CaptureSheet
           defaultKind={captureDefaultForTab(tab)}
