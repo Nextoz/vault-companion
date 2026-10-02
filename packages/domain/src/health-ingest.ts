@@ -130,7 +130,8 @@ function parsePayload(body: string, now: Date): { ok: true; payload: Payload } |
     return { ok: false, status: 400, error: 'invalid health ingest payload' };
   }
   // iOS Shortcuts dictionaries can carry spaces around key names; the Shortcut is fixed, so trim them here.
-  const obj: Record<string, unknown> = {};
+  // Null prototype: a "__proto__" key must stay a plain key, never smuggle fields in through the prototype.
+  const obj: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const name = key.trim();
     if (Object.hasOwn(obj, name)) return { ok: false, status: 400, error: `duplicate key ${name.slice(0, 40)}` };

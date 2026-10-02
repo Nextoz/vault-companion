@@ -164,6 +164,15 @@ describe('health ingest aggregation and merge', () => {
     expect(store.writeCalls).toBe(0);
   });
 
+  it('ignores fields nested under a "__proto__" key', async () => {
+    const seed = csv([row('2026-09-29', 'Tue')]);
+    const inner = JSON.parse(payload()) as Record<string, unknown>;
+    const { store, result } = await ingest(seed, `{"__proto__ ":${JSON.stringify(inner)}}`);
+    expect(result).toMatchObject({ ok: false, status: 400 });
+    if (!result.ok) expect(result.error).toMatch(/^invalid schemaVersion \(/);
+    expect(store.writeCalls).toBe(0);
+  });
+
   it('diagnoses a duplicate or non-string steps key by shape only', () => {
     const dup = '{"steps":"2026-09-29T08:00:00+02:00|x|5|count","steps":""}';
     expect(bodyShape(dup)).toBe(`body ${dup.length} chars, "steps" keys 2, keys: steps:string(0)`);
