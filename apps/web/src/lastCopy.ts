@@ -69,5 +69,17 @@ export function settleView<T>(copies: LastCopies, account: string | null, key: s
   return { res: fresh, copyAt: null, refreshing: false, failed: false };
 }
 
+/** One note for a screen built from several reads: the oldest copy shown, and "could not refresh" if any copy failed. */
+export function combineViews(views: readonly CopyView<unknown>[]): CopyView<unknown> {
+  const copies = views.filter((v) => v.copyAt !== null);
+  if (copies.length === 0) return { res: null, copyAt: null, refreshing: views.some((v) => v.refreshing), failed: false };
+  return {
+    res: null,
+    copyAt: Math.min(...copies.map((v) => v.copyAt!)),
+    refreshing: copies.some((v) => v.refreshing),
+    failed: copies.some((v) => v.failed),
+  };
+}
+
 /** The app's single store; screens read and write it through `useLastCopy`. */
 export const lastCopies = createLastCopies();

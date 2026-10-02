@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Fetched } from './api.ts';
-import { createLastCopies, openView, settleView } from './lastCopy.ts';
+import { combineViews, createLastCopies, openView, settleView } from './lastCopy.ts';
 
 const ok = (data: string): Fetched<string> => ({ kind: 'ok', data });
 
@@ -67,5 +67,13 @@ describe('last copies (SP3, ADR-0038)', () => {
     expect(view.copyAt).toBeNull();
     expect(copies.get('a', 'notes')).toBeNull();
     expect(copies.get('b', 'training')).toBeNull();
+  });
+
+  it('a screen of several reads names its oldest copy, and any failed copy', () => {
+    const fresh = { res: ok('x'), copyAt: null, refreshing: false, failed: false };
+    const copy = (at: number, failed = false) => ({ res: ok('c'), copyAt: at, refreshing: !failed, failed });
+    expect(combineViews([fresh, fresh]).copyAt).toBeNull();
+    expect(combineViews([fresh, copy(9), copy(5)])).toEqual({ res: null, copyAt: 5, refreshing: true, failed: false });
+    expect(combineViews([copy(9), copy(5, true)])).toMatchObject({ copyAt: 5, failed: true });
   });
 });
