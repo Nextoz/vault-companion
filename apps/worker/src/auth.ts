@@ -16,6 +16,9 @@ const CLOCK_TOLERANCE_S = 5 * 60;
 
 export type Identity = { readonly ok: true; readonly email: string; readonly accountKey: string } | { readonly ok: false };
 
+/** A scoped service credential (health ingest). It has no account key and must not carry an email. */
+export type ServiceTokenIdentity = { readonly ok: true; readonly commonName: string } | { readonly ok: false };
+
 export function createAccessVerifier(config: AccessConfig) {
   const allowed = new Set(config.allowedEmails.map((e) => e.toLowerCase()));
   return async function verify(token: string | undefined): Promise<Identity> {
@@ -36,6 +39,31 @@ export function createAccessVerifier(config: AccessConfig) {
       const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : '';
       if (!payload.sub || !allowed.has(email)) return { ok: false };
       return { ok: true, email, accountKey: await sha256Hex(payload.sub) };
+    } catch {
+      return { ok: false };
+    }
+  };
+}
+
+/** Same lifetime/clock rules as Access, but for the scoped health-ingest audience and a non-empty common_name. */
+export function createServiceTokenVerifier(config: { readonly keys: JWTVerifyGetKey; readonly issuer: string; readonly audience: string }) {
+  return async function verify(token: string | undefined): Promise<ServiceTokenIdentity> {
+    if (!token) return { ok: false };
+    try {
+      const { payload } = await jwtVerify(token, config.keys, {
+        issuer: config.issuer,
+        audience: config.audience,
+        algorithms: ['RS256'],
+        requiredClaims: ['exp', 'iat', 'common_name'],
+        maxTokenAge: MAX_TOKEN_LIFETIME_S,
+        clockTolerance: CLOCK_TOLERANCE_S,
+      });
+      const { exp, iat } = payload as { exp: number; iat: number };
+      if (exp - iat > MAX_TOKEN_LIFETIME_S) return { ok: false };
+      if (iat > Date.now() / 1000 + CLOCK_TOLERANCE_S) return { ok: false };
+      if (typeof payload.common_name !== 'string' || payload.common_name.trim() === '') return { ok: false };
+      if ('email' in payload) return { ok: false };
+      return { ok: true, commonName: payload.common_name };
     } catch {
       return { ok: false };
     }
