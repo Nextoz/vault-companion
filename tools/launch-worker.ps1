@@ -32,10 +32,14 @@ $brief = Join-Path $agent ($(if ($Fix) { "fix-$Task.md" } else { 'brief.md' }))
 if (-not (Test-Path -LiteralPath $brief)) { throw "Missing $brief" }
 $log = Join-Path $agent ($(if ($Fix) { "run-fix-$Task.log" } else { "run-$Task.log" }))
 $fwd = { param($p) $p -replace '\\', '/' }
+# Git Bash explicitly: on this machine the first `bash` on PATH is WSL (C:\Windows\System32\bash.exe), which cannot run
+# tools/agent-pane.sh (seen 2026-10-02). Derive it from git's install folder.
+$bash = Join-Path (Split-Path (Split-Path (Get-Command git -ErrorAction Stop).Source)) 'bin\bash.exe'
+if (-not (Test-Path -LiteralPath $bash)) { throw "Git Bash not found at $bash" }
 
 if ($Tier -eq 'gemini') {
     $env:AGENT_USER_ENV = 'GEMINI_API_KEY'
-    & bash (& $fwd (Join-Path $repo 'tools/agent-pane.sh')) "gemini · $Task" (& $fwd $Clone) (& $fwd $log) bash (& $fwd (Join-Path $repo 'tools/gemini-worker.sh')) (& $fwd $Clone)
+    & $bash (& $fwd (Join-Path $repo 'tools/agent-pane.sh')) "gemini · $Task" (& $fwd $Clone) (& $fwd $log) bash (& $fwd (Join-Path $repo 'tools/gemini-worker.sh')) (& $fwd $Clone)
     exit $LASTEXITCODE
 }
 
@@ -60,5 +64,5 @@ if ($Fix) { $codex += $sid } else { $codex += @('-C', (& $fwd $Clone)) }
 $codex += '-'
 $env:AGENT_STDIN = & $fwd $brief
 $env:AGENT_USER_ENV = 'DEEPSEEK_API_KEY'
-& bash (& $fwd (Join-Path $repo 'tools/agent-pane.sh')) "$Tier · $Task$(if ($Fix) { ' · fix' })" (& $fwd $Clone) (& $fwd $log) @codex
+& $bash (& $fwd (Join-Path $repo 'tools/agent-pane.sh')) "$Tier · $Task$(if ($Fix) { ' · fix' })" (& $fwd $Clone) (& $fwd $log) @codex
 exit $LASTEXITCODE
