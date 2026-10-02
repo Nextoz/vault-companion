@@ -17,7 +17,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-1. **Mood M2** (high-risk, Pro): brief ready in `C:\Devault-companion-clones\mood-m2\.agentrief.md` (base
+1. **Mood M2** (high-risk, Pro): brief ready in `C:/Dev/vault-companion-clones/mood-m2/.agent/brief.md` (base
    `ad1a9bb`; rebase/re-clone onto main first). Blocked on a codex launch (owner) — do not self-implement.
 2. **UI refresh slice 3 — Dashboard + Weather board** (stat tiles, time-series panels). Backlog suggests uPlot: a new
    dependency ⇒ ADR (or simple SVG like the Scouts sparkline, which needs no ADR). Ordinary; Lead may implement.
