@@ -16,6 +16,8 @@ test('production asset policy permits explicit same-origin device location with 
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
+  // UX2: the weather detail now sits behind the morning card's weather line.
+  await page.getByRole('button', { name: /lowest-rain window/ }).click();
   const morning = page.getByRole('region', { name: 'This morning weather' });
   await morning.getByRole('button', { name: 'Weather' }).click();
   expect(api.weatherLocationReads).toBe(0);
@@ -23,4 +25,3 @@ test('production asset policy permits explicit same-origin device location with 
   await expect.poll(() => api.weatherLocationReads).toBe(1);
   expect(JSON.parse(api.weatherLocationBodies[0]!)).toEqual({ latitude: 55.68, longitude: 12.57 });
 });
-

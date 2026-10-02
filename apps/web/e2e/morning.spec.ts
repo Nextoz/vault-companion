@@ -8,6 +8,8 @@ test('This morning: one line on Today, expands to the brief and the explanations
   api.morning = MockApi.SAMPLE_MORNING;
   await api.install(page);
   await page.goto('/');
+  // UX2: the papers line on the morning card opens the same panel.
+  await page.getByRole('button', { name: /Reading brief/ }).click();
   const panel = page.getByRole('region', { name: 'This morning', exact: true });
   await expect(panel.getByTestId('morning-summary')).toHaveText('Reading brief · 1 explained · 1 pending');
   await expect(panel.getByText('Synthetic Sparse Routing')).toHaveCount(0);

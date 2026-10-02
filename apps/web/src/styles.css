@@ -212,11 +212,44 @@ textarea:focus-visible {
   margin: 12px 0;
 }
 
-.today-tasks {
+/* UX2: the compact Today morning card, the check-in line, and the details they open. */
+.morning-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.morning-line,
+.checkin-line {
   width: 100%;
-  margin: 8px 0 12px;
   text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.morning-line-tasks {
   font-weight: 600;
+  color: var(--accent);
+}
+
+.morning-line[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+.checkin-line {
+  margin: 0 0 12px;
+  color: var(--accent);
+}
+
+.morning-card .morning,
+.morning-card .weather-morning {
+  margin: 0;
 }
 
 .content {
