@@ -1,42 +1,42 @@
 :root {
-  --bg: #f7f7f5;
-  --surface: #ffffff;
-  --text: #1c1c1a;
-  --muted: #6b6b66;
-  --line: #e2e2dc;
-  --accent: #1f4a3f;
-  --accent-soft: #e3eeea;
-  --warn: #8a4b00;
-  --warn-soft: #fbefdc;
-  --danger: #a1261b;
-  --danger-soft: #f8e4e1;
-  --maybe: #3d5a8a;
-  --maybe-soft: #e4eaf4;
+  /* Dark iOS palette (UI refresh, 2026-10-01): permanent dark; colour carries one meaning everywhere. */
+  --ios-bg: #000000;
+  --ios-card: #1c1c1e;
+  --ios-raised: #2c2c2e;
+  --ios-separator: #38383a;
+  --ios-text: #ffffff;
+  --ios-secondary: #8e8e93;
+  --ios-blue: #0a84ff; /* primary action, selected tab, tasks */
+  --ios-green: #30d158; /* done, healthy */
+  --ios-yellow: #ffd60a; /* degraded, warning */
+  --ios-red: #ff453a; /* failing, overdue, high priority */
+  --ios-orange: #ff9f0a; /* weather */
+  --ios-purple: #bf5af2; /* research, Radar */
+  --ios-pink: #ff375f; /* events, triage */
+  --ios-cyan: #64d2ff; /* training, health */
+  --ios-indigo: #5e5ce6; /* markets, Dashboard */
+  --bg: var(--ios-bg);
+  --surface: var(--ios-card);
+  --raised: var(--ios-raised);
+  --text: var(--ios-text);
+  --muted: var(--ios-secondary);
+  --line: var(--ios-separator);
+  --accent: var(--ios-blue);
+  --accent-soft: rgb(10 132 255 / 18%);
+  --done: var(--ios-green);
+  --warn: var(--ios-yellow);
+  --warn-soft: rgb(255 214 10 / 18%);
+  --danger: var(--ios-red);
+  --danger-soft: rgb(255 69 58 / 18%);
+  --maybe: var(--ios-purple);
+  --maybe-soft: rgb(191 90 242 / 18%);
   --tap: 44px;
-  color-scheme: light dark;
+  color-scheme: dark;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-size: 17px;
   line-height: 1.4;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #121211;
-    --surface: #1c1c1a;
-    --text: #ededea;
-    --muted: #9b9b95;
-    --line: #2e2e2b;
-    --accent: #7cc4ad;
-    --accent-soft: #1d302a;
-    --warn: #f0b566;
-    --warn-soft: #33260f;
-    --danger: #ff8a7a;
-    --danger-soft: #3a1c18;
-    --maybe: #9db6e8;
-    --maybe-soft: #1c2536;
-  }
 }
 
 * {
@@ -120,7 +120,7 @@ textarea:focus-visible {
 
 .tabs button[aria-pressed='true'],
 .segmented button[aria-pressed='true'] {
-  background: var(--accent-soft);
+  background: var(--raised);
   color: var(--accent);
 }
 
@@ -197,10 +197,27 @@ textarea:focus-visible {
   border-style: dashed;
 }
 
+.check::before {
+  border-color: var(--accent);
+}
+
 .check-on::before {
   border-style: solid;
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--done);
+  background: var(--done);
+}
+
+/* The tick inside a done circle: drawn, not an asset; black on green meets WCAG AA. */
+.check-on::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 14px;
+  width: 6px;
+  height: 11px;
+  border: solid #000;
+  border-width: 0 2.5px 2.5px 0;
+  transform: rotate(45deg);
 }
 
 .task-body {
@@ -662,13 +679,6 @@ textarea:focus-visible {
   .scout-table-cards a { display: inline-block; padding-block: 8px; }
 }
 
-/* Explicit dark theme mirrors the system theme tokens. */
-:root[data-theme='dark'] {
-  color-scheme: dark;
-  --bg: #121211; --surface: #1c1c1a; --text: #ededea; --muted: #9b9b95; --line: #2e2e2b;
-  --accent: #7cc4ad; --accent-soft: #1d302a; --warn: #f0b566; --warn-soft: #33260f; --danger: #ff8a7a;
-  --danger-soft: #3a1c18; --maybe: #9db6e8; --maybe-soft: #1c2536;
-}
 .triage-stack { max-width: 420px; margin: 0 auto; padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; overflow: clip; }
 .triage-meta { color: var(--muted); font-size: 13px; margin: 0; font-variant-numeric: tabular-nums; }
 .triage-stage { position: relative; min-height: 470px; display: grid; margin-bottom: 14px; }
@@ -743,3 +753,110 @@ textarea:focus-visible {
 .progress-evidence li { padding: 4px 0; }
 .progress-note { min-height: var(--tap); padding: 0; font-size: inherit; text-align: left; }
 .progress .progress-days { margin-bottom: 0; }
+
+/* Dark iOS refresh, slice 1 — Today in iPhone mode: large title, inset cards, coloured source chips. */
+.top {
+  background: rgb(0 0 0 / 88%);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border-bottom-color: var(--line);
+}
+
+/* The large title is drawn by CSS so no new heading or text node changes what screen readers and tests find. */
+.app[data-tab='today'] .content::before {
+  content: 'Today';
+  display: block;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  margin: 8px 0 4px;
+}
+
+.app[data-tab='today'] .tasks,
+.app[data-tab='today'] .action-list {
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.app[data-tab='today'] .task,
+.app[data-tab='today'] .action {
+  border-top: 0.5px solid var(--line);
+}
+
+.app[data-tab='today'] .group h2 {
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin: 24px 0 6px 16px;
+}
+
+.app[data-tab='today'] .morning,
+.app[data-tab='today'] .weather-morning,
+.app[data-tab='today'] .active-work {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 4px 16px 12px;
+  margin: 16px 0;
+}
+
+.app[data-tab='today'] .morning h2,
+.app[data-tab='today'] .weather-morning h2,
+.app[data-tab='today'] .active-work h2 {
+  margin: 4px 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 1rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+/* One rounded-square icon chip per source; colour carries meaning (orange weather, purple research, blue work). */
+.app[data-tab='today'] .morning h2::before,
+.app[data-tab='today'] .weather-morning h2::before,
+.app[data-tab='today'] .active-work h2::before,
+.app[data-tab='today'] .scouts > h1::before {
+  content: '';
+  flex: none;
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  vertical-align: middle;
+  background: var(--chip, var(--accent)) center / 18px 18px no-repeat;
+}
+.app[data-tab='today'] .scouts > h1::before {
+  margin-right: 12px;
+}
+.app[data-tab='today'] .weather-morning { --chip: var(--ios-orange); }
+.app[data-tab='today'] .morning { --chip: var(--ios-purple); }
+.app[data-tab='today'] .active-work { --chip: var(--ios-blue); }
+.app[data-tab='today'] .scouts { --chip: var(--ios-green); }
+
+.app[data-tab='today'] .morning > p,
+.app[data-tab='today'] .weather-morning > p {
+  margin: 0 0 4px 40px;
+}
+
+.app[data-tab='today'] .scouts {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.app[data-tab='today'] .scouts > h1 {
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
