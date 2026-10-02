@@ -1,13 +1,14 @@
-# Checkpoint — 2026-10-02 08:30 (Mood M3 PR)
+# Checkpoint — 2026-10-02 08:35 (Mood M2+M3 merged #91 and deployed)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
 
-- **Live: `35c44728`** (UI refresh, SP3a/b/c, SP1 measure). Rollback target `f5ea4843`.
-- **This PR: Mood M3** — Today "Mood check-in" card (mood/energy −3…+3 chips, sleep hours with `7,5`, "Check in"),
+- **Live: `d9d3dff2`** (main `89437c5`: Mood M2+M3, deployed by the Lead 08:31, standing approval). Rollback target
+  `35c44728`. Anonymous 302-to-Access check not run (host not in repo): owner's phone test confirms.
+- **Mood M3 (#91)** — Today "Mood check-in" card (mood/energy −3…+3 chips, sleep hours with `7,5`, "Check in"),
   collapses to "Checked in HH:MM" from this device's queue; Undo from the Actions panel (queue Undo lists include
-  `UndoMoodCheckin`). With M2 (#87) the mood write target is complete: **deploy M2+M3 together after merge**.
+  `UndoMoodCheckin`). With M2 (#87) the mood write target is complete and live.
 - Owner standing decisions now live in `.agent/owner-instructions.md` (local); decisions log `.agent/decisions.md`.
 - M3: DeepSeek Flash one run; CodeRabbit 0 findings; GLM 6 findings → 1 real (date at tap, fixed by Lead), rest
   skipped (logged). Lead fixes: chip text = value only; button "Check in" and region `div` (existing e2e matched
@@ -17,10 +18,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-1. **Deploy M2+M3** (standing approval in owner-instructions): note version, upload, deploy 100 %, verify 302s,
-   roll back on failure; log in `.agent/decisions.md`.
-2. **HC — Health card (Phase 1)**: brief in the vault Ready Backlog (priority line 2026-10-02).
-3. Then AB AI budget card → NY Needs You + Morning Review → SP phone measurement (re-read the backlog note).
+1. **HC — Health card (Phase 1)**: brief in the vault Ready Backlog (priority line 2026-10-02).
+2. Then AB AI budget card → NY Needs You + Morning Review → SP phone measurement (re-read the backlog note).
 
 ## Owner items
 
