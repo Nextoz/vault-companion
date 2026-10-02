@@ -1,22 +1,19 @@
 import type { TrainingResponse } from '@vault-companion/contracts';
-import { useEffect, useState } from 'react';
-import { getTraining, type Fetched } from '../api.ts';
+import { getTraining } from '../api.ts';
 import { trainingRowKeys, trainingSummary } from '../training.ts';
 import { copenhagenDay } from '../triage.ts';
 import { weekBars } from '../week-chart.ts';
 import { BarChart } from './BarChart.tsx';
+import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 
-export function Training({ refreshKey }: { refreshKey: number | null }) {
-  const [res, setRes] = useState<Fetched<TrainingResponse> | null>(null);
-  useEffect(() => {
-    let live = true;
-    void getTraining().then((r) => { if (live) setRes(r); });
-    return () => { live = false; };
-  }, [refreshKey]);
+export function Training({ refreshKey, accountKey }: { refreshKey: number | null; accountKey: string | null }) {
+  const view = useLastCopy<TrainingResponse>(accountKey, 'training', getTraining, refreshKey);
+  const res = view.res;
   const read = res?.kind === 'ok' ? res.data : null;
   const keys = read?.status === 'ok' ? trainingRowKeys(read.rows) : [];
   return <section className="group training" aria-label="Training sessions">
     <h2>Training</h2>
+    <CopyNote view={view} />
     {!res && <p className="muted">Loading training…</p>}
     {res && !read && <p className="muted">Training could not be loaded. Refresh when connected.</p>}
     {read?.status === 'absent' && <p className="muted">Training log not found. Create Health/Training Log.md in Obsidian.</p>}

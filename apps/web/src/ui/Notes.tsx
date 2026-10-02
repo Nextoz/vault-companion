@@ -1,5 +1,5 @@
 // Inbox notes (ADR-0022): list → note → edit. Nothing here is stored on the device except a queued edit; note text is
-// fetched `no-store` and never cached by the SW.
+// fetched `no-store` and never cached by the SW. The last answers are kept in memory only (SP3, ADR-0038).
 import type { NoteReadResponse, NotesResponse } from '@vault-companion/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getNote, getNotes, type Fetched } from '../api.ts';
@@ -8,6 +8,7 @@ import { canStartEdit, latestNoteEdit, noteTaskKey } from '../notes.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import type { NoteRenderer } from '../note/render.ts';
 import { loadRenderer, REFUSED } from './NoteView.tsx';
+import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 
 type Entry = NotesResponse['notes'][number];
 type OkNote = Extract<NoteReadResponse, { status: 'ok' }>;
@@ -22,13 +23,9 @@ export function Notes({ refreshKey, queue, items, accountKey, baseRevision }: {
   accountKey: string | null;
   baseRevision: string | null;
 }) {
-  const [list, setList] = useState<Fetched<NotesResponse> | null>(null);
+  const listView = useLastCopy(accountKey, 'notes', getNotes, refreshKey);
+  const list = listView.res;
   const [open, setOpen] = useState<Entry | null>(null);
-  useEffect(() => {
-    let live = true;
-    void getNotes().then((value) => { if (live) setList(value); });
-    return () => { live = false; };
-  }, [refreshKey]);
 
   if (open) {
     return <NoteScreen entry={open} refreshKey={refreshKey} queue={queue} items={items} accountKey={accountKey}
@@ -37,6 +34,7 @@ export function Notes({ refreshKey, queue, items, accountKey, baseRevision }: {
   const data = list?.kind === 'ok' ? list.data : null;
   return <section aria-label="Notes" className="notes">
     <h1>Notes</h1>
+    <CopyNote view={listView} />
     {(!list || list.kind !== 'ok') && <p role="status">{!list ? 'Loading notes…' : unavailable(list, 'notes')}</p>}
     {data?.notes.length === 0 && <p className="muted">No notes in the Inbox yet.</p>}
     {data && data.notes.length > 0 && <ul className="note-list">
@@ -59,17 +57,17 @@ export function NoteScreen({ entry, refreshKey, queue, items, accountKey, baseRe
   baseRevision: string | null;
   onBack: () => void;
 }) {
-  const [res, setRes] = useState<Fetched<NoteReadResponse> | null>(null);
+  const view = useLastCopy(accountKey, `note:${entry.path}`, () => getNote(entry.path), refreshKey);
+  const res = view.res;
   const [render, setRender] = useState<NoteRenderer | 'failed' | null>(null);
   const [editing, setEditing] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     let live = true;
-    void getNote(entry.path).then((r) => { if (live) setRes(r); });
     loadRenderer().then((r) => live && setRender(() => r), () => live && setRender('failed'));
     return () => { live = false; };
-  }, [entry.path, refreshKey]);
+  }, []);
   useEffect(() => heading.current?.focus(), []);
 
   const note: OkNote | null = res?.kind === 'ok' && res.data.status === 'ok' ? res.data : null;
@@ -83,13 +81,15 @@ export function NoteScreen({ entry, refreshKey, queue, items, accountKey, baseRe
   else if (res.kind !== 'ok') message = unavailable(res, 'notes');
   else if (res.data.status === 'refused') message = res.data.code === 'not-found' ? 'This note is no longer in the Inbox.' : REFUSED[res.data.code];
 
-  const editable = note !== null && accountKey !== null && baseRevision !== null && canStartEdit(latest, note.blobSha);
+  // A copy is never edited: Edit waits for this read's answer, so the edit's blob SHA is the vault's current one.
+  const editable = note !== null && view.copyAt === null && accountKey !== null && baseRevision !== null && canStartEdit(latest, note.blobSha);
   return <section aria-label="Note" className="notes">
     <header className="note-head">
       <button type="button" onClick={onBack} aria-label="Back to notes">‹ Back</button>
       <h1 ref={heading} tabIndex={-1}>{entry.title}</h1>
       {note && <button type="button" className="primary" disabled={!editable} onClick={() => setEditing(true)}>Edit</button>}
     </header>
+    <CopyNote view={view} />
     {latest && <p className="muted small" role="status" data-testid="note-edit-state">
       {latest.state === 'saved' ? 'Saved to the vault; reaches Obsidian at your next desktop sync'
         : latest.state === 'attention' ? 'Your edit needs attention — see Actions below.' : 'Saving your edit…'}

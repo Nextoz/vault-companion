@@ -43,3 +43,53 @@ test('Notes (ADR-0022): list → view → edit offline → saved; frontmatter ne
   await expect(note.getByTestId('note-edit-state')).toHaveText('Saved to the vault; reaches Obsidian at your next desktop sync');
   await expect(note.getByTestId('note-body')).toContainText('Order by Friday.');
 });
+
+test('SP3 (ADR-0038): a note seen before reopens from its labelled copy when the read fails; a copy is never editable', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const api = new MockApi();
+  await api.install(page);
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await page.getByTestId('note-row').click();
+  const note = page.getByRole('region', { name: 'Note', exact: true });
+  await expect(note.getByTestId('note-body').locator('strong')).toHaveText('basil');
+  await expect(note.getByTestId('copy-note')).toHaveCount(0);
+  await expect(note.getByRole('button', { name: 'Edit' })).toBeEnabled();
+
+  await page.getByRole('button', { name: 'Training', exact: true }).click();
+  api.network = 'down';
+  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  const list = page.getByRole('region', { name: 'Notes', exact: true });
+  await expect(list.getByTestId('copy-note')).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
+  await list.getByTestId('note-row').click();
+  await expect(note.getByTestId('note-body').locator('strong')).toHaveText('basil');
+  await expect(note.getByTestId('copy-note')).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
+  await expect(note.getByRole('button', { name: 'Edit' })).toBeDisabled();
+  await page.screenshot({ path: test.info().outputPath('sp3-note-copy-390x844.png') });
+});
+
+test('SP3 (ADR-0038): signing out anywhere drops the copies; signed in again, nothing old is shown', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const api = new MockApi();
+  await api.install(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await expect(page.getByTestId('note-row')).toHaveCount(1);
+
+  // The sign-out is seen by the app's own session read on Today, never by the Notes screen.
+  await page.getByRole('button', { name: 'Today', exact: true }).click();
+  api.session = 'signed-out';
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('alert').filter({ hasText: 'Signed out' })).toBeVisible();
+  api.session = 'ok';
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByRole('alert').filter({ hasText: 'Signed out' })).toHaveCount(0);
+
+  api.network = 'down';
+  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  const list = page.getByRole('region', { name: 'Notes', exact: true });
+  await expect(list.getByRole('status')).toHaveText('Notes are only shown while connected.');
+  await expect(list.getByTestId('copy-note')).toHaveCount(0);
+  await expect(list.getByTestId('note-row')).toHaveCount(0);
+});
