@@ -204,6 +204,11 @@ textarea:focus-visible {
   color: var(--accent);
 }
 
+/* minmax(0, 1fr): an auto track grows to the chips' min-content and overflows 390 px on Linux fonts. */
+.scale-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; margin-bottom: 10px; }
+.scale-label { font-weight: 600; }
+.scale-ends { display: flex; justify-content: space-between; margin: 0; }
+
 .task-view {
   margin: 12px 0;
 }

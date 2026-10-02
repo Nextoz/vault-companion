@@ -10,6 +10,13 @@ test('mood check-in: chips, Danish sleep, collapse to "Checked in", and Undo', a
 
   const card = page.getByRole('region', { name: 'Mood check-in' });
   await expect(card).toBeVisible();
+  // B8: each chip row carries a visible label and what its scale ends mean.
+  for (const [label, low, high] of [['Mood', 'low', 'great'], ['Energy', 'drained', 'energised']] as const) {
+    const row = card.locator('.scale-row').filter({ has: page.getByRole('group', { name: label, exact: true }) });
+    await expect(row.locator('.scale-label')).toHaveText(label);
+    await expect(row.locator('.scale-ends')).toContainText(low);
+    await expect(row.locator('.scale-ends')).toContainText(high);
+  }
   const save = card.getByRole('button', { name: 'Check in', exact: true });
   await expect(save).toBeDisabled();
 
