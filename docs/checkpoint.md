@@ -1,9 +1,11 @@
-# Checkpoint — 2026-10-02 (B8)
+# Checkpoint — 2026-10-02 (B9)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
 
+- **B9** (Lead, ~5 lines): BTC history was blank because Coinbase `/candles` returns 400 without a User-Agent (`/ticker` does not); market fetches now send `User-Agent: vault-companion`; test asserts it.
+- **B11 in flight:** DeepSeek Flash worker in `C:\Dev\vault-companion-clones\b11` (base 248e97a, brief `.agent/brief.md`). Format decided: Type `Gym`, Split cell `Group: <class>` (`.agent/decisions.md`). Next Lead: if `.agent/handoffs/b11.md` exists run handoff-check (task b11), else wait on `run-b11.log`.
 - **Live before UX1: `f0580812`** (B5+B6, main 6dc275c). UX1 is deployed right after its merge; the new version ID
   and rollback target are in `.agent/decisions.md`.
 - **UX1** (worker, check clean; pnpm check 1819 + e2e 102): bottom tab bar Today · Scouts · Notes · Log · More
@@ -22,7 +24,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-1. Owner bug order (2026-10-02): **B11 → B12 → B9** (Ready Backlog bug table), before any new UX slice.
+1. Owner bug order (2026-10-02): **B11 (worker running) → B12** (same training files: start after B11 merges), before any new UX slice.
 2. Then UX2–UX5 → AB AI budget card → NY Needs You + Morning Review → SP phone measurement (re-read the backlog).
 
 ## Owner items

@@ -83,7 +83,7 @@ describe('bounded failures', () => {
   });
 
   it('refuses UTF8 byte overflow even when JSON character count fits', async () => {
-    const payload = JSON.stringify({ price: '60000', time: '2026-09-30T12:00:00Z', extra: 'é'.repeat(MAX_BODY_BYTES / 2) });
+    const payload = JSON.stringify({ price: '60000', time: '2026-09-30T12:00:00Z', extra: 'ï¿½'.repeat(MAX_BODY_BYTES / 2) });
     expect(payload.length).toBeLessThan(MAX_BODY_BYTES);
     expect(new TextEncoder().encode(payload).byteLength).toBeGreaterThan(MAX_BODY_BYTES);
     const source = createMarketSource({ fetch: async () => new Response(payload), now: () => NOW_MS });
@@ -116,6 +116,17 @@ describe('bounded failures', () => {
     await expect(bad.ticker()).resolves.toEqual({ status: 'unavailable', reason: 'provider-error' });
     const junk = createMarketSource({ fetch: async () => new Response('<html>', { status: 200 }), now: () => NOW_MS });
     await expect(junk.ticker()).resolves.toEqual({ status: 'unavailable', reason: 'malformed' });
+  });
+
+  it('sends a User-Agent on every provider call (Coinbase refuses candles without one, B9)', async () => {
+    const agents: (string | null)[] = [];
+    const call = createMarketSource({ fetch: async (url, init) => {
+      agents.push(new Headers(init?.headers).get('user-agent'));
+      return String(url).includes('/ticker') ? json({ price: '60000', time: '2026-09-30T12:00:00Z' }) : json([bucket(endSec - G)]);
+    }, now: () => NOW_MS });
+    await call.ticker();
+    await call.series('1W');
+    expect(agents).toEqual(['vault-companion', 'vault-companion']);
   });
 
   it('keeps a partial history absent rather than inventing one', async () => {
