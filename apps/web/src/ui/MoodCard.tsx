@@ -72,11 +72,11 @@ export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
   const guard = useRef(false);
 
   if (saved && !reopened) {
-    return <section className="group mood" aria-label="Mood check-in">
+    return <div className="group mood" role="region" aria-label="Mood check-in">
       <button type="button" onClick={() => {
         setMood(saved.mood); setEnergy(saved.energy); setSleepText(String(saved.sleep)); setReopened(true);
       }}>Checked in {localTime(saved.checkinAt)}</button>
-    </section>;
+    </div>;
   }
 
   const sleep = parseSleep(sleepText);
@@ -96,7 +96,7 @@ export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
     finally { guard.current = false; setSaving(false); }
   };
 
-  return <section className="group mood" aria-label="Mood check-in">
+  return <div className="group mood" role="region" aria-label="Mood check-in">
     <h2>Mood check-in</h2>
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
       <div className="segmented" role="group" aria-label="Mood">
@@ -109,7 +109,7 @@ export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
       {(!accountKey || !baseRevision) && <p className="muted small">Connect once to set up this device before checking in.</p>}
       {blocked && <p className="muted small">The vault is locked until the conflict is resolved in Obsidian.</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      <button type="submit" className="primary" disabled={saving || !ready}>Save check-in</button>
+      <button type="submit" className="primary" disabled={saving || !ready}>Check in</button>
     </form>
-  </section>;
+  </div>;
 }
