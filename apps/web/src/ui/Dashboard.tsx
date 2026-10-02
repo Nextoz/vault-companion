@@ -1,9 +1,10 @@
 // Dashboard (DASH1): read-only overview. One BTC/USD card with a 1W/1M/3M series, plus honest overview cards for the
 // AI usage and Health sources that are not connected yet. No writes, no provider calls from the browser.
 import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketSeries, MarketTickerResponse, WeatherCard } from '@vault-companion/contracts';
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { getDashboard, getMarketTicker, type Fetched } from '../api.ts';
+import { useCallback, useEffect, useId, useMemo, useState, type PointerEvent } from 'react';
+import { getDashboard, getMarketTicker } from '../api.ts';
 import './Dashboard.css';
+import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
 
 export const TICKER_POLL_MS = 60_000;
@@ -196,39 +197,37 @@ function OverviewCard({ card, onDrillthrough }: { card: DashboardCard; onDrillth
   );
 }
 
-export function Dashboard({ refreshKey, onDrillthrough }: { refreshKey: number | null; onDrillthrough?: ((view: string) => void) | undefined }) {
+export function Dashboard({ refreshKey, accountKey = null, onDrillthrough }: {
+  refreshKey: number | null; accountKey?: string | null; onDrillthrough?: ((view: string) => void) | undefined;
+}) {
   const [range, setRange] = useState<DashboardRange>('1W');
-  const [loaded, setLoaded] = useState<{ range: DashboardRange; data: DashboardResponse } | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [tickerFailed, setTickerFailed] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
-  const genRef = useRef(0);
+  const [poll, setPoll] = useState<MarketTickerResponse | null>(null);
+  const [tickerFailed, setTickerFailed] = useState(false);
+  const [lastGood, setLastGood] = useState<DashboardResponse | null>(null);
+  // SP3c (ADR-0038): each range opens from its own last copy. The ticker poll is merged into live answers only and
+  // never written into a copy.
+  const view = useLastCopy<DashboardResponse>(accountKey, `dashboard:${range}`, () => getDashboard(range), `${refreshKey}:${retryKey}`);
+  const res = view.res;
+  const isCopy = view.copyAt !== null;
+  const live = res?.kind === 'ok' && !isCopy;
+  const failed = res !== null && res.kind !== 'ok';
 
   useEffect(() => {
-    const gen = ++genRef.current;
-    let live = true;
-    void getDashboard(range).then((res: Fetched<DashboardResponse>) => {
-      if (!live || gen !== genRef.current) return;
-      if (res.kind === 'ok') {
-        setLoaded({ range, data: res.data });
-        setFailed(false);
-        setTickerFailed(false);
-      } else {
-        setFailed(true);
-      }
-    });
-    return () => { live = false; };
-  }, [range, refreshKey, retryKey]);
+    if (res?.kind !== 'ok') return;
+    setLastGood(res.data);
+    if (live) setTickerFailed(false);
+  }, [res]);
 
   useEffect(() => {
     const canPoll = () => (typeof document === 'undefined' || document.visibilityState !== 'hidden') && (typeof navigator === 'undefined' || navigator.onLine !== false);
+    let mounted = true;
     const tick = async () => {
       if (!canPoll()) return;
-      const gen = genRef.current;
       const res = await getMarketTicker();
-      if (gen !== genRef.current) return;
+      if (!mounted) return;
       if (res.kind === 'ok') {
-        setLoaded((previous) => (previous ? { ...previous, data: mergeTicker(previous.data, res.data) } : previous));
+        if (res.data.status === 'ok') setPoll(res.data);
         setTickerFailed(res.data.status !== 'ok');
       } else {
         setTickerFailed(true);
@@ -239,6 +238,7 @@ export function Dashboard({ refreshKey, onDrillthrough }: { refreshKey: number |
     document.addEventListener('visibilitychange', onWake);
     window.addEventListener('online', onWake);
     return () => {
+      mounted = false;
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onWake);
       window.removeEventListener('online', onWake);
@@ -246,13 +246,15 @@ export function Dashboard({ refreshKey, onDrillthrough }: { refreshKey: number |
   }, []);
 
   const onRange = useCallback((next: DashboardRange) => setRange(next), []);
-  const matching = loaded !== null && loaded.range === range ? loaded.data : null;
-  // When the requested range has not arrived yet, an older range's data may still be shown — but only labelled as stale.
-  const shown = matching ?? (failed ? loaded?.data ?? null : null);
+  // A failed read with no copy of this range may still show an earlier answer — but only labelled as stale.
+  const base = res?.kind === 'ok' ? res.data : failed ? lastGood : null;
+  // A poll older than the answer it would patch is ignored, so a late ticker never repaints a newer value.
+  const shown = base && live && poll && at(poll.now) >= at(base.now) ? mergeTicker(base, poll) : base;
   const market = shown?.cards.find((card): card is MarketCard => card.id === 'market') ?? null;
   const weather = shown?.cards.find((card): card is WeatherCard => card.id === 'weather') ?? null;
-  const stale = failed || tickerFailed || (market !== null && market.status === 'ok' && shown !== null && !marketFresh(market, at(shown.now)));
-  const weatherStale = failed || (weather !== null && weather.status === 'ok' && shown !== null && !weatherFresh(weather.projection, at(shown.now)));
+  const notLive = failed || isCopy;
+  const stale = notLive || tickerFailed || (market !== null && market.status === 'ok' && shown !== null && !marketFresh(market, at(shown.now)));
+  const weatherStale = notLive || (weather !== null && weather.status === 'ok' && shown !== null && !weatherFresh(weather.projection, at(shown.now)));
 
   return (
     <section className="dash" aria-label="Dashboard">
@@ -262,10 +264,11 @@ export function Dashboard({ refreshKey, onDrillthrough }: { refreshKey: number |
           <button key={r} type="button" aria-pressed={range === r} onClick={() => onRange(r)}>{r}</button>
         ))}
       </div>
+      <CopyNote view={view} />
       {!shown && !failed && <p className="muted" role="status">Loading…</p>}
       {!shown && failed && <p className="dash-note" role="status">The dashboard could not be loaded.</p>}
-      {(failed || market?.status === 'unavailable' || (market?.status === 'ok' && !market.series)) && <button type="button" className="link" onClick={() => setRetryKey((previous) => previous + 1)}>Retry dashboard</button>}
-      {shown && stale && <p className="dash-stale" role="status">Not refreshed — the times below are from the last success.</p>}
+      {(failed || view.failed || market?.status === 'unavailable' || (market?.status === 'ok' && !market.series)) && <button type="button" className="link" onClick={() => setRetryKey((previous) => previous + 1)}>Retry dashboard</button>}
+      {shown && stale && !isCopy && <p className="dash-stale" role="status">Not refreshed — the times below are from the last success.</p>}
       {shown && market && <MarketView card={market} stale={stale} onDrillthrough={onDrillthrough} />}
       {shown && weather && <WeatherCardView card={weather} stale={weatherStale} onDrillthrough={onDrillthrough} />}
       {shown && (

@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDashboard, getMarketTicker, type Fetched } from '../api.ts';
+import { lastCopies } from '../lastCopy.ts';
 import { Dashboard, MARKET_STALE_MS, mergeTicker, seriesSegments } from './Dashboard.tsx';
 
 vi.mock('../api.ts', () => ({ getDashboard: vi.fn(), getMarketTicker: vi.fn() }));
@@ -44,6 +45,7 @@ afterEach(async () => {
   dom.window.close();
   vi.useRealTimers();
   vi.clearAllMocks();
+  lastCopies.clear();
 });
 
 const render = async (cards?: DashboardCard[], onDrillthrough?: (view: string) => void) => {
@@ -183,6 +185,63 @@ describe('ticker polling guard (DASH1)', () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
     expect(vi.mocked(getMarketTicker)).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('last copy per range (SP3c, ADR-0038)', () => {
+  const mount = async (accountKey: string | null) => {
+    root = createRoot(document.getElementById('root')!);
+    await act(async () => { root!.render(createElement(Dashboard, { refreshKey: 0, accountKey })); });
+  };
+  const remount = async (accountKey: string | null) => {
+    await act(async () => root!.unmount());
+    await mount(accountKey);
+  };
+
+  it('reopens a range seen before from its labelled copy, and never shows it for another range', async () => {
+    vi.mocked(getDashboard).mockResolvedValue(ok());
+    await mount('account-a');
+    expect(document.querySelector('[data-testid="copy-note"]')).toBeNull();
+    const pending = deferred<Fetched<DashboardResponse>>();
+    vi.mocked(getDashboard).mockReturnValue(pending.promise);
+    await remount('account-a');
+    expect(text()).toContain('$60,123.45');
+    expect(document.querySelector('[data-testid="copy-note"]')!.textContent).toMatch(/^Showing the copy from \d\d:\d\d · refreshing…$/);
+    expect(text()).toContain('Stale'); // a copy is never labelled Live
+    await click(button('1M'));
+    expect(text()).toContain('Loading…'); // 1M was never seen: no copy, and the 1W copy is not reused for it
+    expect(text()).not.toContain('$60,123.45');
+    await click(button('1W'));
+    await act(async () => { pending.resolve({ kind: 'error', message: 'synthetic failure' }); await Promise.resolve(); });
+    expect(document.querySelector('[data-testid="copy-note"]')!.textContent).toMatch(/^Could not refresh · showing the copy from \d\d:\d\d$/);
+    expect(button('Retry dashboard')).toBeDefined();
+    await remount('account-b');
+    expect(text()).not.toContain('$60,123.45'); // another account never sees this copy
+  });
+
+  it('merges the ticker into live answers only: the copy keeps the read it came from', async () => {
+    vi.useFakeTimers();
+    const later = new Date(Date.parse(NOW) + 60_000).toISOString();
+    vi.mocked(getMarketTicker).mockResolvedValue({ kind: 'ok', data: MarketTickerResponse.parse({ status: 'ok', now: later, ticker: { ...TICKER, price: 61000, providerTime: later }, fetchedAt: later }) });
+    vi.mocked(getDashboard).mockResolvedValue(ok());
+    await mount('account-a');
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(text()).toContain('$61,000.00');
+    vi.mocked(getDashboard).mockResolvedValue({ kind: 'error', message: 'synthetic failure' });
+    await remount('account-a');
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(text()).toContain('$60,123.45');
+    expect(text()).not.toContain('$61,000.00');
+  });
+
+  it('ignores a ticker poll older than the answer it would patch', async () => {
+    vi.useFakeTimers();
+    const earlier = new Date(Date.parse(NOW) - 60_000).toISOString();
+    vi.mocked(getMarketTicker).mockResolvedValue({ kind: 'ok', data: MarketTickerResponse.parse({ status: 'ok', now: earlier, ticker: { ...TICKER, price: 59000, providerTime: earlier }, fetchedAt: earlier }) });
+    await render();
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(text()).toContain('$60,123.45');
+    expect(text()).not.toContain('$59,000.00');
   });
 });
 
