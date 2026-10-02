@@ -1,16 +1,15 @@
-# Checkpoint — 2026-10-02 04:05 (UI refresh complete: slices 1–5 merged, not deployed)
+# Checkpoint — 2026-10-02 04:50 (UI refresh 1–5 + SP3a merged, not deployed)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
 
-- **Merged, NOT deployed: UI refresh slices 1 #67, 2 #69, 3 #71, 4 #73, 5 #75** (main `55b0ba3`). Slice 5: Notes in
-  iPhone mode, sheets with grabber, Radar purple panels + token badges, last hard-coded old colours removed. Slice 1: dark iOS tokens + Today
-  pilot (ADR-0037). Slice 2: Scouts board — two-column stat tiles (health dot, big findings number in health colour,
-  last run, decorative sparkline); scout/Insights colours on tokens. Slice 3: Dashboard + Weather board panels (SVG,
-  Jev chose SVG over uPlot ⇒ no dep/ADR), indigo/orange gradient lines; fixed Weather lines plotting raw values as
-  pixel y. Slice 4: Training + Progress/History in iPhone mode, SVG `BarChart` + pure `week-chart.ts`: cyan
-  "Sessions per week" (8 wk) and green "Tasks done this week" (Jev: fits ADR-0021, 0.93). Screenshots: `.agent/screenshots/ui1-today-*`, `ui2-scouts-390x844.png`, `ui3-dashboard-*`, `ui4-*`, `ui5-*` (+ `ui5-before-*`). Production deploys are denied by the auto-mode classifier — owner deploys.
+- **Merged, NOT deployed: SP3a #77** (main `298c425`): Notes list, a note and Training reopen from an in-memory last copy,
+  labelled "Showing the copy from HH:MM · refreshing…" / "Could not refresh · …"; a copy is never editable; any sign-out
+  clears (ADR-0038, memory only). Screenshot `.agent/screenshots/sp3-note-copy-390x844.png`.
+- **Merged, NOT deployed: UI refresh slices 1 #67, 2 #69, 3 #71, 4 #73, 5 #75** (dark iOS tokens, ADR-0037; details in
+  `.agent/overnight-decisions.md`; screenshots `.agent/screenshots/ui*`). Production deploys are denied by the
+  auto-mode classifier — owner deploys.
 - **Live: SP4 + Mood M1** (Worker `f5ea4843` = rollback target for the next deploy; older rollback `cae397cc`).
 - **Worker launches:** codex (Flash/Pro) launches are denied by the classifier ([Create Unsafe Agents]); GLM trial
   FAILED (two silent exits). Until the owner allows codex launches, the Lead implements small ordinary slices itself.
@@ -22,18 +21,19 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 1. **Mood M2** (high-risk, Pro): brief ready in `C:/Dev/vault-companion-clones/mood-m2/.agent/brief.md` (base
    `ad1a9bb`; rebase/re-clone onto main first). Blocked on a codex launch (owner) — do not self-implement.
-2. **SP3** (next Ready Backlog item after UI; read the backlog's SP section first). Lead may implement if ordinary.
+2. **SP3b**: Progress/History (and Dashboard) adopt `useLastCopy` (`apps/web/src/ui/useLastCopy.tsx`); ordinary, Lead
+   may implement. Then SP remainder per the backlog (phone measurement is the owner's).
 3. M3 Today mood card after M2.
 
 ## Owner items
 
-- Deploy main `55b0ba3` (#67 + #69 + #71 + #73 + #75): from `apps/worker` after a clean `pnpm build`: `wrangler versions upload
-  --tag ui5-55b0ba3 --message "UI refresh slices 1-5"` then `wrangler versions deploy <id>@100% --yes`; rollback `f5ea4843`.
+- Deploy main `298c425` (#67 + #69 + #71 + #73 + #75 + #77): from `apps/worker` after a clean `pnpm build`: `wrangler versions upload
+  --tag sp3a-298c425 --message "UI refresh 1-5 + SP3a"` then `wrangler versions deploy <id>@100% --yes`; rollback `f5ea4843`.
 - Allow codex worker launches (Bash permission rule) or launch Mood M2 yourself.
-- Describe the phone symptom. Review ADR-0036 (Mood) and ADR-0037 (UI tokens).
+- Describe the phone symptom. Review ADR-0036 (Mood), ADR-0037 (UI tokens), ADR-0038 (last copy).
 - Phone acceptance (after the phone fix): Dashboard, R1 explainer, This Morning, Radar, the new dark Today + Scouts + Dashboard/Weather + Training + Progress + Notes/Radar/sheets.
 
 ## Budget
 
 DeepSeek: $9.80 (owner-status 03:00). GLM-5.2: ~24k/900k local estimate.
-CodeRabbit CLI: 3 reviews used in last hour (~02:57, ~03:33, ~04:00).
+CodeRabbit CLI: reviews at ~04:00 and ~04:35 (one rate-limited attempt 04:16).
