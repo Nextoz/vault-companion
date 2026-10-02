@@ -25,7 +25,6 @@ const SCREEN: Record<string, string> = {
   scouts: 'Scouts',
   history: 'Progress',
   status: 'Status',
-  actions: 'Actions',
 };
 
 export function screenName(tab: string): string {

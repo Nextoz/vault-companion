@@ -9,15 +9,14 @@ export type Tab =
   | 'training'
   | 'scouts'
   | 'history'
-  | 'status'
-  | 'actions';
+  | 'status';
 
 /** The five bottom-bar buttons. */
 export type BarKey = 'today' | 'tasks' | 'scouts' | 'notes' | 'log';
 
 /**
  * Which bottom-bar button is pressed for a screen; 'all' shares Tasks, both Log views share Log.
- * The header's Status screen (and the retained Actions screen) belong to no bar button: nothing is pressed.
+ * The header's Status screen belongs to no bar button: nothing is pressed.
  */
 export function barKey(tab: Tab): BarKey | null {
   switch (tab) {
@@ -35,7 +34,6 @@ export function barKey(tab: Tab): BarKey | null {
     case 'notes':
       return 'notes';
     case 'status':
-    case 'actions':
       return null;
   }
 }

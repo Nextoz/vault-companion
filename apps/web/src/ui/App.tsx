@@ -309,7 +309,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   // ADR-0037 tokens: red = cannot work, yellow = something to see, green = settled.
   const statusDot = signedOut || readFailed || connection === 'error' || connection === 'offline'
     ? 'red'
-    : needsAttention || readsInFlight > 0 || snapshot.items.length > 0
+    : needsAttention || readsInFlight > 0 || snapshot.items.some((i) => i.state !== 'saved')
       ? 'yellow'
       : 'green';
   const openStatus = () => {
@@ -399,15 +399,6 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {tab === 'status' && !signedOut && (
           <>
             <Back onBack={() => setTab(statusReturn)} />
-            {!needsAttention && (
-              <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
-            )}
-          </>
-        )}
-
-        {tab === 'actions' && !signedOut && (
-          <>
-            <Back onBack={() => setTab('today')} />
             {!needsAttention && (
               <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
             )}
