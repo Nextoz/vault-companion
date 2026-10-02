@@ -972,3 +972,4 @@ textarea:focus-visible {
 .edit-sheet input,
 .edit-sheet select,
 .sheet label input { background: var(--surface); border-color: transparent; }
+.vault-status .read-speed { margin: 0.25rem 0 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }

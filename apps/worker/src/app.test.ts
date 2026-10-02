@@ -141,6 +141,10 @@ describe('responses', () => {
       expect(res.headers.get('Permissions-Policy')).toBe('camera=(), microphone=(), geolocation=(self), payment=()');
     }
   });
+  it('reports the same Worker time in Server-Timing as in the log, and nothing else there', async () => {
+    const res = await makeApp().request('/api/session');
+    expect(res.headers.get('Server-Timing')).toBe(`app;dur=${logs.at(-1)!.durationMs}`);
+  });
   it.each([
     ['conflict:task-changed', 409],
     ['refused:recurring', 422],

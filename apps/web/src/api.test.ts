@@ -1,6 +1,7 @@
 import { SessionResponse } from '@vault-companion/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getJson, getTasks, READ_TIMEOUT_MS } from './api.ts';
+import { clearReadTimings, readTimings } from './timings.ts';
 
 const ok = { accountKey: 'a'.repeat(64) };
 const json = (body: unknown, status = 200) =>
@@ -22,6 +23,18 @@ describe('getJson: bounded session and task reads (P4-B)', () => {
   it('answers ok for a valid reply', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json(ok)));
     await expect(getJson('/api/session', SessionResponse)).resolves.toEqual({ kind: 'ok', data: ok });
+  });
+
+  it('records the read time and the Worker time per route, without the query', async () => {
+    clearReadTimings();
+    const res = json(ok);
+    res.headers.set('Server-Timing', 'app;dur=42');
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      vi.advanceTimersByTime(250); // the phone's view of the round trip
+      return res;
+    }));
+    await getJson('/api/session?known=secret', SessionResponse);
+    expect(readTimings()).toEqual([expect.objectContaining({ route: '/api/session', totalMs: 250, serverMs: 42 })]);
   });
 
   it('gives up on a read the server never answers after the fixed timeout, as an error', async () => {
