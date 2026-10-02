@@ -355,6 +355,7 @@ export const ErrorCode = z.enum([
   'refused:invalid-edit',
   'conflict:task-changed',
   'conflict:mood-changed',
+  'conflict:training-changed',
   'conflict:report-changed',
   'conflict:ambiguous',
   'conflict:stale',
