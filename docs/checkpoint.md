@@ -1,9 +1,11 @@
-# Checkpoint — 2026-10-02 04:50 (UI refresh 1–5 + SP3a merged, not deployed)
+# Checkpoint — 2026-10-02 05:15 (UI refresh 1–5 + SP3a + SP3b merged, not deployed)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
 
+- **Merged, NOT deployed: SP3b #79** (main `5cf4a15`): Progress opens from its last copies (one note, oldest copy);
+  a copied history offers no Reopen. Dashboard deferred to SP3c. Screenshot `.agent/screenshots/sp3b-progress-copy-390x844.png`.
 - **Merged, NOT deployed: SP3a #77** (main `298c425`): Notes list, a note and Training reopen from an in-memory last copy,
   labelled "Showing the copy from HH:MM · refreshing…" / "Could not refresh · …"; a copy is never editable; any sign-out
   clears (ADR-0038, memory only). Screenshot `.agent/screenshots/sp3-note-copy-390x844.png`.
@@ -21,14 +23,14 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 1. **Mood M2** (high-risk, Pro): brief ready in `C:/Dev/vault-companion-clones/mood-m2/.agent/brief.md` (base
    `ad1a9bb`; rebase/re-clone onto main first). Blocked on a codex launch (owner) — do not self-implement.
-2. **SP3b**: Progress/History (and Dashboard) adopt `useLastCopy` (`apps/web/src/ui/useLastCopy.tsx`); ordinary, Lead
-   may implement. Then SP remainder per the backlog (phone measurement is the owner's).
+2. **SP3c**: Dashboard adopts `useLastCopy` (key per range; the ticker merge stays live-only; a copy shows no
+   drill-through actions that write). Ordinary, Lead may implement. Then SP remainder per the backlog.
 3. M3 Today mood card after M2.
 
 ## Owner items
 
-- Deploy main `298c425` (#67 + #69 + #71 + #73 + #75 + #77): from `apps/worker` after a clean `pnpm build`: `wrangler versions upload
-  --tag sp3a-298c425 --message "UI refresh 1-5 + SP3a"` then `wrangler versions deploy <id>@100% --yes`; rollback `f5ea4843`.
+- Deploy main `5cf4a15` (#67 + #69 + #71 + #73 + #75 + #77 + #79): from `apps/worker` after a clean `pnpm build`: `wrangler versions upload
+  --tag sp3b-5cf4a15 --message "UI refresh 1-5 + SP3a/b"` then `wrangler versions deploy <id>@100% --yes`; rollback `f5ea4843`.
 - Allow codex worker launches (Bash permission rule) or launch Mood M2 yourself.
 - Describe the phone symptom. Review ADR-0036 (Mood), ADR-0037 (UI tokens), ADR-0038 (last copy).
 - Phone acceptance (after the phone fix): Dashboard, R1 explainer, This Morning, Radar, the new dark Today + Scouts + Dashboard/Weather + Training + Progress + Notes/Radar/sheets.
@@ -36,4 +38,4 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 ## Budget
 
 DeepSeek: $9.80 (owner-status 03:00). GLM-5.2: ~24k/900k local estimate.
-CodeRabbit CLI: reviews at ~04:00 and ~04:35 (one rate-limited attempt 04:16).
+CodeRabbit CLI: reviews at ~04:35 and ~05:08. Jev: one call hung >15 min at 04:55 (SP3b scope); decided without it.
