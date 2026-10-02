@@ -32,20 +32,24 @@ it('suggests Group class names newest-first, distinct case-sensitively, capped a
 describe('rowToDraft (B12)', () => {
   it('turns canonical cells into the sheet draft', () => {
     expect(rowToDraft({ date: '2026-09-28', time: '10:00', type: 'Run', distance: '5.2 km', duration: '28 min', weight: '', split: '', note: 'Easy loop' }))
-      .toEqual({ type: 'Run', when: '2026-09-28T10:00', distance: '5.2', duration: '28', weight: '', split: 'Bicep', className: '', note: 'Easy loop' });
+      .toEqual({ type: 'Run', when: '2026-09-28T10:00', distance: '5.2', distanceWas: null, duration: '28', durationWas: null, weight: '', weightWas: null, split: '', className: '', note: 'Easy loop' });
     expect(rowToDraft({ date: '2026-09-28', time: '', type: 'Gym', distance: '', duration: '60 min', weight: '82.4 kg', split: 'Tricep', note: '' }))
-      .toEqual({ type: 'Gym', when: '', distance: '', duration: '60', weight: '82.4', split: 'Tricep', className: '', note: '' });
+      .toEqual({ type: 'Gym', when: '', distance: '', distanceWas: null, duration: '60', durationWas: null, weight: '82.4', weightWas: null, split: 'Tricep', className: '', note: '' });
   });
-  it('reads a legacy run without a unit and leaves unparseable cells empty', () => {
+  it('reads a legacy run without a unit and remembers cells it cannot parse', () => {
     expect(rowToDraft({ ...base, distance: '5.2km', duration: '28 min' }).distance).toBe('5.2');
     expect(rowToDraft({ ...base, distance: 'fast', duration: '', weight: 'heavy', note: '' }))
-      .toMatchObject({ distance: '', duration: '', weight: '' });
-    expect(rowToDraft({ ...base, type: 'Gym', split: 'Push' }).split).toBe('Bicep');
+      .toMatchObject({ distance: '', distanceWas: 'fast', duration: '', durationWas: null, weight: '', weightWas: 'heavy' });
   });
-  it('reads Group with its class name and unescapes the writer’s cells', () => {
-    const draft = rowToDraft({ ...base, type: 'Gym', split: 'Group: Yoga\\|Spin', note: 'a \\\\ b \\| c' });
+  it('leaves an unsupported split unselected instead of defaulting it', () => {
+    const draft = rowToDraft({ ...base, type: 'Gym', split: 'Push' });
+    expect(draft.split).toBe('');
+    expect(draft.className).toBe('');
+  });
+  it('keeps a literal backslash-pipe in the read’s note and class unchanged', () => {
+    const draft = rowToDraft({ ...base, type: 'Gym', split: 'Group: Yoga\\|Spin', note: 'a \\| b' });
     expect(draft.split).toBe('Group');
-    expect(draft.className).toBe('Yoga|Spin');
-    expect(draft.note).toBe('a \\ b | c');
+    expect(draft.className).toBe('Yoga\\|Spin');
+    expect(draft.note).toBe('a \\| b');
   });
 });

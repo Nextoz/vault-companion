@@ -58,45 +58,47 @@ export function groupClassSuggestions(rows: readonly TrainingRow[], limit = 6): 
 /** What the training sheet's controlled inputs hold; every field is a string, so an unparseable cell stays empty. */
 export interface TrainingDraft {
   type: 'Gym' | 'Run';
-  /** `YYYY-MM-DDTHH:MM` for the datetime-local input; empty means the sheet keeps its own default (now). */
+  /** `YYYY-MM-DDTHH:MM` for the datetime-local input; empty when the read had no time. */
   when: string;
   distance: string;
+  /** The original cell when it is non-empty but does not parse; null otherwise. */
+  distanceWas: string | null;
   duration: string;
+  durationWas: string | null;
   weight: string;
-  split: 'Bicep' | 'Tricep' | 'Legs' | 'Group';
+  weightWas: string | null;
+  /** Empty when the read's split is not a known workout; the sheet then requires a choice before saving. */
+  split: '' | 'Bicep' | 'Tricep' | 'Legs' | 'Group';
   className: string;
   note: string;
-}
-
-/** Inverse of the writer's cell escaping: `\\` and `\|` decode; any other backslash stays literal. */
-function unescapeCell(value: string): string {
-  let out = '';
-  for (let i = 0; i < value.length; i++) {
-    if (value[i] === '\\' && (value[i + 1] === '|' || value[i + 1] === '\\')) out += value[++i];
-    else out += value[i];
-  }
-  return out;
 }
 
 const text = (value: number | null): string => (value === null ? '' : String(value));
 
 /**
  * B12: a read row to the sheet's draft. Only Run and Gym rows are tappable, so any other type prefills as Gym.
- * A cell the summary parser cannot read (or a split that is not a known value) stays empty for the owner to fill.
+ * The read already decodes cell escapes, so note and class travel verbatim. A cell that does not parse stays
+ * empty, and its raw non-empty value is kept in `…Was` so the sheet can show what it could not read.
  */
 export function rowToDraft(row: TrainingRow): TrainingDraft {
+  const distance = numberWithUnit(row.distance, 'km');
+  const duration = numberWithUnit(row.duration, 'min');
+  const weight = numberWithUnit(row.weight, 'kg');
   const group = row.split.startsWith('Group: ') ? row.split.slice('Group: '.length) : null;
   const split = row.split === 'Bicep' || row.split === 'Tricep' || row.split === 'Legs' || group !== null
     ? (group !== null ? 'Group' : (row.split as 'Bicep' | 'Tricep' | 'Legs'))
-    : 'Bicep';
+    : '';
   return {
     type: row.type === 'Run' ? 'Run' : 'Gym',
     when: row.time ? `${row.date}T${row.time}` : '',
-    distance: text(numberWithUnit(row.distance, 'km')),
-    duration: text(numberWithUnit(row.duration, 'min')),
-    weight: text(numberWithUnit(row.weight, 'kg')),
+    distance: text(distance),
+    distanceWas: distance === null && row.distance !== '' ? row.distance : null,
+    duration: text(duration),
+    durationWas: duration === null && row.duration !== '' ? row.duration : null,
+    weight: text(weight),
+    weightWas: weight === null && row.weight !== '' ? row.weight : null,
     split,
-    className: group === null ? '' : unescapeCell(group),
-    note: unescapeCell(row.note),
+    className: group ?? '',
+    note: row.note,
   };
 }

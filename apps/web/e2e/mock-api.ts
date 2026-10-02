@@ -162,6 +162,8 @@ export class MockApi {
   trainingMode: 'ok' | 'error' | 'hang' = 'ok';
   trainingUnknownLines: string[] = [];
   #trainingBefore = new Map<string, TrainingRow[]>();
+  /** B12: each applied edit's original row and the row it wrote, so an Undo can swap exactly that row back. */
+  #trainingEdits = new Map<string, { before: TrainingRow; after: TrainingRow }>();
   session: 'ok' | 'signed-out' = 'ok';
   /** The account the session reports (switch it to simulate signing in as someone else). */
   account = ACCOUNT;
@@ -578,12 +580,20 @@ export class MockApi {
     if ((command.type === 'UndoCompleteTask' || command.type === 'UndoActiveWork' || command.type === 'UndoEditTraining') && this.#receipts.get(command.payload.target.operationId)?.commitSha !== command.payload.targetCommit) {
       return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'Undo target does not match.', retryable: false }));
     }
-    // B12: an edit locates its row by exact cells; a row that moved in Obsidian is a conflict, never a guess.
-    if (command.type === 'EditTraining' && !this.trainingRows.some((r) => sameTrainingRow(r, command.payload.row))) {
-      return this.#json(route, 409, ApiError.parse({ code: 'conflict:training-changed', message: 'That session changed in Obsidian.', retryable: false }));
-    }
     const previous = this.#receipts.get(command.operationId);
     if (previous) return this.#json(route, 200, { ...previous, status: 'already-applied' });
+    // B12: an edit locates its row by exact cells; moved => conflict, ambiguous => conflict, never a guess.
+    if (command.type === 'EditTraining') {
+      const matches = this.trainingRows.filter((r) => sameTrainingRow(r, command.payload.row)).length;
+      if (matches === 0) return this.#json(route, 409, ApiError.parse({ code: 'conflict:training-changed', message: 'That session changed in Obsidian.', retryable: false }));
+      if (matches > 1) return this.#json(route, 409, ApiError.parse({ code: 'conflict:ambiguous', message: 'More than one session matches.', retryable: false }));
+    }
+    if (command.type === 'UndoEditTraining') {
+      const edit = this.#trainingEdits.get(command.payload.target.operationId);
+      if (!edit || !this.trainingRows.some((r) => sameTrainingRow(r, edit.after))) {
+        return this.#json(route, 409, ApiError.parse({ code: 'conflict:training-changed', message: 'That session changed in Obsidian.', retryable: false }));
+      }
+    }
     const receipt = Receipt.parse(this.#apply(command));
     this.#receipts.set(command.operationId, receipt);
     this.applied.push(command);
@@ -634,21 +644,25 @@ export class MockApi {
       }
       case 'EditTraining': {
         const { row, session } = command.payload;
-        this.#trainingBefore.set(command.operationId, structuredClone(this.trainingRows));
+        const index = this.trainingRows.findIndex((r) => sameTrainingRow(r, row));
+        if (index < 0) throw new Error('mock: editing an unknown row');
         const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(session.when));
         const replacement: TrainingRow = { date: copenhagenDay(session.when), time: parts, type: session.type,
           distance: session.type === 'Run' ? session.distance.toFixed(1) : '', duration: String(session.duration),
           weight: session.type === 'Gym' && session.weight !== undefined ? session.weight.toFixed(1) : '',
           split: session.type === 'Gym' ? (session.split === 'Group' ? `Group: ${session.className ?? ''}` : session.split) : '',
           note: session.note ?? '' };
-        this.trainingRows = this.trainingRows.map((r) => (sameTrainingRow(r, row) ? replacement : r));
+        this.#trainingEdits.set(command.operationId, { before: row, after: replacement });
+        this.trainingRows = this.trainingRows.map((r, i) => (i === index ? replacement : r));
         this.trainingRows.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
         return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'edited', lineText: '| synthetic session |' } };
       }
       case 'UndoEditTraining': {
-        const before = this.#trainingBefore.get(command.payload.target.operationId);
-        if (!before) throw new Error('mock: unknown training edit undo');
-        this.trainingRows = before;
+        const edit = this.#trainingEdits.get(command.payload.target.operationId);
+        const index = edit ? this.trainingRows.findIndex((r) => sameTrainingRow(r, edit.after)) : -1;
+        if (!edit || index < 0) throw new Error('mock: unknown training edit undo');
+        this.trainingRows = this.trainingRows.map((r, i) => (i === index ? edit.before : r));
+        this.trainingRows.sort((a, b) => (b.date + b.time).localeCompare(a.date + b.time));
         return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'undone', lineText: '| synthetic session |' } };
       }
       case 'MoodCheckin':
