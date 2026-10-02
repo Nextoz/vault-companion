@@ -317,7 +317,10 @@ export function createApp(deps: AppDeps) {
     const verifyIngest = deps.verifyIngest;
     if (!ingest || !verifyIngest) return c.json({ ok: false, error: 'not found' }, 404);
     const identity = await verifyIngest(c.req.header('Cf-Access-Jwt-Assertion'));
-    if (!identity.ok) return c.json({ ok: false, error: 'sign in required' }, 401);
+    if (!identity.ok) {
+      c.get('logMeta').errorCode = `health-ingest:auth:${identity.reason}`;
+      return c.json({ ok: false, error: 'sign in required' }, 401);
+    }
 
     const text = await c.req.text();
     if (new TextEncoder().encode(text).length > MAX_HEALTH_INGEST_BYTES) {
