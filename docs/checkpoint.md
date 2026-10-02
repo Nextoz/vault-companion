@@ -4,12 +4,9 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## State
 
-- **HC3a** (ADR-0043; Pro worker, both reviewers: 2 real fixes incl. a wiring bug that made the route always 404,
-  now covered by `health-ingest-wiring.test.ts`; pnpm check 1885 + e2e 103/104, `actions.spec` flaky under load, 2/2
-  alone): `POST /api/health/ingest`, own service-token verifier (ingest AUD only, no email claim), rewrites only
-  sent days of the health CSV via `executeWrite`. Off (404) until secret `HEALTH_INGEST_AUD` is set.
-- **UX1b** live: bar Today · Tasks · Scouts · Notes · Log; status dot → Status (Back + Actions).
-- **B12** (ADR-0042) edit training; **B9** BTC history; **B11** Group training (ADR-0041); **B8**; **B7** — all live.
+- **HC3a** (ADR-0043): `POST /api/health/ingest`, own service-token verifier (ingest AUD only, no email claim),
+  rewrites only sent days of the health CSV via `executeWrite`. `HEALTH_INGEST_AUD` set by owner 2026-10-02.
+- **UX1b** (bar, status dot → Status) · **B12** (ADR-0042) edit training; **B9** BTC history; **B11** Group training (ADR-0041); **B8**; **B7** — all live.
 - FB1/FB2 (Report button, ADR-0040) live. Launcher gotcha: prepend Git's `bin` to PATH before
   `tools/launch-worker.ps1`, else `agent-pane.sh: No such file`.
 - `pnpm -r exec tsc --noEmit` reads stale `dist` d.ts via project references; use `pnpm typecheck` (`tsc -b`).
@@ -18,8 +15,11 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-1. **HC3a** deployed (afc5b960) but **off**: owner sets `HEALTH_INGEST_AUD`, builds the Shortcut per
-   `docs/health-shortcut.md`, runs it once → fix the parser for any field/line error the owner reports (names only).
+1. **HC3a live 401** (owner set AUD + built Shortcut; Worker gets the Access JWT, still 401). Diagnostics deployed:
+   the ingest route logs `errorCode: health-ingest:auth:<reason>` (no-token, bad-signature, iss, aud, expired,
+   missing-claim, email-present, lifetime, other; never token/claims). Next Lead: run `wrangler tail` (filter route
+   `/api/health/ingest`) in the background, post ACTION NEEDED "run the Shortcut once", read the code, fix the cause
+   with a test (a Cloudflare-shaped service-token test already passes: type, aud[], sub:"", 24 h), deploy.
 2. **HC3b** history view: range chips 30 d / 90 d / 1 y / all for steps, headphone, first/last move (Flash, ordinary).
 3. Then UX2–UX5 (UX1b overrides them where they differ) → AB AI budget card → NY Needs You + Morning Review → SP
    phone measurement (re-read the backlog).

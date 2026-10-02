@@ -3,12 +3,14 @@ import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWK } from
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp, type Services } from './app.ts';
 import { createServiceTokenVerifier } from './auth.ts';
+import type { LogRecord } from './log.ts';
 
 const ACCOUNT = 'a'.repeat(64);
 const EMAIL = 'owner@example.com';
 const COMMON_NAME = 'health-ingest-shortcut';
 
 let calls: string[] = [];
+let logs: LogRecord[] = [];
 let next: HealthIngestOutcome;
 
 const okOutcome: HealthIngestOutcome = { ok: true, days: ['2026-09-29'], commitSha: '2'.repeat(40) };
@@ -38,12 +40,14 @@ function makeApp(withIngest = true) {
     ...(withIngest
       ? {
           verifyIngest: async (token) =>
-            token === 'ingest' ? { ok: true, commonName: COMMON_NAME } : { ok: false },
+            token === 'ingest' ? { ok: true, commonName: COMMON_NAME } : { ok: false, reason: 'aud' },
         }
       : {}),
     appOrigin: 'https://vc.example.com',
     services: services(withIngest),
-    log: () => {},
+    log: (record) => {
+      logs.push(record);
+    },
   });
 }
 
@@ -57,10 +61,18 @@ function post(path: string, token = 'ingest', body = '{}') {
 
 beforeEach(() => {
   calls = [];
+  logs = [];
   next = okOutcome;
 });
 
 describe('POST /api/health/ingest route', () => {
+  it('logs only the refusal reason code on a 401, never the token', async () => {
+    const res = await post('/api/health/ingest', 'not-the-token');
+    expect(res.status).toBe(401);
+    expect(logs.at(-1)?.errorCode).toBe('health-ingest:auth:aud');
+    expect(JSON.stringify(logs)).not.toContain('not-the-token');
+  });
+
   it('skips user auth for the exact POST, verifies the service token, and returns days', async () => {
     const body = '{"schemaVersion":1}';
     const res = await post('/api/health/ingest', 'ingest', body);
@@ -139,12 +151,14 @@ describe('createServiceTokenVerifier', () => {
     verify = createServiceTokenVerifier({ keys: createLocalJWKSet({ keys: [jwk] }), issuer: ISS, audience: INGEST_AUD });
   });
 
-  function token(opts: { key?: CryptoKey; aud?: string; commonName?: string; email?: string; exp?: string | number; iat?: number } = {}) {
-    const claims: Record<string, unknown> = { common_name: opts.commonName ?? COMMON_NAME };
+  function token(
+    opts: { key?: CryptoKey; aud?: string; iss?: string; commonName?: string | null; email?: string; exp?: string | number; iat?: number } = {},
+  ) {
+    const claims: Record<string, unknown> = opts.commonName === null ? {} : { common_name: opts.commonName ?? COMMON_NAME };
     if (opts.email !== undefined) claims.email = opts.email;
     return new SignJWT(claims)
       .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
-      .setIssuer(ISS)
+      .setIssuer(opts.iss ?? ISS)
       .setAudience(opts.aud ?? INGEST_AUD)
       .setIssuedAt(opts.iat)
       .setExpirationTime(opts.exp ?? '10m')
@@ -155,15 +169,29 @@ describe('createServiceTokenVerifier', () => {
     expect(await verify(await token())).toEqual({ ok: true, commonName: COMMON_NAME });
   });
 
+  it("accepts Cloudflare's documented service-token payload (type, aud[], sub:'', 24 h session)", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const jwt = await new SignJWT({ type: 'app', aud: [INGEST_AUD], exp: now + 24 * 3600, iss: ISS, common_name: COMMON_NAME, iat: now, sub: '' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
+      .sign(good);
+    expect(await verify(jwt)).toEqual({ ok: true, commonName: COMMON_NAME });
+  });
+
+  const now = () => Math.floor(Date.now() / 1000);
   it.each([
-    ['missing token', async () => undefined],
-    ['wrong audience', async () => token({ aud: MAIN_AUD })],
-    ['signed by another key', async () => token({ key: other })],
-    ['email claim present', async () => token({ email: EMAIL })],
-    ['empty common_name', async () => token({ commonName: '' })],
-    ['lifetime over 24 h', async () => token({ exp: '30h' })],
-    ['issued in the future', async () => token({ iat: Math.floor(Date.now() / 1000) + 3600, exp: Math.floor(Date.now() / 1000) + 7200 })],
-  ])('rejects %s', async (_name, make) => {
-    expect(await verify(await make())).toEqual({ ok: false });
+    ['missing token', 'no-token', async () => undefined],
+    ['wrong audience', 'aud', async () => token({ aud: MAIN_AUD })],
+    ['wrong issuer', 'iss', async () => token({ iss: 'https://other-team.cloudflareaccess.com' })],
+    ['signed by another key', 'bad-signature', async () => token({ key: other })],
+    ['malformed token', 'bad-signature', async () => 'not.a.jwt'],
+    ['expired', 'expired', async () => token({ iat: now() - 7200, exp: now() - 3600 })],
+    ['email claim present', 'email-present', async () => token({ email: EMAIL })],
+    ['empty common_name', 'missing-claim', async () => token({ commonName: '' })],
+    ['no common_name', 'missing-claim', async () => token({ commonName: null })],
+    ['lifetime over 24 h', 'lifetime', async () => token({ exp: '30h' })],
+    ['issued over 24 h ago', 'lifetime', async () => token({ iat: now() - 25 * 3600, exp: now() + 3600 })],
+    ['issued in the future', 'lifetime', async () => token({ iat: now() + 3600, exp: now() + 7200 })],
+  ])('rejects %s as %s', async (_name, reason, make) => {
+    expect(await verify(await make())).toEqual({ ok: false, reason });
   });
 });
