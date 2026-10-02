@@ -299,7 +299,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const needsAttention = snapshot.items.some((i) => i.state === 'attention');
 
   return (
-    <div className="app">
+    <div className="app" data-tab={tab}>
       <header className="top" inert={noteOpen || editing !== null}>
         <nav className="tabs" aria-label="Views">
           <button type="button" aria-pressed={tab === 'dashboard'} onClick={() => setTab('dashboard')}>Dashboard</button>
