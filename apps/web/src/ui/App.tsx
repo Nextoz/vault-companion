@@ -391,7 +391,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {tab === 'history' && !signedOut && <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
           accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />}
 
-        {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} />}
+        {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
 
         {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
           accountKey={accountKey} baseRevision={revision} />}
