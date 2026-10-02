@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 test('Today attention opens Scouts, compact rows and history lead to sanitised findings at phone width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -39,7 +40,7 @@ test('Today attention opens Scouts, compact rows and history lead to sanitised f
   expect(api.scoutOutputRequests).toEqual(['learning', 'learning']);
   api.scouts.scouts = api.scouts.scouts.filter((entry) => entry.state === 'ok' && entry.status.runStatus === 'success');
   const refreshed = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/scouts');
-  await page.getByRole('button', { name: 'Today', exact: true }).click();
+  await goTo(page, 'Today');
   expect((await (await refreshed).json()).scouts).toHaveLength(1);
   await expect(page.getByRole('button', { name: /scouts need attention/ })).toHaveCount(0);
 });

@@ -33,8 +33,8 @@ import { Training } from './Training.tsx';
 import { TrainingSheet } from './TrainingSheet.tsx';
 import { Triage } from './Triage.tsx';
 import { TaskList } from './TaskList.tsx';
+import { TabBar, type Tab } from './TabBar.tsx';
 
-type Tab = 'dashboard' | 'today' | 'all' | 'notes' | 'training' | 'scouts' | 'history';
 interface Toast {
   target: CompleteTaskCommand;
   label: string;
@@ -308,19 +308,6 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   return (
     <div className="app" data-tab={tab}>
       <header className="top" inert={noteOpen || editing !== null}>
-        <nav className="tabs" aria-label="Views">
-          <button type="button" aria-pressed={tab === 'dashboard'} onClick={() => setTab('dashboard')}>Dashboard</button>
-          <button type="button" aria-pressed={tab === 'today'} onClick={() => setTab('today')}>
-            Today
-          </button>
-          <button type="button" aria-pressed={tab === 'all'} onClick={() => setTab('all')}>
-            All
-          </button>
-          <button type="button" aria-pressed={tab === 'notes'} onClick={() => setTab('notes')}>Notes</button>
-          <button type="button" aria-pressed={tab === 'training'} onClick={() => setTab('training')}>Training</button>
-          <button type="button" aria-pressed={tab === 'scouts'} onClick={() => setTab('scouts')}>Scouts</button>
-          <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')}>Progress</button>
-        </nav>
         <div className="top-actions">
           <button type="button" className="link" aria-label="Report a bug or wish" disabled={signedOut || writeBlocked || frozen} onClick={() => setReportOpen(true)}>Report</button>
         </div>
@@ -396,10 +383,41 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
 
-        {tab === 'dashboard' && !signedOut && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
+        {tab === 'more' && !signedOut && (
+          <nav className="more-list" aria-label="More">
+            <button type="button" onClick={() => setTab('history')}>Progress</button>
+            <button type="button" onClick={() => setTab('dashboard')}>Dashboard</button>
+            <button type="button" onClick={() => setTab('status')}>Status</button>
+            <button type="button" onClick={() => setTab('actions')}>Actions</button>
+          </nav>
+        )}
 
-        {tab === 'history' && !signedOut && <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
-          accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />}
+        {tab === 'dashboard' && !signedOut && (
+          <>
+            <BackToMore onBack={() => setTab('more')} />
+            <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />
+          </>
+        )}
+
+        {tab === 'history' && !signedOut && (
+          <>
+            <BackToMore onBack={() => setTab('more')} />
+            <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
+              accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />
+          </>
+        )}
+
+        {/* Status is the vault-status block already shown above on every tab; the screen adds only the way back. */}
+        {tab === 'status' && !signedOut && <BackToMore onBack={() => setTab('more')} />}
+
+        {tab === 'actions' && !signedOut && (
+          <>
+            <BackToMore onBack={() => setTab('more')} />
+            {!needsAttention && (
+              <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
+            )}
+          </>
+        )}
 
         {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
 
@@ -420,6 +438,12 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         )}
 
         {tasks && lock?.conflict && <p className="muted small">{FROZEN_NOTE}</p>}
+        {(tab === 'today' || tab === 'all') && (
+          <div className="segmented task-view" role="group" aria-label="Task view">
+            <button type="button" aria-pressed={tab === 'today'} onClick={() => setTab('today')}>Today</button>
+            <button type="button" aria-pressed={tab === 'all'} onClick={() => setTab('all')}>All</button>
+          </div>
+        )}
         {tasks && (tab === 'today' || tab === 'all') &&
           (tab === 'today' ? (
             <>
@@ -450,6 +474,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
       </main>
+
+      <TabBar tab={tab} onSelect={setTab} inert={noteOpen || editing !== null} />
 
       <button type="button" className="fab" inert={noteOpen || editing !== null} onClick={() => setCaptureOpen(true)} aria-label={tab === 'training' ? 'Add training' : 'Capture'}>
         +
@@ -491,5 +517,14 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         </div>
       )}
     </div>
+  );
+}
+
+/** The one way back from a More sub-screen. */
+function BackToMore({ onBack }: { onBack: () => void }) {
+  return (
+    <button type="button" className="link back-to-more" onClick={onBack}>
+      ‹ More
+    </button>
   );
 }

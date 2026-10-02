@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 // B2: the Actions list is one line by default (the other specs start it expanded via the config's storage state).
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -32,7 +33,7 @@ test('collapsed by default, remembered when opened, absent on Scouts, and a prob
   await page.getByRole('button', { name: /scouts need attention/ }).click();
   await expect(panel(page)).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Today', exact: true }).click();
+  await goTo(page, 'Today');
   api.commandMode = { refuse: { code: 'refused:structure', message: 'Synthetic refusal.', retryable: false } };
   await captureNote(page, 'A refused synthetic thought');
   await expect(panel(page)).toContainText('1 needs attention');

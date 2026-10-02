@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
 import { waitForSettledRetry } from './settled-retry.ts';
+import { goTo } from './nav.ts';
 
 async function openSheet(page: Page) {
   await page.getByRole('button', { name: 'Add training', exact: true }).click();
@@ -11,7 +12,7 @@ test('run and gym logging, newest-first list, notes, yesterday placement and exa
   api.trainingUnknownLines = ['| unknown | keep these bytes |'];
   await api.install(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Training', exact: true }).click();
+  await goTo(page, 'Log');
   const list = page.getByRole('region', { name: 'Training sessions' });
   await expect(list).toContainText('No sessions yet');
   await expect(list).toContainText('| unknown | keep these bytes |');
@@ -61,7 +62,7 @@ test('run and gym logging, newest-first list, notes, yesterday placement and exa
 
 test('offline save survives reload and dependent Undo waits for the receipt', async ({ page }) => {
   const api = new MockApi(); await api.install(page); await page.goto('/');
-  await page.getByRole('button', { name: 'Training', exact: true }).click();
+  await goTo(page, 'Log');
   const sheet = await openSheet(page);
   await sheet.getByLabel('Duration (min)').fill('60');
   api.commandMode = 'offline';
@@ -83,11 +84,11 @@ test('offline save survives reload and dependent Undo waits for the receipt', as
   expect(api.trainingRows).toEqual([]);
 });
 
-test('seven complete tab labels fit 390 px without page overflow', async ({ page }) => {
+test('five complete tab labels fit 390 px without page overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const api = new MockApi(); await api.install(page); await page.goto('/');
   const nav = page.getByRole('navigation', { name: 'Views' });
-  await expect(nav.getByRole('button')).toHaveText(['Dashboard', 'Today', 'All', 'Notes', 'Training', 'Scouts', 'Progress']);
+  await expect(nav.getByRole('button')).toHaveText(['Today', 'Scouts', 'Notes', 'Log', 'More']);
   const bounds = await nav.evaluate((el) => {
     const bar = el.getBoundingClientRect();
     return { page: document.documentElement.scrollWidth, width: innerWidth, labels: [...el.querySelectorAll('button')].map((b) => {
@@ -96,8 +97,8 @@ test('seven complete tab labels fit 390 px without page overflow', async ({ page
     }) };
   });
   expect(bounds.page).toBeLessThanOrEqual(bounds.width);
-  expect(bounds.labels).toEqual([true, true, true, true, true, true, true]);
-  await nav.getByRole('button', { name: 'Training', exact: true }).click();
+  expect(bounds.labels).toEqual([true, true, true, true, true]);
+  await goTo(page, 'Log');
   await openSheet(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

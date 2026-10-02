@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { MockApi, taskView } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 test('History: two days newest first; Reopen only for this device’s completion, via the existing Undo', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -11,7 +12,7 @@ test('History: two days newest first; Reopen only for this device’s completion
   await expect.poll(() => api.applied.length).toBe(1);
   await expect(page.getByRole('region', { name: 'Done today' }).getByText('Saved to GitHub')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Progress' }).click();
+  await goTo(page, 'Progress');
   const history = page.getByRole('region', { name: 'History', exact: true });
   await expect(history.getByRole('heading', { level: 2 })).toHaveText(['Thu 24 Sep', 'Wed 23 Sep']);
   const today = history.getByRole('region', { name: 'Thu 24 Sep' });

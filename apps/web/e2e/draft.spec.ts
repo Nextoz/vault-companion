@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Command } from '@vault-companion/contracts';
 import { MockApi, taskView } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 let api: MockApi;
 
@@ -20,7 +21,7 @@ for (const [tab, kind, field] of [
   test(`${tab} Add overrides the remembered kind and focuses ${kind}`, async ({ page }) => {
     await page.goto('/');
     await page.evaluate(() => localStorage.setItem('vc.captureKind', 'active-work'));
-    await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: tab, exact: true }).click();
+    await goTo(page, tab);
     await page.getByRole('button', { name: 'Capture' }).click();
     await expect(page.getByRole('button', { name: kind, exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByLabel(field)).toBeFocused();
@@ -34,17 +35,16 @@ for (const [tab, kind, field] of [
 
 test('a fresh reopen follows the new tab; views without a default remember the choice', async ({ page }) => {
   await page.goto('/');
-  const views = page.getByRole('navigation', { name: 'Views' });
-  await views.getByRole('button', { name: 'Notes', exact: true }).click();
+  await goTo(page, 'Notes');
   await page.getByRole('button', { name: 'Capture' }).click();
   await expect(page.getByLabel('Note text')).toBeFocused();
   await page.getByRole('button', { name: 'Active Work', exact: true }).click();
   await page.getByRole('button', { name: 'Close' }).click();
-  await views.getByRole('button', { name: 'Today', exact: true }).click();
+  await goTo(page, 'Today');
   await page.getByRole('button', { name: 'Capture' }).click();
   await expect(page.getByLabel('Task text')).toBeFocused();
   await page.getByRole('button', { name: 'Close' }).click();
-  await views.getByRole('button', { name: 'Progress', exact: true }).click();
+  await goTo(page, 'Progress');
   await page.getByRole('button', { name: 'Capture' }).click();
   await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
 });
@@ -52,12 +52,11 @@ test('a fresh reopen follows the new tab; views without a default remember the c
 test('Notes uses Note for a fresh Add but restores an Active Work draft with all its fields', async ({ page }) => {
   await page.goto('/');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();
-  const views = page.getByRole('navigation', { name: 'Views' });
-  await views.getByRole('button', { name: 'Notes', exact: true }).click();
+  await goTo(page, 'Notes');
   await page.getByRole('button', { name: 'Capture' }).click();
   await expect(page.getByLabel('Note text')).toBeFocused();
   await page.getByRole('button', { name: 'Close' }).click();
-  await views.getByRole('button', { name: 'Today', exact: true }).click();
+  await goTo(page, 'Today');
   await page.getByRole('button', { name: 'Capture' }).click();
   await page.getByRole('button', { name: 'Active Work', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill('Synthetic garden project');
@@ -69,7 +68,7 @@ test('Notes uses Note for a fresh Add but restores an Active Work draft with all
     activeWork: { next: 'Sketch the beds', review: '2026-10-15', link: '[[Garden Plan]]' },
   })]);
   await page.reload();
-  await views.getByRole('button', { name: 'Notes', exact: true }).click();
+  await goTo(page, 'Notes');
   await page.evaluate(() => localStorage.setItem('vc.captureKind', 'note'));
   await page.getByRole('button', { name: 'Capture' }).click();
   await expect(page.getByRole('button', { name: 'Active Work', exact: true })).toHaveAttribute('aria-pressed', 'true');

@@ -21,9 +21,12 @@ const SCREEN: Record<string, string> = {
   today: 'Today',
   all: 'All',
   notes: 'Notes',
-  training: 'Training',
+  training: 'Log',
   scouts: 'Scouts',
   history: 'Progress',
+  more: 'More',
+  status: 'Status',
+  actions: 'Actions',
 };
 
 export function screenName(tab: string): string {

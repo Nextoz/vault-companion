@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { Command } from '@vault-companion/contracts';
 import { waitForSettledRetry } from './settled-retry.ts';
 import { MockApi, taskView } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 let api: MockApi;
 
@@ -123,7 +124,7 @@ test('a pending action survives a reload and is sent afterwards, byte-for-byte',
   await expect(region(page, 'Actions on this device')).toContainText('Saved to GitHub');
   expect(parsed(api.bodies).map((c) => c.type)).toEqual(api.bodies.map(() => 'CaptureTask'));
   expect(new Set(api.bodies).size).toBe(1);
-  await page.getByRole('button', { name: 'All', exact: true }).click();
+  await goTo(page, 'All');
   await expect(region(page, 'All tasks').getByText('Buy seed potatoes')).toBeVisible();
 });
 

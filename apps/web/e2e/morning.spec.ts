@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 test('This morning: one line on Today, expands to the brief and the explanations at phone width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -20,6 +21,6 @@ test('This morning: one line on Today, expands to the brief and the explanations
   await expect(explained.first()).toContainText('A synthetic plain explanation.');
   await expect(explained.first()).not.toContainText('type: research-explained');
 
-  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await goTo(page, 'Notes');
   await expect(panel).toHaveCount(0);
 });

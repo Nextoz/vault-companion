@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { MockApi, taskView } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 test('edit text and due, queue only changed fields, then show the reflected task', async ({ page }) => {
   const api = new MockApi();
@@ -26,7 +27,7 @@ test('edit text and due, queue only changed fields, then show the reflected task
     changes: { text: 'Water the herbs', due: '2026-09-25' } });
   api.release();
   await expect.poll(() => api.applied.length).toBe(1);
-  await page.getByRole('button', { name: 'All', exact: true }).click();
+  await goTo(page, 'All');
   await expect(page.getByRole('button', { name: 'Edit: Water the herbs', exact: true })).toBeEnabled();
 });
 
