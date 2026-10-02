@@ -25,8 +25,12 @@ const TARGET_LINE = /^(mood|energy|sleep|checkin_at):(.*)$/;
 const TARGET_KEYS = ['mood', 'energy', 'sleep', 'checkin_at'] as const;
 type TargetKey = (typeof TARGET_KEYS)[number];
 
-const DATE_PLACEHOLDER = '{{date:YYYY-MM-DD}}';
+const DATE_PLACEHOLDER = /^{{date:([^{}]+)}}$/;
 const PLACEHOLDER = /{{[^{}]*}}/g;
+/** Obsidian (moment.js) date tokens the daily template uses, plus literal separators; anything else is refused. */
+const DATE_TOKEN = /YYYY|MMMM|MM|dddd|DD|D|[ ,.\/-]/y;
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
@@ -229,15 +233,35 @@ export function revertMoodCheckin(text: string, applied: string, previous: strin
   };
 }
 
+/**
+ * `{{date:<format>}}` for a calendar date (already the Europe/Copenhagen day), English names like Obsidian's default
+ * locale. Weekday is computed in UTC from the date alone, so the server's time zone cannot shift it. null = unsupported.
+ */
+function formatDatePlaceholder(placeholder: string, date: string): string | null {
+  const format = DATE_PLACEHOLDER.exec(placeholder)?.[1];
+  if (format === undefined) return null;
+  const [y, m, d] = date.split('-') as [string, string, string];
+  const weekday = WEEKDAYS[new Date(Date.UTC(Number(y), Number(m) - 1, Number(d))).getUTCDay()]!;
+  const values: Record<string, string> = { YYYY: y, MMMM: MONTHS[Number(m) - 1]!, MM: m, dddd: weekday, DD: d, D: String(Number(d)) };
+  let out = '';
+  DATE_TOKEN.lastIndex = 0;
+  while (DATE_TOKEN.lastIndex < format.length) {
+    const token = DATE_TOKEN.exec(format)?.[0];
+    if (token === undefined) return null;
+    out += values[token] ?? token;
+  }
+  return out;
+}
+
 export function renderDailyNote(template: string, date: string): MutationOk<DailyNoteEffect> | Refusal {
   if (!isValidDate(date)) return refuse('checkin-invalid-input', 'date must be a valid YYYY-MM-DD date.');
   const placeholders = template.match(PLACEHOLDER) ?? [];
-  if (placeholders.some((placeholder) => placeholder !== DATE_PLACEHOLDER)) {
+  if (placeholders.some((placeholder) => formatDatePlaceholder(placeholder, date) === null)) {
     return refuse('template-unsupported-placeholder', 'Template contains an unsupported placeholder.');
   }
   return {
     ok: true,
-    text: template.replaceAll(DATE_PLACEHOLDER, date),
+    text: template.replace(PLACEHOLDER, (placeholder) => formatDatePlaceholder(placeholder, date)!),
     effect: { kind: 'daily-note-rendered' },
   };
 }

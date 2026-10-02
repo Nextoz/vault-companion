@@ -135,6 +135,31 @@ describe('renderDailyNote', () => {
     expect(result).toMatchObject({ ok: true, text: '2026-10-01 daily\n2026-10-01', effect: { kind: 'daily-note-rendered' } });
   });
 
+  it('B7: renders the daily template placeholder forms (ISO date in front matter, long date in the body)', () => {
+    const template = ['---', 'date: {{date:YYYY-MM-DD}}', 'created: {{date:YYYY-MM-DD}}', 'updated: {{date:YYYY-MM-DD}}', 'mood:', '---', '', '# {{date:dddd, D MMMM YYYY}}', ''].join('\n');
+    const result = renderDailyNote(template, '2026-10-02');
+    expect(result).toMatchObject({
+      ok: true,
+      text: ['---', 'date: 2026-10-02', 'created: 2026-10-02', 'updated: 2026-10-02', 'mood:', '---', '', '# Friday, 2 October 2026', ''].join('\n'),
+    });
+  });
+
+  it('long date: no zero padding for D, correct weekday across month and leap-day boundaries', () => {
+    const long = (date: string) => {
+      const r = renderDailyNote('{{date:dddd, D MMMM YYYY}}', date);
+      return r.ok ? r.text : r.code;
+    };
+    expect(long('2026-01-01')).toBe('Thursday, 1 January 2026');
+    expect(long('2028-02-29')).toBe('Tuesday, 29 February 2028');
+    expect(long('2026-12-31')).toBe('Thursday, 31 December 2026');
+  });
+
+  it('unknown date tokens or other placeholders ⇒ template-unsupported-placeholder', () => {
+    expect(renderCode('{{date:HH:mm}}', '2026-10-01')).toBe('template-unsupported-placeholder');
+    expect(renderCode('{{date:}}', '2026-10-01')).toBe('template-unsupported-placeholder');
+    expect(renderCode('{{date:YYYY-MM-DD}} {{time}}', '2026-10-01')).toBe('template-unsupported-placeholder');
+  });
+
   it('leftover placeholder ⇒ template-unsupported-placeholder', () => {
     expect(renderCode('{{date:YYYY-MM-DD}} {{title}}', '2026-10-01')).toBe('template-unsupported-placeholder');
   });
