@@ -9,7 +9,7 @@ test('mood check-in: chips, Danish sleep, collapse to "Checked in", and Undo', a
 
   const card = page.getByRole('region', { name: 'Mood check-in' });
   await expect(card).toBeVisible();
-  const save = card.getByRole('button', { name: 'Save', exact: true });
+  const save = card.getByRole('button', { name: 'Save check-in', exact: true });
   await expect(save).toBeDisabled();
 
   await card.getByRole('button', { name: 'Mood +2', exact: true }).click();

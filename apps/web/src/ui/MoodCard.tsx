@@ -109,7 +109,7 @@ export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
       {(!accountKey || !baseRevision) && <p className="muted small">Connect once to set up this device before checking in.</p>}
       {blocked && <p className="muted small">The vault is locked until the conflict is resolved in Obsidian.</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      <button type="submit" className="primary" disabled={saving || !ready}>Save</button>
+      <button type="submit" className="primary" disabled={saving || !ready}>Save check-in</button>
     </form>
   </section>;
 }
