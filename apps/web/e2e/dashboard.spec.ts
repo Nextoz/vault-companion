@@ -175,19 +175,21 @@ test('SP3c (ADR-0038): a range seen before reopens from its labelled copy when t
   await nav.getByRole('button', { name: 'Dashboard', exact: true }).click();
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
   const market = dashboard.getByRole('article', { name: 'BTC / USD', exact: true });
+  // The Health panel keeps its own copy note; this test is about the Dashboard's.
+  const dashNote = dashboard.locator(':scope > [data-testid="copy-note"]');
   await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
-  await expect(dashboard.getByTestId('copy-note')).toHaveCount(0);
+  await expect(dashNote).toHaveCount(0);
 
   await nav.getByRole('button', { name: 'Today', exact: true }).click();
   api.network = 'down';
   await nav.getByRole('button', { name: 'Dashboard', exact: true }).click();
-  await expect(dashboard.getByTestId('copy-note')).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
+  await expect(dashNote).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
   await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
   await expect(market.locator('.dash-chip')).toHaveText('Stale');
   await expect(market.locator('svg.dash-svg')).toHaveCount(1);
   await page.screenshot({ path: test.info().outputPath('sp3c-dashboard-copy-390x844.png') });
   // A range never seen has no copy: the failure is said plainly, the 1W copy stays labelled as stale.
   await dashboard.getByRole('button', { name: '1M', exact: true }).click();
-  await expect(dashboard.getByTestId('copy-note')).toHaveCount(0);
+  await expect(dashNote).toHaveCount(0);
   await expect(market.locator('.dash-chip')).toHaveText('Stale');
 });

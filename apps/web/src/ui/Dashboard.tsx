@@ -272,7 +272,7 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough }: {
       {shown && stale && !isCopy && <p className="dash-stale" role="status">Not refreshed — the times below are from the last success.</p>}
       {shown && market && <MarketView card={market} stale={stale} onDrillthrough={onDrillthrough} />}
       {shown && weather && <WeatherCardView card={weather} stale={weatherStale} onDrillthrough={onDrillthrough} />}
-      {shown && <HealthPanel accountKey={accountKey} refreshKey={refreshKey} />}
+      <HealthPanel accountKey={accountKey} refreshKey={refreshKey} />
       {shown && (
         <div className="dash-tiles">
           {shown.cards.filter((card) => card.id !== 'market' && card.id !== 'weather' && card.id !== 'health').map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}
