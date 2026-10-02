@@ -15,6 +15,7 @@ export * from './triage-format.ts';
 export * from './weather.ts';
 
 export * from './training.ts';
+export * from './health.ts';
 export * from './research-explainer.ts';
 export * from './research-radar.ts';
 export * from './research-radar-format.ts';
