@@ -17,9 +17,9 @@ health and mood lines; it must be written safely, idempotently, and readably by 
   handling. A CAS conflict or unreadable existing file is a typed no-write outcome.
 - **Dedupe:** if the existing file already has today's date, the job stops before gathering/model work and logs
   `204 already-written`. The second daily cron and retries never double-commit.
-- **Cron/DST:** two UTC triggers, `30 4 * * *` and `30 5 * * *`, cover 06:30 Europe/Copenhagen across DST. The job
-  runs only when the local Copenhagen hour is 6; otherwise it logs `204 skipped`. `30 4` is shared with the research
-  explainer's primary trigger and routes to both jobs.
+- **Cron/DST:** two UTC triggers, `31 4 * * *` and `31 5 * * *`, cover 06:31 Europe/Copenhagen across DST. The job
+  runs only when the local Copenhagen hour is 6; otherwise it logs `204 skipped`. The brief has its own minute (not the explainer's
+  `30 4`) so it runs in its own invocation with its own subrequest budget.
 - **Missing key:** `SCALEWAY_API_KEY` is an optional Worker secret. When unset, the deterministic fallback brief is
   written with `source: "fallback"`; the job is not skipped.
 - **Not a note:** the brief is an app-read JSON artifact, not an Obsidian note. Markdown notes would put model text

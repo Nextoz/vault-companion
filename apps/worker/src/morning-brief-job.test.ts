@@ -134,8 +134,14 @@ describe('morning brief job (ADR-0046)', () => {
 
   it('a CAS conflict is a typed outcome and never overwrites', async () => {
     const store = await InMemoryStore.create({});
-    store.writeFile = async () => ({ ok: false, reason: 'precondition-failed' });
+    const head = store.headCommit;
+    const submitted: { baseCommit: string; expect: 'absent' | 'regular-file'; path: string }[] = [];
+    store.writeFile = async (req) => {
+      submitted.push({ baseCommit: req.baseCommit, expect: req.expect, path: req.path });
+      return { ok: false, reason: 'precondition-failed' };
+    };
     const logs = await run(store);
+    expect(submitted).toEqual([{ baseCommit: head, expect: 'absent', path: MORNING_BRIEF_PATH }]);
     expect(store.text(MORNING_BRIEF_PATH)).toBeNull();
     expect(logs).toMatchObject([{ status: 503, errorCode: 'not-written:precondition-failed' }]);
   });

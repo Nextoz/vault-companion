@@ -12,9 +12,12 @@ import { createAccessVerifier, createServiceTokenVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
 import { createScalewayChat } from './scaleway-chat.ts';
 import { gatherCandidates } from './morning-brief-gather.ts';
-import { briefSlotForCron, runBriefJob } from './morning-brief-job.ts';
-import type { LogRecord } from './log.ts';
+import { BRIEF_ROUTE, briefSlotForCron, runBriefJob } from './morning-brief-job.ts';
+import { diagnosticDetail, type LogRecord } from './log.ts';
 import { EXPLAINER_ROUTE, runExplainerJob } from './research-explainer.ts';
+
+/** ADR-0046: the Morning Brief is always the owner's Copenhagen calendar, never another configured zone. */
+const MORNING_BRIEF_TIME_ZONE = 'Europe/Copenhagen';
 
 export interface Env {
   AUTH_MODE: string;
@@ -146,19 +149,31 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
     if (!env.GEMINI_API_KEY) {
       log({ ...base, route: EXPLAINER_ROUTE, status: 503, errorCode: 'gemini-key-missing' });
     } else {
-      await runExplainerJob(cron, {
-        store,
-        explainer: createGeminiExplainer({ apiKey: env.GEMINI_API_KEY, fetch: counted }),
-        now: () => new Date(),
-        timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE,
-        subrequests: () => used,
-        log,
-      });
+      try {
+        await runExplainerJob(cron, {
+          store,
+          explainer: createGeminiExplainer({ apiKey: env.GEMINI_API_KEY, fetch: counted }),
+          now: () => new Date(),
+          timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE,
+          subrequests: () => used,
+          log,
+        });
+      } catch (err) {
+        const detail = diagnosticDetail(err);
+        log({
+          ...base,
+          route: EXPLAINER_ROUTE,
+          status: 500,
+          errorCode: 'internal',
+          errorClass: err instanceof Error ? err.name : 'unknown',
+          ...(detail ? { errorDetail: detail } : {}),
+        });
+      }
     }
   }
 
   if (briefSlot) {
-    const timeZone = env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE;
+    const timeZone = MORNING_BRIEF_TIME_ZONE;
     const now = () => new Date();
     const command = createCommandService({ store, now, timeZone });
     const training = createTrainingService({ store });
@@ -174,14 +189,26 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
       readWeather: () => weather.readWeather(),
       readMood: () => Promise.resolve(unavailable),
     });
-    await runBriefJob(cron, {
-      store,
-      gather,
-      ...(env.SCALEWAY_API_KEY ? { chat: createScalewayChat({ apiKey: env.SCALEWAY_API_KEY, fetch: counted }) } : {}),
-      now,
-      timeZone,
-      log,
-    });
+    try {
+      await runBriefJob(cron, {
+        store,
+        gather,
+        ...(env.SCALEWAY_API_KEY ? { chat: createScalewayChat({ apiKey: env.SCALEWAY_API_KEY, fetch: counted }) } : {}),
+        now,
+        timeZone,
+        log,
+      });
+    } catch (err) {
+      const detail = diagnosticDetail(err);
+      log({
+        ...base,
+        route: BRIEF_ROUTE,
+        status: 500,
+        errorCode: 'internal',
+        errorClass: err instanceof Error ? err.name : 'unknown',
+        ...(detail ? { errorDetail: detail } : {}),
+      });
+    }
   }
 }
 

@@ -18,8 +18,8 @@ import type { MorningBriefCandidates } from './morning-brief-gather.ts';
 import { writeBrief, type ScalewayChat } from './scaleway-chat.ts';
 
 export const BRIEF_ROUTE = 'cron:morning-brief';
-/** Two UTC slots cover Copenhagen 06:30 across DST: 04:30 UTC (summer) and 05:30 UTC (winter). */
-export const BRIEF_CRONS = { summer: '30 4 * * *', winter: '30 5 * * *' } as const;
+/** Two UTC slots cover Copenhagen 06:31 (own minute, so the brief never shares an invocation or subrequest budget with the explainer) across DST: 04:30 UTC (summer) and 05:30 UTC (winter). */
+export const BRIEF_CRONS = { summer: '31 4 * * *', winter: '31 5 * * *' } as const;
 export type BriefSlot = keyof typeof BRIEF_CRONS;
 const BRIEF_LOCAL_HOUR = 6;
 

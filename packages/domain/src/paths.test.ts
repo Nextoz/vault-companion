@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canReadLinkedNote, canReadRadarSource, canWrite, EXPLAINER_STATUS_PATH, isInboxNotePath, isRadarDecisionPath, isResearchLibraryPath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
+import { canReadLinkedNote, canReadRadarSource, canWrite, EXPLAINER_STATUS_PATH, isInboxNotePath, isRadarDecisionPath, isResearchLibraryPath, MORNING_BRIEF_PATH, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 
 describe('parseVaultPath', () => {
   it.each([
@@ -128,6 +128,16 @@ describe('ADR-0029 research explainer write scope', () => {
     expect(w('Automation/Scout Status/city-events.json', 'create')).toBe(false);
     expect(w('Automation/Scout Status/city-events.json', 'update')).toBe(false);
     expect(w('Automation/Scout Status/research-explainer.md', 'create')).toBe(false);
+  });
+});
+
+describe('ADR-0046 Morning Brief write scope', () => {
+  it('allows exactly the documented JSON path for create and update-by-CAS', () => {
+    expect(parseVaultPath(MORNING_BRIEF_PATH)).toBe(MORNING_BRIEF_PATH);
+    expect(canWrite(parseVaultPath(MORNING_BRIEF_PATH)!, 'create')).toBe(true);
+    expect(canWrite(parseVaultPath(MORNING_BRIEF_PATH)!, 'update')).toBe(true);
+    expect(parseVaultPath('Daily/Morning Digest/Morning Brief - 2026-06-15.json')).toBeNull();
+    expect(parseVaultPath('Daily/Morning Digest/Other.json')).toBeNull();
   });
 });
 

@@ -50,7 +50,7 @@ export function parseBriefFile(raw: unknown): BriefFile | null {
   let value = raw;
   if (value instanceof Uint8Array) {
     try {
-      value = new TextDecoder('utf-8', { ignoreBOM: true }).decode(value);
+      value = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(value);
     } catch {
       return null;
     }
