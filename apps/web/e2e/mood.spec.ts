@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 test('mood check-in: chips, Danish sleep, collapse to "Checked in", and Undo', async ({ page }) => {
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Today', exact: true }).click();
+  await goTo(page, 'Today');
 
   const card = page.getByRole('region', { name: 'Mood check-in' });
   await expect(card).toBeVisible();

@@ -3,6 +3,7 @@
 // the bytes and commits in that repo. Synthetic text only.
 import { expect, test as base, type Page } from '@playwright/test';
 import { startRealStack, todayIn, type RealStack } from './real-stack.ts';
+import { goTo } from './nav.ts';
 
 const TODO = 'Tasks/To-Do List.md';
 const OLD_DONE = '- [x] Synthetic old chore #todo ✅ 2026-09-01';
@@ -98,7 +99,7 @@ test.describe('offline burst', () => {
       expect(stack.read(`Inbox/${note} - ${today}.md`).split(note)).toHaveLength(2);
     }
     // The screen shows the vault: every capture listed once, no chore left open.
-    await page.getByRole('button', { name: 'All', exact: true }).click();
+    await goTo(page, 'All');
     for (const t of tasks) await expect(region(page, 'All tasks').getByText(t, { exact: true })).toHaveCount(1);
     await expect(page.getByRole('button', { name: /^Complete: Synthetic chore/ })).toHaveCount(0);
   });

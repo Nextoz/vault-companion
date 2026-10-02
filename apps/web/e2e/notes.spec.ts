@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 const PATH = 'Inbox/Seed order - 2026-09-23.md';
 
@@ -9,7 +10,7 @@ test('Notes (ADR-0022): list → view → edit offline → saved; frontmatter ne
   await api.install(page);
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await goTo(page, 'Notes');
   const list = page.getByRole('region', { name: 'Notes', exact: true });
   await expect(list.getByTestId('note-row')).toHaveCount(1);
   await expect(list.getByTestId('note-row')).toContainText('Seed order');
@@ -50,16 +51,16 @@ test('SP3 (ADR-0038): a note seen before reopens from its labelled copy when the
   await api.install(page);
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await goTo(page, 'Notes');
   await page.getByTestId('note-row').click();
   const note = page.getByRole('region', { name: 'Note', exact: true });
   await expect(note.getByTestId('note-body').locator('strong')).toHaveText('basil');
   await expect(note.getByTestId('copy-note')).toHaveCount(0);
   await expect(note.getByRole('button', { name: 'Edit' })).toBeEnabled();
 
-  await page.getByRole('button', { name: 'Training', exact: true }).click();
+  await goTo(page, 'Log');
   api.network = 'down';
-  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await goTo(page, 'Notes');
   const list = page.getByRole('region', { name: 'Notes', exact: true });
   await expect(list.getByTestId('copy-note')).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
   await list.getByTestId('note-row').click();
@@ -74,11 +75,11 @@ test('SP3 (ADR-0038): signing out anywhere drops the copies; signed in again, no
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await goTo(page, 'Notes');
   await expect(page.getByTestId('note-row')).toHaveCount(1);
 
   // The sign-out is seen by the app's own session read on Today, never by the Notes screen.
-  await page.getByRole('button', { name: 'Today', exact: true }).click();
+  await goTo(page, 'Today');
   api.session = 'signed-out';
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.getByRole('alert').filter({ hasText: 'Signed out' })).toBeVisible();
@@ -87,7 +88,7 @@ test('SP3 (ADR-0038): signing out anywhere drops the copies; signed in again, no
   await expect(page.getByRole('alert').filter({ hasText: 'Signed out' })).toHaveCount(0);
 
   api.network = 'down';
-  await page.getByRole('button', { name: 'Notes', exact: true }).click();
+  await goTo(page, 'Notes');
   const list = page.getByRole('region', { name: 'Notes', exact: true });
   await expect(list.getByRole('status')).toHaveText('Notes are only shown while connected.');
   await expect(list.getByTestId('copy-note')).toHaveCount(0);

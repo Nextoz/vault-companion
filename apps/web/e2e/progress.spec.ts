@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { TriageResponse } from '@vault-companion/contracts';
 import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 // The mock's history "today" is Thu 24 Sep 2026, so this week is Mon 21 – Sun 27 Sep (Europe/Copenhagen).
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -28,7 +29,7 @@ async function openProgress(page: Page, api: MockApi) {
   await page.setViewportSize({ width: 390, height: 844 });
   await api.install(page);
   await page.goto('/');
-  await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Progress' }).click();
+  await goTo(page, 'Progress');
   return page.getByRole('region', { name: 'Progress', exact: true });
 }
 
@@ -99,9 +100,9 @@ test('SP3 (ADR-0038): Progress seen before reopens from its labelled copy when t
   const days = await progress.getByTestId('history-item').count();
   expect(days).toBeGreaterThan(0);
 
-  await page.getByRole('button', { name: 'Training', exact: true }).click();
+  await goTo(page, 'Log');
   api.network = 'down';
-  await page.getByRole('button', { name: 'Progress', exact: true }).click();
+  await goTo(page, 'Progress');
   await expect(progress.getByTestId('copy-note')).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
   await expect(progress.getByTestId('week-summary')).toHaveText(summary);
   await expect(progress.getByTestId('history-item')).toHaveCount(days);

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { MockApi, sampleWeather } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -13,8 +14,7 @@ test('Dashboard mounts Weather with attribution, model comparison and touch/keyb
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
-  const nav = page.getByRole('navigation', { name: 'Views' });
-  await nav.getByRole('button', { name: 'Dashboard', exact: true }).click();
+  await goTo(page, 'Dashboard');
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
   const weather = dashboard.getByRole('article', { name: 'Weather', exact: true });
   await expect(weather.locator('.dash-chip')).toHaveText('Live');
@@ -54,7 +54,7 @@ test('partial comparison failure is labelled single-model, not a made-up agreeme
   api.weather = sampleWeather(true);
   await api.install(page);
   await page.goto('/');
-  await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Dashboard' }).click();
+  await goTo(page, 'Dashboard');
   const weather = page.getByRole('region', { name: 'Dashboard' }).getByRole('article', { name: 'Weather' });
   await expect(weather).toContainText('one model unavailable');
   await expect(weather).toContainText('One model covers this window');
@@ -84,7 +84,7 @@ test('unavailable weather stays honest on Dashboard and Today', async ({ page })
   await api.install(page);
   await page.goto('/');
   await expect(page.getByRole('region', { name: 'This morning weather' })).toContainText('No weather model returned usable forecast points.');
-  await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Dashboard' }).click();
+  await goTo(page, 'Dashboard');
   const weather = page.getByRole('region', { name: 'Dashboard' }).getByRole('article', { name: 'Weather' });
   await expect(weather.locator('.dash-chip')).toHaveText('Unavailable');
   await expect(weather).toContainText('Weather is unavailable.');

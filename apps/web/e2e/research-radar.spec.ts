@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
 import { ApiError } from '@vault-companion/contracts';
+import { goTo } from './nav.ts';
 
 test('a refused Radar decision can be discarded and stays cleared after reload', async ({ page }) => {
   const api = new MockApi();
@@ -13,8 +14,7 @@ test('a refused Radar decision can be discarded and stays cleared after reload',
     })) });
   });
   await page.goto('/');
-  const scouts = page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Scouts', exact: true });
-  await scouts.click();
+  await goTo(page, 'Scouts');
   const radar = page.getByRole('region', { name: 'Research Radar' });
   const toggle = radar.getByRole('button', { name: /^Research Radar(?:\s+[▸▾])?$/ });
   await toggle.click();
@@ -31,7 +31,7 @@ test('a refused Radar decision can be discarded and stays cleared after reload',
     .filter(([key]) => key.startsWith('vault-companion:radar-pending:'))
     .reduce((total, [, value]) => total + (JSON.parse(value) as unknown[]).length, 0))).toBe(0);
   await page.reload();
-  await scouts.click();
+  await goTo(page, 'Scouts');
   await toggle.click();
   await expect(cards).toHaveCount(2);
   await expect(radar.getByTestId('radar-decision')).toHaveCount(0);
@@ -43,7 +43,7 @@ test('Radar mounts on Scouts, expands/collapses, reads a note and keeps decision
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
-  await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Scouts', exact: true }).click();
+  await goTo(page, 'Scouts');
 
   const radar = page.getByRole('region', { name: 'Research Radar' });
   await expect(radar).toBeVisible();
