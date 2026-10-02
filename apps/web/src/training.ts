@@ -36,3 +36,21 @@ export function trainingRowKeys(rows: readonly TrainingRow[]): string[] {
 export function trainingLocalTime(now = new Date()): string {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
+
+/**
+ * B11 (ADR-0041): class names already logged in `Group: <name>` split cells, most recent first (the rows are
+ * newest-first), case-sensitive and distinct, at most six. A legacy bare `Group: ` cell suggests nothing.
+ */
+export function groupClassSuggestions(rows: readonly TrainingRow[], limit = 6): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const row of rows) {
+    if (!row.split.startsWith('Group: ')) continue;
+    const name = row.split.slice('Group: '.length);
+    if (name === '' || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+    if (names.length === limit) break;
+  }
+  return names;
+}

@@ -613,7 +613,7 @@ export class MockApi {
         const s = command.payload.session;
         this.#trainingBefore.set(command.operationId, structuredClone(this.trainingRows));
         const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(s.when));
-        this.trainingRows.push({ date: copenhagenDay(s.when), time: parts, type: s.type, distance: s.type === 'Run' ? s.distance.toFixed(1) : '', duration: String(s.duration), weight: s.type === 'Gym' && s.weight !== undefined ? s.weight.toFixed(1) : '', split: s.type === 'Gym' ? s.split : '', note: s.note ?? '' });
+        this.trainingRows.push({ date: copenhagenDay(s.when), time: parts, type: s.type, distance: s.type === 'Run' ? s.distance.toFixed(1) : '', duration: String(s.duration), weight: s.type === 'Gym' && s.weight !== undefined ? s.weight.toFixed(1) : '', split: s.type === 'Gym' ? (s.split === 'Group' ? `Group: ${s.className ?? ''}` : s.split) : '', note: s.note ?? '' });
         this.trainingRows.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
         return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'logged', lineText: '| synthetic session |' } };
       }

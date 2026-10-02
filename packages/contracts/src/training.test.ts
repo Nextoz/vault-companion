@@ -19,6 +19,23 @@ it.each([
 it.each([{ split: 'Back' }, { weight: 29.9 }, { weight: 250.1 }, { distance: 2 }])('rejects invalid gym %#', (changes) => {
   expect(TrainingSession.safeParse({ type: 'Gym', when: run.when, split: 'Bicep', duration: 60, ...changes }).success).toBe(false);
 });
+const gym = { type: 'Gym', when: run.when, split: 'Bicep', duration: 60 } as const;
+it('accepts Group with a class name, trimming it', () => {
+  expect(TrainingSession.safeParse({ ...gym, split: 'Group', className: 'Functional Express' }).success).toBe(true);
+  const parsed = TrainingSession.safeParse({ ...gym, split: 'Group', className: '  Functional Express  ' });
+  expect(parsed.success && parsed.data.type === 'Gym' ? parsed.data.className : null).toBe('Functional Express');
+});
+it.each([
+  { split: 'Group' }, { split: 'Group', className: '' }, { split: 'Group', className: '   ' },
+  { split: 'Group', className: 'x'.repeat(61) }, { split: 'Group', className: 'a\rb' },
+  { split: 'Group', className: 'a\nb' }, { split: 'Group', className: 'a\u2028b' }, { split: 'Group', className: 'a\u2029b' },
+  { split: 'Bicep', className: 'Functional Express' }, { split: 'Legs', className: 'x' },
+])('rejects invalid group class name %#', (changes) => {
+  expect(TrainingSession.safeParse({ ...gym, ...changes }).success).toBe(false);
+});
+it('rejects a class name on a Run', () => {
+  expect(TrainingSession.safeParse({ ...run, className: 'Functional Express' }).success).toBe(false);
+});
 it('accepts inclusive bounds, optional weight, notes with pipe/newline, and exactly one future day', () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-28T12:00:00Z'));
   for (const distance of [0.1, 100]) for (const duration of [1, 600])
