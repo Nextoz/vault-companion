@@ -92,6 +92,33 @@ function parseIso(value: unknown): Date | null {
   return Number.isFinite(date.getTime()) ? date : null;
 }
 
+/**
+ * HC3a diagnostic for 400/422 answers: top-level key names with each value's type and length, never a value, plus
+ * how often a `"steps"` key appears in the raw body (JSON.parse keeps only the last duplicate). Response only, not logs.
+ */
+export function bodyShape(body: string): string {
+  const stepsKeys = (body.match(/"steps"\s*:/g) ?? []).length;
+  const head = `body ${body.length} chars, "steps" keys ${stepsKeys}`;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(body);
+  } catch {
+    return `${head}, not JSON`;
+  }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return `${head}, top level ${Array.isArray(raw) ? 'array' : typeof raw}`;
+  const entries = Object.entries(raw as Record<string, unknown>);
+  const keys = entries.slice(0, 30).map(([key, value]) => `${key.slice(0, 40)}:${valueShape(value)}`);
+  return `${head}, keys: ${keys.join(', ')}${entries.length > 30 ? `, +${entries.length - 30} more` : ''}`;
+}
+
+function valueShape(value: unknown): string {
+  if (typeof value === 'string') return `string(${value.length})`;
+  if (Array.isArray(value)) return `array(${value.length})`;
+  if (value === null) return 'null';
+  if (typeof value === 'object') return `object(${Object.keys(value).length})`;
+  return typeof value;
+}
+
 function parsePayload(body: string, now: Date): { ok: true; payload: Payload } | { ok: false; status: 400; error: string } {
   let raw: unknown;
   try {
@@ -514,11 +541,11 @@ export function createHealthIngestService(deps: HealthIngestDeps) {
   return {
     async ingestHealth(body: string): Promise<HealthIngestOutcome> {
       const parsed = parsePayload(body, now());
-      if (!parsed.ok) return err(parsed.status, parsed.error);
+      if (!parsed.ok) return err(parsed.status, `${parsed.error} (${bodyShape(body)})`);
       const payload = parsed.payload;
 
       const result = aggregate(payload, timeZone);
-      if (!result.ok) return err(result.status, result.error);
+      if (!result.ok) return err(result.status, `${result.error} (${bodyShape(body)})`);
       const { aggs, days } = result;
       const plan = planFor(payload, aggs, days, timeZone);
 

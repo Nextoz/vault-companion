@@ -50,7 +50,7 @@ describe('health ingest production wiring', () => {
     const res = await request(app, token);
     expect(res.status).not.toBe(404);
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ ok: false, error: 'invalid schemaVersion' });
+    expect(await res.json()).toMatchObject({ ok: false, error: expect.stringMatching(/^invalid schemaVersion \(body /) });
   });
 
   it('leaves the route disabled when HEALTH_INGEST_AUD is unset', async () => {
