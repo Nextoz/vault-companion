@@ -15,6 +15,14 @@ const fixture = '\uFEFF---\nprivate: synthetic\n---\n## Sessions\n\n' + header +
 const session: kernel.TrainingSession = { type: 'Run', when: '2026-09-28T18:00:00+02:00', distance: 5.2, duration: 28, note: ' Easy | loop\nagain ' };
 const line = '| 2026-09-28 | 18:00 | Run | 5.2 km | 28 min | | | Easy \\| loop again |';
 
+const todayRow: kernel.TrainingRow = { date: '2026-09-28', time: '19:00', type: 'Gym', distance: '', duration: '60 min', weight: '82.4 kg', split: 'Bicep', note: '' };
+const editedToday = '| 2026-09-28 | 19:00 | Gym | | 75 min | 82.4 kg | Bicep | |';
+const movedUp = '| 2026-09-30 | 19:00 | Gym | | 60 min | 82.4 kg | Bicep | |';
+const movedDown = '| 2026-09-26 | 19:00 | Gym | | 60 min | 82.4 kg | Bicep | |';
+const legacyRun = '| 2026-09-25 | 09:00 | Run | 5.2 km | 28 min | | | Legacy |';
+const legacyRow: kernel.TrainingRow = { date: '2026-09-25', time: '09:00', type: 'Run', distance: '5.2 km', duration: '28 min', weight: '', split: '', note: 'Legacy' };
+const editedLegacyRun = '| 2026-09-25 | 09:00 | Run | 5.2 km | 30 min | | | Legacy |';
+
 it.each([
   ['backtick fence', '## Sessions\n```md\n' + header + '```'],
   ['tilde fence', '## Sessions\n~~~~~md\n' + header + '~~~~~'],
@@ -97,6 +105,45 @@ it('exact inverse refuses any intervening byte change', () => {
   if (!r.ok) throw new Error(r.code);
   expect(kernel.undoTraining(r.text, r.text, fixture, r.effect)).toMatchObject({ text: fixture, effect: { op: 'undone' } });
   expect(kernel.undoTraining(r.text + ' ', r.text, fixture, r.effect)).toMatchObject({ code: 'refused:undo-expired' });
+});
+
+it('edits a row in place when the date/time is unchanged, keeping every other byte', () => {
+  const r = kernel.editTrainingRow(fixture, todayRow, { type: 'Gym', split: 'Bicep', weight: 82.4, duration: 75, when: '2026-09-28T17:00:00Z' });
+  expect(r).toMatchObject({ ok: true, effect: { kind: 'training', op: 'edited', lineText: editedToday }, text: fixture.replace(today, editedToday) });
+  if (!r.ok) throw new Error(r.code);
+  expect(r.text.replace(editedToday, today)).toBe(fixture);
+  expect(r.text).toContain(unknown); expect(r.text).toContain(legacy);
+});
+it('a date change moves the row up when newer and down when older', () => {
+  const sorted = '## Sessions\n' + header + '| 2026-09-29 | 09:00 | Run | 5.2 km | 28 min | | | |\n' + today + '\n' + '| 2026-09-27 | 08:00 | Run | 5.2 km | 28 min | | | |\n';
+  const up = kernel.editTrainingRow(sorted, todayRow, { type: 'Gym', split: 'Bicep', weight: 82.4, duration: 60, when: '2026-09-30T17:00:00Z' });
+  expect(up).toMatchObject({ ok: true, effect: { lineText: movedUp }, text: sorted.replace(today + '\n', '').replace('| 2026-09-29 | 09:00 | Run | 5.2 km | 28 min | | | |', movedUp + '\n' + '| 2026-09-29 | 09:00 | Run | 5.2 km | 28 min | | | |') });
+  const down = kernel.editTrainingRow(sorted, todayRow, { type: 'Gym', split: 'Bicep', weight: 82.4, duration: 60, when: '2026-09-26T17:00:00Z' });
+  expect(down).toMatchObject({ ok: true, effect: { lineText: movedDown }, text: sorted.replace(today + '\n', '') + movedDown + '\n' });
+});
+it('keeps CRLF, BOM and the absence of a final newline when editing', () => {
+  const source = ('## Sessions\n' + header + today).replaceAll('\n', '\r\n');
+  expect(kernel.editTrainingRow(source, todayRow, { type: 'Gym', split: 'Bicep', weight: 82.4, duration: 75, when: '2026-09-28T17:00:00Z' })).toMatchObject({ text: source.replace(today, editedToday) });
+  const full = fixture.replaceAll('\n', '\r\n');
+  expect(kernel.editTrainingRow(full, todayRow, { type: 'Gym', split: 'Bicep', weight: 82.4, duration: 75, when: '2026-09-28T17:00:00Z' })).toMatchObject({ text: fixture.replace(today, editedToday).replaceAll('\n', '\r\n') });
+});
+it('edits a legacy row and leaves unknown and neighbouring legacy bytes untouched', () => {
+  const r = kernel.editTrainingRow(fixture, legacyRow, { type: 'Run', when: '2026-09-25T07:00:00Z', distance: 5.2, duration: 30, note: 'Legacy' });
+  expect(r).toMatchObject({ ok: true, effect: { lineText: editedLegacyRun }, text: fixture.replace(legacyRun, editedLegacyRun) });
+  if (!r.ok) throw new Error(r.code);
+  expect(r.text).toContain(unknown); expect(r.text).toContain(today); expect(r.text).toContain('| 2026-09-26 | | Group workout | | | | | |');
+});
+it('refuses a row that changed, ambiguous duplicates, no-op edits and missing tables', () => {
+  expect(kernel.editTrainingRow(fixture, { ...todayRow, note: 'x' }, session)).toMatchObject({ code: 'conflict:training-changed' });
+  expect(kernel.editTrainingRow('## Sessions\n' + header + today + '\n' + today + '\n', todayRow, { type: 'Gym', split: 'Bicep', weight: 82.4, duration: 75, when: '2026-09-28T17:00:00Z' })).toMatchObject({ code: 'conflict:ambiguous' });
+  expect(kernel.editTrainingRow(fixture, todayRow, { type: 'Gym', split: 'Bicep', weight: 82.4, duration: 60, when: '2026-09-28T17:00:00Z' })).toMatchObject({ code: 'refused:invalid-edit' });
+  expect(kernel.editTrainingRow('## Sessions\nNo table\n', todayRow, session)).toMatchObject({ code: 'refused:training-table-missing' });
+});
+
+it('mutation kills the edit row-match guard', () => {
+  const assertion = (k: typeof kernel) => expect(k.editTrainingRow(fixture, { ...todayRow, note: 'x' }, session)).toMatchObject({ code: 'conflict:training-changed' });
+  assertion(kernel);
+  expect(() => assertion(mutant('matches.length === 0', 'false'))).toThrow();
 });
 
 const source = readFileSync(new URL('./training.ts', import.meta.url), 'utf8');

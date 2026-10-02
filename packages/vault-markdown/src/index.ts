@@ -12,5 +12,5 @@ export type { FeedbackReportEffect, FeedbackReportInput } from './feedback-repor
 export { parseActiveWork, captureActiveWork, editActiveWork, reviewActiveWork, undoActiveWork } from './active-work.ts';
 export type { ActiveWorkItem, ActiveWorkDoneItem, ActiveWorkChanges, ActiveWorkCapture, ActiveWorkEffect } from './active-work.ts';
 
-export { parseTraining, insertTrainingRow, formatTrainingRow, undoTraining } from './training.ts';
+export { parseTraining, insertTrainingRow, editTrainingRow, formatTrainingRow, undoTraining } from './training.ts';
 export type { TrainingRow, TrainingSession, TrainingEffect } from './training.ts';

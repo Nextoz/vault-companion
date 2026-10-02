@@ -371,20 +371,40 @@ export function trainingPlan(cmd: Extract<Command, { type: 'LogTraining' }>): Wr
     return f.ok ? trainingOn(cmd, f) : f.planned;
   } };
 }
-async function verifiedTraining(store: VaultStore, c: CommitInfo, target: Extract<Command, { type: 'LogTraining' }>) {
+
+type TrainingWriteCommand = Extract<Command, { type: 'LogTraining' | 'EditTraining' }>;
+type TrainingUndoCommand = Extract<Command, { type: 'UndoLogTraining' | 'UndoEditTraining' }>;
+
+function editTrainingOn(cmd: Extract<Command, { type: 'EditTraining' }>, f: TodoFile): Planned<md.TrainingEffect> {
+  return fromKernel(md.editTrainingRow(f.text, cmd.payload.row, cmd.payload.session), TRAINING, (e) => e);
+}
+export function editTrainingPlan(cmd: Extract<Command, { type: 'EditTraining' }>): WritePlan<md.TrainingEffect> {
+  return { message: 'Vault Companion: edit Training session', async compute(store, at) {
+    if (!canWrite(TRAINING, 'update')) return refuse('refused:path', 'training path is not writable');
+    const f = await readTodo(store, at, TRAINING);
+    return f.ok ? editTrainingOn(cmd, f) : f.planned;
+  } };
+}
+
+function replayTraining(target: TrainingWriteCommand, f: TodoFile): Planned<md.TrainingEffect> {
+  return target.type === 'EditTraining' ? editTrainingOn(target, f) : trainingOn(target, f);
+}
+
+type VerifiedTraining = { ok: true; before: TodoFile; afterBytes: Uint8Array; effect: md.TrainingEffect } | { ok: false; planned: Planned<never> };
+async function verifiedTraining(store: VaultStore, c: CommitInfo, target: TrainingWriteCommand): Promise<VerifiedTraining> {
   const changed = c.files.length === 1 ? c.files[0] : undefined;
   if (c.parent === null || changed?.path !== TRAINING || changed.blobSha === null) {
     return { ok: false as const, planned: refuse('invalid', 'undo target does not match the recorded session') };
   }
   const before = await readTodo(store, c.parent, TRAINING);
   if (!before.ok) return { ok: false as const, planned: refuse('dedupe-unknown', 'the session cannot be verified') };
-  const replay = trainingOn(target, before);
+  const replay = replayTraining(target, before);
   if (!replay.ok || (await gitBlobSha(replay.bytes)) !== changed.blobSha) {
     return { ok: false as const, planned: refuse('dedupe-unknown', 'the session cannot be verified') };
   }
   return { ok: true as const, before, afterBytes: replay.bytes, effect: replay.effect };
 }
-function undoTrainingPlan(cmd: Extract<Command, { type: 'UndoLogTraining' }>, raw: unknown): WritePlan<Receipt['effect']> {
+function undoTrainingPlan(cmd: TrainingUndoCommand, raw: unknown): WritePlan<Receipt['effect']> {
   const target = cmd.payload.target;
   const token = cmd.payload.targetCommit;
   const rawTarget = (raw as { payload: { target: unknown } }).payload.target;
@@ -394,7 +414,7 @@ function undoTrainingPlan(cmd: Extract<Command, { type: 'UndoLogTraining' }>, ra
   let applied: { session: CommitInfo; undo: CommitInfo } | null = null;
 
   /** The inverse of the verified session `v` on Training at `at` (X for a write, U^ to verify U). */
-  const inverseAt = async (store: VaultStore, v: Extract<Awaited<ReturnType<typeof verifiedTraining>>, { ok: true }>, at: string): Promise<Planned<Receipt['effect']>> => {
+  const inverseAt = async (store: VaultStore, v: Extract<VerifiedTraining, { ok: true }>, at: string): Promise<Planned<Receipt['effect']>> => {
     if (!canWrite(TRAINING, 'update')) return refuse('refused:path', 'training path is not writable');
     const f = await readTodo(store, at, TRAINING);
     if (!f.ok) return f.planned;
@@ -808,7 +828,9 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
     case 'TriageDecide':
       return triageDecidePlan(cmd, raw);
     case 'LogTraining': return trainingPlan(cmd);
+    case 'EditTraining': return editTrainingPlan(cmd);
     case 'UndoLogTraining': return undoTrainingPlan(cmd, raw);
+    case 'UndoEditTraining': return undoTrainingPlan(cmd, raw);
     case 'MoodCheckin': return moodCheckinPlan(cmd);
     case 'UndoMoodCheckin': return undoMoodCheckinPlan(cmd, raw);
     case 'ReportFeedback': return reportFeedbackPlan(cmd);

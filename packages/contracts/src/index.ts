@@ -225,6 +225,11 @@ export const TrainingSession = z.discriminatedUnion('type', [
 export type TrainingSession = z.infer<typeof TrainingSession>;
 export const LogTrainingCommand = envelope('LogTraining', z.strictObject({ session: TrainingSession }));
 export type LogTrainingCommand = z.infer<typeof LogTrainingCommand>;
+export const TrainingRow = z.strictObject({ date: z.iso.date(), time: z.string(), type: z.string(), distance: z.string(), duration: z.string(), weight: z.string(), split: z.string(), note: z.string() });
+export type TrainingRow = z.infer<typeof TrainingRow>;
+/** B12: replace one session row, located by its exact parsed cells, with a canonical row for `session`. */
+export const EditTrainingCommand = envelope('EditTraining', z.strictObject({ row: TrainingRow, session: TrainingSession }));
+export type EditTrainingCommand = z.infer<typeof EditTrainingCommand>;
 
 /** ADR-0036: a real calendar date, accepted only as strict `YYYY-MM-DD`. */
 const calendarDate = z
@@ -274,6 +279,8 @@ export const Command = z.discriminatedUnion('type', [
   CompleteTaskCommand,
   LogTrainingCommand,
   envelope('UndoLogTraining', z.strictObject({ target: LogTrainingCommand, targetCommit: commitSha })),
+  EditTrainingCommand,
+  envelope('UndoEditTraining', z.strictObject({ target: EditTrainingCommand, targetCommit: commitSha })),
   MoodCheckinCommand,
   envelope('UndoMoodCheckin', z.strictObject({ target: MoodCheckinCommand, targetCommit: commitSha })),
   ReportFeedbackCommand,
@@ -312,7 +319,7 @@ export const ActiveWorkEffect = z.strictObject({
   beforeLineText: singleLine.nullable(),
   afterLineText: singleLine.nullable(),
 });
-export const TrainingEffect = z.strictObject({ kind: z.literal('training'), op: z.enum(['logged', 'undone']), lineText: singleLine });
+export const TrainingEffect = z.strictObject({ kind: z.literal('training'), op: z.enum(['logged', 'edited', 'undone']), lineText: singleLine });
 export const MoodEffect = z.strictObject({ kind: z.literal('mood'), op: z.enum(['checked-in', 'undone']) });
 export type MoodEffect = z.infer<typeof MoodEffect>;
 export const ReportEffect = z.strictObject({ kind: z.literal('report'), op: z.enum(['reported', 'undone']) });
@@ -348,6 +355,7 @@ export const ErrorCode = z.enum([
   'refused:invalid-edit',
   'conflict:task-changed',
   'conflict:mood-changed',
+  'conflict:training-changed',
   'conflict:report-changed',
   'conflict:ambiguous',
   'conflict:stale',
@@ -891,8 +899,6 @@ export const RadarNoteResponse = z.discriminatedUnion('status', [
 export type RadarNoteResponse = z.infer<typeof RadarNoteResponse>;
 
 /** Only sessions and unknown table lines, never the surrounding health note. */
-export const TrainingRow = z.strictObject({ date: z.iso.date(), time: z.string(), type: z.string(), distance: z.string(), duration: z.string(), weight: z.string(), split: z.string(), note: z.string() });
-export type TrainingRow = z.infer<typeof TrainingRow>;
 export const TrainingResponse = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('ok'), revision: commitSha, blobSha, rows: z.array(TrainingRow), unknownLines: z.array(z.string()) }),
   z.strictObject({ status: z.literal('absent'), revision: commitSha }),

@@ -105,6 +105,38 @@ test('offline save survives reload and dependent Undo waits for the receipt', as
   expect(api.trainingRows).toEqual([]);
 });
 
+test('editing a logged Gym session prefills, saves the changed cells, and Undo restores it', async ({ page }) => {
+  const api = new MockApi();
+  api.trainingRows = [{ date: '2026-09-20', time: '08:00', type: 'Gym', distance: '', duration: '45', weight: '', split: 'Group: Functional Express', note: 'Capped at 12' }];
+  await api.install(page);
+  await page.goto('/');
+  await goTo(page, 'Log');
+  const list = page.getByRole('region', { name: 'Training sessions' });
+  await list.getByRole('button', { name: 'Edit Gym session on 2026-09-20 at 08:00' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Edit session', exact: true });
+  await expect(sheet.getByLabel('When', { exact: true })).toHaveValue('2026-09-20T08:00');
+  await expect(sheet.getByRole('combobox', { name: 'Workout', exact: true })).toHaveValue('Group');
+  await expect(sheet.getByLabel('Class name', { exact: true })).toHaveValue('Functional Express');
+  await expect(sheet.getByLabel('Duration (min)')).toHaveValue('45');
+  await expect(sheet.getByLabel('Note (optional)')).toHaveValue('Capped at 12');
+  await sheet.getByLabel('Duration (min)').fill('52');
+  await sheet.getByLabel('Class name', { exact: true }).fill('Functional Power');
+  await sheet.getByRole('button', { name: 'Save changes', exact: true }).click();
+  const row = list.getByTestId('training-row');
+  await expect(row).toContainText('Group: Functional Power');
+  await expect(row).toContainText('52 min');
+  await expect(row).toContainText('Capped at 12');
+  const edit = api.applied.find((c) => c.type === 'EditTraining');
+  expect(edit?.type === 'EditTraining' && edit.payload.row).toEqual({
+    date: '2026-09-20', time: '08:00', type: 'Gym', distance: '', duration: '45', weight: '', split: 'Group: Functional Express', note: 'Capped at 12',
+  });
+  const action = page.getByTestId('action').filter({ hasText: 'Edit training' });
+  await action.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(row).toContainText('Group: Functional Express');
+  await expect(row).toContainText('45 min');
+  expect(api.applied.map((c) => c.type)).toEqual(['EditTraining', 'UndoEditTraining']);
+});
+
 test('five complete tab labels fit 390 px without page overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const api = new MockApi(); await api.install(page); await page.goto('/');

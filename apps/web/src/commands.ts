@@ -4,6 +4,7 @@ import {
   type CompleteTaskCommand,
   type ReviewActiveWorkCommand,
   type LogTrainingCommand,
+  type EditTrainingCommand,
   type MoodCheckinCommand,
   type ReportFeedbackCommand,
   type TrainingSession,
@@ -66,12 +67,13 @@ export function undoDraft(ctx: MintContext, target: CompleteTaskCommand): Comman
 
 /** An Undo draft (no token yet), as the queue stores it. */
 export function isUndoDraft(envelope: Command): boolean {
-  return (envelope.type === 'UndoCompleteTask' || envelope.type === 'UndoActiveWork' || envelope.type === 'UndoLogTraining' || envelope.type === 'UndoMoodCheckin' || envelope.type === 'UndoReportFeedback') && !('targetCommit' in envelope.payload);
+  return (envelope.type === 'UndoCompleteTask' || envelope.type === 'UndoActiveWork' || envelope.type === 'UndoLogTraining' || envelope.type === 'UndoEditTraining' || envelope.type === 'UndoMoodCheckin' || envelope.type === 'UndoReportFeedback') && !('targetCommit' in envelope.payload);
 }
 
 /** The draft with its token: a checked, sendable Undo whose other fields are unchanged. */
 export function withTargetCommit(draft: Command, targetCommit: string): Command {
   if (draft.type === 'UndoLogTraining') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
+  if (draft.type === 'UndoEditTraining') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type === 'UndoMoodCheckin') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type === 'UndoReportFeedback') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type === 'UndoActiveWork') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
@@ -104,6 +106,8 @@ export function exportText(envelope: Command): string {
   switch (envelope.type) {
     case 'LogTraining': return JSON.stringify(envelope.payload.session, null, 2);
     case 'UndoLogTraining': return exportText(envelope.payload.target);
+    case 'EditTraining': return JSON.stringify(envelope.payload.session, null, 2);
+    case 'UndoEditTraining': return exportText(envelope.payload.target);
     case 'MoodCheckin': return JSON.stringify(envelope.payload, null, 2);
     case 'UndoMoodCheckin': return exportText(envelope.payload.target);
     case 'ReportFeedback': return JSON.stringify(envelope.payload, null, 2);
@@ -158,6 +162,8 @@ export function bindUndoTarget(undo: Command, target: Command): Command | null {
     return { ...undo, payload: { ...undo.payload, target } };
   if (undo.type === 'UndoLogTraining' && target.type === 'LogTraining')
     return { ...undo, payload: { ...undo.payload, target } };
+  if (undo.type === 'UndoEditTraining' && target.type === 'EditTraining')
+    return { ...undo, payload: { ...undo.payload, target } };
   if (undo.type === 'UndoMoodCheckin' && target.type === 'MoodCheckin')
     return { ...undo, payload: { ...undo.payload, target } };
   if (undo.type === 'UndoReportFeedback' && target.type === 'ReportFeedback')
@@ -173,6 +179,18 @@ export function undoLogTraining(ctx: MintContext, target: LogTrainingCommand, ta
 }
 export function undoLogTrainingDraft(ctx: MintContext, target: LogTrainingCommand): Command {
   const draft = { ...base(ctx), type: 'UndoLogTraining' as const, payload: { target } };
+  checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
+  return draft as Command;
+}
+
+export function editTraining(ctx: MintContext, row: EditTrainingCommand['payload']['row'], session: TrainingSession): EditTrainingCommand {
+  return checked({ ...base(ctx), type: 'EditTraining', payload: { row, session } }) as EditTrainingCommand;
+}
+export function undoEditTraining(ctx: MintContext, target: EditTrainingCommand, targetCommit: string): Command {
+  return checked({ ...base(ctx), type: 'UndoEditTraining', payload: { target, targetCommit } });
+}
+export function undoEditTrainingDraft(ctx: MintContext, target: EditTrainingCommand): Command {
+  const draft = { ...base(ctx), type: 'UndoEditTraining' as const, payload: { target } };
   checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
   return draft as Command;
 }
