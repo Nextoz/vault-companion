@@ -98,10 +98,10 @@ export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
     <h2>Mood check-in</h2>
     <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
       <div className="segmented" role="group" aria-label="Mood">
-        {SCALE.map((v) => <button key={v} type="button" aria-pressed={mood === v} onClick={() => setMood(v)}>{chipLabel('Mood', v)}</button>)}
+        {SCALE.map((v) => <button key={v} type="button" aria-label={chipLabel('Mood', v)} aria-pressed={mood === v} onClick={() => setMood(v)}>{chipLabel('Mood', v).slice(5)}</button>)}
       </div>
       <div className="segmented" role="group" aria-label="Energy">
-        {SCALE.map((v) => <button key={v} type="button" aria-pressed={energy === v} onClick={() => setEnergy(v)}>{chipLabel('Energy', v)}</button>)}
+        {SCALE.map((v) => <button key={v} type="button" aria-label={chipLabel('Energy', v)} aria-pressed={energy === v} onClick={() => setEnergy(v)}>{chipLabel('Energy', v).slice(7)}</button>)}
       </div>
       <label>Sleep (hours)<input type="text" inputMode="decimal" value={sleepText} onChange={(e) => setSleepText(e.target.value)} /></label>
       {(!accountKey || !baseRevision) && <p className="muted small">Connect once to set up this device before checking in.</p>}
