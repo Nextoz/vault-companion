@@ -4,6 +4,7 @@ import runbook from '../../../docs/deploy.md?raw';
 import raw from '../wrangler.jsonc?raw';
 import assetHeaders from '../../web/public/_headers?raw';
 import { configProblems } from './index.ts';
+import { BRIEF_CRONS, briefSlotForCron } from './morning-brief-job.ts';
 
 /** JSONC → JSON: drops comments and trailing commas outside strings. */
 function stripJsonc(text: string): string {
@@ -94,11 +95,16 @@ describe('wrangler.jsonc', () => {
     expect(assetHeaders.match(/^\s*Permissions-Policy: (.+)$/m)?.[1]).toBe('camera=(), microphone=(), geolocation=(self), payment=()');
   });
 
-  it('schedules exactly the research explainer crons (ADR-0029) and keeps its key optional and secret', () => {
-    expect(config.triggers?.crons).toEqual(Object.values(EXPLAINER_CRONS));
+  it('schedules exactly the research explainer and Morning Brief crons and keeps their keys optional and secret', () => {
+    const expected = [...new Set([...Object.values(EXPLAINER_CRONS), ...Object.values(BRIEF_CRONS)])].sort();
+    expect([...(config.triggers?.crons ?? [])].sort()).toEqual(expected);
     expect(Object.values(EXPLAINER_CRONS).map(slotForCron)).toEqual(['primary', 'catchup']);
+    expect(Object.values(BRIEF_CRONS).map(briefSlotForCron)).toEqual(['summer', 'winter']);
     expect('GEMINI_API_KEY' in vars).toBe(false);
     expect(secrets).not.toContain('GEMINI_API_KEY');
     expect(required).not.toContain('GEMINI_API_KEY');
+    expect('SCALEWAY_API_KEY' in vars).toBe(false);
+    expect(secrets).not.toContain('SCALEWAY_API_KEY');
+    expect(required).not.toContain('SCALEWAY_API_KEY');
   });
 });

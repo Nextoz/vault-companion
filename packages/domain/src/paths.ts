@@ -7,6 +7,8 @@ export const INBOX_DIR = 'Inbox';
 /** ADR-0029 write targets of the daily research explainer. */
 export const EXPLAINED_DIR = 'Research/Explained';
 export const EXPLAINER_STATUS_PATH = `${SCOUT_STATUS_DIR}/research-explainer.json`;
+/** ADR-0046: the one JSON file the morning-brief cron may create or overwrite. */
+export const MORNING_BRIEF_PATH = 'Daily/Morning Digest/Morning Brief - latest.json';
 export const RADAR_DIR = 'Research/Radar';
 export const RADAR_DECISIONS_DIR_LOCAL = RADAR_DECISIONS_DIR;
 /** ADR-0036: the template a missing daily journal is rendered from (read-only). */
@@ -72,7 +74,8 @@ export function parseVaultPath(raw: string): VaultPath | null {
   const scoutStatus = path.startsWith(`${SCOUT_STATUS_DIR}/`) && path.split('/').length === 3 && path.endsWith('.json');
   const triage = path === 'Events/Triage/feed.json' || path === 'Events/Triage/applied.json' || isTriageDecisionPath(path);
   const radar = isRadarDecisionPath(path) || isRadarAppliedPath(path);
-  if (!path.endsWith('.md') && !scoutStatus && !triage && !radar) return null;
+  const morningBrief = path === MORNING_BRIEF_PATH;
+  if (!path.endsWith('.md') && !scoutStatus && !triage && !radar && !morningBrief) return null;
   return path as VaultPath;
 }
 
@@ -98,6 +101,7 @@ export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
   if (isTriageDecisionPath(path)) return true;
   if (isRadarDecisionPath(path)) return true;
   if (path === EXPLAINER_STATUS_PATH) return true;
+  if (path === MORNING_BRIEF_PATH) return true;
   // Create; update only replaces this job's own pending note (blob-SHA checked by the job, ADR-0029 amendment 2).
   if (isExplainedNotePath(path)) return true;
   if (isDailyJournalPath(path)) return true;
