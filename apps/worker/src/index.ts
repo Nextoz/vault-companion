@@ -120,8 +120,8 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
 }
 
 /**
- * ADR-0029 cron: production composition of the research explainer. Every GitHub and Gemini request goes through one
- * counting `fetch`, so the run stays inside the subrequest budget (ADR-0029 amendment). `fetchImpl` is for tests.
+ * Cron composition: research explainer (ADR-0029) and Morning Brief (ADR-0046). Every GitHub/model request goes
+ * through one counting `fetch`, so the explainer run stays inside its subrequest budget. `fetchImpl` is for tests.
  */
 export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis)): Promise<void> {
   const base = { requestId: crypto.randomUUID(), method: 'CRON' as const, durationMs: 0 };
