@@ -4,6 +4,17 @@ Owner decision 2026-10-01 (ADR-0035). This file is **policy only**: no live stat
 readings (those go in `docs/checkpoint.md`). Change it only on an owner decision, by editing it in place — never by
 appending amendments. History: Git and branch `archive/codex-lead-2026-10-01`.
 
+**What lives where (keep these in step; nothing else holds operating rules):**
+
+| Place | Holds |
+|---|---|
+| this file | roles, workers, delivery loop, review, budget, authority defaults |
+| `.agent/owner-instructions.md` (local, gitignored) | the owner's standing decisions; **overrides this file** where they differ |
+| `tools/lead-prompt.md` | the Lead's start prompt (used by `start-lead.ps1` and the watcher) |
+| `.claude/settings.json` (+ local) | pre-approved commands for the Lead |
+| user `~/.claude/settings.json` → `autoMode.allow` | owner-approved auto-mode exceptions: sandboxed worker launches, production deploys |
+| `docs/checkpoint.md` | current state only |
+
 ## Roles
 
 - **Lead: Claude Opus 5.5, effort medium.** An engineer, not a dispatcher: owns understanding the relevant code,
@@ -101,17 +112,27 @@ notable misses in the checkpoint. Jev never accepts work, waives a check or auth
 
 - Startup reads: `AGENTS.md` (auto), `docs/checkpoint.md`, the Ready Backlog's ranked table. Nothing else until a task
   needs it; then `rg -n` + a line window, not whole files.
-- Commit state only at milestones (merge, pause, end of session): overwrite `docs/checkpoint.md`. No docs commit per event.
-- **Fresh context after each merge:** overwrite the checkpoint, get it onto `main`, then end the turn with a line
-  containing only `LEAD-RESTART-NOW`. `tools/lead-watch.ps1` (running in a second pane) sends `/clear` and the start
-  prompt. Do the same before any wait longer than ~30 minutes. It also resumes the Lead after a usage limit resets.
+- **Checkpoint inside the slice's PR:** update `docs/checkpoint.md` in the same PR before merging it. No
+  checkpoint-only PRs (14 of 31 merged PRs on 2026-10-01/02 were just checkpoints, each a full PR/CI/merge cycle). A
+  separate docs commit only for a pause or end of session with no open slice.
+- **Fresh context after each merge:** end the turn with a line containing only `LEAD-RESTART-NOW`;
+  `tools/lead-watch.ps1` (second pane) sends `/clear` and the start prompt. Do the same before any wait longer than
+  ~30 minutes. Usage limits need nothing: Claude Code continues by itself when the limit resets.
 - Do not build orchestration tooling unless the owner asks for it. The tools here are enough.
 
 ## Authority
 
 The Lead may push branches, open/close PRs and merge them. **Deploys, live/reference vault writes, credential,
-Access and billing changes need the owner's explicit approval each time.** The Lead prepares the exact deploy
-command and asks with a line starting `ACTION NEEDED:`.
+Access and billing changes need the owner's explicit approval**, either standing (in `.agent/owner-instructions.md`)
+or asked for with a line starting `ACTION NEEDED:` and the exact command. Live vault writes, credentials, Access and
+billing are never standing approvals.
+
+## Owner instructions
+
+`.agent/owner-instructions.md` is where the owner's decisions survive context resets. The Lead reads it at every start
+and **appends any decision the owner makes in chat** (dated, one line, before acting on it): approvals, priorities,
+limits, "do X from now on". It is local and gitignored (it may name budgets and private preferences). The owner can
+edit or delete lines at any time; a deleted line is no longer authority.
 
 ## Owner updates
 
