@@ -22,7 +22,7 @@
 //   fills the token from the completion's receipt and persists it before the request leaves, so every attempt sends
 //   the same bytes. A draft whose completion is refused (known not applied) is discarded locally; a receipt a draft
 //   still needs is never evicted.
-import type { Command, CommandType, CompleteTaskCommand, ReviewActiveWorkCommand, LogTrainingCommand, MoodCheckinCommand, ReportFeedbackCommand, Receipt, TasksResponse } from '@vault-companion/contracts';
+import type { Command, CommandType, CompleteTaskCommand, ReviewActiveWorkCommand, LogTrainingCommand, EditTrainingCommand, MoodCheckinCommand, ReportFeedbackCommand, Receipt, TasksResponse } from '@vault-companion/contracts';
 import { bindUndoTarget, isUndoDraft, withTargetCommit } from '../commands.ts';
 import { backoffMs, classify, knownNotApplied, type Outcome } from './classify.ts';
 import type { DraftBasis, PendingError, PendingRecord, PendingStore, ReceiptRecord, Watermark } from './db.ts';
@@ -246,7 +246,7 @@ export class PendingQueue {
    * Otherwise — or without Web Locks to prove it — the Undo is a real command queued behind it (`'queued'`).
    */
   async undoCompletion(
-    target: CompleteTaskCommand | ReviewActiveWorkCommand | LogTrainingCommand | MoodCheckinCommand | ReportFeedbackCommand,
+    target: CompleteTaskCommand | ReviewActiveWorkCommand | LogTrainingCommand | EditTrainingCommand | MoodCheckinCommand | ReportFeedbackCommand,
     undo: Command,
     options: Omit<EnqueueOptions, 'dependsOn'>,
   ): Promise<'cancelled' | 'queued'> {
@@ -263,7 +263,7 @@ export class PendingQueue {
       const receipt = this.#receipts.get(target.operationId);
       const durable = receipt ?? predecessor;
       const durableTarget = durable ? this.#envelopeOf(durable) : null;
-      if (undo.type === 'UndoCompleteTask' || undo.type === 'UndoActiveWork' || undo.type === 'UndoLogTraining' || undo.type === 'UndoMoodCheckin' || undo.type === 'UndoReportFeedback') {
+      if (undo.type === 'UndoCompleteTask' || undo.type === 'UndoActiveWork' || undo.type === 'UndoLogTraining' || undo.type === 'UndoEditTraining' || undo.type === 'UndoMoodCheckin' || undo.type === 'UndoReportFeedback') {
         const bound = durableTarget && bindUndoTarget(undo, durableTarget);
         if (bound) {
           undo = bound;
@@ -461,7 +461,7 @@ export class PendingQueue {
       }
       const draft = this.#envelopeOf(record);
       let body = record.body;
-      if (!record.everSent && isUndoDraft(draft) && (draft.type === 'UndoCompleteTask' || draft.type === 'UndoActiveWork' || draft.type === 'UndoLogTraining' || draft.type === 'UndoMoodCheckin' || draft.type === 'UndoReportFeedback')) {
+      if (!record.everSent && isUndoDraft(draft) && (draft.type === 'UndoCompleteTask' || draft.type === 'UndoActiveWork' || draft.type === 'UndoLogTraining' || draft.type === 'UndoEditTraining' || draft.type === 'UndoMoodCheckin' || draft.type === 'UndoReportFeedback')) {
         const targetId = draft.payload.target.operationId;
         const receipt = this.#receipts.get(targetId);
         const predecessor = this.#records.get(targetId);
@@ -644,7 +644,7 @@ export class PendingQueue {
     const needed = new Set<string>();
     for (const r of this.#records.values()) {
       const e = this.#envelopeOf(r);
-      if (isUndoDraft(e) && (e.type === 'UndoCompleteTask' || e.type === 'UndoActiveWork' || e.type === 'UndoLogTraining' || e.type === 'UndoMoodCheckin' || e.type === 'UndoReportFeedback')) needed.add(e.payload.target.operationId);
+      if (isUndoDraft(e) && (e.type === 'UndoCompleteTask' || e.type === 'UndoActiveWork' || e.type === 'UndoLogTraining' || e.type === 'UndoEditTraining' || e.type === 'UndoMoodCheckin' || e.type === 'UndoReportFeedback')) needed.add(e.payload.target.operationId);
     }
     return needed;
   }

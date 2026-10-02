@@ -54,3 +54,51 @@ export function groupClassSuggestions(rows: readonly TrainingRow[], limit = 6): 
   }
   return names;
 }
+
+/** What the training sheet's controlled inputs hold; every field is a string, so an unparseable cell stays empty. */
+export interface TrainingDraft {
+  type: 'Gym' | 'Run';
+  /** `YYYY-MM-DDTHH:MM` for the datetime-local input; empty when the read had no time. */
+  when: string;
+  distance: string;
+  /** The original cell when it is non-empty but does not parse; null otherwise. */
+  distanceWas: string | null;
+  duration: string;
+  durationWas: string | null;
+  weight: string;
+  weightWas: string | null;
+  /** Empty when the read's split is not a known workout; the sheet then requires a choice before saving. */
+  split: '' | 'Bicep' | 'Tricep' | 'Legs' | 'Group';
+  className: string;
+  note: string;
+}
+
+const text = (value: number | null): string => (value === null ? '' : String(value));
+
+/**
+ * B12: a read row to the sheet's draft. Only Run and Gym rows are tappable, so any other type prefills as Gym.
+ * The read already decodes cell escapes, so note and class travel verbatim. A cell that does not parse stays
+ * empty, and its raw non-empty value is kept in `…Was` so the sheet can show what it could not read.
+ */
+export function rowToDraft(row: TrainingRow): TrainingDraft {
+  const distance = numberWithUnit(row.distance, 'km');
+  const duration = numberWithUnit(row.duration, 'min');
+  const weight = numberWithUnit(row.weight, 'kg');
+  const group = row.split.startsWith('Group: ') ? row.split.slice('Group: '.length) : null;
+  const split = row.split === 'Bicep' || row.split === 'Tricep' || row.split === 'Legs' || group !== null
+    ? (group !== null ? 'Group' : (row.split as 'Bicep' | 'Tricep' | 'Legs'))
+    : '';
+  return {
+    type: row.type === 'Run' ? 'Run' : 'Gym',
+    when: row.time ? `${row.date}T${row.time}` : '',
+    distance: text(distance),
+    distanceWas: distance === null && row.distance !== '' ? row.distance : null,
+    duration: text(duration),
+    durationWas: duration === null && row.duration !== '' ? row.duration : null,
+    weight: text(weight),
+    weightWas: weight === null && row.weight !== '' ? row.weight : null,
+    split,
+    className: group ?? '',
+    note: row.note,
+  };
+}

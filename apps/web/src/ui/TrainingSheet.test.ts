@@ -1,4 +1,4 @@
-import { TrainingResponse } from '@vault-companion/contracts';
+import { TrainingResponse, type TrainingRow } from '@vault-companion/contracts';
 import { JSDOM } from 'jsdom';
 import { act, createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -37,11 +37,11 @@ async function setValue(el: HTMLInputElement | HTMLSelectElement, value: string)
   await act(async () => { el.dispatchEvent(new dom.window.Event(select ? 'change' : 'input', { bubbles: true })); });
 }
 
-async function mount() {
+async function mount(edit?: { row: TrainingRow }) {
   const enqueue = vi.fn().mockResolvedValue('enqueued');
   const queue = { enqueue } as unknown as PendingQueue;
   const root = createRoot(document.getElementById('root')!);
-  await act(async () => { root.render(createElement(TrainingSheet, { queue, accountKey: 'a'.repeat(64), baseRevision: '1'.repeat(40), onClose: () => {} })); });
+  await act(async () => { root.render(createElement(TrainingSheet, { queue, accountKey: 'a'.repeat(64), baseRevision: '1'.repeat(40), onClose: () => {}, ...(edit ? { edit } : {}) })); });
   return { root, enqueue };
 }
 
@@ -86,6 +86,27 @@ describe('Group training (B11)', () => {
     await setValue(label('Workout')!.querySelector('select')!, 'Legs');
     expect(label('Class name')).toBeUndefined();
     expect(button('Functional Express')).toBeUndefined();
+    await act(async () => root.unmount());
+  });
+});
+
+describe('edit mode (B12)', () => {
+  it('keeps an edited row’s empty time empty and waits for one before saving', async () => {
+    const { root } = await mount({ row: { date: '2026-09-20', time: '', type: 'Run', distance: '5.2 km', duration: '45 min', weight: '', split: '', note: '' } });
+    expect(inputOf('When').value).toBe('');
+    expect(button('Save changes')!.disabled).toBe(true);
+    await setValue(inputOf('When'), '2026-09-20T08:00');
+    expect(button('Save changes')!.disabled).toBe(false);
+    await act(async () => root.unmount());
+  });
+
+  it('leaves an unknown split unselected, shows an unreadable weight, and waits for both', async () => {
+    const { root } = await mount({ row: { date: '2026-09-20', time: '08:00', type: 'Gym', distance: '', duration: '45', weight: 'heavy', split: 'Push', note: '' } });
+    expect(button('Save changes')!.disabled).toBe(true);
+    expect(document.body.textContent).toContain('Was: heavy');
+    await setValue(label('Workout')!.querySelector('select')!, 'Bicep');
+    await setValue(inputOf('Weight (kg, optional)'), '80');
+    expect(button('Save changes')!.disabled).toBe(false);
     await act(async () => root.unmount());
   });
 });

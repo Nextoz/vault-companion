@@ -886,6 +886,8 @@ textarea:focus-visible {
 .training-list p { margin: 4px 0; }
 .training-list summary { cursor: pointer; width: fit-content; padding: 6px; }
 .training-sheet input, .training-sheet select, .training-sheet textarea { min-width: 0; max-width: 100%; }
+.training-session { display: block; width: 100%; text-align: left; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.training-session-line { display: block; margin: 4px 0; }
 /* Progress Wall (ADR-0027) */
 .progress h2 { font-size: 1rem; margin: 20px 0 6px; }
 .progress-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px 12px 8px; overflow-wrap: anywhere; }
