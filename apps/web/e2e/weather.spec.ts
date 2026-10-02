@@ -40,6 +40,8 @@ test('Today shows the compact weather morning projection and opens the same shar
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
+  // UX2: the weather line on the morning card opens the same compact panel.
+  await page.getByRole('button', { name: /lowest-rain window/ }).click();
   const morning = page.getByRole('region', { name: 'This morning weather', exact: true });
   await expect(morning.getByTestId('weather-morning-summary')).toContainText('lowest-rain window');
   await expect(morning.getByTestId('weather-morning-summary')).toContainText('Two models cover this window');
@@ -71,6 +73,7 @@ test('denied device geolocation keeps the honest coarse Copenhagen fallback and 
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
+  await page.getByRole('button', { name: /lowest-rain window/ }).click();
   const morning = page.getByRole('region', { name: 'This morning weather' });
   await morning.getByRole('button', { name: 'Weather' }).click();
   await morning.getByRole('button', { name: 'Use my device location' }).click();
@@ -83,6 +86,8 @@ test('unavailable weather stays honest on Dashboard and Today', async ({ page })
   api.weather = { status: 'unavailable', now: '2026-09-30T12:00:00Z', location: { label: 'Copenhagen city centre (coarse fallback)', latitude: 55.68, longitude: 12.57, precision: 'city-fallback', timeZone: 'Europe/Copenhagen' }, reason: 'provider-error', message: 'No weather model returned usable forecast points.' };
   await api.install(page);
   await page.goto('/');
+  // The honest failure is the line's copy; tapping it opens the same panel that scrolls its detail.
+  await page.getByRole('button', { name: /No weather model returned usable forecast points/ }).click();
   await expect(page.getByRole('region', { name: 'This morning weather' })).toContainText('No weather model returned usable forecast points.');
   await goTo(page, 'Today');
   const weather = page.getByRole('region', { name: 'Dashboard' }).getByRole('article', { name: 'Weather' });

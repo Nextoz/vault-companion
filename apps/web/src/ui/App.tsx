@@ -23,10 +23,8 @@ import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
 import { VaultStatus } from './VaultStatus.tsx';
 import { Progress } from './Progress.tsx';
-import { Morning } from './Morning.tsx';
-import { MoodCard } from './MoodCard.tsx';
+import { MorningCard } from './MorningCard.tsx';
 import { ReportSheet, screenName } from './ReportSheet.tsx';
-import { WeatherMorning } from './WeatherLab.tsx';
 import { Notes } from './Notes.tsx';
 import { Scouts } from './Scouts.tsx';
 import { Training } from './Training.tsx';
@@ -423,17 +421,21 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
           accountKey={accountKey} baseRevision={revision} />}
 
-        {tab === 'scouts' && !signedOut && <Scouts key={`scouts:${accountKey}`} page onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />}
+        {/* Scouts is now also where triage lives (UX2), so its indicator and dialog mount here. */}
+        {tab === 'scouts' && !signedOut && (
+          <>
+            <Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} />
+            <Scouts key={`scouts:${accountKey}`} page onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />
+          </>
+        )}
 
-        {/* Today is the cockpit: one line to the Tasks screen, then the morning/mood/weather/scouts/triage boards. */}
+        {/* Today is the cockpit (UX2): the morning card, the check-in line, then the Dashboard boards. Each card line
+            keeps its detail reachable (weather/papers inline; scouts and events on the Scouts tab). */}
         {tab === 'today' && !signedOut && (
           <>
-            <button type="button" className="today-tasks" onClick={() => setTab('tasks')}>{tasksTodayText(view.today.length)}</button>
-            <Morning key={`morning:${accountKey}`} refreshKey={checkedAt} />
-            <MoodCard key={`mood:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} baseRevision={revision} blocked={writeBlocked || frozen} />
-            <WeatherMorning key={`weather-morning:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />
-            <Scouts key={`scouts:${accountKey}`} page={false} onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />
-            <Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} />
+            <MorningCard key={`morning-card:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey}
+              baseRevision={revision} blocked={writeBlocked || frozen} refreshKey={checkedAt} tasksToday={view.today.length}
+              onOpenTasks={() => setTab('tasks')} onOpenScouts={() => setTab('scouts')} />
             {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
             {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
           </>
@@ -535,10 +537,4 @@ function Back({ onBack }: { onBack: () => void }) {
       ‹ Back
     </button>
   );
-}
-
-/** The Today cockpit's one-line way into the Tasks screen. */
-function tasksTodayText(count: number): string {
-  if (count === 0) return 'No tasks today';
-  return count === 1 ? '1 task today' : `${count} tasks today`;
 }

@@ -14,6 +14,8 @@ test('Today indicator → real stack and details → go → Calendar pending →
   ] };
   await api.install(page);
   await page.goto('/');
+  // UX2: the events line on Today opens the Scouts tab, where triage now lives.
+  await page.getByRole('button', { name: '1 new events' }).click();
   await page.getByRole('button', { name: '1 new events' }).click();
   const dialog = page.getByRole('dialog', { name: 'Event triage stack' });
   await expect(dialog.getByText('Event feed from 2026-09-25T06:50:00+02:00')).toBeVisible();
@@ -52,6 +54,8 @@ test('a decision made while the previous one is still saving is kept, and Undo t
   api.commandMode = 'hold';
   await api.install(page);
   await page.goto('/');
+  // UX2: the events line on Today opens the Scouts tab, where triage now lives.
+  await page.getByRole('button', { name: '2 new events' }).click();
   await page.getByRole('button', { name: '2 new events' }).click();
   const dialog = page.getByRole('dialog', { name: 'Event triage stack' });
   await dialog.getByRole('button', { name: /^Skip/ }).click();
@@ -80,6 +84,8 @@ test('check-ins are extra, attended undo works, summaries and both Go overlap so
   api.triage = { ...api.triage, feedState: 'ok', generatedAt: '2026-09-27T06:50:00+02:00', cards,
     checkins: [{ eventId: 'eeeeeeeeeeeeeeeeeeee', title: 'Synthetic past meetup', start: '2026-09-25T17:00:00+02:00' }] };
   await api.install(page); await page.goto('/');
+  // UX2: the events line on Today opens the Scouts tab, where triage now lives.
+  await page.getByRole('button', { name: '11 new events' }).click();
   await page.getByRole('button', { name: '11 new events' }).click();
   const dialog = page.getByRole('dialog', { name: 'Event triage stack' });
   await expect(dialog.getByRole('region', { name: 'Event check-in' })).toBeVisible();
