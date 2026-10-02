@@ -46,6 +46,8 @@ it('missing or duplicate structure is a typed refusal and leaves the text unchan
   expect(refusal('## Bug backlog\n\n## Bug backlog\n', bug)).toBe('refused:structure');
   expect(refusal('## Bug backlog\n\n| Bug | Seen | Expected | Likely cause (hint) |\n', bug)).toBe('refused:structure');
   expect(refusal('## Candidates to refine next\n\nNo list\n', wish)).toBe('refused:structure');
+  expect(refusal('## Bug backlog\n\n## Other\n\n| Bug | Seen | Expected | Likely cause (hint) |\n| --- | --- | --- | --- |\n', bug)).toBe('refused:structure');
+  expect(refusal('## Candidates to refine next\n\nNo list\n\n## Other\n\n- Elsewhere\n', wish)).toBe('refused:structure');
 });
 
 it('revert removes exactly the written line; absent or duplicated line is a conflict refusal', () => {

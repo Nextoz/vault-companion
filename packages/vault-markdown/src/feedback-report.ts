@@ -53,10 +53,13 @@ function headingIndex(lines: readonly string[], heading: string): number | Refus
   return index === null ? refuse('refused:structure', `${heading} was not found.`) : index;
 }
 
+// The table or list must sit inside its own section: scanning stops at the next heading.
+const isHeading = (line: string): boolean => /^#{1,6}\s/.test(line);
+
 function bugInsertIndex(lines: readonly string[]): number | Refusal {
   const heading = headingIndex(lines, BUG_HEADING);
   if (typeof heading !== 'number') return heading;
-  for (let i = heading + 1; i < lines.length; i++) {
+  for (let i = heading + 1; i < lines.length && !isHeading(lines[i]!); i++) {
     if (lines[i] === BUG_HEADER && lines[i + 1] !== undefined && TABLE_SEPARATOR.test(lines[i + 1]!)) return i + 2;
   }
   return refuse('refused:structure', 'The Bug backlog table was not found.');
@@ -66,7 +69,7 @@ function wishInsertIndex(lines: readonly string[]): number | Refusal {
   const heading = headingIndex(lines, WISH_HEADING);
   if (typeof heading !== 'number') return heading;
   let last = -1;
-  for (let i = heading + 1; i < lines.length; i++) {
+  for (let i = heading + 1; i < lines.length && !isHeading(lines[i]!); i++) {
     const line = lines[i] ?? '';
     if (line.startsWith('- ')) { last = i; continue; }
     if (last !== -1) break;
