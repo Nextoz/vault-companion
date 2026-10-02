@@ -1,7 +1,7 @@
 import { HEALTH_DAILY_CSV, HealthResponse } from '@vault-companion/contracts';
 import { expect, it } from 'vitest';
 import { createHealthService } from './health.ts';
-import { StoreUnavailable } from './store.ts';
+import { FileTooLarge, StoreUnavailable } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 const NOW = new Date('2026-05-01T12:00:00Z'); // Copenhagen: 2026-05-01, so yesterday is 2026-04-30.
@@ -118,6 +118,10 @@ it('refuses an oversized export and a blob that does not match the listing', asy
   const real = store.readFile.bind(store);
   store.readFile = async (path, at) => { const file = await real(path, at); return file && { ...file, blobSha: 'f'.repeat(40) }; };
   expect(await read()).toMatchObject({ status: 'unreadable' });
+
+  // The GitHub adapter throws FileTooLarge instead of returning big bytes: still unreadable, never "GitHub down".
+  store.readFile = async () => { throw new FileTooLarge(); };
+  expect(await read()).toMatchObject({ status: 'unreadable', metrics: [] });
 });
 
 it('maps a store outage to upstream-unavailable without leaking any cell text', async () => {

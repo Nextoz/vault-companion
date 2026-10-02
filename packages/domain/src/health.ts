@@ -150,7 +150,14 @@ async function readHealth(deps: Required<Pick<HealthServiceDeps, 'store' | 'now'
 
     const listed = (await store.listFiles('Health/Data', revision)).find((f) => f.path === PATH);
     if (!listed) return missing;
-    const file = await store.readFile(PATH, revision);
+    let file;
+    try {
+      file = await store.readFile(PATH, revision);
+    } catch (e) {
+      // The GitHub adapter refuses files above its byte bound: that is an unreadable export, not an outage.
+      if (e instanceof FileTooLarge) return unreadable;
+      throw e;
+    }
     if (!file || file.blobSha !== listed.blobSha) return unreadable;
     if (file.bytes.length > MAX_HEALTH_BYTES) return unreadable;
     let text: string;
