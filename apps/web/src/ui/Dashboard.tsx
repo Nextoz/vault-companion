@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useMemo, useState, type PointerEvent } f
 import { getDashboard, getMarketTicker } from '../api.ts';
 import './Dashboard.css';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
+import { HealthPanel } from './HealthPanel.tsx';
 import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
 
 export const TICKER_POLL_MS = 60_000;
@@ -271,9 +272,10 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough }: {
       {shown && stale && !isCopy && <p className="dash-stale" role="status">Not refreshed — the times below are from the last success.</p>}
       {shown && market && <MarketView card={market} stale={stale} onDrillthrough={onDrillthrough} />}
       {shown && weather && <WeatherCardView card={weather} stale={weatherStale} onDrillthrough={onDrillthrough} />}
+      {shown && <HealthPanel accountKey={accountKey} refreshKey={refreshKey} />}
       {shown && (
         <div className="dash-tiles">
-          {shown.cards.filter((card) => card.id !== 'market' && card.id !== 'weather').map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}
+          {shown.cards.filter((card) => card.id !== 'market' && card.id !== 'weather' && card.id !== 'health').map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}
         </div>
       )}
     </section>

@@ -8,6 +8,7 @@ import {
   encodeLinkedNoteHeader,
   encodeNoteHeader,
   HistoryResponse,
+  HealthResponse,
   LINKED_NOTE_HEADER,
   LinkedNoteResponse,
   NOTE_HEADER,
@@ -143,6 +144,9 @@ export const getMarketTicker = () => getJson('/api/dashboard/ticker', MarketTick
 
 /** Weather projection (ADR-0033 W1): default read is the fixed coarse Copenhagen fallback. */
 export const getWeather = () => getJson('/api/weather', WeatherResponse);
+
+/** Health daily card (HC1/HC2): read-only projection of the one fixed Apple Health export. */
+export const getHealth = () => getJson('/api/health', HealthResponse);
 
 /** Precise device location only after explicit foreground consent, sent as a bounded same-origin JSON POST. */
 export async function postWeatherLocation(location: WeatherLocationRequest, accountKey: string): Promise<Fetched<WeatherResponse>> {
