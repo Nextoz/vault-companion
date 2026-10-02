@@ -111,7 +111,7 @@ test('a pending action survives a reload and is sent afterwards, byte-for-byte',
   api.commandMode = 'unavailable';
   await page.goto('/');
   await page.getByRole('button', { name: 'Capture' }).click();
-  await page.getByRole('button', { name: 'Task' }).click();
+  await page.getByRole('button', { name: 'Task', exact: true }).click();
   await page.getByLabel('Task text').fill('Buy seed potatoes');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => api.bodies.length).toBeGreaterThan(0);

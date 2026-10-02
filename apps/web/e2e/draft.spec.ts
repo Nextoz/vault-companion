@@ -142,7 +142,7 @@ test('an unsaved capture survives a reload, is restored with its type, and is se
 test('closing keeps the draft; Discard draft removes it', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Capture' }).click();
-  await page.getByRole('button', { name: 'Task' }).click();
+  await page.getByRole('button', { name: 'Task', exact: true }).click();
   await page.getByLabel('Task text').fill('Synthetic task draft');
   await page.getByRole('button', { name: 'Close' }).click();
 

@@ -399,6 +399,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {tab === 'status' && !signedOut && (
           <>
             <Back onBack={() => setTab(statusReturn)} />
+            <h2 className="status-actions-title">Actions</h2>
+            {snapshot.items.length === 0 && <p className="muted">No pending actions.</p>}
             {!needsAttention && (
               <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
             )}
@@ -432,7 +434,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             <WeatherMorning key={`weather-morning:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />
             <Scouts key={`scouts:${accountKey}`} page={false} onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />
             <Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} />
-            <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />
+            {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
+            {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
           </>
         )}
 
