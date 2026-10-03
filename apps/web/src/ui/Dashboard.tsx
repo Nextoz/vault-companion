@@ -5,7 +5,7 @@ import { useCallback, useEffect, useId, useMemo, useState, type PointerEvent } f
 import { getDashboard, getMarketTicker } from '../api.ts';
 import './Dashboard.css';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
-import { formatChange, formatWatchPrice, legacyMarketCard, seriesChange, watchCards, watchFresh, watchTitle } from './watchlist.ts';
+import { formatChange, formatWatchPrice, formatWatchValue, legacyMarketCard, seriesChange, watchCards, watchFresh, watchTitle } from './watchlist.ts';
 import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
 
 export const TICKER_POLL_MS = 60_000;
@@ -57,7 +57,9 @@ export function marketFresh(card: MarketCard, nowMs: number): boolean {
   return card.status === 'ok' && card.fetchedAt !== null && nowMs - at(card.fetchedAt) <= MARKET_STALE_MS;
 }
 
-function Chart({ series, title, active, onInspect }: { series: MarketSeries; title: string; active: number | null; onInspect: (index: number) => void }) {
+function Chart({ series, title, formatValue = (value: number) => money.format(value), active, onInspect }: {
+  series: MarketSeries; title: string; formatValue?: ((value: number) => string) | undefined; active: number | null; onInspect: (index: number) => void;
+}) {
   const points = series.points;
   const segments = useMemo(() => seriesSegments(series), [series]);
   const { min, max } = useMemo(() => {
@@ -116,7 +118,7 @@ function Chart({ series, title, active, onInspect }: { series: MarketSeries; tit
       />
       <figcaption className="dash-readout" aria-live="polite">
         {points.length > 0
-          ? <><time dateTime={points[active ?? points.length - 1]!.time}>{formatInstant(points[active ?? points.length - 1]!.time)}</time> · {money.format(points[active ?? points.length - 1]!.close)}</>
+          ? <><time dateTime={points[active ?? points.length - 1]!.time}>{formatInstant(points[active ?? points.length - 1]!.time)}</time> · {formatValue(points[active ?? points.length - 1]!.close)}</>
           : 'No points to inspect'}
       </figcaption>
     </figure>
@@ -197,7 +199,7 @@ function WatchView({ card, stale, onDrillthrough }: {
           {stale && <p className="dash-stale" role="status">This value is not fresh — showing the last one we have.</p>}
           {card.series
             ? <>
-                <Chart series={card.series} title={watchTitle(card)} active={selection} onInspect={setSelection} />
+                <Chart series={card.series} title={watchTitle(card)} formatValue={(value) => formatWatchValue(card, value)} active={selection} onInspect={setSelection} />
                 {card.series.missingIntervals > 0 && <p className="muted small">{card.series.missingIntervals} intervals missing — shown as gaps, not filled in.</p>}
               </>
             : <p className="dash-note" role="status">{card.note ?? 'Current value only.'}</p>}

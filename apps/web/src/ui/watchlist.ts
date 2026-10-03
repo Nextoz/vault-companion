@@ -27,13 +27,18 @@ export function watchDecimals(card: WatchCard): number {
   return card.item.type === 'fx' ? 4 : 2;
 }
 
-/** The current value, formatted per quote (fx four decimals, crypto two). `unavailable` has no value: it stays empty. */
-export function formatWatchPrice(card: WatchCard): string {
+/** One value for a card, formatted per quote (fx four decimals, crypto two). `unavailable` has no value: stays empty. */
+export function formatWatchValue(card: WatchCard, value: number): string {
   if (card.status !== 'ok') return '';
   const decimals = watchDecimals(card);
   return new Intl.NumberFormat('en-US', {
     style: 'currency', currency: card.ticker.quote, minimumFractionDigits: decimals, maximumFractionDigits: decimals,
-  }).format(card.ticker.price).replace(/\u00a0/g, ' ');
+  }).format(value).replace(/\u00a0/g, ' ');
+}
+
+/** The card's current value, in the same format the chart readout uses. */
+export function formatWatchPrice(card: WatchCard): string {
+  return card.status === 'ok' ? formatWatchValue(card, card.ticker.price) : '';
 }
 
 export interface WatchChange {

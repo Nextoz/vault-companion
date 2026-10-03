@@ -1,6 +1,6 @@
 import type { MarketCard, MarketSeries, WatchCard } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
-import { formatChange, formatWatchPrice, legacyMarketCard, seriesChange, watchCards, watchDecimals, watchFresh, watchTitle } from './watchlist.ts';
+import { formatChange, formatWatchPrice, formatWatchValue, legacyMarketCard, seriesChange, watchCards, watchDecimals, watchFresh, watchTitle } from './watchlist.ts';
 
 const NOW = '2026-09-30T12:00:00Z';
 const point = (index: number, close: number) => ({
@@ -56,6 +56,12 @@ describe('watchlist price (WL2)', () => {
 
   it('never paints a number for an unavailable card', () => {
     expect(formatWatchPrice(unavailable)).toBe('');
+  });
+
+  it('formats any series point with the same quote and precision (the chart readout)', () => {
+    expect(formatWatchValue(fx(), 0.09)).toBe('DKK 0.0900');
+    expect(formatWatchValue(crypto(), 2_900)).toBe('$2,900.00');
+    expect(formatWatchValue(unavailable, 1)).toBe('');
   });
 });
 

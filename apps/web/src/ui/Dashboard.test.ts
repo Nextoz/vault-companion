@@ -156,6 +156,13 @@ describe('watchlist cards (WL2)', () => {
     expect(text()).toContain('Current value only');
     expect(document.querySelector('.dash-svg')).toBeNull();
   });
+
+  it('reads out a watch point in the quote currency and precision, not the market default', async () => {
+    const fx = watch({ item: { symbol: 'RUB/DKK', type: 'fx' }, ticker: { base: 'RUB', quote: 'DKK', provider: 'frankfurter', price: 0.09, providerTime: NOW }, series: watchSeries([0.05, 0.0712, 0.09]) });
+    await render([fx, ...overviewCards]);
+    expect(document.querySelector('.dash-readout')!.textContent).toContain('DKK 0.0900');
+    expect(document.querySelector('.dash-readout')!.textContent).not.toContain('$');
+  });
 });
 
 describe('range and freshness (DASH1)', () => {
