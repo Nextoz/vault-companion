@@ -1,13 +1,16 @@
-// UX2: the Today cockpit's compact morning card. Up to four one-liners plus the tasks line, each tapping through to
-// its detail; weather and papers open the existing panels inline, scouts and events open the Scouts tab where their
-// detail (and triage) now lives. Below it the check-in line, hidden once today already holds a check-in.
-import type { MorningBriefResponse, MorningResponse, ScoutsResponse, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
+// UX2: the Today cockpit's compact morning card. A "Needs you" line (NY1), then up to four one-liners plus the tasks
+// line, each tapping through to its detail; weather and papers open the existing panels inline, scouts and events open
+// the Scouts tab where their detail (and triage) now lives. Below it the check-in line, once today has no check-in.
+import type { ActiveWorkResponse, MorningBriefResponse, MorningResponse, ScoutsResponse, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
-import { getMorning, getMorningBrief, getScouts, getTriage, getWeather, type Fetched } from '../api.ts';
+import { getActiveWork, getMorning, getMorningBrief, getScouts, getTriage, getWeather, type Fetched } from '../api.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
+import { dateIn } from '../time.ts';
 import { deriveTriage } from '../triage.ts';
 import { localDate, MoodCard } from './MoodCard.tsx';
 import { Morning } from './Morning.tsx';
+import { NeedsYouSheet } from './NeedsYouSheet.tsx';
+import { needsYou, type NeedsYouFacts, type NeedsYouTarget } from './needs-you.ts';
 import { WeatherMorning } from './WeatherLab.tsx';
 import { briefLines, checkinDue, morningLines, type MorningLineId } from './morning-card.ts';
 
@@ -21,18 +24,21 @@ export interface MorningCardProps {
   tasksToday: number;
   onOpenTasks: () => void;
   onOpenScouts: () => void;
+  onOpenStatus: () => void;
 }
 
-export function MorningCard({ queue, items, accountKey, baseRevision, blocked, refreshKey, tasksToday, onOpenTasks, onOpenScouts }: MorningCardProps) {
+export function MorningCard({ queue, items, accountKey, baseRevision, blocked, refreshKey, tasksToday, onOpenTasks, onOpenScouts, onOpenStatus }: MorningCardProps) {
   const [weather, setWeather] = useState<Fetched<WeatherResponse> | null>(null);
   const [scouts, setScouts] = useState<Fetched<ScoutsResponse> | null>(null);
   const [morning, setMorning] = useState<Fetched<MorningResponse> | null>(null);
   const [brief, setBrief] = useState<Fetched<MorningBriefResponse> | null>(null);
   const [triage, setTriage] = useState<TriageResponse | null>(null);
+  const [activeWork, setActiveWork] = useState<Fetched<ActiveWorkResponse> | null>(null);
   const [open, setOpen] = useState<MorningLineId | null>(null);
   const [checkinOpen, setCheckinOpen] = useState(false);
+  const [needsOpen, setNeedsOpen] = useState(false);
 
-  // The same reads the four panels used to make on Today; no new endpoint is introduced here.
+  // The Today panels' own reads, plus the Tasks tab's Active Work read (reused for Needs you); no new endpoint.
   useEffect(() => {
     if (!accountKey) return;
     let live = true;
@@ -40,6 +46,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
     void getMorning().then((value) => { if (live) setMorning(value); });
     void getMorningBrief().then((value) => { if (live) setBrief(value); });
     void getTriage().then((value) => { if (live && value.kind === 'ok') setTriage(value.data); });
+    void getActiveWork().then((value) => { if (live) setActiveWork(value); });
     return () => { live = false; };
   }, [refreshKey, accountKey]);
   useEffect(() => {
@@ -52,19 +59,35 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   const triageView = triage ? deriveTriage(triage, items, accountKey) : null;
   // A failed, stale or absent brief yields no rows: the card keeps its existing lines, never a placeholder.
   const briefRows = brief !== null && brief.kind === 'ok' ? briefLines(brief.data, localDate()) : null;
+  const eventsToTriage = triageView ? triageView.cards.length + triageView.checkins.length : 0;
+  // NY1: the same `attention` state the Actions panel counts; the queue read itself is not repeated here.
+  const needsFacts: NeedsYouFacts = {
+    scouts: scouts?.kind === 'ok' ? scouts.data : null,
+    activeWork: activeWork?.kind === 'ok' && activeWork.data.status === 'ok' ? activeWork.data : null,
+    eventsToTriage,
+    actionsNeedingAttention: items.filter((item) => item.state === 'attention').length,
+  };
+  const needsRows = needsYou(needsFacts, dateIn(new Date().toISOString(), 'Europe/Copenhagen'));
   const lines = morningLines({
     weather: weather?.kind === 'ok' ? weather.data : null,
     weatherFailed: weather !== null && weather.kind !== 'ok',
     scouts: scouts?.kind === 'ok' ? scouts.data : null,
     morning: morning?.kind === 'ok' ? morning.data : null,
-    eventsToTriage: triageView ? triageView.cards.length + triageView.checkins.length : 0,
+    eventsToTriage,
     tasksToday,
+    needs: needsRows,
   });
 
   function openLine(id: MorningLineId) {
+    if (id === 'needs') return setNeedsOpen(true);
     if (id === 'tasks') return onOpenTasks();
     if (id === 'scouts' || id === 'triage') return onOpenScouts();
     setOpen((current) => (current === id ? null : id));
+  }
+
+  function openNeedsTarget(target: NeedsYouTarget) {
+    if (target.kind === 'scouts' || target.kind === 'triage') return onOpenScouts();
+    if (target.kind === 'actions') return onOpenStatus();
   }
 
   const due = checkinDue(items);
@@ -81,6 +104,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
       {open === 'weather' && <WeatherMorning refreshKey={refreshKey} accountKey={accountKey} blocked={blocked} />}
       {open === 'papers' && <Morning refreshKey={refreshKey} />}
     </section>
+    {needsOpen && <NeedsYouSheet rows={needsRows} queue={queue} accountKey={accountKey} onNavigate={openNeedsTarget} onClose={() => setNeedsOpen(false)} />}
     {due && !checkinOpen
       ? <button type="button" className="checkin-line" onClick={() => setCheckinOpen(true)}>How are you today? Check in</button>
       : <MoodCard queue={queue} items={items} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked} />}
