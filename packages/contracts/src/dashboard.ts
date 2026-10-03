@@ -86,6 +86,43 @@ export const MarketCard = z.union([
 ]);
 export type MarketCard = z.infer<typeof MarketCard>;
 
+// ---- Watchlist (WL1): one card per watched symbol, crypto (Coinbase) or fx (Frankfurter / Bank of Russia) ----
+
+/** The kinds a watch item may be, matching the adapter behind it. Adding an item never adds a kind. */
+export const WatchItemKind = z.enum(['crypto', 'fx']);
+export type WatchItemKind = z.infer<typeof WatchItemKind>;
+
+/** Which watched item a card is about; a client keys by this, never by the human title. */
+export const WatchItemRef = z.strictObject({
+  symbol: z.string().min(1).max(20),
+  type: WatchItemKind,
+});
+export type WatchItemRef = z.infer<typeof WatchItemRef>;
+
+/**
+ * A generalized current value for a watched symbol. Unlike MarketTicker (the fixed BTC/USD coinbase card), base/quote
+ * and provider are named per item, so fx pairs and extra crypto pairs fit one card without faking a Coinbase ticker.
+ */
+export const WatchTicker = z.strictObject({
+  base: z.string().min(1).max(10),
+  quote: z.string().min(1).max(10),
+  provider: z.string().min(1).max(40),
+  price: z.number().finite().positive(),
+  providerTime: isoInstant,
+});
+export type WatchTicker = z.infer<typeof WatchTicker>;
+
+/**
+ * One watched symbol. `series` is null when the current value stands but the history read failed: partial failure is an
+ * absent history, never invented points. `unavailable` means there is no usable current value either, and nothing stale
+ * is passed off as current.
+ */
+export const WatchCard = z.union([
+  z.strictObject({ id: z.literal('watchlist'), status: z.literal('ok'), ...cardMeta, item: WatchItemRef, ticker: WatchTicker, series: MarketSeries.nullable() }),
+  z.strictObject({ id: z.literal('watchlist'), status: z.literal('unavailable'), ...cardMeta, item: WatchItemRef, reason: MarketUnavailableReason }),
+]);
+export type WatchCard = z.infer<typeof WatchCard>;
+
 /**
  * AI usage / Health overviews: no approved source is wired in DASH1, so these are honest non-ok cards. The `ok` variant is
  * intentionally absent rather than faked; a later approved DTO (HealthDTO / operational telemetry) widens `status` and
@@ -106,13 +143,16 @@ export const WeatherCard = z.union([
 ]);
 export type WeatherCard = z.infer<typeof WeatherCard>;
 
-export const DashboardCard = z.union([MarketCard, WeatherCard, AiUsageCard, HealthCard]);
+export const DashboardCard = z.union([MarketCard, WatchCard, WeatherCard, AiUsageCard, HealthCard]);
 export type DashboardCard = z.infer<typeof DashboardCard>;
+
+/** A bounded list, but one that grows with the watchlist config: four fixed cards plus one per watched item. */
+export const MAX_DASHBOARD_CARDS = 24;
 
 export const DashboardResponse = z.strictObject({
   /** Server time, so staleness never depends on the phone clock (same rule as ScoutsResponse). */
   now: isoInstant,
-  cards: z.array(DashboardCard).max(8),
+  cards: z.array(DashboardCard).max(MAX_DASHBOARD_CARDS),
 });
 export type DashboardResponse = z.infer<typeof DashboardResponse>;
 

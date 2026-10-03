@@ -7,6 +7,7 @@ import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createApp } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
 import { createMarketSource } from './market.ts';
+import { createWatchlistSource } from './watchlist.ts';
 import { createWeatherProvider } from './weather-provider.ts';
 import { createGoogleReader } from './google-reader.ts';
 import { createAccessVerifier, createServiceTokenVerifier } from './auth.ts';
@@ -129,7 +130,12 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...createAiBudgetReadService({ store }),
     ...createHistoryService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createNotesService({ store }),
-    ...createDashboardService({ market: createMarketSource({ fetch: fetchImpl, now: () => Date.now() }), weather: weatherService, now: () => new Date() }),
+    ...createDashboardService({
+      market: createMarketSource({ fetch: fetchImpl, now: () => Date.now() }),
+      watchlist: createWatchlistSource({ fetch: fetchImpl, now: () => Date.now() }),
+      weather: weatherService,
+      now: () => new Date(),
+    }),
     ...weatherService,
   };
   return createApp({ verify, verifyIngest, appOrigin: env.APP_ORIGIN, services, log });
