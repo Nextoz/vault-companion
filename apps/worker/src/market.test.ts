@@ -71,10 +71,11 @@ describe('windowing long spans (WL3)', () => {
   it('splits a year of daily candles into requests inside the provider cap, ending exactly at the window end', () => {
     const windows = candleWindows('1Y', yStart, yEnd);
     expect(windows).toHaveLength(2);
-    expect(windows[0]).toEqual({ startSec: yStart, endSec: yStart + COINBASE_MAX_CANDLES * Y_G });
+    expect(windows[0]).toEqual({ startSec: yStart, endSec: yStart + (COINBASE_MAX_CANDLES - 1) * Y_G });
     expect(windows[windows.length - 1]!.endSec).toBe(yEnd);
     for (const window of windows) {
-      expect((window.endSec - window.startSec) / Y_G).toBeLessThanOrEqual(COINBASE_MAX_CANDLES);
+      // One bucket of headroom: a prepended pre-start candle must not push the response past the provider cap.
+      expect((window.endSec - window.startSec) / Y_G).toBeLessThanOrEqual(COINBASE_MAX_CANDLES - 1);
     }
   });
 
@@ -93,7 +94,8 @@ describe('windowing long spans (WL3)', () => {
       const query = new URL(String(url)).searchParams;
       const from = Number(query.get('start'));
       const to = Number(query.get('end'));
-      return json(Array.from({ length: (to - from) / Y_G }, (_, i) => bucket(from + i * Y_G)));
+      // Coinbase may prepend the candle just before `start`; it must be dropped, never truncate a requested bucket.
+      return json([bucket(from - Y_G), ...Array.from({ length: (to - from) / Y_G }, (_, i) => bucket(from + i * Y_G))]);
     } });
     const out = await source.series('1Y');
     if (out.status !== 'ok') throw new Error('expected an ok 1Y series');
@@ -102,7 +104,7 @@ describe('windowing long spans (WL3)', () => {
     expect(out.series.points).toHaveLength(365);
     for (const url of urls) {
       const query = new URL(url).searchParams;
-      expect((Number(query.get('end')) - Number(query.get('start'))) / Y_G).toBeLessThanOrEqual(COINBASE_MAX_CANDLES);
+      expect((Number(query.get('end')) - Number(query.get('start'))) / Y_G).toBeLessThanOrEqual(COINBASE_MAX_CANDLES - 1);
     }
   });
 

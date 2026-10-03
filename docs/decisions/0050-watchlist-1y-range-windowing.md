@@ -11,7 +11,8 @@ than 300 buckets, and its coarsest granularity is one day, so a single request c
 - **Contract:** `DASHBOARD_RANGES` gains `1Y`; `DASHBOARD_RANGE_PLAN['1Y']` is `{ granularitySeconds: 86_400,
   spanSeconds: 365 * 86_400 }`. `MAX_MARKET_POINTS` rises 300 -> 400 (a merged year fits with headroom).
 - **Windowing:** `apps/worker/src/market.ts` exposes `COINBASE_MAX_CANDLES = 300`, `candleWindows(...)` and
-  `readCandleRows(...)`. A span is split into consecutive whole-bucket windows of at most 300 and the raw rows are
+  `readCandleRows(...)`. A span is split into consecutive whole-bucket windows that ask for at most 299 buckets each
+  (one of the provider's 300 kept as headroom for the candle Coinbase may prepend before `start`), and the raw rows are
   concatenated; all ranges but 1Y stay a single window (no new subrequest). Any failed window fails the read, so no
   partial year is passed off as complete.
 - **FX:** Frankfurter and Bank of Russia windows use the same 1Y span (~365 days); `FX_SERIES_TTL_MS['1Y']` is 12 h
