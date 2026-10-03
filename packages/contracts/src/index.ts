@@ -379,6 +379,10 @@ export const ErrorCode = z.enum([
   'not-found',
   'clock-skew',
   'upstream-unavailable',
+  /** ADR-0044: the OAuth token response granted a scope other than exactly calendar.readonly + gmail.metadata. */
+  'google-scope-mismatch',
+  /** ADR-0044: the OAuth refresh token was revoked/expired (`invalid_grant`). */
+  'google-reauth-needed',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 

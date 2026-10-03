@@ -21,6 +21,7 @@ const TODO_TEXT = 'SENTINEL-CANDIDATE-TODO';
 
 const candidates = (over: Partial<MorningBriefCandidates> = {}): MorningBriefCandidates => ({
   todos: [{ text: TODO_TEXT, due: DATE, bill: false }],
+  events: [],
   metrics: [],
   mood: { mood: -1, energy: 0, sleep: 7 },
   trainingRecent: { count: 0, dates: [] },
@@ -92,7 +93,7 @@ describe('morning brief job (ADR-0046)', () => {
     const logs = await run(store);
     expect(store.writeCalls).toBe(1);
     const parsed = parseBriefFile(store.text(MORNING_BRIEF_PATH));
-    expect(parsed).toMatchObject({ schemaVersion: 1, date: DATE, source: 'fallback', unavailable: ['calendar', 'mail'] });
+    expect(parsed).toMatchObject({ schemaVersion: 1, date: DATE, source: 'fallback', unavailable: [] });
     expect(parsed?.brief.source).toBe('fallback');
     const commit = await store.readCommit(store.headCommit);
     expect(commit?.files.map((f) => f.path)).toEqual([MORNING_BRIEF_PATH]);
@@ -108,6 +109,18 @@ describe('morning brief job (ADR-0046)', () => {
     expect(parsed?.source).toBe('model');
     expect(parsed?.brief.todos[0]).toMatchObject({ id: 0, text: TODO_TEXT, firstStep: 'Open the letter.' });
     expect(logs).toMatchObject([{ status: 200 }]);
+  });
+
+  it('passes real free blocks from calendar events and never hard-codes calendar/mail unavailability', async () => {
+    const store = await InMemoryStore.create({});
+    const event = { title: 'Focus block', start: '2026-06-15T10:00:00.000Z', end: '2026-06-15T11:00:00.000Z', allDay: false };
+    const logs = await run(store, {
+      gather: async () => candidates({ events: [event], unavailable: ['calendar'] }),
+    });
+    const parsed = parseBriefFile(store.text(MORNING_BRIEF_PATH));
+    expect(parsed?.brief.gaps.length).toBeGreaterThan(0);
+    expect(parsed?.unavailable).toEqual(['calendar']);
+    expect(JSON.stringify(logs)).not.toContain('mail');
   });
 
   it('falls back when the model output is invalid and never writes model text', async () => {
@@ -167,7 +180,7 @@ describe('morning brief job (ADR-0046)', () => {
     const logs = await run(store, { mailer });
     expect(sent).toHaveLength(1);
     expect(sent[0]!.subject).toBe(`Morning Brief - ${DATE}`);
-    expect(sent[0]!.text).toContain(`${DATE}: 0 free block(s), 1 todo candidate(s).`);
+    expect(sent[0]!.text).toContain(`${DATE}: 1 free block(s), 1 todo candidate(s).`);
     expect(logs).toMatchObject([{ status: 200, operationId: await morningBriefOperationId(DATE) }]);
   });
 

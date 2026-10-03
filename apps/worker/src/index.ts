@@ -8,6 +8,7 @@ import { createApp } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
 import { createMarketSource } from './market.ts';
 import { createWeatherProvider } from './weather-provider.ts';
+import { createGoogleReader } from './google-reader.ts';
 import { createAccessVerifier, createServiceTokenVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
 import { createScalewayChat } from './scaleway-chat.ts';
@@ -44,6 +45,10 @@ export interface Env {
   /** MB1d: owner from/to addresses; optional secrets, never logged or committed. Email requires both. */
   BRIEF_EMAIL_FROM?: string;
   BRIEF_EMAIL_TO?: string;
+  /** ADR-0044: read-only Google Calendar/Gmail metadata. Optional; the brief runs without them when any is unset. */
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REFRESH_TOKEN?: string;
 }
 
 /** The two members of Cloudflare's ScheduledController/ExecutionContext the cron handler uses. */
@@ -187,6 +192,18 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
     const health = createHealthService({ store, now, timeZone });
     const weather = createWeatherService({ reader: createWeatherProvider({ fetch: counted, now: () => Date.now() }), now, timeZone });
     const unavailable: ApiError = { code: 'upstream-unavailable', message: 'reader unavailable', retryable: true };
+    const googleReader = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_REFRESH_TOKEN
+      ? createGoogleReader({
+        clientId: env.GOOGLE_CLIENT_ID,
+        clientSecret: env.GOOGLE_CLIENT_SECRET,
+        refreshToken: env.GOOGLE_REFRESH_TOKEN,
+        fetch: counted,
+        now,
+      })
+      : {
+        readCalendar: () => Promise.resolve(unavailable),
+        readMail: () => Promise.resolve(unavailable),
+      };
     const gather = (day: string) => gatherCandidates({
       day,
       timeZone,
@@ -195,6 +212,8 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
       readTraining: () => training.readTraining(),
       readWeather: () => weather.readWeather(),
       readMood: () => Promise.resolve(unavailable),
+      readCalendar: () => googleReader.readCalendar(),
+      readMail: () => googleReader.readMail(),
     });
     try {
       await runBriefJob(cron, {
