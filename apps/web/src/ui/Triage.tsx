@@ -111,7 +111,7 @@ export function Triage({ queue, items, accountKey, refreshKey, blocked }: {
             </div>
             <p className="triage-lane-count">{countLine(counts)}</p>
           </div>}
-          <TriageStack key={`${stackVersion}-${lane}`} cards={shown} onDecide={decide} onUndo={undo}
+          <TriageStack key={stackVersion} cards={shown} onDecide={decide} onUndo={undo}
             disabled={blocked || !accountKey} onDetails={(id) => setDetail(read.cards.find((c) => c.eventId === id) ?? null)} />
         </>;
       })()}
