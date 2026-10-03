@@ -23,6 +23,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 - Workers cannot run Playwright; e2e failures surface only in the Lead's run — budget a Lead fix pass for UI slices.
 - Parked: stray `sp-read-latency.test.ts` change in `git stash@{0}` (origin unknown).
 
+- **WL1** (Watchlist backend): dashboard now returns one `watchlist` card per item in `apps/worker/src/watchlist.ts` (BTC, ETH Coinbase; SEK/DKK Frankfurter; RUB/DKK Bank of Russia XML, id R01215, because ECB dropped RUB) plus the legacy `market` card; ranges 1W/1M/3M (1Y open). Web UI is WL2.
+
 ## Next actions (in order)
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
