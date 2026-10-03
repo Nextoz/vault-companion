@@ -1,9 +1,10 @@
-# Checkpoint — 2026-10-03 (AB card)
+# Checkpoint — 2026-10-03 (CS lanes)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
 
+- **CS (app side, lanes)**: Events triage shows a Work/Culture lane tag per card (`laneOf` in `apps/web/src/triage.ts`, category set per backlog), an All · Work · Culture filter (filtering never remounts the stack, so Undo/skip state survives) and a "6 work · 4 culture" line. Scouts tab needs no code: the registry is the status directory. Open: owner phone check of the mix; confirm `culture-events` shows on Scouts after its first run; tolerant missing record untested live.
 - **HC3b**: Health card → **History** toggle (lazy `GET /api/health/history`, all rows ≤ yesterday; chips 30 d / 90 d / 1 y / All slice client-side; range medians + SVG lines). Shares `readSource` with the card.
 - **HC3a** (ADR-0043): `POST /api/health/ingest`, own service-token verifier (ingest AUD only, no email claim),
   rewrites only sent days of the health CSV via `executeWrite`. **Live and working with the real Shortcut.**
@@ -30,7 +31,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
    model `packages/domain/src/morning-brief.ts`: `freeBlocks` 07–22 local DST-safe, `rankTodos` bills/due ≤ 3 d →
    overdue → rest, max 3; `stateLine` above/below flags, low = mood or energy ≤ −2). **MB1b merged** (`apps/worker/src/morning-brief-gather.ts`: injected readers -> todos/metrics/mood/training/weather windows, never throws, `unavailable` list; `bill` always false: TaskView has no bill marker, `readMood` is device-held check-ins, so MB1c must decide the server-side mood source). **MB1b2 merged** (ADR-0045: pure `morning-brief-writer.ts` input/prompt/validate/fallback + Worker `scaleway-chat.ts`, model `deepseek-v4-flash-0731` on Scaleway; ADR-0044 now `gmail.metadata`). **MB1c merged** (ADR-0046: `morning-brief-job.ts` cron at `31 4`/`31 5` UTC, own invocation, runs only at Copenhagen hour 6; writes only `Daily/Morning Digest/Morning Brief - latest.json`, CAS + date dedupe, fallback brief without `SCALEWAY_API_KEY`; calendar/mail/mood readers `unavailable` until MB0/MB1d). **MB1d merged** (ADR-0047: free Email Routing `send_email` binding `BRIEF_EMAIL`, pure `morning-brief-email.ts` MIME+HTML render, best-effort send after a fresh commit; owner secrets `BRIEF_EMAIL_FROM`/`BRIEF_EMAIL_TO` + `SCALEWAY_API_KEY` still to set; check the live run's subrequest count in logs). **MB2 merged.** **MB0 built** (`google-reader.ts`: one shared token refresh, exact-scope guard, `invalid_grant` -> `google-reauth-needed`, calendar -> `freeBlocks`, `Jev/*` labelled inbox mail -> to-dos, metadata only). Day-0 read spike PASSED 2026-10-03; **day-8 re-run >= 2026-10-10 gates MB done**. Calendar write credential (ADR-0048, `calendar.events` only, `tools/google-token-spike-write.ps1`) day-0 PASSED; feature unbuilt (Ideas Backlog, not Ready).
    Tooling note: pass `handoff-check.ps1 -Clone` as an absolute path (a relative one writes the report to a nested dir).
-2. (UX1–UX5, AB Part 2 done) NY Needs You + Morning Review → SP phone measurement (re-read the backlog). AB Part 1
+2. (UX1–UX5, AB Part 2, CS done) NY Needs You + Morning Review → SP phone measurement (re-read the backlog). AB Part 1
    (vault writer) is not the Lead's; owner decides when it is built.
 
 ## Owner items

@@ -151,7 +151,8 @@ export function TriageStack({ cards, onDecide, onUndo, onDetails, disabled = fal
           <h2>{item.title}</h2>{item.summary && <p className="triage-summary">{item.summary}</p>}
           <div className="triage-datehead"><div className="triage-dateblock"><span>{date.dow}</span><strong>{date.dom}</strong><span>{date.mon}</span></div>
             <div><div className="triage-time">{timeInCopenhagen(item.start)}</div><p className="triage-where">{item.location}</p></div></div>
-          <div className="triage-chips">{chipsFor(item).map((chip, i) => <span key={i} className={`triage-chip triage-${chip.tone}`}>{chip.label}</span>)}</div>
+          <div className="triage-chips"><span className={`triage-lane triage-lane-${item.lane}`}>{item.lane === 'culture' ? 'Culture' : 'Work'}</span>
+            {chipsFor(item).map((chip, i) => <span key={i} className={`triage-chip triage-${chip.tone}`}>{chip.label}</span>)}</div>
           <p className="triage-why">{item.why}</p>
           {!next && <div aria-hidden="true"><span className="triage-stamp triage-go" style={{ opacity: fade(position.dx) }}>GO</span>
             <span className="triage-stamp triage-skip" style={{ opacity: fade(-position.dx) }}>SKIP</span>

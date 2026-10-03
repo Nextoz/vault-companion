@@ -5,12 +5,12 @@ import { deriveTriage, toTriageCardView, calendarStatus, copenhagenDay } from '.
 import { getTriage } from './api.ts';
 import { triageDecide } from './commands.ts';
 import type { QueueItem } from './queue/queue.ts';
-import { chipsFor, dateBlockParts, decideFromGesture, defaultSkipReason, timeInCopenhagen, type TriageCardView } from './triage.ts';
+import { chipsFor, countLine, dateBlockParts, decideFromGesture, defaultSkipReason, laneCounts, laneOf, timeInCopenhagen, type TriageCardView } from './triage.ts';
 const card: TriageCardView = {
   eventId: 'invented', start: '2026-09-29T16:30:00Z', end: '2026-09-29T18:00:00Z', title: 'Invented workshop',
   summary: 'A short synthetic summary.',
   location: 'Example hall', why: 'Try a new topic', cost: '75 kr', registration: { state: 'open', deadline: null },
-  aiScore: 88, explore: false, calendar: { inCalendar: null, clash: null, freeThatEvening: true },
+  aiScore: 88, explore: false, lane: 'work', calendar: { inCalendar: null, clash: null, freeThatEvening: true },
 };
 
 const now = '2026-09-30T22:30:00Z';
@@ -164,5 +164,29 @@ describe('presentation', () => {
     expect(dateBlockParts('2026-12-31T23:30:00Z')).toEqual({ dow: 'Fri', dom: '1', mon: 'Jan' });
     expect(timeInCopenhagen('2026-03-29T00:30:00Z')).toBe('01:30');
     expect(timeInCopenhagen('2026-03-29T01:30:00Z')).toBe('03:30');
+  });
+});
+
+describe('lanes', () => {
+  it.each(['culture', 'community', 'music', 'civic', 'social', 'art', 'exhibition', 'film', 'literature'])('maps %s to culture', (category) => {
+    expect(laneOf(category)).toBe('culture');
+  });
+  it.each(['Culture', '  MUSIC  ', ' Art '])('normalizes case and whitespace for %s', (category) => {
+    expect(laneOf(category)).toBe('culture');
+  });
+  it.each(['', '  ', 'work', 'technology', 'sport', 'Culture Club'])('maps %s to work', (category) => {
+    expect(laneOf(category)).toBe('work');
+  });
+  it('derives the lane from the card category in the view', () => {
+    const view = deriveTriage(triageRead()).cards.map(toTriageCardView);
+    expect(view[0]?.lane).toBe('culture');
+    expect(toTriageCardView({ ...triageRead().cards[0]!, category: 'technology' }).lane).toBe('work');
+  });
+  it('counts lanes and renders the count line', () => {
+    const cards: TriageCardView[] = [{ ...card, lane: 'work' }, { ...card, lane: 'culture' }, { ...card, lane: 'work' }];
+    expect(laneCounts(cards)).toEqual({ work: 2, culture: 1 });
+    expect(laneCounts([])).toEqual({ work: 0, culture: 0 });
+    expect(countLine({ work: 6, culture: 4 })).toBe('6 work · 4 culture');
+    expect(countLine({ work: 0, culture: 0 })).toBe('0 work · 0 culture');
   });
 });

@@ -1190,3 +1190,13 @@ textarea:focus-visible {
 .health-history-ranges { align-self: flex-start; }
 .health-history-line { width: 100%; height: 36px; margin-top: 4px; }
 .health-history-line polyline { fill: none; stroke: var(--ios-cyan); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+
+/* CS lanes (task cs-lanes): Work/Culture tag, filter chips and count line. Presentation only. */
+.triage-lanebar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.triage-lane-filter { display: flex; gap: 6px; }
+.triage-lane-filter button { font-size: 13px; padding: 6px 12px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--text); }
+.triage-lane-filter button[aria-pressed='true'] { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 600; }
+.triage-lane-count { margin: 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.triage-lane { font-size: 12.5px; font-weight: 600; padding: 5px 9px; border-radius: 999px; border: 1px solid transparent; }
+.triage-lane-work { background: var(--accent-soft); color: var(--ios-blue); }
+.triage-lane-culture { background: rgb(255 159 10 / 18%); color: var(--ios-orange); }
