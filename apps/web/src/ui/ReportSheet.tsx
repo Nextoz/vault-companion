@@ -24,6 +24,7 @@ const SCREEN: Record<string, string> = {
   training: 'Log',
   scouts: 'Scouts',
   history: 'Progress',
+  health: 'Health',
   status: 'Status',
 };
 
