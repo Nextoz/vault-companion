@@ -1,4 +1,4 @@
-# Checkpoint — 2026-10-02 (UX2 Today cockpit)
+# Checkpoint — 2026-10-03 (MB2 brief on Today)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
@@ -9,6 +9,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
   rewrites only sent days of the health CSV via `executeWrite`. **Live and working with the real Shortcut.**
   Root causes: Access session lifetime > 24 h (401), a trailing space in the Shortcut's `steps` key (422). Ingest
   now trims key names (null-prototype map, 400 on collision); 400/422 answers append the body shape (no values).
+- **MB2**: `GET /api/morning-brief` (domain `createMorningBriefReadService`, fixed path, re-validated) + MorningCard rows above the existing lines (`briefLines`: Fallback marker, day, state, gaps with suggestion, to-dos open Tasks, encouragement); stale date or failed read = card unchanged. e2e MockApi serves a stale brief by default.
 - **UX2**: Today = `MorningCard` (weather glance / scouts / papers / new events / tasks lines, each opens its detail) + check-in line, then Dashboard; Triage now mounts under the Scouts tab. Check-in shows collapsed "Checked in HH:MM" (kept so Undo stays reachable; backlog says hide, owner to say). Pure `morning-card.ts`.
 - **UX1b** (bar, status dot → Status) · **B12** (ADR-0042) edit training; **B9** BTC history; **B11** Group training (ADR-0041); **B8**; **B7** — all live.
 - FB1/FB2 (Report button, ADR-0040) live. Launcher gotcha: prepend Git's `bin` to PATH before
@@ -23,9 +24,9 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the
    Worker Google reader (Pro, `-Reviewer both`); day-8 re-run ≥ 2026-10-10 gates MB "done". MB1a merged (pure day
    model `packages/domain/src/morning-brief.ts`: `freeBlocks` 07–22 local DST-safe, `rankTodos` bills/due ≤ 3 d →
-   overdue → rest, max 3; `stateLine` above/below flags, low = mood or energy ≤ −2). **MB1b merged** (`apps/worker/src/morning-brief-gather.ts`: injected readers -> todos/metrics/mood/training/weather windows, never throws, `unavailable` list; `bill` always false: TaskView has no bill marker, `readMood` is device-held check-ins, so MB1c must decide the server-side mood source). **MB1b2 merged** (ADR-0045: pure `morning-brief-writer.ts` input/prompt/validate/fallback + Worker `scaleway-chat.ts`, model `deepseek-v4-flash-0731` on Scaleway; ADR-0044 now `gmail.metadata`). **MB1c merged** (ADR-0046: `morning-brief-job.ts` cron at `31 4`/`31 5` UTC, own invocation, runs only at Copenhagen hour 6; writes only `Daily/Morning Digest/Morning Brief - latest.json`, CAS + date dedupe, fallback brief without `SCALEWAY_API_KEY`; calendar/mail/mood readers `unavailable` until MB0/MB1d). **MB1d merged** (ADR-0047: free Email Routing `send_email` binding `BRIEF_EMAIL`, pure `morning-brief-email.ts` MIME+HTML render, best-effort send after a fresh commit; owner secrets `BRIEF_EMAIL_FROM`/`BRIEF_EMAIL_TO` + `SCALEWAY_API_KEY` still to set; check the live run's subrequest count in logs). **Next:** MB0 build when owner Google setup is done.
+   overdue → rest, max 3; `stateLine` above/below flags, low = mood or energy ≤ −2). **MB1b merged** (`apps/worker/src/morning-brief-gather.ts`: injected readers -> todos/metrics/mood/training/weather windows, never throws, `unavailable` list; `bill` always false: TaskView has no bill marker, `readMood` is device-held check-ins, so MB1c must decide the server-side mood source). **MB1b2 merged** (ADR-0045: pure `morning-brief-writer.ts` input/prompt/validate/fallback + Worker `scaleway-chat.ts`, model `deepseek-v4-flash-0731` on Scaleway; ADR-0044 now `gmail.metadata`). **MB1c merged** (ADR-0046: `morning-brief-job.ts` cron at `31 4`/`31 5` UTC, own invocation, runs only at Copenhagen hour 6; writes only `Daily/Morning Digest/Morning Brief - latest.json`, CAS + date dedupe, fallback brief without `SCALEWAY_API_KEY`; calendar/mail/mood readers `unavailable` until MB0/MB1d). **MB1d merged** (ADR-0047: free Email Routing `send_email` binding `BRIEF_EMAIL`, pure `morning-brief-email.ts` MIME+HTML render, best-effort send after a fresh commit; owner secrets `BRIEF_EMAIL_FROM`/`BRIEF_EMAIL_TO` + `SCALEWAY_API_KEY` still to set; check the live run's subrequest count in logs). **MB2 merged.** **Next:** MB0 build: owner says Google setup + secrets are done (2026-10-03); the day-0 `tools/google-token-spike.ps1` PASS is still to be seen (interactive, owner runs it) before building.
    Tooling note: pass `handoff-check.ps1 -Clone` as an absolute path (a relative one writes the report to a nested dir).
-2. UX3–UX5 (UX1b/UX2 override them where they differ) → **MB2** (now unblocked; reads the brief JSON into MorningCard) → AB AI budget card → NY Needs You +
+2. UX3–UX5 (UX1b/UX2 override them where they differ) → AB AI budget card → NY Needs You +
    Morning Review → SP phone measurement (re-read the backlog).
 
 ## Owner items
