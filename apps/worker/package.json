@@ -13,10 +13,10 @@
     "@vault-companion/contracts": "workspace:*",
     "@vault-companion/domain": "workspace:*",
     "@vault-companion/github": "workspace:*",
-    "hono": "^4.13.8",
+    "hono": "^4.13.12",
     "jose": "^6.2.12"
   },
   "devDependencies": {
-    "wrangler": "4.138.0"
+    "wrangler": "4.144.0"
   }
 }
