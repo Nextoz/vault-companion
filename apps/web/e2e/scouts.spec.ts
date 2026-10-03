@@ -7,7 +7,7 @@ test('Today attention opens Scouts, compact rows and history lead to sanitised f
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
-  await page.getByRole('button', { name: '1 scouts need attention' }).click();
+  await page.getByRole('button', { name: '1 scout needs attention' }).click();
   const scouts = page.getByRole('region', { name: 'Scouts', exact: true });
   const failed = scouts.getByRole('button', { name: /City events/ });
   const healthy = scouts.getByRole('button', { name: /Learning opportunities/ });

@@ -15,8 +15,8 @@ test('Today indicator → real stack and details → go → Calendar pending →
   await api.install(page);
   await page.goto('/');
   // UX2: the events line on Today opens the Scouts tab, where triage now lives.
-  await page.getByRole('button', { name: '1 new events' }).click();
-  await page.getByRole('button', { name: '1 new events' }).click();
+  await page.getByRole('button', { name: '1 new event' }).click();
+  await page.getByRole('button', { name: '1 new event' }).click();
   const dialog = page.getByRole('dialog', { name: 'Event triage stack' });
   await expect(dialog.getByText('Event feed from 2026-09-25T06:50:00+02:00')).toBeVisible();
   await dialog.getByRole('article', { name: /Evening talk/ }).tap();

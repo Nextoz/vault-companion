@@ -44,12 +44,15 @@ test('scout insights show totals, picks, states and bounded parallel previews at
   await expect(learningCard.getByRole('link', { name: 'Platform workshop' })).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(learningCard).not.toContainText('Findings unavailable');
 
-  const failedCard = insights.getByRole('article', { name: 'City events' });
-  await expect(failedCard).toContainText('Failed');
-  await expect(failedCard).not.toContainText('Loading findings');
+  // UX4: the board row is the single "City events: Failed" line, so Insights no longer repeats it as a preview card.
+  await expect(insights.getByRole('article', { name: 'City events' })).toHaveCount(0);
+  const boardRow = page.getByRole('region', { name: 'Scouts', exact: true }).getByRole('button', { name: /City events/ });
+  await expect(boardRow).toContainText('Failed');
   await expect(insights.getByRole('article', { name: 'Extra scout 1' })).toContainText('Loading findings');
   await expect(insights.getByRole('article', { name: 'Extra scout 2' })).toContainText('Findings unavailable');
-  await expect(insights.getByRole('article', { name: 'Stale scout' })).toContainText('Stale');
+  // UX4: a stale scout is likewise shown once, on the board row, not repeated as a preview card.
+  await expect(insights.getByRole('article', { name: 'Stale scout' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Scouts', exact: true }).getByRole('button', { name: /Stale scout/ })).toContainText('Stale');
   await expect(insights.getByRole('article', { name: 'Extra scout 6' })).toContainText('Open scout to see findings');
   // At most six scouts are previewed; a fresh scouts response retries only unavailable reads, never a success
   // (learning) or one still in flight (extra-1).
