@@ -23,6 +23,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 - Workers cannot run Playwright; e2e failures surface only in the Lead's run — budget a Lead fix pass for UI slices.
 - Parked: stray `sp-read-latency.test.ts` change in `git stash@{0}` (origin unknown).
 
+- **NY1** (Needs You v1): Today card line "Needs you" (hidden at 0) opens `NeedsYouSheet`; pure `ui/needs-you.ts` rows: failed/degraded scouts, Active Work review due, triage pending, queue actions needing attention. Waiting items and registration deadlines not covered (no client data). NY2 Morning Review next.
+
 ## Next actions (in order)
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
