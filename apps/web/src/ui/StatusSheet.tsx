@@ -1,16 +1,16 @@
-// ux3: the Status screen opened from the status dot - one grouped sheet over reads the app already holds. Vault,
-// Scouts, Data sources, Speed and Actions. No write path, no new endpoint: the scout read is the Scouts tab's own
-// read, and the data sources come from in-memory copies the app already has (absent => "-").
-import type { DashboardResponse, HealthResponse, ScoutsResponse, TasksResponse } from '@vault-companion/contracts';
+// ux3/AB2: the Status screen opened from the status dot - one grouped sheet. Vault, Scouts, Data sources, AI budget,
+// Speed and Actions. No write path: the scout read is the Scouts tab's own read, the AI budget is a fixed read-only
+// file, and the data sources come from in-memory copies the app already has (absent => "-").
+import type { AiBudgetResponse, DashboardResponse, HealthResponse, ScoutsResponse, TasksResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
-import { getScouts, type Fetched } from '../api.ts';
+import { getAiBudget, getScouts, type Fetched } from '../api.ts';
 import { FRESH_FOR_MS, vaultFreshness } from '../freshness.ts';
 import { lastCopies } from '../lastCopy.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { exactTime } from '../scouts.ts';
 import { readTimings } from '../timings.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
-import { buildLine, dataSourceRows, scoutRows, shortRevision, stateLabel, type ScoutRow } from './status-sheet.ts';
+import { budgetFreshness, budgetRows, buildLine, dataSourceRows, scoutRows, shortRevision, stateLabel, type BudgetRow, type ScoutRow } from './status-sheet.ts';
 
 const DASHBOARD_KEYS = ['dashboard:1W', 'dashboard:1M', 'dashboard:3M'] as const;
 const stateClass = (state: string) => `scout-state-${state.toLowerCase().replaceAll(' ', '-')}`;
@@ -39,6 +39,17 @@ function ScoutLine({ row }: { row: ScoutRow }) {
   );
 }
 
+/** A tiny 7-day line: at least two points by the time it is drawn, scaled to its own min/max. No axis, no labels. */
+function BudgetSparkline({ row }: { row: BudgetRow }) {
+  const history = row.history!;
+  const min = Math.min(...history);
+  const span = Math.max(...history) - min || 1;
+  const points = history
+    .map((value, i) => `${(1 + i * 38 / (history.length - 1)).toFixed(1)},${(15 - (value - min) / span * 13).toFixed(1)}`)
+    .join(' ');
+  return <svg className="status-sheet-budget-spark" viewBox="0 0 40 16" aria-hidden="true"><polyline points={points} /></svg>;
+}
+
 export function StatusSheet({
   read, checkedAt, failed, busy, onRefresh, accountKey, queue, items, onDiscard,
 }: {
@@ -55,6 +66,7 @@ export function StatusSheet({
   const [now, setNow] = useState(Date.now);
   const [timings, setTimings] = useState(readTimings);
   const [scouts, setScouts] = useState<{ account: string; value: Fetched<ScoutsResponse> } | null>(null);
+  const [budget, setBudget] = useState<{ account: string; value: Fetched<AiBudgetResponse> } | null>(null);
 
   useEffect(() => {
     setTimings(readTimings());
@@ -74,6 +86,14 @@ export function StatusSheet({
     return () => { live = false; };
   }, [accountKey, checkedAt]);
 
+  // The AI budget read, stamped with its account so a previous account's rows never flash while a new read is pending.
+  useEffect(() => {
+    if (!accountKey) { setBudget(null); return; }
+    let live = true;
+    void getAiBudget().then((value) => { if (live) setBudget({ account: accountKey, value }); });
+    return () => { live = false; };
+  }, [accountKey, checkedAt]);
+
   const status = read ? vaultFreshness(read, checkedAt, failed, now) : null;
   const timeZone = read?.timeZone ?? 'Europe/Copenhagen';
   const build = typeof __APP_BUILD__ === 'undefined' ? { commit: 'dev', builtAt: null } : __APP_BUILD__;
@@ -82,6 +102,9 @@ export function StatusSheet({
   const scoutResult = scouts && scouts.account === accountKey ? scouts.value : null;
   const scoutData = scoutResult?.kind === 'ok' ? scoutResult.data : null;
   const rows = scoutData ? scoutRows(scoutData) : [];
+  const budgetData = budget && budget.account === accountKey && budget.value.kind === 'ok' ? budget.value.data : null;
+  const budgetRowList = budgetRows(budgetData, now, timeZone);
+  const budgetLine = budgetFreshness(budgetData, now, timeZone);
 
   return (
     <section className="status-sheet" aria-label="Vault status">
@@ -118,6 +141,30 @@ export function StatusSheet({
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="group" aria-label="AI budget">
+        <h2>AI budget</h2>
+        {!budgetData && <p className="muted" role="status">No budget data yet</p>}
+        {budgetData && (
+          <>
+            {budgetLine && <p className={budgetLine.stale ? 'chip chip-attention' : 'muted'}>{budgetLine.text}</p>}
+            {budgetRowList.length === 0
+              ? <p className="muted">No budget data yet</p>
+              : (
+                <ul className="status-sheet-budgets" aria-label="AI budget">
+                  {budgetRowList.map((row, i) => (
+                    <li key={`${row.id}-${i}`} className="status-sheet-budget">
+                      <span className="status-sheet-budget-label">{row.label}</span>
+                      <span className={`status-sheet-budget-value budget-${row.tone}`}>{row.value}</span>
+                      {row.history && <BudgetSparkline row={row} />}
+                      {row.reset && <span className="muted small status-sheet-budget-reset">{row.reset}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </>
+        )}
       </section>
 
       <section className="group" aria-label="Speed">

@@ -1,6 +1,6 @@
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
-import { createTrainingService, createActiveWorkService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, slotForCron } from '@vault-companion/domain';
+import { createTrainingService, createActiveWorkService, createAiBudgetReadService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, slotForCron } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
 import { WEATHER_TIME_ZONE, type ApiError } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
@@ -126,6 +126,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...(env.HEALTH_INGEST_AUD ? createHealthIngestService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }) : {}),
     ...createMorningService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createMorningBriefReadService({ store }),
+    ...createAiBudgetReadService({ store }),
     ...createHistoryService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createNotesService({ store }),
     ...createDashboardService({ market: createMarketSource({ fetch: fetchImpl, now: () => Date.now() }), weather: weatherService, now: () => new Date() }),

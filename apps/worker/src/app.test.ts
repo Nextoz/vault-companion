@@ -1,4 +1,4 @@
-import { MorningBriefResponse } from '@vault-companion/contracts';
+import { AiBudgetResponse, MorningBriefResponse } from '@vault-companion/contracts';
 import type { ApiError, Command, Receipt } from '@vault-companion/contracts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp, statusFor, type Services } from './app.ts';
@@ -229,6 +229,55 @@ describe('GET /api/morning-brief (MB2)', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(sample());
     expect(logs.at(-1)).toMatchObject({ commitSha: '4'.repeat(40) });
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+});
+
+describe('GET /api/ai-budget (AB2)', () => {
+  const sample = (): AiBudgetResponse => AiBudgetResponse.parse({
+    revision: '5'.repeat(40),
+    generatedAt: '2026-10-03T06:31:00+02:00',
+    providers: [{ id: 'claude', label: `${SENTINEL} weekly`, kind: 'percent', value: 58, limit: 100, unit: null, resetsAt: null, history: null }],
+    freeRamGb: 12.5,
+  });
+
+  function app(readAiBudget?: Services['readAiBudget']) {
+    const services: Services = {
+      async readTasks() { return { code: 'upstream-unavailable', message: 'x', retryable: true }; },
+      async execute() { return receipt; },
+      ...(readAiBudget ? { readAiBudget } : {}),
+    };
+    return createApp({
+      verify: async (t) => (t === 'good' ? { ok: true, email: 'owner@example.com', accountKey: ACCOUNT } : { ok: false }),
+      appOrigin: ORIGIN,
+      services,
+      log: (r) => logs.push(r),
+    });
+  }
+  const get = (readAiBudget?: Services['readAiBudget']) =>
+    app(readAiBudget).request('/api/ai-budget', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+
+  it('404s without a service, and logs nothing from the budget', async () => {
+    const res = await get();
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+
+  it.each([
+    [{ code: 'not-found', retryable: false }, 404],
+    [{ code: 'invalid', retryable: false }, 400],
+    [{ code: 'upstream-unavailable', retryable: true }, 503],
+  ] as const)('maps %o to %i', async (error, status) => {
+    const res = await get(async () => ({ ...error, message: 'm' }));
+    expect(res.status).toBe(status);
+    expect(logs.at(-1)).toMatchObject({ errorCode: error.code });
+  });
+
+  it('returns the budget and logs only the revision', async () => {
+    const res = await get(async () => sample());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(sample());
+    expect(logs.at(-1)).toMatchObject({ commitSha: '5'.repeat(40) });
     expect(JSON.stringify(logs)).not.toContain(SENTINEL);
   });
 });
