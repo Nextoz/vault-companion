@@ -1,11 +1,24 @@
 // Dashboard composition (DASH1): the read-only card list the phone renders. Market data comes from the public
 // Coinbase source; Weather uses the same projection as the Today morning view; AI usage and Health have no approved
 // source yet and say so honestly.
-import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketTickerResponse, MarketUnavailableReason, WeatherCard, WeatherFailureReason, WeatherResponse } from '@vault-companion/contracts';
+import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketTickerResponse, MarketUnavailableReason, WatchCard, WeatherCard, WeatherFailureReason, WeatherResponse } from '@vault-companion/contracts';
 import type { MarketSource } from './market.ts';
+import type { WatchItem, WatchlistSource } from './watchlist.ts';
 
 const PROVIDER_LABEL = 'Coinbase Exchange (public)';
 const iso = (ms: number): string => new Date(ms).toISOString();
+
+/** Human source names per watch provider; the fallback keeps a not-yet-fetched card honest about its source. */
+const WATCH_PROVIDER_LABEL = {
+  coinbase: PROVIDER_LABEL,
+  frankfurter: 'Frankfurter (ECB reference rates)',
+  cbr: 'Bank of Russia',
+} as const;
+const watchProvenance = (item: WatchItem, provider?: string): string => {
+  if (provider === 'coinbase' || provider === 'frankfurter' || provider === 'cbr') return WATCH_PROVIDER_LABEL[provider];
+  if (item.type === 'crypto') return WATCH_PROVIDER_LABEL.coinbase;
+  return (item.base ?? item.symbol.split('/')[0]) === 'RUB' ? WATCH_PROVIDER_LABEL.cbr : WATCH_PROVIDER_LABEL.frankfurter;
+};
 
 const REASON_NOTE: Record<MarketUnavailableReason, string> = {
   timeout: 'The market provider did not answer in time.',
@@ -38,6 +51,7 @@ const overviewCards = (): DashboardCard[] => [
 
 export interface DashboardDeps {
   readonly market: MarketSource;
+  readonly watchlist: WatchlistSource;
   readonly weather: WeatherReadService;
   readonly now: () => Date;
 }
@@ -63,6 +77,25 @@ export function createDashboardService(deps: DashboardDeps) {
     };
   };
 
+  const watchCard = async (item: WatchItem, range: DashboardRange): Promise<WatchCard> => {
+    const [ticker, series] = await Promise.all([deps.watchlist.ticker(item), deps.watchlist.series(item, range)]);
+    const ref = { symbol: item.symbol, type: item.type } as const;
+    if (ticker.status !== 'ok') {
+      return {
+        id: 'watchlist', status: 'unavailable', title: item.name, provenance: watchProvenance(item),
+        observedAt: null, fetchedAt: null, note: REASON_NOTE[ticker.reason], drillthrough: null, item: ref, reason: ticker.reason,
+      };
+    }
+    // As with the market card: a failed history read is an absent history, never invented points.
+    const historyMissing = series.status !== 'ok';
+    return {
+      id: 'watchlist', status: 'ok', title: item.name, provenance: watchProvenance(item, ticker.ticker.provider),
+      observedAt: ticker.ticker.providerTime, fetchedAt: iso(ticker.fetchedAt),
+      note: historyMissing ? `Current value only. ${REASON_NOTE[series.reason]} History is not shown.` : null,
+      drillthrough: null, item: ref, ticker: ticker.ticker, series: series.status === 'ok' ? series.series : null,
+    };
+  };
+
   const weatherCard = async (): Promise<WeatherCard> => {
     const response = await deps.weather.readWeather();
     if (response.status !== 'ok') {
@@ -84,8 +117,12 @@ export function createDashboardService(deps: DashboardDeps) {
 
   return {
     async readDashboard(range: DashboardRange): Promise<DashboardResponse> {
-      const [market, weather] = await Promise.all([marketCard(range), weatherCard()]);
-      return { now: deps.now().toISOString(), cards: [market, weather, ...overviewCards()] };
+      const [market, watches, weather] = await Promise.all([
+        marketCard(range),
+        Promise.all(deps.watchlist.items.map((item) => watchCard(item, range))),
+        weatherCard(),
+      ]);
+      return { now: deps.now().toISOString(), cards: [market, ...watches, weather, ...overviewCards()] };
     },
     async readMarketTicker(): Promise<MarketTickerResponse> {
       const now = deps.now().toISOString();
