@@ -1,11 +1,10 @@
 // UX2: the Today morning card's one-liners are a pure projection of reads the card already holds - no fetch here.
 // A line with nothing to say is omitted (never a "Not configured" placeholder); the tasks line is always present.
-import type { MorningBriefResponse, MorningResponse, ScoutsResponse, WeatherResponse } from '@vault-companion/contracts';
+import type { MorningBriefResponse, MorningResponse, ScoutsResponse, WeatherResponse, WeatherRunWindow } from '@vault-companion/contracts';
 import type { QueueItem } from '../queue/queue.ts';
-import { attentionCount } from '../scouts.ts';
+import { attentionCount, pluralise, scoutsNeedAttention } from '../scouts.ts';
 import { localDate, latestCheckin } from './MoodCard.tsx';
 import { morningSummary } from './Morning.tsx';
-import { runWindowSummary } from './WeatherLab.tsx';
 
 /** One line on the morning card; `id` is both the React key and which detail the line opens. */
 export type MorningLineId = 'weather' | 'scouts' | 'papers' | 'triage' | 'tasks';
@@ -65,22 +64,37 @@ export function tasksTodayText(count: number): string {
   return count === 1 ? '1 task today' : `${count} tasks today`;
 }
 
+/**
+ * UX4: the weather card's short glance - "Dry 08-10 · 14° · light wind". The full window summary, agreement and model
+ * detail stay in the weather panel this line opens. Rain, temperature and wind keep honest wording; a run window the
+ * forecast could not choose reads as "No daytime window" rather than a guess. Pure.
+ */
+export function weatherGlance(window: WeatherRunWindow | null): string {
+  if (!window) return 'No daytime window';
+  const condition = window.rainMm === null ? 'Rain unknown' : window.rainMm < 0.1 ? 'Dry' : 'Wet';
+  const start = window.start.slice(11, 13);
+  const end = window.end.slice(11, 13);
+  const temp = `${Math.round(window.temperatureRangeC.max)}°`;
+  const wind = window.windRangeMs.max <= 3.4 ? 'light wind' : window.windRangeMs.max <= 7.9 ? 'breezy' : 'strong wind';
+  return `${condition} ${start}–${end} · ${temp} · ${wind}`;
+}
+
 /** Weather glance, scouts, papers, events, then the tasks line - each omitted when it has nothing to say. */
 export function morningLines(facts: MorningCardFacts): MorningLine[] {
   const lines: MorningLine[] = [];
   // An unavailable forecast is still something to say: the line carries the honest reason, not a placeholder.
   if (facts.weather) {
     lines.push({ id: 'weather', text: facts.weather.status === 'ok'
-      ? runWindowSummary(facts.weather.projection.runWindow) : facts.weather.message });
+      ? weatherGlance(facts.weather.projection.runWindow) : facts.weather.message });
   } else if (facts.weatherFailed) {
     lines.push({ id: 'weather', text: 'Weather unavailable' });
   }
   const problems = facts.scouts ? attentionCount(facts.scouts) : 0;
-  if (problems > 0) lines.push({ id: 'scouts', text: `${problems} scouts need attention` });
+  if (problems > 0) lines.push({ id: 'scouts', text: scoutsNeedAttention(problems) });
   if (facts.morning && (facts.morning.brief !== null || facts.morning.explained.length > 0)) {
     lines.push({ id: 'papers', text: morningSummary(facts.morning) });
   }
-  if (facts.eventsToTriage > 0) lines.push({ id: 'triage', text: `${facts.eventsToTriage} new events` });
+  if (facts.eventsToTriage > 0) lines.push({ id: 'triage', text: pluralise(facts.eventsToTriage, 'new event') });
   lines.push({ id: 'tasks', text: tasksTodayText(facts.tasksToday) });
   return lines;
 }

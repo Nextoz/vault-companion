@@ -139,6 +139,14 @@ describe('compact scout health list', () => {
     expect(list.compareDocumentPosition(insights) & 4).toBeTruthy();
   });
 
+  it('keeps a Failed scout as one board attention row, not a second "What your scouts found" card', async () => {
+    root = await render([healthy, failed]);
+    const insights = document.querySelector('.insights')!;
+    expect(insights.textContent).toContain('Learning opportunities');
+    expect(insights.textContent).not.toContain('City events');
+    expect(row('City events').textContent).toContain('Failed');
+  });
+
   it('hides the calendar-sync tracker while healthy or degraded', async () => {
     const triage = ok('triage.json', status({ scoutId: 'triage-applier', displayName: 'Triage applier' }));
     root = await render([healthy, triage]);

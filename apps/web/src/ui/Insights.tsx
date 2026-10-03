@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { getScoutOutput } from '../api.ts';
 import { degradedReason, findingsTrend, overview } from '../insights.ts';
 import { createOutputLoader, type Output } from '../insight-outputs.ts';
-import { displayState } from '../scouts.ts';
+import { displayState, pluralise } from '../scouts.ts';
 import { ScoutTime } from './ScoutTime.tsx';
 import './Insights.css';
 
@@ -35,7 +35,7 @@ export function Insights({ data, hidden, onSelect }: { data: ScoutsResponse; hid
   return <section className="insights" aria-labelledby="insights-heading" hidden={hidden}>
     <h2 id="insights-heading">What your scouts found</h2>
     <div className="insights-overview">
-      <p><strong>{summary.totalFindings} findings</strong><span>Latest <ScoutTime at={summary.latestSuccessAt} now={data.now} /></span>
+      <p><strong>{pluralise(summary.totalFindings, 'finding')}</strong><span>Latest <ScoutTime at={summary.latestSuccessAt} now={data.now} /></span>
         {!!summary.noSuccess.length && <span> · {summary.noSuccess.length} without usable findings</span>}</p>
       <div className="insights-trend" role="img" aria-label={trendLabel}>
         {trend.map((day) => <span key={day.date} className={day.findings === null ? 'insights-bar-gap' : 'insights-bar'}
@@ -51,7 +51,7 @@ export function Insights({ data, hidden, onSelect }: { data: ScoutsResponse; hid
         const reason = state === 'Degraded' ? degradedReason(status) : null;
         const headingId = `insight-${status.scoutId}`;
         return <article className="insight-card" key={file} aria-labelledby={headingId}>
-          <header><h3 id={headingId}>{status.displayName}</h3><strong>{latest ? `${latest.findings} findings` : 'No usable findings'}</strong></header>
+          <header><h3 id={headingId}>{status.displayName}</h3><strong>{latest ? pluralise(latest.findings, 'finding') : 'No usable findings'}</strong></header>
           {suppressPicks ? <p className={`insight-state scout-state-${state.toLowerCase()}`}>{state}</p> : <>
             {state === 'Degraded' && <p className="insight-state scout-state-degraded">Ran with problems{reason ? ` — ${reason}` : ''}</p>}
             {latest && <small>Picks from <ScoutTime at={latest.at} now={data.now} /></small>}

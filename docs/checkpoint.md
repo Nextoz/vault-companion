@@ -1,4 +1,4 @@
-# Checkpoint — 2026-10-03 (UX3 Status sheet)
+# Checkpoint — 2026-10-03 (UX4 copy and polish)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
@@ -10,6 +10,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
   Root causes: Access session lifetime > 24 h (401), a trailing space in the Shortcut's `steps` key (422). Ingest
   now trims key names (null-prototype map, 400 on collision); 400/422 answers append the body shape (no values).
 - **MB2**: `GET /api/morning-brief` (domain `createMorningBriefReadService`, fixed path, re-validated) + MorningCard rows above the existing lines (`briefLines`: Fallback marker, day, state, gaps with suggestion, to-dos open Tasks, encouragement); stale date or failed read = card unchanged. e2e MockApi serves a stale brief by default.
+- **UX4**: copy/polish only: morning-card weather glance (`weatherGlance`), scout/event pluralisation, wrapped labels, FAB clearance, hidden "Not configured" dashboard tiles, Failed/Stale scouts shown once (board row, not Insights cards). Mood/Energy/Sleep labels were already done.
 - **UX3**: status dot → Status sheet (`StatusSheet.tsx`, pure `status-sheet.ts`): Vault freshness, Scouts (keyed to account), Data sources (in-memory last copies), Speed, Actions. Presentation only.
 - **UX5**: Log = Training · Progress · Health (HealthPanel moved off Today; `LogMood` shows the last 14 check-ins on Progress). Mood list is device-held only (queue snapshot, receipts capped at 20), no server mood-history read yet; Report labels the Health tab.
 - **UX2**: Today = `MorningCard` (weather glance / scouts / papers / new events / tasks lines, each opens its detail) + check-in line, then Dashboard; Triage now mounts under the Scouts tab. Check-in shows collapsed "Checked in HH:MM" (kept so Undo stays reachable; backlog says hide, owner to say). Pure `morning-card.ts`.
@@ -28,7 +29,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
    model `packages/domain/src/morning-brief.ts`: `freeBlocks` 07–22 local DST-safe, `rankTodos` bills/due ≤ 3 d →
    overdue → rest, max 3; `stateLine` above/below flags, low = mood or energy ≤ −2). **MB1b merged** (`apps/worker/src/morning-brief-gather.ts`: injected readers -> todos/metrics/mood/training/weather windows, never throws, `unavailable` list; `bill` always false: TaskView has no bill marker, `readMood` is device-held check-ins, so MB1c must decide the server-side mood source). **MB1b2 merged** (ADR-0045: pure `morning-brief-writer.ts` input/prompt/validate/fallback + Worker `scaleway-chat.ts`, model `deepseek-v4-flash-0731` on Scaleway; ADR-0044 now `gmail.metadata`). **MB1c merged** (ADR-0046: `morning-brief-job.ts` cron at `31 4`/`31 5` UTC, own invocation, runs only at Copenhagen hour 6; writes only `Daily/Morning Digest/Morning Brief - latest.json`, CAS + date dedupe, fallback brief without `SCALEWAY_API_KEY`; calendar/mail/mood readers `unavailable` until MB0/MB1d). **MB1d merged** (ADR-0047: free Email Routing `send_email` binding `BRIEF_EMAIL`, pure `morning-brief-email.ts` MIME+HTML render, best-effort send after a fresh commit; owner secrets `BRIEF_EMAIL_FROM`/`BRIEF_EMAIL_TO` + `SCALEWAY_API_KEY` still to set; check the live run's subrequest count in logs). **MB2 merged.** **MB0 built** (`google-reader.ts`: one shared token refresh, exact-scope guard, `invalid_grant` -> `google-reauth-needed`, calendar -> `freeBlocks`, `Jev/*` labelled inbox mail -> to-dos, metadata only). Day-0 read spike PASSED 2026-10-03; **day-8 re-run >= 2026-10-10 gates MB done**. Calendar write credential (ADR-0048, `calendar.events` only, `tools/google-token-spike-write.ps1`) day-0 PASSED; feature unbuilt (Ideas Backlog, not Ready).
    Tooling note: pass `handoff-check.ps1 -Clone` as an absolute path (a relative one writes the report to a nested dir).
-2. (UX3, UX5 done) UX4 → (UX1b/UX2 override them where they differ) → AB AI budget card → NY Needs You +
+2. (UX1–UX5 done) AB AI budget card (in the Status sheet, not a Dashboard panel) → NY Needs You +
    Morning Review → SP phone measurement (re-read the backlog).
 
 ## Owner items

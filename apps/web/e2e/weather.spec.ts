@@ -41,7 +41,8 @@ test('Today shows the compact weather morning projection and opens the same shar
   await api.install(page);
   await page.goto('/');
   // UX2: the weather line on the morning card opens the same compact panel.
-  await page.getByRole('button', { name: /lowest-rain window/ }).click();
+  // UX4: that line is now the short glance from sampleWeather() (rain 0.3mm, 06:00–08:00Z, 15°C max, 4 m/s max).
+  await page.getByRole('button', { name: /^Wet 06–08 · 15° · breezy/ }).click();
   const morning = page.getByRole('region', { name: 'This morning weather', exact: true });
   await expect(morning.getByTestId('weather-morning-summary')).toContainText('lowest-rain window');
   await expect(morning.getByTestId('weather-morning-summary')).toContainText('Two models cover this window');
@@ -73,7 +74,8 @@ test('denied device geolocation keeps the honest coarse Copenhagen fallback and 
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
-  await page.getByRole('button', { name: /lowest-rain window/ }).click();
+  // UX4: the morning line is the short weatherGlance; sampleWeather() yields "Wet 06–08 · 15° · breezy".
+  await page.getByRole('button', { name: /^Wet 06–08 · 15° · breezy/ }).click();
   const morning = page.getByRole('region', { name: 'This morning weather' });
   await morning.getByRole('button', { name: 'Weather' }).click();
   await morning.getByRole('button', { name: 'Use my device location' }).click();

@@ -3,14 +3,10 @@ import { HealthResponse } from '@vault-companion/contracts';
 import { MockApi } from './mock-api.ts';
 import { goTo } from './nav.ts';
 
+/** UX4: a card that only said "Not configured" is hidden on the Dashboard, so nothing is rendered for it here. */
 async function expectUnconfigured(dashboard: Locator) {
-  for (const [title, note] of [
-    ['AI usage', 'No approved usage source is connected yet.'],
-  ] as const) {
-    const card = dashboard.getByRole('article', { name: title, exact: true });
-    await expect(card).toContainText('Not configured');
-    await expect(card).toContainText(note);
-    await expect(card.locator('time, .dash-price, svg')).toHaveCount(0);
+  for (const title of ['AI usage'] as const) {
+    await expect(dashboard.getByRole('article', { name: title, exact: true })).toHaveCount(0);
   }
 }
 

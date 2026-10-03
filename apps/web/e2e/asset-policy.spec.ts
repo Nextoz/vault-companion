@@ -17,7 +17,8 @@ test('production asset policy permits explicit same-origin device location with 
   await api.install(page);
   await page.goto('/');
   // UX2: the weather detail now sits behind the morning card's weather line.
-  await page.getByRole('button', { name: /lowest-rain window/ }).click();
+  // UX4: that line is now the short glance from sampleWeather() (Wet 06–08 · 15° · breezy).
+  await page.getByRole('button', { name: /^Wet 06–08 · 15° · breezy/ }).click();
   const morning = page.getByRole('region', { name: 'This morning weather' });
   await morning.getByRole('button', { name: 'Weather' }).click();
   expect(api.weatherLocationReads).toBe(0);
