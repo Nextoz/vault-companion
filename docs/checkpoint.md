@@ -26,6 +26,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 - **NY1** (Needs You v1): Today card line "Needs you" (hidden at 0) opens `NeedsYouSheet`; pure `ui/needs-you.ts` rows: failed/degraded scouts, Active Work review due, triage pending, queue actions needing attention. Waiting items and registration deadlines not covered (no client data). NY2 Morning Review next.
 - **WL1** (Watchlist backend): dashboard now returns one `watchlist` card per item in `apps/worker/src/watchlist.ts` (BTC, ETH Coinbase; SEK/DKK Frankfurter; RUB/DKK Bank of Russia XML, id R01215, because ECB dropped RUB) plus the legacy `market` card; ranges 1W/1M/3M (1Y open). Web UI is WL2.
 
+- **WL2**: Dashboard renders one card per `watchlist` item (pure `ui/watchlist.ts`: price format, range change %), legacy BTC `market` card hidden when a watchlist exists.
+
 ## Next actions (in order)
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
