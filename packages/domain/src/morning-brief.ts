@@ -73,7 +73,7 @@ function zoneOffsetMs(instant: Date, timeZone: string): number {
 }
 
 /** Local wall-clock time of `date` in `timeZone` as a UTC instant (DST-correct). */
-function localWallToInstant(date: string, hour: number, minute: number, timeZone: string): number {
+export function localWallToInstant(date: string, hour: number, minute: number, timeZone: string): number {
   const parts = date.split('-');
   const wall = Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), hour, minute, 0, 0);
   // Two passes settle the offset on either side of a DST transition.

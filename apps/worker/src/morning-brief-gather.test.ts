@@ -19,6 +19,7 @@ import {
   recentTraining,
   toBriefTodos,
   toHealthMetrics,
+  toMailTodos,
   toWeatherWindows,
   type MorningBriefGatherDeps,
 } from './morning-brief-gather.ts';
@@ -132,6 +133,24 @@ describe('toBriefTodos', () => {
   });
 });
 
+describe('toMailTodos', () => {
+  it('maps Jev labels to the exact one-line todo format and bill flag', () => {
+    expect(toMailTodos([
+      { label: 'deadline', subject: 'Contract', sender: 'Alice' },
+      { label: 'payment', subject: 'Invoice', sender: 'Bob' },
+      { label: 'needs-reply', subject: 'Question', sender: 'Cleo' },
+    ])).toEqual([
+      { text: 'Deadline: Contract (Alice)', due: null, bill: true },
+      { text: 'Pay: Invoice (Bob)', due: null, bill: true },
+      { text: 'Reply: Question (Cleo)', due: null, bill: false },
+    ]);
+  });
+
+  it('empty input is empty output', () => {
+    expect(toMailTodos([])).toEqual([]);
+  });
+});
+
 describe('toHealthMetrics', () => {
   const baseline = Array.from({ length: 20 }, (_, i) =>
     hday(`2026-05-${String(i + 1).padStart(2, '0')}`, { steps: 1000, headphone_min: 60, first_move: 600, last_move: 600 }));
@@ -220,6 +239,8 @@ describe('gatherCandidates', () => {
     readTraining: async () => trainingResponse([trow(DAY, '')]),
     readWeather: async () => weatherResponse([model(briefDayPoints())]),
     readMood: async () => [mood(DAY, '2026-06-15T07:00:00.000Z', [1, 1, 7])],
+    readCalendar: async () => [],
+    readMail: async () => [],
     ...over,
   });
 
@@ -230,6 +251,7 @@ describe('gatherCandidates', () => {
     expect(result.mood).toEqual({ mood: 1, energy: 1, sleep: 7 });
     expect(result.trainingRecent).toEqual({ count: 1, dates: [DAY] });
     expect(result.weatherWindows).toHaveLength(1);
+    expect(result.events).toEqual([]);
     expect(result.unavailable).toEqual([]);
   });
 
@@ -258,7 +280,7 @@ describe('gatherCandidates', () => {
       readWeather: async () => weatherResponse([]),
       readMood: async () => [],
     }));
-    expect(result).toEqual({ todos: [], metrics: [], mood: null, trainingRecent: { count: 0, dates: [] }, weatherWindows: [], unavailable: [] });
+    expect(result).toEqual({ todos: [], events: [], metrics: [], mood: null, trainingRecent: { count: 0, dates: [] }, weatherWindows: [], unavailable: [] });
   });
 
   it('a non-ok union status is an honest empty slot, not a gatherer failure', async () => {
@@ -270,5 +292,30 @@ describe('gatherCandidates', () => {
     expect(result.weatherWindows).toEqual([]);
     expect(result.unavailable).toEqual([]);
   });
-});
 
+  it('merges calendar events and Jev mail todos without throwing', async () => {
+    const result = await gatherCandidates(deps({
+      readCalendar: async () => [{ title: 'Stand-up', start: '2026-06-15T07:00:00.000Z', end: '2026-06-15T07:30:00.000Z', allDay: false }],
+      readMail: async () => [
+        { label: 'payment', subject: 'Invoice', sender: 'Alice' },
+        { label: 'needs-reply', subject: 'Question', sender: 'Bob' },
+      ],
+    }));
+    expect(result.events).toEqual([{ title: 'Stand-up', start: '2026-06-15T07:00:00.000Z', end: '2026-06-15T07:30:00.000Z', allDay: false }]);
+    expect(result.todos).toEqual([
+      { text: 'Alpha', due: DAY, bill: false },
+      { text: 'Pay: Invoice (Alice)', due: null, bill: true },
+      { text: 'Reply: Question (Bob)', due: null, bill: false },
+    ]);
+    expect(result.unavailable).toEqual([]);
+  });
+
+  it('a failed calendar or mail reader lands in unavailable and leaves its slot empty', async () => {
+    const result = await gatherCandidates(deps({
+      readCalendar: async () => ({ code: 'google-scope-mismatch', message: 'x', retryable: false }),
+      readMail: async () => ({ code: 'upstream-unavailable', message: 'x', retryable: true }),
+    }));
+    expect(result.events).toEqual([]);
+    expect(result.unavailable).toEqual(['calendar', 'mail']);
+  });
+});

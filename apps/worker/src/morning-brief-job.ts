@@ -4,6 +4,7 @@ import {
   buildWriterInput,
   commitMorningBrief,
   fallbackBrief,
+  freeBlocks,
   MORNING_BRIEF_PATH,
   morningBriefOperationId,
   parseBriefFile,
@@ -80,10 +81,10 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
     }
 
     const candidates = await deps.gather(date);
-    const unavailable = [...candidates.unavailable, 'calendar', 'mail'];
+    const unavailable = [...candidates.unavailable];
     const input = buildWriterInput({
       day: date,
-      blocks: [],
+      blocks: freeBlocks(candidates.events, date, deps.timeZone),
       todos: candidates.todos,
       state: stateLine(candidates.metrics, candidates.mood),
       weatherWindows: candidates.weatherWindows,

@@ -17,7 +17,8 @@ import {
   type WeatherRunWindow,
   WEATHER_TIME_ZONE,
 } from '@vault-companion/contracts';
-import { chooseRunWindow, type BriefTodo, type MoodSnapshot } from '@vault-companion/domain';
+import { chooseRunWindow, type BriefEvent, type BriefTodo, type MoodSnapshot } from '@vault-companion/domain';
+import type { GoogleMailItem } from './google-reader.ts';
 
 /** Same shape the API layer uses to tell a projection from a typed error. */
 const isApiError = (value: unknown): value is ApiError =>
@@ -33,6 +34,7 @@ export interface TrainingRecent {
 
 export interface MorningBriefCandidates {
   readonly todos: BriefTodo[];
+  readonly events: BriefEvent[];
   readonly metrics: HealthMetric[];
   readonly mood: MoodSnapshot | null;
   readonly trainingRecent: TrainingRecent;
@@ -51,6 +53,10 @@ export interface MorningBriefGatherDeps {
   readonly readWeather: () => Promise<WeatherResponse | ApiError>;
   /** The check-ins this device holds (ADR-0036); the newest one is the mood snapshot. */
   readonly readMood: () => Promise<readonly MoodCheckinPayload[] | ApiError>;
+  /** ADR-0044: today's local calendar events (metadata only). */
+  readonly readCalendar: () => Promise<readonly BriefEvent[] | ApiError>;
+  /** ADR-0044: today's Jev-labelled inbox mail (metadata only). */
+  readonly readMail: () => Promise<readonly GoogleMailItem[] | ApiError>;
 }
 
 // ---- Tasks ----
@@ -66,6 +72,20 @@ export function toBriefTodos(tasks: readonly TaskView[]): BriefTodo[] {
     todos.push({ text: task.description, due: task.due, bill: false });
   }
   return todos;
+}
+
+/** Mail metadata becomes the only mail text the writer may see: one todo line per Jev label item. */
+export function toMailTodos(mail: readonly GoogleMailItem[]): BriefTodo[] {
+  const prefix: Record<GoogleMailItem['label'], string> = {
+    deadline: 'Deadline',
+    payment: 'Pay',
+    'needs-reply': 'Reply',
+  };
+  return mail.map((item) => ({
+    text: `${prefix[item.label]}: ${item.subject} (${item.sender})`,
+    due: null,
+    bill: item.label === 'payment' || item.label === 'deadline',
+  }));
 }
 
 // ---- Health ----
@@ -187,17 +207,20 @@ async function settle<T>(read: () => Promise<T | ApiError>): Promise<Settled<T>>
  */
 export async function gatherCandidates(deps: MorningBriefGatherDeps): Promise<MorningBriefCandidates> {
   const timeZone = deps.timeZone ?? WEATHER_TIME_ZONE;
-  const [tasks, health, training, weather, mood] = await Promise.all([
+  const [tasks, health, training, weather, mood, calendar, mail] = await Promise.all([
     settle(deps.readTasks),
     settle(deps.readHealthHistory),
     settle(deps.readTraining),
     settle(deps.readWeather),
     settle(deps.readMood),
+    settle(deps.readCalendar),
+    settle(deps.readMail),
   ]);
 
   const unavailable: string[] = [];
-  const todos = tasks.ok ? toBriefTodos(tasks.value.allOpen) : [];
+  const todos = [...(tasks.ok ? toBriefTodos(tasks.value.allOpen) : []), ...(mail.ok ? toMailTodos(mail.value) : [])];
   if (!tasks.ok) unavailable.push('tasks');
+  const events = calendar.ok ? [...calendar.value] : [];
   const metrics = health.ok ? toHealthMetrics(health.value.days, deps.day) : [];
   if (!health.ok) unavailable.push('health');
   const trainingRecent = training.ok && training.value.status === 'ok' ? recentTraining(training.value.rows, deps.day) : { count: 0, dates: [] };
@@ -206,6 +229,8 @@ export async function gatherCandidates(deps: MorningBriefGatherDeps): Promise<Mo
   if (!weather.ok) unavailable.push('weather');
   const moodSnapshot = mood.ok ? latestMood(mood.value) : null;
   if (!mood.ok) unavailable.push('mood');
+  if (!calendar.ok) unavailable.push('calendar');
+  if (!mail.ok) unavailable.push('mail');
 
-  return { todos, metrics, mood: moodSnapshot, trainingRecent, weatherWindows, unavailable };
+  return { todos, events, metrics, mood: moodSnapshot, trainingRecent, weatherWindows, unavailable };
 }
