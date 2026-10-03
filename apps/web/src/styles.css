@@ -779,6 +779,15 @@ textarea:focus-visible {
 .status-sheet-scout-name { font-weight: 600; overflow-wrap: anywhere; }
 .status-sheet-scout-run { width: 100%; }
 .status-sheet .read-speed { list-style: none; margin: 0; padding: 0; font-variant-numeric: tabular-nums; }
+.status-sheet-budgets { list-style: none; margin: 0; padding: 0; }
+.status-sheet-budget { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; padding: 2px 0; }
+.status-sheet-budget-label { font-weight: 600; overflow-wrap: anywhere; }
+.status-sheet-budget-value { font-variant-numeric: tabular-nums; }
+.status-sheet-budget-reset { width: 100%; }
+.status-sheet-budget-spark { width: 40px; height: 16px; fill: none; stroke: var(--ios-blue); stroke-width: 1.5; }
+.budget-ok { color: var(--ios-green); }
+.budget-warn { color: var(--ios-yellow); }
+.budget-bad { color: var(--ios-red); }
 
 .task-edit {
   display: inline;

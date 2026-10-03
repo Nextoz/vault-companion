@@ -3,6 +3,7 @@ import { TrainingResponse, type TrainingRow } from '@vault-companion/contracts';
 // so a mock that drifts from packages/contracts fails loudly instead of testing a fiction.
 import {
   ActiveWorkResponse,
+  AiBudgetResponse,
   ApiError,
   Command,
   DASHBOARD_RANGE_PLAN,
@@ -312,6 +313,15 @@ export class MockApi {
     revision: 'b'.repeat(40), date: '2000-01-01', generatedAt: '2000-01-01T04:31:00+01:00', source: 'fallback',
     unavailable: [], brief: { source: 'fallback', dayLine: 'Stale', gaps: [], todos: [] },
   };
+  /** AI budget (AB2): a synthetic two-provider file by default; the vault-side writer (AB1) is not built yet. */
+  aiBudget: AiBudgetResponse = {
+    revision: 'c'.repeat(40), generatedAt: '2026-09-30T12:00:00+02:00',
+    providers: [
+      { id: 'claude', label: 'Claude weekly', kind: 'percent', value: 58, limit: 100, unit: null, resetsAt: '2026-10-05T04:00:00+02:00', history: [40, 44, 50, 58] },
+      { id: 'scaleway', label: 'Scaleway credits', kind: 'money', value: 6.14, limit: null, unit: '$', resetsAt: null, history: null },
+    ],
+    freeRamGb: null,
+  };
 
   static readonly SAMPLE_MORNING: MorningResponse = MorningResponse.parse({
     revision: 'a'.repeat(40), date: '2026-09-30',
@@ -343,6 +353,8 @@ export class MockApi {
       : this.#json(route, 200, MorningResponse.parse(this.morning ?? { revision: 'a'.repeat(40), date: '2026-09-30', brief: null, explained: [] })));
     await on('**/api/morning-brief', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, MorningBriefResponse.parse(this.morningBrief)));
+    await on('**/api/ai-budget', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
+      : this.#json(route, 200, AiBudgetResponse.parse(this.aiBudget)));
     await on('**/api/scouts', (route) => this.session === 'signed-out'
       ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, ScoutsResponse.parse(this.scouts)));

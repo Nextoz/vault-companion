@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CaptureNotePayload, CaptureTaskPayload, ScoutStatus, TasksResponse } from './index.ts';
+import { AiBudgetProvider, AiBudgetResponse, CaptureNotePayload, CaptureTaskPayload, ScoutStatus, TasksResponse } from './index.ts';
 
 describe('capture context', () => {
   it.each(['[[Projects/Boat]]', '[[Boat|the boat]]', 'https://example.com/a?b=c'])('accepts %j', (context) => {
@@ -74,5 +74,29 @@ describe('scout status schema', () => {
 
   it('still rejects a wrong schemaVersion', () => {
     expect(ScoutStatus.safeParse({ ...base, schemaVersion: 2 }).success).toBe(false);
+  });
+});
+
+describe('ai budget schema', () => {
+  const provider = { id: 'claude', label: 'Claude weekly', kind: 'percent', value: 58, limit: 100, unit: null, resetsAt: null, history: [1, 2] };
+
+  it('accepts a full provider, including nulls and history', () => {
+    expect(AiBudgetProvider.safeParse(provider).success).toBe(true);
+    expect(AiBudgetProvider.safeParse({ ...provider, limit: null, unit: null, resetsAt: null, history: null }).success).toBe(true);
+  });
+
+  it('rejects an unknown provider id or kind, and any extra field', () => {
+    expect(AiBudgetProvider.safeParse({ ...provider, id: 'mystery' }).success).toBe(false);
+    expect(AiBudgetProvider.safeParse({ ...provider, kind: 'credits' }).success).toBe(false);
+    expect(AiBudgetProvider.safeParse({ ...provider, extra: 1 }).success).toBe(false);
+  });
+
+  it('is a strict response envelope with a nullable freeRamGb', () => {
+    const rev = 'a'.repeat(40);
+    const ok = { revision: rev, generatedAt: '2026-10-03T06:31:00+02:00', providers: [provider], freeRamGb: null };
+    expect(AiBudgetResponse.safeParse(ok).success).toBe(true);
+    expect(AiBudgetResponse.safeParse({ ...ok, extra: 1 }).success).toBe(false);
+    expect(AiBudgetResponse.safeParse({ ...ok, revision: 'nope' }).success).toBe(false);
+    expect(AiBudgetResponse.safeParse({ ...ok, generatedAt: '2026-10-03' }).success).toBe(false);
   });
 });

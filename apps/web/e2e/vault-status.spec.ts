@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 test('one app switch (focus + visibilitychange + online) makes one read; the next switch and Refresh read again', async ({ page }) => {
   await page.clock.install();
@@ -88,4 +89,12 @@ test('the Vault status details list the last read time per route (SP measure), w
   await expect(speed.getByRole('listitem').filter({ hasText: /^tasks \d+ ms/ })).toHaveCount(1);
   await expect(speed).not.toContainText('?');
   await page.screenshot({ path: test.info().outputPath('sp1-read-speed-390x844.png') });
+});
+
+test('the Status sheet renders the AI budget rows', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  await page.goto('/');
+  await goTo(page, 'Status');
+  await expect(page.getByRole('list', { name: 'AI budget' })).toContainText('Claude weekly');
 });

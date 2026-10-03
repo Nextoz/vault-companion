@@ -13,6 +13,7 @@ import {
   ResearchRadarDecideCommand,
   ScoutStatus,
   WeatherLocationRequest,
+  type AiBudgetResponse,
   type MarketTickerResponse,
   type MorningBriefResponse,
   type MorningResponse,
@@ -57,6 +58,8 @@ export interface Services {
   readScouts?(): Promise<ScoutsResponse | ApiError>;
   /** Weekday Morning Brief card (MB2). Optional: without it the route answers 404. */
   readMorningBrief?(): Promise<MorningBriefResponse | ApiError>;
+  /** AI budget card (AB2). Optional: without it the route answers 404. */
+  readAiBudget?(): Promise<AiBudgetResponse | ApiError>;
   /** "This morning" (ADR-0029 Part 2). Optional: without it the route answers 404. */
   readMorning?(): Promise<MorningResponse | ApiError>;
   /** Completion history (ADR-0021). Optional: without it the route answers 404. */
@@ -118,7 +121,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | MorningBriefResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | MorningBriefResponse | AiBudgetResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -293,6 +296,21 @@ export function createApp(deps: AppDeps) {
   // only the commit SHA, never brief text or the `unavailable` reasons.
   app.get('/api/morning-brief', async (c) => {
     const read = deps.services.readMorningBrief;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // AI budget card (AB2): ONE fixed read-only JSON file written by the vault-side writer (AB1). No request input;
+  // logs carry only the commit SHA, never any provider value.
+  app.get('/api/ai-budget', async (c) => {
+    const read = deps.services.readAiBudget;
     if (!read) return c.json(err('invalid', 'not found'), 404);
     const result = await read();
     const meta = c.get('logMeta');

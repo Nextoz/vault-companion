@@ -645,6 +645,30 @@ export const MorningBriefResponse = z.strictObject({
 });
 export type MorningBriefResponse = z.infer<typeof MorningBriefResponse>;
 
+// ---- AI budget card (AB2): the vault-side AI budget JSON under Automation/Scout Status (ADR-0049), read-only ----
+
+/** One provider line. The domain reader parses providers one-by-one, so an unknown `id`/`kind` drops only itself. */
+export const AiBudgetProvider = z.strictObject({
+  id: z.enum(['claude', 'codex', 'deepseek', 'scaleway', 'coderabbit']),
+  label: z.string(),
+  kind: z.enum(['percent', 'money', 'count']),
+  value: z.number(),
+  limit: z.number().nullable(),
+  unit: z.string().nullable(),
+  resetsAt: isoInstant.nullable(),
+  history: z.array(z.number()).nullable(),
+});
+export type AiBudgetProvider = z.infer<typeof AiBudgetProvider>;
+
+/** `Automation/Scout Status/ai-budget.json`, projected for the Status sheet. No path or value is client input. */
+export const AiBudgetResponse = z.strictObject({
+  revision: commitSha,
+  generatedAt: isoInstant,
+  providers: z.array(AiBudgetProvider),
+  freeRamGb: z.number().nullable(),
+});
+export type AiBudgetResponse = z.infer<typeof AiBudgetResponse>;
+
 export const ScoutsResponse = z.strictObject({
   revision: commitSha,
   /** Server time: staleness never depends on the phone clock. */

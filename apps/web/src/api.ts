@@ -2,6 +2,7 @@
 // opaque redirect instead of silently following it to a login page (F11).
 import {
   ActiveWorkResponse,
+  AiBudgetResponse,
   DashboardResponse,
   MarketTickerResponse,
   TrainingResponse,
@@ -78,6 +79,7 @@ export const getSession = () => getJson('/api/session', SessionResponse);
 export const getScouts = () => getJson('/api/scouts', ScoutsResponse.strip());
 export const getMorning = () => getJson('/api/morning', MorningResponse.strip());
 export const getMorningBrief = () => getJson('/api/morning-brief', MorningBriefResponse.strip());
+export const getAiBudget = () => getJson('/api/ai-budget', AiBudgetResponse.strip());
 export const getTriage = () => getJson('/api/triage', TriageResponse.strip());
 export const getRadar = () => getJson('/api/radar', RadarResponse.strip());
 export const getRadarNote = (paperId: string) =>
