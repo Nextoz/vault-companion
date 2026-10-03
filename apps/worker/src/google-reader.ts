@@ -17,6 +17,10 @@ const LABELS: readonly { readonly label: JevLabel; readonly name: string }[] = [
 
 const REQUIRED_SCOPES = ['calendar.readonly', 'gmail.metadata'] as const;
 const MAX_MAIL_ITEMS = 10;
+/** Per-label list page: larger than the final cap so cross-label dedupe cannot starve the 10-item cap. */
+const MAIL_LIST_PAGE_SIZE = MAX_MAIL_ITEMS * 3;
+/** Number of message metadata reads issued in parallel per batch. */
+const MAIL_FETCH_BATCH_SIZE = 10;
 
 export type JevLabel = 'deadline' | 'payment' | 'needs-reply';
 
@@ -209,7 +213,7 @@ export function createGoogleReader(deps: GoogleReaderDeps): GoogleReader {
 
   const listMessageIds = async (token: string, labelId: string): Promise<readonly string[] | ApiError> => {
     try {
-      const params = new URLSearchParams({ maxResults: String(MAX_MAIL_ITEMS), fields: 'messages(id)' });
+      const params = new URLSearchParams({ maxResults: String(MAIL_LIST_PAGE_SIZE), fields: 'messages(id)' });
       params.append('labelIds', 'INBOX');
       params.append('labelIds', labelId);
       const res = await deps.fetch(`${GMAIL_BASE}/messages?${params.toString()}`, {
@@ -249,21 +253,30 @@ export function createGoogleReader(deps: GoogleReaderDeps): GoogleReader {
     const labelIds = await listLabelIds(token);
     if (isApiError(labelIds)) return labelIds;
 
-    const seen = new Set<string>();
-    const items: GoogleMailItem[] = [];
+    const seenIds = new Set<string>();
+    const candidates: { readonly id: string; readonly label: JevLabel }[] = [];
     for (const { label, name } of LABELS) {
       const labelId = labelIds[name];
       if (!labelId) continue;
       const ids = await listMessageIds(token, labelId);
       if (isApiError(ids)) return ids;
       for (const messageId of ids) {
-        if (seen.has(messageId) || items.length >= MAX_MAIL_ITEMS) continue;
-        seen.add(messageId);
-        const item = await readMessage(token, messageId, label);
-        if (isApiError(item)) return item;
-        if (item) items.push(item);
+        if (seenIds.has(messageId)) continue;
+        seenIds.add(messageId);
+        candidates.push({ id: messageId, label });
       }
-      if (items.length >= MAX_MAIL_ITEMS) break;
+    }
+
+    const items: GoogleMailItem[] = [];
+    let cursor = 0;
+    while (items.length < MAX_MAIL_ITEMS && cursor < candidates.length) {
+      const batch = candidates.slice(cursor, cursor + MAIL_FETCH_BATCH_SIZE);
+      cursor += batch.length;
+      const results = await Promise.all(batch.map((candidate) => readMessage(token, candidate.id, candidate.label)));
+      for (const result of results) {
+        if (isApiError(result)) return result;
+        if (result && items.length < MAX_MAIL_ITEMS) items.push(result);
+      }
     }
     return items;
   };
