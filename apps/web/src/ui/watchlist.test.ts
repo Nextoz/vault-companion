@@ -77,6 +77,12 @@ describe('watchlist change over the range (WL2)', () => {
     expect(seriesChange(null)).toBeNull();
     expect(seriesChange(series([100]))).toBeNull();
   });
+
+  it('measures a 1Y series the same way as any other range (WL3)', () => {
+    const year: MarketSeries = { ...series([100, 90]), range: '1Y' };
+    expect(seriesChange(year)).toEqual({ direction: 'down', percent: -10 });
+    expect(formatChange(seriesChange(year)!)).toBe('-10.00%');
+  });
 });
 
 describe('watchlist freshness (WL2)', () => {

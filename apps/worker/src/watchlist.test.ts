@@ -2,6 +2,7 @@ import { DASHBOARD_RANGE_PLAN, MARKET_BASE_URL } from '@vault-companion/contract
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TICKER_TTL_MS } from './market.ts';
 import {
+  FX_SERIES_TTL_MS,
   WATCHLIST,
   createCryptoAdapter,
   createFxAdapter,
@@ -22,6 +23,8 @@ const startSec = endSec - DASHBOARD_RANGE_PLAN['1W'].spanSeconds;
 const DAY = 86_400;
 const fxEnd = Math.floor(NOW_MS / 1000 / DAY) * DAY + DAY;
 const fxStart = fxEnd - DASHBOARD_RANGE_PLAN['1W'].spanSeconds;
+const yStart = fxEnd - DASHBOARD_RANGE_PLAN['1Y'].spanSeconds;
+const yEnd = fxEnd - DAY;
 
 const BTC: WatchItem = { symbol: 'BTC-USD', type: 'crypto', name: 'BTC / USD', base: 'BTC', quote: 'USD' };
 const ETH: WatchItem = { symbol: 'ETH-USD', type: 'crypto', name: 'ETH / USD', base: 'ETH', quote: 'USD' };
@@ -171,5 +174,83 @@ describe('watchlist source', () => {
     const source = createWatchlistSource({ now: () => NOW_MS, fetch: async () => new Response('x', { status: 503 }) });
     await expect(source.ticker(WATCHLIST[1]!)).resolves.toEqual({ status: 'unavailable', reason: 'provider-error' });
     await expect(source.series(WATCHLIST[1]!, '1M')).resolves.toEqual({ status: 'unavailable', reason: 'provider-error' });
+  });
+});
+
+describe('1Y range (WL3)', () => {
+  // Production guard: 1Y crypto must be two bounded daily requests merged, not one over-cap request or a truncated year.
+  it('fetches a 1Y crypto series as two bounded daily requests and merges the year', async () => {
+    const urls: string[] = [];
+    const adapter = createCryptoAdapter({ now: () => NOW_MS, fetch: async (url) => {
+      urls.push(String(url));
+      const query = new URL(String(url)).searchParams;
+      const from = Number(query.get('start'));
+      const to = Number(query.get('end'));
+      return json(Array.from({ length: (to - from) / DAY }, (_, i) => bucket(from + i * DAY)));
+    } });
+    const out = await adapter.series(BTC, '1Y');
+    expect(out).toMatchObject({ status: 'ok', series: { range: '1Y', granularitySeconds: DAY, missingIntervals: 0 } });
+    if (out.status === 'ok') expect(out.series.points).toHaveLength(DASHBOARD_RANGE_PLAN['1Y'].spanSeconds / DAY);
+    expect(urls).toHaveLength(2);
+    for (const url of urls) expect(url).toContain('granularity=86400');
+  });
+
+  it('asks Frankfurter for a ~365-day 1Y window, not the 3M one', async () => {
+    const urls: string[] = [];
+    const adapter = createFxAdapter({ now: () => NOW_MS, fetch: async (url) => {
+      urls.push(String(url));
+      return json({ amount: 1, base: 'SEK', rates: { '2025-10-01': { DKK: 0.69 }, '2026-09-30': { DKK: 0.6876 } } });
+    } });
+    const out = await adapter.series(SEK, '1Y');
+    expect(out).toMatchObject({ status: 'ok', series: { range: '1Y', granularitySeconds: DAY } });
+    const url = urls[0]!;
+    expect(url).toContain('api.frankfurter.dev');
+    const match = /(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})/.exec(url)!;
+    expect(match[1]).toBe(new Date(yStart * 1000).toISOString().slice(0, 10));
+    expect(match[2]).toBe(new Date(yEnd * 1000).toISOString().slice(0, 10));
+    expect((Date.parse(match[2]!) - Date.parse(match[1]!)) / 86_400_000).toBe(364); // a year, inclusive of both ends
+  });
+
+  it('asks Bank of Russia for the same ~365-day window on 1Y', async () => {
+    let seenUrl = '';
+    const adapter = createFxAdapter({ now: () => NOW_MS, fetch: async (url) => {
+      seenUrl = String(url);
+      return new Response(cbrBody(`${cbrRecord('29.09.2026', '1', '13,4000')}${cbrRecord('30.09.2026', '1', '13,4547')}`), { status: 200 });
+    } });
+    await expect(adapter.series(RUB, '1Y')).resolves.toMatchObject({ status: 'ok', series: { range: '1Y' } });
+    const match = /date_req1=(\d{2})\/(\d{2})\/(\d{4})&date_req2=(\d{2})\/(\d{2})\/(\d{4})/.exec(seenUrl)!;
+    const from = Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+    const to = Date.UTC(Number(match[6]), Number(match[5]) - 1, Number(match[4]));
+    expect((to - from) / 86_400_000).toBe(364);
+  });
+
+  it('adds 1Y to the fx series TTL, cached well past 3M', () => {
+    expect(FX_SERIES_TTL_MS['1Y']).toBe(12 * 60 * 60_000);
+    expect(FX_SERIES_TTL_MS['1Y']).toBeGreaterThan(FX_SERIES_TTL_MS['3M']);
+  });
+
+  it('serves a 1Y series from cache inside its TTL and keeps the original fetchedAt on a failed refresh', async () => {
+    let nowMs = NOW_MS;
+    let fail = false;
+    let fetches = 0;
+    const source = createWatchlistSource({ now: () => nowMs, fetch: async (url) => {
+      fetches += 1;
+      if (fail) return new Response('x', { status: 503 });
+      const query = new URL(String(url)).searchParams;
+      const from = Number(query.get('start'));
+      const to = Number(query.get('end'));
+      return json(Array.from({ length: (to - from) / DAY }, (_, i) => bucket(from + i * DAY)));
+    } });
+    const first = await source.series(BTC, '1Y');
+    expect(first).toMatchObject({ status: 'ok', fetchedAt: NOW_MS, series: { range: '1Y' } });
+    const afterFirst = fetches;
+    fail = true;
+    nowMs += 1_000;
+    expect(await source.series(BTC, '1Y')).toEqual(first); // inside the 1Y TTL: no failed refetch
+    expect(fetches).toBe(afterFirst);
+    nowMs += 12 * 60 * 60_000; // past the 1Y TTL, and the provider now fails
+    const stale = await source.series(BTC, '1Y');
+    expect(stale).toEqual(first); // same series AND the ORIGINAL fetchedAt, never repainted as current
+    if (stale.status === 'ok') expect(stale.fetchedAt).toBe(NOW_MS);
   });
 });

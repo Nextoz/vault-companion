@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDashboard, getHealth, getMarketTicker, type Fetched } from '../api.ts';
 import { lastCopies } from '../lastCopy.ts';
-import { Dashboard, MARKET_STALE_MS, mergeTicker, overviewTiles, seriesSegments } from './Dashboard.tsx';
+import { DASHBOARD_RANGES, Dashboard, MARKET_STALE_MS, RANGE_LABELS, mergeTicker, overviewTiles, seriesSegments } from './Dashboard.tsx';
 
 vi.mock('../api.ts', () => ({ getDashboard: vi.fn(), getHealth: vi.fn(), getMarketTicker: vi.fn() }));
 
@@ -229,6 +229,21 @@ describe('range and freshness (DASH1)', () => {
     expect(text()).toContain('Stale');
     expect(text()).toContain('not fresh');
   });
+
+  // WL3: the 1Y chip asks for 1Y and the chart is labelled "1 year", not the 3M copy.
+  it('offers a 1Y chip that fetches 1Y and labels the chart "1 year"', async () => {
+    await render();
+    const chip = button('1Y');
+    expect(chip).toBeDefined();
+    vi.mocked(getDashboard).mockResolvedValue(ok([
+      market({ series: { range: '1Y', granularitySeconds: 86_400, points: [point(0), point(1)], missingIntervals: 0 } }), ...overviewCards,
+    ]));
+    await click(chip);
+    await flush();
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    expect(vi.mocked(getDashboard)).toHaveBeenLastCalledWith('1Y');
+    expect(document.querySelector('.dash-svg')!.getAttribute('aria-label')).toContain('1 year');
+  });
 });
 
 describe('ticker polling guard (DASH1)', () => {
@@ -373,5 +388,10 @@ describe('pure helpers (DASH1)', () => {
     expect(merged.now).toBe('2026-09-30T12:01:00Z');
     expect(merged.cards[0]).toMatchObject({ id: 'market', status: 'ok', ticker: { price: 61_000 }, fetchedAt: '2026-09-30T12:01:00Z' });
     expect(merged.cards[1]).toEqual(data.cards[1]);
+  });
+
+  it('lists 1Y last with its human label', () => {
+    expect(RANGE_LABELS['1Y']).toBe('1 year');
+    expect(DASHBOARD_RANGES).toEqual(['1W', '1M', '3M', '1Y']);
   });
 });

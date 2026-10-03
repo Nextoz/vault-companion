@@ -14,9 +14,9 @@ import {
   SERIES_TTL_MS,
   TICKER_TTL_MS,
   type BoundedTextOptions,
-  candlesUrl,
   parseCandles,
   parseCoinbaseTicker,
+  readCandleRows,
   readBoundedText,
   tickerUrl,
 } from './market.ts';
@@ -74,7 +74,7 @@ export interface WatchlistSourceDeps extends WatchAdapterDeps {
 
 /** fx reference rates move at most once a day, so they are cached well past the 60-second crypto ticker. */
 export const FX_TICKER_TTL_MS = 10 * 60_000;
-export const FX_SERIES_TTL_MS: Record<DashboardRange, number> = { '1W': 60 * 60_000, '1M': 3 * 60 * 60_000, '3M': 6 * 60 * 60_000 };
+export const FX_SERIES_TTL_MS: Record<DashboardRange, number> = { '1W': 60 * 60_000, '1M': 3 * 60 * 60_000, '3M': 6 * 60 * 60_000, '1Y': 12 * 60 * 60_000 };
 export const WATCH_TICKER_TTL_MS: Record<WatchItemType, number> = { crypto: TICKER_TTL_MS, fx: FX_TICKER_TTL_MS };
 export const WATCH_SERIES_TTL_MS: Record<WatchItemType, Record<DashboardRange, number>> = { crypto: SERIES_TTL_MS, fx: FX_SERIES_TTL_MS };
 
@@ -121,9 +121,9 @@ export function createCryptoAdapter(deps: WatchAdapterDeps): WatchAdapter {
       const { granularitySeconds, spanSeconds } = DASHBOARD_RANGE_PLAN[range];
       const endSec = Math.floor(deps.now() / 1000 / granularitySeconds) * granularitySeconds;
       const startSec = endSec - spanSeconds;
-      const res = await readText(deps, candlesUrl(range, startSec, endSec, item.symbol), MARKET_HEADERS);
+      const res = await readCandleRows(deps.fetch, range, startSec, endSec, item.symbol, deps.timeoutMs ?? FETCH_TIMEOUT_MS);
       if (!res.ok) return { status: 'unavailable', reason: res.reason };
-      const series = parseCandles(parseJson(res.text), range, startSec, endSec);
+      const series = parseCandles(res.rows, range, startSec, endSec);
       return series ? { status: 'ok', series, fetchedAt: deps.now() } : { status: 'unavailable', reason: 'malformed' };
     },
   };

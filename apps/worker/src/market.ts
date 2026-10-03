@@ -21,7 +21,9 @@ export const MAX_BODY_BYTES = 256 * 1024;
 /** The current value is cheap: refreshed about once a minute (docs/DASH1). */
 export const TICKER_TTL_MS = 60_000;
 /** History changes slowly: it is cached well past a minute so it is never polled every 60 seconds. */
-export const SERIES_TTL_MS: Record<DashboardRange, number> = { '1W': 10 * 60_000, '1M': 30 * 60_000, '3M': 60 * 60_000 };
+export const SERIES_TTL_MS: Record<DashboardRange, number> = { '1W': 10 * 60_000, '1M': 30 * 60_000, '3M': 60 * 60_000, '1Y': 12 * 60 * 60_000 };
+/** Coinbase refuses a candles request asking for more than this many buckets; the 1Y plan exceeds it and is windowed. */
+export const COINBASE_MAX_CANDLES = 300;
 
 export type MarketFailure = { readonly status: 'unavailable'; readonly reason: MarketUnavailableReason };
 export type TickerOutcome = { readonly status: 'ok'; readonly ticker: MarketTicker; readonly fetchedAt: number } | MarketFailure;
@@ -34,6 +36,23 @@ export type SeriesOutcome = { readonly status: 'ok'; readonly series: MarketSeri
 export const tickerUrl = (product: string = MARKET_PRODUCT): string => `${MARKET_BASE_URL}/products/${product}/ticker`;
 export const candlesUrl = (range: DashboardRange, startSec: number, endSec: number, product: string = MARKET_PRODUCT): string =>
   `${MARKET_BASE_URL}/products/${product}/candles?granularity=${DASHBOARD_RANGE_PLAN[range].granularitySeconds}&start=${startSec}&end=${endSec}`;
+
+export interface CandleWindow {
+  readonly startSec: number;
+  readonly endSec: number;
+}
+
+/**
+ * Split [startSec, endSec) into whole-bucket windows of at most `maxCandles` each, aligned to the range's granularity
+ * grid. Every range except 1Y fits one window, so this adds no subrequest today; it exists so a span longer than the
+ * provider's per-request cap is never asked for in one call.
+ */
+export function candleWindows(range: DashboardRange, startSec: number, endSec: number, maxCandles: number = COINBASE_MAX_CANDLES): CandleWindow[] {
+  const step = DASHBOARD_RANGE_PLAN[range].granularitySeconds * maxCandles;
+  const windows: CandleWindow[] = [];
+  for (let start = startSec; start < endSec; start += step) windows.push({ startSec: start, endSec: Math.min(start + step, endSec) });
+  return windows;
+}
 
 /** B9: Coinbase answers `/candles` with 400 when User-Agent is absent, and a Worker's fetch sends none by default. */
 export const MARKET_HEADERS = { Accept: 'application/json', 'User-Agent': 'vault-companion' } as const;
@@ -114,6 +133,28 @@ async function readJson(fetchImpl: typeof fetch, url: string, timeoutMs: number)
   } catch {
     return { ok: false, reason: 'malformed' };
   }
+}
+
+/**
+ * Fetch a whole span, one bounded request per window, and concatenate the raw candle rows. Any window failing fails the
+ * read (never a partial series passed off as complete). All ranges but 1Y are a single window.
+ */
+export async function readCandleRows(
+  fetchImpl: typeof fetch,
+  range: DashboardRange,
+  startSec: number,
+  endSec: number,
+  product: string,
+  timeoutMs: number,
+): Promise<{ ok: true; rows: unknown[] } | { ok: false; reason: MarketUnavailableReason }> {
+  const rows: unknown[] = [];
+  for (const window of candleWindows(range, startSec, endSec)) {
+    const res = await readJson(fetchImpl, candlesUrl(range, window.startSec, window.endSec, product), timeoutMs);
+    if (!res.ok) return res;
+    if (!Array.isArray(res.body)) return { ok: false, reason: 'malformed' };
+    rows.push(...res.body);
+  }
+  return { ok: true, rows };
 }
 
 /** Coinbase ticker: `{ price, time, ... }` with string numbers. Anything else is refused, never coerced blindly. */
@@ -201,9 +242,9 @@ export function createMarketSource(deps: MarketSourceDeps): MarketSource {
     const nowSec = Math.floor(deps.now() / 1000);
     const endSec = Math.floor(nowSec / granularitySeconds) * granularitySeconds;
     const startSec = endSec - spanSeconds;
-    const res = await readJson(deps.fetch, candlesUrl(range, startSec, endSec), timeoutMs);
+    const res = await readCandleRows(deps.fetch, range, startSec, endSec, MARKET_PRODUCT, timeoutMs);
     if (!res.ok) return { status: 'unavailable', reason: res.reason };
-    const series = parseCandles(res.body, range, startSec, endSec);
+    const series = parseCandles(res.rows, range, startSec, endSec);
     return series ? { status: 'ok', series, fetchedAt: deps.now() } : { status: 'unavailable', reason: 'malformed' };
   };
 

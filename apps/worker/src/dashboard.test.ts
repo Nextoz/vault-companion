@@ -47,7 +47,7 @@ describe('Dashboard routes are authenticated (DASH1)', () => {
     const app1 = app({ readDashboard: read });
     await app1.request('/api/dashboard', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
     expect(read).toHaveBeenLastCalledWith('1W');
-    const bad = await app1.request('/api/dashboard?range=1Y', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+    const bad = await app1.request('/api/dashboard?range=2Y', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
     expect(bad.status).toBe(400);
     expect(read).toHaveBeenCalledTimes(1); // the invalid range never reaches the provider-facing service
   });
