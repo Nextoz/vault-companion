@@ -41,6 +41,7 @@ test('Dashboard keeps Today default and supports mobile ranges, touch and keyboa
   await expect(market.locator('.dash-times time').first()).toHaveAttribute('datetime', '2026-09-30T11:59:00Z');
   await expect(market.locator('.dash-times time').last()).toHaveAttribute('datetime', api.dashboardFetchedAt);
   await expectUnconfigured(dashboard);
+  await expect(dashboard.getByRole('article', { name: 'Health', exact: true })).toHaveCount(0);
 
   for (const [range, label, count] of [['1W', '1 week', 167], ['1M', '1 month', 119], ['3M', '3 months', 89]] as const) {
     await dashboard.getByRole('button', { name: range, exact: true }).click();
@@ -72,9 +73,9 @@ test('Health board shows four formatted tiles with gap-aware sparklines', async 
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
-  await goTo(page, 'Today');
-  const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
-  const health = dashboard.getByRole('article', { name: 'Health', exact: true });
+  await goTo(page, 'Log');
+  await page.getByRole('group', { name: 'Log view' }).getByRole('button', { name: 'Health', exact: true }).click();
+  const health = page.getByRole('article', { name: 'Health', exact: true });
   await expect(health).toContainText('Data from 29 Sept 2026');
   await expect(health.locator('.health-tile')).toHaveCount(4);
   await expect(health.locator('.health-tile').nth(0)).toContainText('12,345');
@@ -92,8 +93,9 @@ test('Health board labels old data and uses the stale styling at three days', as
   api.health = HealthResponse.parse({ ...api.health, day: '2026-09-26', staleDays: 3 });
   await api.install(page);
   await page.goto('/');
-  await goTo(page, 'Today');
-  const health = page.getByRole('region', { name: 'Dashboard', exact: true }).getByRole('article', { name: 'Health', exact: true });
+  await goTo(page, 'Log');
+  await page.getByRole('group', { name: 'Log view' }).getByRole('button', { name: 'Health', exact: true }).click();
+  const health = page.getByRole('article', { name: 'Health', exact: true });
   await expect(health).toContainText('Data from 26 Sept 2026 — 3 days old');
   await expect(health.locator('.dash-stale')).toHaveCount(1);
 });
@@ -103,8 +105,9 @@ test('Health board reports a missing export without tiles or sparklines', async 
   api.health = HealthResponse.parse({ revision: 'a'.repeat(40), now: '2026-09-30T12:00:00Z', status: 'missing', metrics: [] });
   await api.install(page);
   await page.goto('/');
-  await goTo(page, 'Today');
-  const health = page.getByRole('region', { name: 'Dashboard', exact: true }).getByRole('article', { name: 'Health', exact: true });
+  await goTo(page, 'Log');
+  await page.getByRole('group', { name: 'Log view' }).getByRole('button', { name: 'Health', exact: true }).click();
+  const health = page.getByRole('article', { name: 'Health', exact: true });
   await expect(health).toContainText('No Apple Health export in the vault yet.');
   await expect(health.locator('.health-tile, svg')).toHaveCount(0);
 });

@@ -20,7 +20,6 @@ const market = (over: Record<string, unknown> = {}): DashboardCard => ({
 } as DashboardCard);
 const overviewCards: DashboardCard[] = [
   { id: 'ai-usage', status: 'not-configured', title: 'AI usage', provenance: 'Not configured', observedAt: null, fetchedAt: null, note: 'No approved usage source is connected yet.', drillthrough: null },
-  { id: 'health', status: 'not-configured', title: 'Health', provenance: 'Not configured', observedAt: null, fetchedAt: null, note: 'No approved health source is connected yet.', drillthrough: null },
 ];
 const response = (cards: DashboardCard[] = [market(), ...overviewCards]) => DashboardResponse.parse({ now: NOW, cards });
 const ok = (cards?: DashboardCard[]) => ({ kind: 'ok' as const, data: response(cards) });
@@ -78,10 +77,8 @@ describe('BTC/USD market card (DASH1)', () => {
   it('keeps overview cards honest: no fake numbers for a source that is not connected', async () => {
     await render();
     expect(text()).toContain('AI usage');
-    expect(text()).toContain('Health');
     expect(text()).toContain('Not configured');
     expect(text()).toContain('No approved usage source is connected yet.');
-    expect(text()).not.toContain('No approved health source is connected yet.');
     const overviewText = [...document.querySelectorAll('.dash-card')].filter((card) => !card.classList.contains('dash-market')).map((card) => card.textContent ?? '').join(' ');
     expect(overviewText).not.toMatch(/\$\d/);
     expect(overviewText).not.toMatch(/\d+ ?(quota|spend|reset)/i);
@@ -294,7 +291,7 @@ describe('inspection and account edges (DASH1)', () => {
   it('exposes the drillthrough seam a later detail view can use', async () => {
     const onDrillthrough = vi.fn();
     const card = { ...overviewCards[0]!, drillthrough: { label: 'Usage detail', view: 'usage' } } as DashboardCard;
-    await render([market(), card, overviewCards[1]!], onDrillthrough);
+    await render([market(), card], onDrillthrough);
     await click(button('Usage detail'));
     expect(onDrillthrough).toHaveBeenCalledWith('usage');
   });

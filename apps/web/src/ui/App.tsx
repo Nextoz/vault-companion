@@ -18,6 +18,7 @@ import { FROZEN_NOTE, taskListLock } from '../writeBlock.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
 import { ActiveWorkCard } from './ActiveWorkCard.tsx';
 import { Dashboard } from './Dashboard.tsx';
+import { HealthPanel } from './HealthPanel.tsx';
 import { EditSheet } from './EditSheet.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
@@ -405,10 +406,11 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           </>
         )}
 
-        {(tab === 'training' || tab === 'history') && !signedOut && (
+        {(tab === 'training' || tab === 'history' || tab === 'health') && !signedOut && (
           <div className="segmented log-view" role="group" aria-label="Log view">
             <button type="button" aria-pressed={tab === 'training'} onClick={() => setTab('training')}>Training</button>
             <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')}>Progress</button>
+            <button type="button" aria-pressed={tab === 'health'} onClick={() => setTab('health')}>Health</button>
           </div>
         )}
 
@@ -417,6 +419,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
             accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />
         )}
+
+        {tab === 'health' && !signedOut && <HealthPanel key={`health:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
 
         {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
           accountKey={accountKey} baseRevision={revision} />}

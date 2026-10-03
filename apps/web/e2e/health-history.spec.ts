@@ -10,7 +10,8 @@ test('Health card opens the history view lazily and switches to 1 y', async ({ p
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
-  await goTo(page, 'Today');
+  await goTo(page, 'Log');
+  await page.getByRole('group', { name: 'Log view' }).getByRole('button', { name: 'Health', exact: true }).click();
   const health = page.getByRole('article', { name: 'Health', exact: true });
 
   expect(api.healthHistoryReads).toBe(0); // nothing loads until the toggle is pressed
