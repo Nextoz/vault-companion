@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DASHBOARD_RANGE_PLAN,
+  DASHBOARD_RANGES,
   DashboardResponse,
   MAX_MARKET_POINTS,
   MarketTickerResponse,
@@ -51,7 +52,7 @@ describe('DashboardResponse (DASH1)', () => {
 
   it('rejects an unknown range and an unknown provider', () => {
     const series = card() as Extract<DashboardCard, { id: 'market'; status: 'ok' }>;
-    const badRange = { ...series, series: { ...series.series!, range: '1Y' } };
+    const badRange = { ...series, series: { ...series.series!, range: '2Y' } };
     const badProvider = { ...series, ticker: { ...series.ticker, provider: 'binance' } };
     expect(DashboardResponse.safeParse({ now: NOW, cards: [badRange] }).success).toBe(false);
     expect(DashboardResponse.safeParse({ now: NOW, cards: [badProvider] }).success).toBe(false);
@@ -73,9 +74,16 @@ describe('MarketTickerResponse (DASH1 ticker poll)', () => {
 });
 
 describe('DASHBOARD_RANGE_PLAN', () => {
-  it('keeps every range inside the provider 300-point cap', () => {
+  it('keeps every range inside the series point cap', () => {
     for (const plan of Object.values(DASHBOARD_RANGE_PLAN)) {
       expect(plan.spanSeconds / plan.granularitySeconds).toBeLessThanOrEqual(MAX_MARKET_POINTS);
     }
+  });
+
+  // Production guard: 1Y is a real year of daily buckets, not a relabelled 3M, and it fits the series cap.
+  it('defines 1Y as ~365 days of daily buckets within MAX_MARKET_POINTS', () => {
+    expect(DASHBOARD_RANGES).toContain('1Y');
+    expect(DASHBOARD_RANGE_PLAN['1Y']).toEqual({ granularitySeconds: 86_400, spanSeconds: 365 * 86_400 });
+    expect(DASHBOARD_RANGE_PLAN['1Y'].spanSeconds / DASHBOARD_RANGE_PLAN['1Y'].granularitySeconds).toBeLessThanOrEqual(MAX_MARKET_POINTS);
   });
 });

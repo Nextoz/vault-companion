@@ -1,4 +1,4 @@
-// Dashboard (DASH1): read-only overview. One card per watched item (WL2) with a 1W/1M/3M series, plus honest overview
+// Dashboard (DASH1): read-only overview. One card per watched item (WL2) with a 1W/1M/3M/1Y series, plus honest overview
 // cards for the AI usage sources that are not connected yet. No writes, no provider calls from the browser.
 import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketSeries, MarketTickerResponse, WatchCard, WeatherCard } from '@vault-companion/contracts';
 import { useCallback, useEffect, useId, useMemo, useState, type PointerEvent } from 'react';
@@ -11,8 +11,8 @@ import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
 export const TICKER_POLL_MS = 60_000;
 /** Older than this and the card says so, in words; the number is never silently repainted as fresh. */
 export const MARKET_STALE_MS = 120_000;
-export const RANGE_LABELS: Record<DashboardRange, string> = { '1W': '1 week', '1M': '1 month', '3M': '3 months' };
-export const DASHBOARD_RANGES: readonly DashboardRange[] = ['1W', '1M', '3M'];
+export const RANGE_LABELS: Record<DashboardRange, string> = { '1W': '1 week', '1M': '1 month', '3M': '3 months', '1Y': '1 year' };
+export const DASHBOARD_RANGES: readonly DashboardRange[] = ['1W', '1M', '3M', '1Y'];
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
 const instant = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });

@@ -9,21 +9,25 @@ z.config({ jitless: true });
 
 const isoInstant = z.iso.datetime({ offset: true });
 
-/** The three selectable windows for the one BTC/USD series. Fixed here: the client never names a provider URL. */
-export const DASHBOARD_RANGES = ['1W', '1M', '3M'] as const;
+/** The four selectable windows for the watched series. Fixed here: the client never names a provider URL. */
+export const DASHBOARD_RANGES = ['1W', '1M', '3M', '1Y'] as const;
 export const DashboardRange = z.enum(DASHBOARD_RANGES);
 export type DashboardRange = z.infer<typeof DashboardRange>;
 
 /**
- * Fixed range plan: the only granularity/span combinations the worker may ask Coinbase for (each inside the 300-point
- * cap: 168, 120, 90). Kept next to the contract so client and worker agree on what a range means.
+ * Fixed range plan: the only granularity/span combinations the worker may ask a provider for. 1W/1M/3M fit one Coinbase
+ * request (168, 120, 90 buckets); 1Y is daily over ~365 days, which exceeds the provider's 300-candle per-request cap,
+ * so the worker fetches it as consecutive windows and merges them (a series may therefore hold up to MAX_MARKET_POINTS).
+ * Kept next to the contract so client and worker agree on what a range means.
  */
 export const DASHBOARD_RANGE_PLAN: Record<DashboardRange, { readonly granularitySeconds: number; readonly spanSeconds: number }> = {
   '1W': { granularitySeconds: 3_600, spanSeconds: 7 * 86_400 },
   '1M': { granularitySeconds: 21_600, spanSeconds: 30 * 86_400 },
   '3M': { granularitySeconds: 86_400, spanSeconds: 90 * 86_400 },
+  '1Y': { granularitySeconds: 86_400, spanSeconds: 365 * 86_400 },
 };
-export const MAX_MARKET_POINTS = 300;
+/** Series cap across all ranges: a year of daily buckets (365) fits with headroom. One provider request is capped lower. */
+export const MAX_MARKET_POINTS = 400;
 
 /** Why a market read has nothing to show. Never carries provider text. */
 export const MarketUnavailableReason = z.enum(['timeout', 'malformed', 'provider-error']);

@@ -1,12 +1,15 @@
-import { DASHBOARD_RANGE_PLAN, MARKET_BASE_URL } from '@vault-companion/contracts';
+import { DASHBOARD_RANGE_PLAN, MARKET_BASE_URL, MAX_MARKET_POINTS } from '@vault-companion/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { candlesUrl, createMarketSource, parseCandles, parseTicker, tickerUrl, TICKER_TTL_MS, MAX_BODY_BYTES } from './market.ts';
+import { COINBASE_MAX_CANDLES, candleWindows, candlesUrl, createMarketSource, parseCandles, parseTicker, tickerUrl, TICKER_TTL_MS, MAX_BODY_BYTES } from './market.ts';
 
 const NOW_MS = Date.parse('2026-09-30T12:00:00Z');
 const G = DASHBOARD_RANGE_PLAN['1W'].granularitySeconds;
 const SPAN = DASHBOARD_RANGE_PLAN['1W'].spanSeconds;
 const endSec = Math.floor(NOW_MS / 1000 / G) * G;
 const startSec = endSec - SPAN;
+const Y_G = 86_400;
+const yEnd = Math.floor(NOW_MS / 1000 / Y_G) * Y_G;
+const yStart = yEnd - DASHBOARD_RANGE_PLAN['1Y'].spanSeconds;
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
 const bucket = (time: number, overrides: Record<number, string> = {}): unknown[] => {
@@ -20,7 +23,7 @@ afterEach(() => vi.useRealTimers());
 describe('allowlisted provider URLs (DASH1)', () => {
   it('only ever builds the fixed host/product with an enum granularity', () => {
     expect(tickerUrl()).toBe(`${MARKET_BASE_URL}/products/BTC-USD/ticker`);
-    for (const range of ['1W', '1M', '3M'] as const) {
+    for (const range of ['1W', '1M', '3M', '1Y'] as const) {
       const url = candlesUrl(range, 1, 2);
       expect(url.startsWith(`${MARKET_BASE_URL}/products/BTC-USD/candles?`)).toBe(true);
       expect(url).toContain(`granularity=${DASHBOARD_RANGE_PLAN[range].granularitySeconds}`);
@@ -56,11 +59,63 @@ describe('provider body validation', () => {
     expect(parseCandles([], '1W', startSec, endSec)!.points).toEqual([]);
   });
 
-  it('caps the series at 300 points even if a provider over-answers', () => {
-    const rows = Array.from({ length: 500 }, (_, i) => bucket(startSec - 500 * G + i * G));
-    rows.push(...Array.from({ length: 500 }, (_, i) => bucket(startSec + i * G)));
-    const series = parseCandles(rows, '1W', startSec, endSec)!;
-    expect(series.points.length).toBeLessThanOrEqual(300);
+  it('caps the series at MAX_MARKET_POINTS even if a provider over-answers', () => {
+    const bigStart = yEnd - (MAX_MARKET_POINTS + 50) * Y_G;
+    const rows = Array.from({ length: MAX_MARKET_POINTS + 50 }, (_, i) => bucket(bigStart + i * Y_G));
+    const series = parseCandles(rows, '1Y', bigStart, yEnd)!;
+    expect(series.points.length).toBe(MAX_MARKET_POINTS);
+  });
+});
+
+describe('windowing long spans (WL3)', () => {
+  it('splits a year of daily candles into requests inside the provider cap, ending exactly at the window end', () => {
+    const windows = candleWindows('1Y', yStart, yEnd);
+    expect(windows).toHaveLength(2);
+    expect(windows[0]).toEqual({ startSec: yStart, endSec: yStart + (COINBASE_MAX_CANDLES - 1) * Y_G });
+    expect(windows[windows.length - 1]!.endSec).toBe(yEnd);
+    for (const window of windows) {
+      // One bucket of headroom: a prepended pre-start candle must not push the response past the provider cap.
+      expect((window.endSec - window.startSec) / Y_G).toBeLessThanOrEqual(COINBASE_MAX_CANDLES - 1);
+    }
+  });
+
+  it('adds no window for the shorter ranges', () => {
+    for (const range of ['1W', '1M', '3M'] as const) {
+      const end = Math.floor(NOW_MS / 1000 / DASHBOARD_RANGE_PLAN[range].granularitySeconds) * DASHBOARD_RANGE_PLAN[range].granularitySeconds;
+      expect(candleWindows(range, end - DASHBOARD_RANGE_PLAN[range].spanSeconds, end)).toHaveLength(1);
+    }
+  });
+
+  // Production guard: 1Y must merge two bounded requests into a real ~365-day series, not truncate to the first window.
+  it('fetches 1Y as two provider requests and concatenates the whole year', async () => {
+    const urls: string[] = [];
+    const source = createMarketSource({ now: () => NOW_MS, fetch: async (url) => {
+      urls.push(String(url));
+      const query = new URL(String(url)).searchParams;
+      const from = Number(query.get('start'));
+      const to = Number(query.get('end'));
+      // Coinbase may prepend the candle just before `start`; it must be dropped, never truncate a requested bucket.
+      return json([bucket(from - Y_G), ...Array.from({ length: (to - from) / Y_G }, (_, i) => bucket(from + i * Y_G))]);
+    } });
+    const out = await source.series('1Y');
+    if (out.status !== 'ok') throw new Error('expected an ok 1Y series');
+    expect(urls).toHaveLength(2);
+    expect(out.series).toMatchObject({ range: '1Y', granularitySeconds: Y_G, missingIntervals: 0 });
+    expect(out.series.points).toHaveLength(365);
+    for (const url of urls) {
+      const query = new URL(url).searchParams;
+      expect((Number(query.get('end')) - Number(query.get('start'))) / Y_G).toBeLessThanOrEqual(COINBASE_MAX_CANDLES - 1);
+    }
+  });
+
+  // Production guard: a failed later window fails the read; a partial year is never passed off as complete.
+  it('refuses the 1Y series when any window fails', async () => {
+    let calls = 0;
+    const source = createMarketSource({ now: () => NOW_MS, fetch: async () => {
+      calls += 1;
+      return calls === 1 ? json([bucket(yStart)]) : new Response('x', { status: 503 });
+    } });
+    await expect(source.series('1Y')).resolves.toEqual({ status: 'unavailable', reason: 'provider-error' });
   });
 });
 
