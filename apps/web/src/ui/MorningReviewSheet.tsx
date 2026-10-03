@@ -67,14 +67,18 @@ export function MorningReviewSheet({ brief, needs, open, today, queue, accountKe
     savingRef.current = true;
     setSaving(true);
     setError(null);
+    let done = 0;
     try {
       for (const task of picked) {
         await queue.enqueue(editTask({ baseRevision }, task.locator, { scheduled: today }), {
           accountKey, label: task.description, taskKey: occurrenceKey(task.locator),
         });
+        done += 1;
+        // Drop each task from marked as soon as it is enqueued: a later failure must not resubmit it.
+        const id = occurrenceKey(task.locator);
+        setMarked((current) => new Set([...current].filter((key) => key !== id)));
       }
-      setPlanned(picked.length);
-      setMarked(new Set());
+      setPlanned(done);
       setStep('done');
     } catch {
       setError('Could not keep this plan on the device. Your picks are still here.');
