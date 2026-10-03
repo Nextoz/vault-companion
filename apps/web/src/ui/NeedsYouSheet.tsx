@@ -1,6 +1,6 @@
 // NY1: the "Needs you" sheet - the rows only the owner can decide. Each row opens an existing screen; an Active
 // Work row opens that item's existing edit sheet in place. No new command and no write path of its own.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ActiveWorkItem } from '../active-work.ts';
 import type { PendingQueue } from '../queue/queue.ts';
 import { ActiveWorkEditSheet } from './ActiveWorkEditSheet.tsx';
@@ -15,6 +15,13 @@ export function NeedsYouSheet({ rows, queue, accountKey, onNavigate, onClose }: 
 }) {
   const [editing, setEditing] = useState<{ item: ActiveWorkItem; revision: string } | null>(null);
   const dialog = useRef<HTMLDivElement>(null);
+  // Move focus into the dialog on open, so the Tab-trap below keeps the background unreachable, and return it to
+  // the control that opened the sheet on close (same lifecycle as EditSheet).
+  useEffect(() => {
+    const invoker = document.activeElement;
+    dialog.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
+    return () => { if (invoker instanceof HTMLElement) invoker.focus(); };
+  }, []);
 
   // An Active Work row reuses the item's own edit sheet; every other row hands its target to the caller and closes.
   function open(row: NeedsYouRow) {
