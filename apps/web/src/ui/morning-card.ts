@@ -5,9 +5,10 @@ import type { QueueItem } from '../queue/queue.ts';
 import { attentionCount, pluralise, scoutsNeedAttention } from '../scouts.ts';
 import { localDate, latestCheckin } from './MoodCard.tsx';
 import { morningSummary } from './Morning.tsx';
+import { needsYouText, type NeedsYouRow } from './needs-you.ts';
 
 /** One line on the morning card; `id` is both the React key and which detail the line opens. */
-export type MorningLineId = 'weather' | 'scouts' | 'papers' | 'triage' | 'tasks';
+export type MorningLineId = 'needs' | 'weather' | 'scouts' | 'papers' | 'triage' | 'tasks';
 
 export interface MorningLine {
   readonly id: MorningLineId;
@@ -56,6 +57,8 @@ export interface MorningCardFacts {
   readonly morning: MorningResponse | null;
   readonly eventsToTriage: number;
   readonly tasksToday: number;
+  /** NY1: rows for the "Needs you" sheet, already built by the card; empty hides the line. */
+  readonly needs: readonly NeedsYouRow[];
 }
 
 /** One-line way into the Tasks screen; kept verbatim from UX1b so "No tasks today" never became a placeholder. */
@@ -79,9 +82,11 @@ export function weatherGlance(window: WeatherRunWindow | null): string {
   return `${condition} ${start}–${end} · ${temp} · ${wind}`;
 }
 
-/** Weather glance, scouts, papers, events, then the tasks line - each omitted when it has nothing to say. */
+/** Needs you, then weather glance, scouts, papers, events and the tasks line - each omitted when it has nothing to say. */
 export function morningLines(facts: MorningCardFacts): MorningLine[] {
   const lines: MorningLine[] = [];
+  // NY1: what only the owner can decide leads the card; nothing to decide hides the line entirely.
+  if (facts.needs.length > 0) lines.push({ id: 'needs', text: needsYouText(facts.needs.length) });
   // An unavailable forecast is still something to say: the line carries the honest reason, not a placeholder.
   if (facts.weather) {
     lines.push({ id: 'weather', text: facts.weather.status === 'ok'

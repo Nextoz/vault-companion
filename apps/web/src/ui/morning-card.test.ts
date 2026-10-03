@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { moodCheckin, undoMoodCheckinDraft } from '../commands.ts';
 import type { QueueItem } from '../queue/queue.ts';
 import { briefLines, checkinDue, morningLines, tasksTodayText, weatherGlance, type MorningCardFacts } from './morning-card.ts';
+import type { NeedsYouRow } from './needs-you.ts';
 
 const ACCOUNT = 'a'.repeat(64);
 const ctx = { baseRevision: '1'.repeat(40) };
@@ -62,7 +63,7 @@ const morningWith = (brief: boolean, explained: number): MorningResponse =>
   MorningResponse.parse({ revision: SHA, date: '2026-10-02', brief: brief ? note('complete', 'Brief') : null,
     explained: Array.from({ length: explained }, (_, i) => note(i === 0 ? 'complete' : 'pending', `Paper ${i}`)) });
 
-const empty: MorningCardFacts = { weather: null, weatherFailed: false, scouts: null, morning: null, eventsToTriage: 0, tasksToday: 0 };
+const empty: MorningCardFacts = { weather: null, weatherFailed: false, scouts: null, morning: null, eventsToTriage: 0, tasksToday: 0, needs: [] };
 
 describe('morning card lines', () => {
   it('omits lines with nothing to say and always keeps the tasks line', () => {
@@ -105,10 +106,16 @@ describe('morning card lines', () => {
 
   it('renders an events line only when events wait and keeps the order', () => {
     expect(morningLines({ ...empty, eventsToTriage: 1 })[0]).toEqual({ id: 'triage', text: '1 new event' });
-    expect(morningLines({ weather: weatherOk(), weatherFailed: false, scouts: scoutsWith('failed'), morning: morningWith(true, 2), eventsToTriage: 3, tasksToday: 2 }))
+    expect(morningLines({ weather: weatherOk(), weatherFailed: false, scouts: scoutsWith('failed'), morning: morningWith(true, 2), eventsToTriage: 3, tasksToday: 2, needs: [] }))
       .toEqual([{ id: 'weather', text: 'Wet 10–12 · 14° · light wind' }, { id: 'scouts', text: '1 scout needs attention' },
         { id: 'papers', text: 'Reading brief \u00b7 1 explained \u00b7 1 pending' }, { id: 'triage', text: '3 new events' },
         { id: 'tasks', text: '2 tasks today' }]);
+  });
+
+  it('leads with a Needs you line counting the rows, and hides it when nothing needs the owner', () => {
+    const row: NeedsYouRow = { id: 'triage', title: 'Event triage', why: '1 event decision waiting', target: { kind: 'triage' } };
+    expect(morningLines(empty)).toEqual([{ id: 'tasks', text: 'No tasks today' }]);
+    expect(morningLines({ ...empty, needs: [row] })[0]).toEqual({ id: 'needs', text: 'Needs you \u00b7 1' });
   });
 
   it('words the tasks line for none, one and many', () => {
