@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getTriage } from '../api.ts';
 import { triageDecide } from '../commands.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
-import { dateBlockParts, deriveTriage, timeInCopenhagen, toTriageCardView, type SkipReason, type TriageDecision } from '../triage.ts';
+import { countLine, dateBlockParts, deriveTriage, laneCounts, timeInCopenhagen, toTriageCardView, type SkipReason, type TriageDecision, type TriageLane } from '../triage.ts';
 import { TriageStack } from './TriageStack.tsx';
 
 export function Triage({ queue, items, accountKey, refreshKey, blocked }: {
@@ -15,6 +15,7 @@ export function Triage({ queue, items, accountKey, refreshKey, blocked }: {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [stackVersion, setStackVersion] = useState(0);
+  const [lane, setLane] = useState<'all' | TriageLane>('all');
   const [answeredCheckins, setAnsweredCheckins] = useState<string[]>([]);
   const [lastCheckin, setLastCheckin] = useState<string | null>(null);
   // Decisions are serialized (never dropped while an earlier one is still saving) and recorded the moment they are
@@ -98,8 +99,22 @@ export function Triage({ queue, items, accountKey, refreshKey, blocked }: {
         <div className="triage-actions"><button disabled={blocked || !accountKey} onClick={() => answerCheckin(checkin.eventId, 'worth')}>Worth it</button>
           <button disabled={blocked || !accountKey} onClick={() => answerCheckin(checkin.eventId, 'not-worth')}>Not worth it</button>
           <button disabled={blocked || !accountKey} onClick={() => answerCheckin(checkin.eventId, 'missed')}>Didn't go</button></div>
-      </section> : <TriageStack key={stackVersion} cards={view.cards.map(toTriageCardView)} onDecide={decide} onUndo={undo}
-        disabled={blocked || !accountKey} onDetails={(id) => setDetail(read.cards.find((c) => c.eventId === id) ?? null)} />}
+      </section> : (() => {
+        const cardViews = view.cards.map(toTriageCardView);
+        const counts = laneCounts(cardViews);
+        const shown = lane === 'all' ? cardViews : cardViews.filter((card) => card.lane === lane);
+        return <>
+          {!!cardViews.length && <div className="triage-lanebar">
+            <div className="triage-lane-filter" role="group" aria-label="Event lane">
+              {(['all', 'work', 'culture'] as const).map((option) => <button key={option} type="button" aria-pressed={lane === option}
+                onClick={() => setLane(option)}>{option === 'all' ? 'All' : option === 'work' ? 'Work' : 'Culture'}</button>)}
+            </div>
+            <p className="triage-lane-count">{countLine(counts)}</p>
+          </div>}
+          <TriageStack key={`${stackVersion}-${lane}`} cards={shown} onDecide={decide} onUndo={undo}
+            disabled={blocked || !accountKey} onDetails={(id) => setDetail(read.cards.find((c) => c.eventId === id) ?? null)} />
+        </>;
+      })()}
       {lastCheckin && <div className="triage-undo"><span role="status">Check-in saved</span><button type="button" onClick={() => {
         const target = undo(); if (target?.payload.eventId === lastCheckin) setAnsweredCheckins((ids) => ids.filter((id) => id !== lastCheckin)); setLastCheckin(null);
       }}>Undo</button></div>}</div>

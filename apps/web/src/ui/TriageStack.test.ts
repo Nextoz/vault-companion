@@ -9,6 +9,7 @@ const card: TriageCardView = {
   eventId: 'aaaaaaaaaaaaaaaaaaaa', title: 'Synthetic evening workshop', summary: 'A synthetic summary.',
   start: '2026-10-03T17:00:00+02:00', end: '2026-10-03T18:00:00+02:00', location: 'Example hall', why: 'Synthetic rationale.',
   cost: 'Free', registration: { state: 'open', deadline: null }, aiScore: 80, explore: false,
+  lane: 'work',
   calendar: { inCalendar: null, clash: null, freeThatEvening: true },
 };
 
@@ -68,6 +69,15 @@ describe('TriageStack skip reason window', () => {
     await act(async () => (document.querySelector('[aria-label="Skip this event"]') as HTMLButtonElement).click());
     await act(async () => vi.advanceTimersByTime(3100));
     expect(onDecide).toHaveBeenCalledWith(clashing.eventId, 'skip', 'busy');
+    await act(async () => root.unmount());
+  });
+
+  it('labels each card with its lane text', async () => {
+    const root = createRoot(document.getElementById('root')!);
+    await act(async () => root.render(createElement(TriageStack, { cards: [{ ...card, lane: 'culture' }], onDecide() {}, onUndo() {} })));
+    expect(document.querySelector('.triage-lane-culture')?.textContent).toBe('Culture');
+    await act(async () => root.render(createElement(TriageStack, { cards: [card], onDecide() {}, onUndo() {} })));
+    expect(document.querySelector('.triage-lane-work')?.textContent).toBe('Work');
     await act(async () => root.unmount());
   });
 });

@@ -3,6 +3,7 @@ import type { QueueItem } from './queue/queue.ts';
 
 export type TriageDecision = 'go' | 'skip' | 'maybe';
 export type SkipReason = 'topic' | 'too-far' | 'bad-time' | 'too-basic' | 'busy';
+export type TriageLane = 'culture' | 'work';
 /** Presentation fields of the feed card. */
 export interface TriageCardView {
   eventId: string;
@@ -16,11 +17,24 @@ export interface TriageCardView {
   registration: { state: 'open' | 'closed' | 'not-required' | 'unknown'; deadline: string | null };
   aiScore: number;
   explore: boolean;
+  lane: TriageLane;
   calendar: {
     inCalendar: null | 'auto' | 'own' | 'go';
     clash: null | { title: string; start: string; end: string; kind: 'go' | 'own' };
     freeThatEvening: boolean;
   };
+}
+const cultureCategories = new Set(['culture', 'community', 'music', 'civic', 'social', 'art', 'exhibition', 'film', 'literature']);
+export function laneOf(category: string): TriageLane {
+  return cultureCategories.has(category.trim().toLowerCase()) ? 'culture' : 'work';
+}
+export function laneCounts(cards: readonly TriageCardView[]): { work: number; culture: number } {
+  const counts = { work: 0, culture: 0 };
+  for (const card of cards) counts[card.lane] += 1;
+  return counts;
+}
+export function countLine(counts: { work: number; culture: number }): string {
+  return `${counts.work} work · ${counts.culture} culture`;
 }
 export function decideFromGesture({ dx, dy, vx }: { dx: number; dy: number; vx: number }): TriageDecision | null {
   if (dx > 110 || (vx > 0.6 && dx > 30)) return 'go';
@@ -56,7 +70,7 @@ export function defaultSkipReason(card: TriageCardView): SkipReason | undefined 
   return card.calendar.clash ? 'busy' : undefined;
 }
 
-export const toTriageCardView = (card: TriageCard): TriageCardView => ({ ...card });
+export const toTriageCardView = (card: TriageCard): TriageCardView => ({ ...card, lane: laneOf(card.category) });
 export function copenhagenDay(at: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(at));
   return ['year', 'month', 'day'].map((type) => parts.find((p) => p.type === type)!.value).join('-');
