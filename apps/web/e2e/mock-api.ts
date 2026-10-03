@@ -23,6 +23,7 @@ import {
   NotesResponse,
   Receipt,
   SessionResponse,
+  MorningBriefResponse,
   MorningResponse,
   RADAR_PAPER_HEADER,
   RadarDecisionLine,
@@ -306,6 +307,11 @@ export class MockApi {
 
   /** "This morning" (ADR-0029 Part 2): empty by default (the panel then stays hidden); morning.spec sets SAMPLE_MORNING. */
   morning: MorningResponse | null = null;
+  /** Morning Brief (MB2): a stale-dated brief by default, so the card shows no brief rows and no unmocked 404 appears. */
+  morningBrief: MorningBriefResponse = {
+    revision: 'b'.repeat(40), date: '2000-01-01', generatedAt: '2000-01-01T04:31:00+01:00', source: 'fallback',
+    unavailable: [], brief: { source: 'fallback', dayLine: 'Stale', gaps: [], todos: [] },
+  };
 
   static readonly SAMPLE_MORNING: MorningResponse = MorningResponse.parse({
     revision: 'a'.repeat(40), date: '2026-09-30',
@@ -335,6 +341,8 @@ export class MockApi {
     await on('**/api/health', (route) => this.#health(route));
     await on('**/api/morning', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, MorningResponse.parse(this.morning ?? { revision: 'a'.repeat(40), date: '2026-09-30', brief: null, explained: [] })));
+    await on('**/api/morning-brief', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
+      : this.#json(route, 200, MorningBriefResponse.parse(this.morningBrief)));
     await on('**/api/scouts', (route) => this.session === 'signed-out'
       ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, ScoutsResponse.parse(this.scouts)));

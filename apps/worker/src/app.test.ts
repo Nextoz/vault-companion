@@ -1,3 +1,4 @@
+import { MorningBriefResponse } from '@vault-companion/contracts';
 import type { ApiError, Command, Receipt } from '@vault-companion/contracts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp, statusFor, type Services } from './app.ts';
@@ -178,5 +179,56 @@ describe('A18 log sentinel', () => {
     expect(logs[0]).toMatchObject({ commandType: 'CaptureNote', status: 200, commitSha: '2'.repeat(40) });
     expect(logs[0]!.pathHash).toMatch(/^[0-9a-f]{16}$/);
     expect(logs[1]).toMatchObject({ errorCode: 'conflict:task-changed', status: 409 });
+  });
+});
+
+describe('GET /api/morning-brief (MB2)', () => {
+  const sample = (): MorningBriefResponse => MorningBriefResponse.parse({
+    revision: '4'.repeat(40),
+    date: '2026-10-02',
+    generatedAt: '2026-10-02T04:31:00+02:00',
+    source: 'model',
+    unavailable: [],
+    brief: { source: 'model', dayLine: `${SENTINEL} on the card`, gaps: [], todos: [{ id: 1, text: 'Pay ${SENTINEL}', due: null, bill: false }] },
+  });
+
+  function app(readMorningBrief?: Services['readMorningBrief']) {
+    const services: Services = {
+      async readTasks() { return { code: 'upstream-unavailable', message: 'x', retryable: true }; },
+      async execute() { return receipt; },
+      ...(readMorningBrief ? { readMorningBrief } : {}),
+    };
+    return createApp({
+      verify: async (t) => (t === 'good' ? { ok: true, email: 'owner@example.com', accountKey: ACCOUNT } : { ok: false }),
+      appOrigin: ORIGIN,
+      services,
+      log: (r) => logs.push(r),
+    });
+  }
+  const get = (readMorningBrief?: Services['readMorningBrief']) =>
+    app(readMorningBrief).request('/api/morning-brief', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+
+  it('404s without a service, and logs nothing from the brief', async () => {
+    const res = await get();
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+
+  it.each([
+    [{ code: 'not-found', retryable: false }, 404],
+    [{ code: 'invalid', retryable: false }, 400],
+    [{ code: 'upstream-unavailable', retryable: true }, 503],
+  ] as const)('maps %o to %i', async (error, status) => {
+    const res = await get(async () => ({ ...error, message: 'm' }));
+    expect(res.status).toBe(status);
+    expect(logs.at(-1)).toMatchObject({ errorCode: error.code });
+  });
+
+  it('returns the brief and logs only the revision', async () => {
+    const res = await get(async () => sample());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(sample());
+    expect(logs.at(-1)).toMatchObject({ commitSha: '4'.repeat(40) });
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
   });
 });

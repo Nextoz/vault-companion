@@ -14,6 +14,7 @@ import {
   ScoutStatus,
   WeatherLocationRequest,
   type MarketTickerResponse,
+  type MorningBriefResponse,
   type MorningResponse,
   type ScoutsResponse,
   type ActiveWorkResponse,
@@ -54,6 +55,8 @@ export interface Services {
   readActiveWork?(): Promise<ActiveWorkResponse | ApiError>;
   readTriage?(): Promise<TriageResponse | ApiError>;
   readScouts?(): Promise<ScoutsResponse | ApiError>;
+  /** Weekday Morning Brief card (MB2). Optional: without it the route answers 404. */
+  readMorningBrief?(): Promise<MorningBriefResponse | ApiError>;
   /** "This morning" (ADR-0029 Part 2). Optional: without it the route answers 404. */
   readMorning?(): Promise<MorningResponse | ApiError>;
   /** Completion history (ADR-0021). Optional: without it the route answers 404. */
@@ -98,6 +101,7 @@ export function statusFor(code: ErrorCode): number {
   if (code === 'unauthorized') return 401;
   if (code === 'forbidden') return 403;
   if (code === 'invalid' || code === 'clock-skew' || code === 'refused:path') return 400;
+  if (code === 'not-found') return 404;
   if (code === 'upstream-unavailable') return 503;
   if (code.startsWith('refused:')) return 422;
   return 409; // conflict:*, operation-id-reused, dedupe-unknown
@@ -114,7 +118,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | MorningBriefResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -274,6 +278,21 @@ export function createApp(deps: AppDeps) {
   // "This morning": fixed read-only paths, no request input. Logs carry neither note text nor paths.
   app.get('/api/morning', async (c) => {
     const read = deps.services.readMorning;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Morning Brief card (MB2): ONE fixed read-only JSON file written by the MB1c cron. No request input; logs carry
+  // only the commit SHA, never brief text or the `unavailable` reasons.
+  app.get('/api/morning-brief', async (c) => {
+    const read = deps.services.readMorningBrief;
     if (!read) return c.json(err('invalid', 'not found'), 404);
     const result = await read();
     const meta = c.get('logMeta');
