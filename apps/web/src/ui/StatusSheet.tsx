@@ -54,7 +54,7 @@ export function StatusSheet({
 }) {
   const [now, setNow] = useState(Date.now);
   const [timings, setTimings] = useState(readTimings);
-  const [scouts, setScouts] = useState<Fetched<ScoutsResponse> | null>(null);
+  const [scouts, setScouts] = useState<{ account: string; value: Fetched<ScoutsResponse> } | null>(null);
 
   useEffect(() => {
     setTimings(readTimings());
@@ -65,11 +65,12 @@ export function StatusSheet({
     return () => clearTimeout(timer);
   }, [checkedAt]);
 
-  // The Scouts tab's own read: same function, same endpoint, no new fetch shape.
+  // The Scouts tab's own read: same function, same endpoint, no new fetch shape. The response is stamped with the
+  // account it was requested for, so a previous account's scouts are never shown while a new read is pending.
   useEffect(() => {
-    if (!accountKey) return;
+    if (!accountKey) { setScouts(null); return; }
     let live = true;
-    void getScouts().then((value) => { if (live) setScouts(value); });
+    void getScouts().then((value) => { if (live) setScouts({ account: accountKey, value }); });
     return () => { live = false; };
   }, [accountKey, checkedAt]);
 
@@ -78,7 +79,8 @@ export function StatusSheet({
   const build = typeof __APP_BUILD__ === 'undefined' ? { commit: 'dev', builtAt: null } : __APP_BUILD__;
   const health = lastCopies.get<HealthResponse>(accountKey, 'health')?.data ?? null;
   const sources = dataSourceRows({ dashboard: newestDashboard(accountKey), health }, now, timeZone);
-  const scoutData = scouts?.kind === 'ok' ? scouts.data : null;
+  const scoutResult = scouts && scouts.account === accountKey ? scouts.value : null;
+  const scoutData = scoutResult?.kind === 'ok' ? scoutResult.data : null;
   const rows = scoutData ? scoutRows(scoutData) : [];
 
   return (
@@ -96,8 +98,8 @@ export function StatusSheet({
 
       <section className="group" aria-label="Scouts">
         <h2>Scouts</h2>
-        {!scouts && <p className="muted" role="status">Loading scouts…</p>}
-        {scouts && !scoutData && <p className="muted" role="status">{scouts.kind === 'error' ? scouts.message : scouts.kind === 'signed-out' ? 'Sign in to view scouts.' : 'Scouts unavailable offline.'}</p>}
+        {!scoutResult && <p className="muted" role="status">Loading scouts…</p>}
+        {scoutResult && scoutResult.kind !== 'ok' && <p className="muted" role="status">{scoutResult.kind === 'error' ? scoutResult.message : scoutResult.kind === 'signed-out' ? 'Sign in to view scouts.' : 'Scouts unavailable offline.'}</p>}
         {scoutData && rows.length === 0 && <p className="muted">No status yet</p>}
         {rows.length > 0 && (
           <ul className="status-sheet-scouts" aria-label="Scout states">
