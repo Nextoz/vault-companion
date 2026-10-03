@@ -28,6 +28,7 @@ import { MorningCard } from './MorningCard.tsx';
 import { ReportSheet, screenName } from './ReportSheet.tsx';
 import { Notes } from './Notes.tsx';
 import { Scouts } from './Scouts.tsx';
+import { StatusSheet } from './StatusSheet.tsx';
 import { Training } from './Training.tsx';
 import { TrainingSheet } from './TrainingSheet.tsx';
 import { Triage } from './Triage.tsx';
@@ -327,7 +328,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
       <main className="content" inert={noteOpen || editing !== null}>
         {updateReady && <div className="banner" role="status"><button type="button" onClick={() => window.location.reload()}>New version — tap to reload</button></div>}
-        <VaultStatus read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0} onRefresh={() => refreshTasks()} />
+        {tab !== 'status' && <VaultStatus read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0} onRefresh={() => refreshTasks()} />}
         {lock && (
           <div className="banner banner-warn" role="alert">
             {lock.banner}
@@ -391,18 +392,15 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           </div>
         ))}
 
-        {needsAttention && (
+        {needsAttention && tab !== 'status' && (
           <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
 
         {tab === 'status' && !signedOut && (
           <>
             <Back onBack={() => setTab(statusReturn)} />
-            <h2 className="status-actions-title">Actions</h2>
-            {snapshot.items.length === 0 && <p className="muted">No pending actions.</p>}
-            {!needsAttention && (
-              <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
-            )}
+            <StatusSheet read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0}
+              onRefresh={() => refreshTasks()} accountKey={accountKey} queue={queue} items={snapshot.items} onDiscard={discard} />
           </>
         )}
 
