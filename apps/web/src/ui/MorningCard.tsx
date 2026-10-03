@@ -1,7 +1,8 @@
 // UX2: the Today cockpit's compact morning card. A "Needs you" line (NY1), then up to four one-liners plus the tasks
 // line, each tapping through to its detail; weather and papers open the existing panels inline, scouts and events open
 // the Scouts tab where their detail (and triage) now lives. Below it the check-in line, once today has no check-in.
-import type { ActiveWorkResponse, MorningBriefResponse, MorningResponse, ScoutsResponse, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
+// NY2 adds "Review my morning": a guided step-through sheet over the brief, the NY1 rows and today's open tasks.
+import type { ActiveWorkResponse, MorningBriefResponse, MorningResponse, ScoutsResponse, TaskView, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
 import { getActiveWork, getMorning, getMorningBrief, getScouts, getTriage, getWeather, type Fetched } from '../api.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
@@ -9,6 +10,7 @@ import { dateIn } from '../time.ts';
 import { deriveTriage } from '../triage.ts';
 import { localDate, MoodCard } from './MoodCard.tsx';
 import { Morning } from './Morning.tsx';
+import { MorningReviewSheet } from './MorningReviewSheet.tsx';
 import { NeedsYouSheet } from './NeedsYouSheet.tsx';
 import { needsYou, type NeedsYouFacts, type NeedsYouTarget } from './needs-you.ts';
 import { WeatherMorning } from './WeatherLab.tsx';
@@ -22,12 +24,15 @@ export interface MorningCardProps {
   blocked: boolean;
   refreshKey: number | null;
   tasksToday: number;
+  /** The vault's open tasks and calendar date, from the read the App already holds (NY2 pick step). */
+  openTasks: readonly TaskView[];
+  today: string;
   onOpenTasks: () => void;
   onOpenScouts: () => void;
   onOpenStatus: () => void;
 }
 
-export function MorningCard({ queue, items, accountKey, baseRevision, blocked, refreshKey, tasksToday, onOpenTasks, onOpenScouts, onOpenStatus }: MorningCardProps) {
+export function MorningCard({ queue, items, accountKey, baseRevision, blocked, refreshKey, tasksToday, openTasks, today, onOpenTasks, onOpenScouts, onOpenStatus }: MorningCardProps) {
   const [weather, setWeather] = useState<Fetched<WeatherResponse> | null>(null);
   const [scouts, setScouts] = useState<Fetched<ScoutsResponse> | null>(null);
   const [morning, setMorning] = useState<Fetched<MorningResponse> | null>(null);
@@ -37,6 +42,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   const [open, setOpen] = useState<MorningLineId | null>(null);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [needsOpen, setNeedsOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   // The Today panels' own reads, plus the Tasks tab's Active Work read (reused for Needs you); no new endpoint.
   useEffect(() => {
@@ -103,8 +109,12 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
       })}
       {open === 'weather' && <WeatherMorning refreshKey={refreshKey} accountKey={accountKey} blocked={blocked} />}
       {open === 'papers' && <Morning refreshKey={refreshKey} />}
+      <button type="button" className="morning-line morning-review-open" onClick={() => setReviewOpen(true)}>Review my morning</button>
     </section>
     {needsOpen && <NeedsYouSheet rows={needsRows} queue={queue} accountKey={accountKey} onNavigate={openNeedsTarget} onClose={() => setNeedsOpen(false)} />}
+    {reviewOpen && <MorningReviewSheet brief={briefRows} needs={needsRows} open={openTasks} today={today}
+      queue={queue} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked}
+      onNavigate={openNeedsTarget} onClose={() => setReviewOpen(false)} />}
     {due && !checkinOpen
       ? <button type="button" className="checkin-line" onClick={() => setCheckinOpen(true)}>How are you today? Check in</button>
       : <MoodCard queue={queue} items={items} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked} />}

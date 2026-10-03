@@ -28,6 +28,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 - **WL2**: Dashboard renders one card per `watchlist` item (pure `ui/watchlist.ts`: price format, range change %), legacy BTC `market` card hidden when a watchlist exists.
 
+- **NY2** (Morning Review v1): "Review my morning" on the Today card opens a step sheet: calendar lines from today's brief, Needs you rows, pick up to 3 tasks (existing `editTask`, scheduled = today, Undo as usual). Owner uses it a week before anything is added.
+
 ## Next actions (in order)
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
