@@ -12,7 +12,11 @@
 .dash-chip-stale { color: var(--warn); }
 .dash-chip-not-configured { color: var(--muted); }
 .dash-chip-unavailable { color: var(--danger); }
-.dash-market .dash-price { color: var(--ios-indigo); }
+.dash-market .dash-price, .dash-watch .dash-price { color: var(--ios-indigo); }
+.dash-watches { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.dash-change { margin: 0; font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dash-change-up { color: var(--done); }
+.dash-change-down { color: var(--danger); }
 .dash-health { border-left: 3px solid var(--ios-cyan); }
 .dash-health .dash-card-head h2 { color: var(--ios-cyan); }
 .dash-price { font-size: 2.2rem; font-weight: 700; line-height: 1.1; margin: 0; font-variant-numeric: tabular-nums; }

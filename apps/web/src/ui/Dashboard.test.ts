@@ -21,6 +21,15 @@ const market = (over: Record<string, unknown> = {}): DashboardCard => ({
 const overviewCards: DashboardCard[] = [
   { id: 'ai-usage', status: 'not-configured', title: 'AI usage', provenance: 'Not configured', observedAt: null, fetchedAt: null, note: 'No approved usage source is connected yet.', drillthrough: null },
 ];
+const watchPoint = (index: number, close: number) => ({ time: new Date(Date.parse(NOW) - (2 - index) * 3_600_000).toISOString(), open: close, high: close, low: close, close });
+const watchSeries = (closes: readonly number[]) => ({ range: '1W' as const, granularitySeconds: 3_600, points: closes.map((close, index) => watchPoint(index, close)), missingIntervals: 0 });
+const watch = (over: Record<string, unknown> = {}): DashboardCard => ({
+  id: 'watchlist', status: 'ok', title: 'BTC / USD', provenance: 'Coinbase Exchange (public)',
+  observedAt: NOW, fetchedAt: NOW, note: null, drillthrough: null, item: { symbol: 'BTC-USD', type: 'crypto' },
+  ticker: { base: 'BTC', quote: 'USD', provider: 'coinbase', price: 60123.45, providerTime: NOW },
+  series: watchSeries([60_000, 60_123.45]),
+  ...over,
+} as DashboardCard);
 const response = (cards: DashboardCard[] = [market(), ...overviewCards]) => DashboardResponse.parse({ now: NOW, cards });
 const ok = (cards?: DashboardCard[]) => ({ kind: 'ok' as const, data: response(cards) });
 const healthMissing = () => ({ kind: 'ok' as const, data: HealthResponse.parse({ revision: 'a'.repeat(40), now: NOW, status: 'missing', metrics: [] }) });
@@ -104,6 +113,55 @@ describe('overviewTiles (UX4)', () => {
     const failedUsage: DashboardCard = { id: 'ai-usage', status: 'unavailable', title: 'AI usage', provenance: 'Not configured', observedAt: null, fetchedAt: null, note: 'The source is down.', drillthrough: null };
     expect(overviewTiles([market(), ...overviewCards, failedUsage]).map((card) => card.status)).toEqual(['unavailable']);
     expect(overviewTiles([market()])).toEqual([]);
+  });
+});
+
+describe('watchlist cards (WL2)', () => {
+  it('renders one card per watched item and hides the legacy market card, so BTC is not shown twice', async () => {
+    const fx = watch({ item: { symbol: 'RUB/DKK', type: 'fx' }, title: 'ignored', ticker: { base: 'RUB', quote: 'DKK', provider: 'frankfurter', price: 0.0712, providerTime: NOW }, series: watchSeries([0.07, 0.0712]) });
+    await render([market(), watch(), fx, ...overviewCards]);
+    expect(document.querySelector('.dash-market')).toBeNull();
+    expect(document.querySelectorAll('.dash-watch').length).toBe(2);
+    expect(text()).toContain('BTC / USD');
+    expect(text()).toContain('RUB / DKK');
+    expect(text()).toContain('$60,123.45');
+    expect(text()).toContain('DKK 0.0712');
+  });
+
+  it('renders the legacy market card as before when the response has no watchlist cards', async () => {
+    await render();
+    expect(document.querySelector('.dash-market')).not.toBeNull();
+    expect(document.querySelectorAll('.dash-watch').length).toBe(0);
+  });
+
+  it('shows an unavailable card as its reason note, never a stale number', async () => {
+    const down: DashboardCard = { id: 'watchlist', status: 'unavailable', title: 'ETH / USD', provenance: 'Coinbase Exchange (public)', observedAt: null, fetchedAt: null, note: 'The market provider is unavailable right now.', drillthrough: null, item: { symbol: 'ETH-USD', type: 'crypto' }, reason: 'provider-error' };
+    await render([down, ...overviewCards]);
+    const card = document.querySelector('.dash-watch')!;
+    expect(card.getAttribute('aria-busy')).toBe('true');
+    expect(card.querySelector('.dash-price')).toBeNull();
+    expect(card.textContent).toContain('The market provider is unavailable right now.');
+    expect(card.textContent).not.toContain('$');
+  });
+
+  it('shows a signed, coloured change over the range: a rise up, a fall down', async () => {
+    const falling = watch({ item: { symbol: 'ETH-USD', type: 'crypto' }, ticker: { base: 'ETH', quote: 'USD', provider: 'coinbase', price: 2970, providerTime: NOW }, series: watchSeries([3_000, 2_970]) });
+    await render([watch({ series: watchSeries([60_000, 60_600]) }), falling, ...overviewCards]);
+    expect(document.querySelector('.dash-change-up')!.textContent).toContain('+1.00%');
+    expect(document.querySelector('.dash-change-down')!.textContent).toContain('-1.00%');
+  });
+
+  it('says the current value stands alone when the history read failed', async () => {
+    await render([watch({ series: null, note: 'Current value only. The market provider did not answer in time. History is not shown.' }), ...overviewCards]);
+    expect(text()).toContain('Current value only');
+    expect(document.querySelector('.dash-svg')).toBeNull();
+  });
+
+  it('reads out a watch point in the quote currency and precision, not the market default', async () => {
+    const fx = watch({ item: { symbol: 'RUB/DKK', type: 'fx' }, ticker: { base: 'RUB', quote: 'DKK', provider: 'frankfurter', price: 0.09, providerTime: NOW }, series: watchSeries([0.05, 0.0712, 0.09]) });
+    await render([fx, ...overviewCards]);
+    expect(document.querySelector('.dash-readout')!.textContent).toContain('DKK 0.0900');
+    expect(document.querySelector('.dash-readout')!.textContent).not.toContain('$');
   });
 });
 
