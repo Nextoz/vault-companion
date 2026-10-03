@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ScoutStatus, ScoutsResponse } from '@vault-companion/contracts';
-import { attentionCount, displayState, lastRun, relativeTime } from './scouts.ts';
+import { attentionCount, displayState, lastRun, pluralise, pluralNoun, previewableScouts, relativeTime, scoutsNeedAttention } from './scouts.ts';
 
 const at = '2026-09-27T04:50:02Z';
 const healthy: ScoutStatus = {
@@ -64,6 +64,34 @@ it('only Failed and Stale need attention; unreadable is neutral', () => {
   ] };
   expect(attentionCount(response)).toBe(2);
   expect(attentionCount({ ...response, scouts: [] })).toBe(0);
+});
+
+describe('UX4 count grammar and the Insights card list', () => {
+  it('reads one as singular and everything else as plural', () => {
+    expect(pluralNoun(1, 'scout')).toBe('scout');
+    expect(pluralNoun(0, 'scout')).toBe('scouts');
+    expect(pluralNoun(2, 'scout')).toBe('scouts');
+    expect(pluralise(1, 'finding')).toBe('1 finding');
+    expect(pluralise(4, 'finding')).toBe('4 findings');
+    expect(pluralise(1, 'new event')).toBe('1 new event');
+  });
+
+  it('words the scout attention line for one and for many', () => {
+    expect(scoutsNeedAttention(1)).toBe('1 scout needs attention');
+    expect(scoutsNeedAttention(2)).toBe('2 scouts need attention');
+  });
+
+  it('drops Failed and Stale scouts from the Insights cards but keeps healthy, running and unreadable', () => {
+    const scouts = [
+      { state: 'ok' as const, file: 'healthy.json', status: healthy },
+      { state: 'ok' as const, file: 'failed.json', status: { ...healthy, runStatus: 'failed' as const, lastSuccessAt: null } },
+      { state: 'ok' as const, file: 'stale.json', status: { ...healthy, lastAttemptAt: '2026-09-20T04:00:00Z' } },
+      { state: 'ok' as const, file: 'running.json', status: { ...healthy, runStatus: 'running' as const } },
+      { state: 'unreadable' as const, file: 'bad.json' },
+    ];
+    expect(previewableScouts(scouts, new Date(now).toISOString()).map((entry) => entry.file))
+      .toEqual(['healthy.json', 'running.json', 'bad.json']);
+  });
 });
 
 

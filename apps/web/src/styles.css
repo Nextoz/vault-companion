@@ -76,7 +76,8 @@ textarea:focus-visible {
 
 .app {
   min-height: 100dvh;
-  padding-bottom: calc(var(--tabbar-h) + 24px + env(safe-area-inset-bottom));
+  /* UX4: clear the floating + (56px, 16px above the bar) as well as the tab bar, so it never covers the last row. */
+  padding-bottom: calc(var(--tabbar-h) + 88px + env(safe-area-inset-bottom));
 }
 
 .top {
@@ -466,9 +467,7 @@ textarea:focus-visible {
 .action-label {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .action-buttons,
@@ -671,11 +670,10 @@ textarea:focus-visible {
 
 .note-head h2 {
   flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 1.05rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .note-head h2:focus {

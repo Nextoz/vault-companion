@@ -1,8 +1,8 @@
-import { MorningBriefResponse, MorningResponse, ScoutsResponse, WeatherResponse, type Command } from '@vault-companion/contracts';
+import { MorningBriefResponse, MorningResponse, ScoutsResponse, WeatherResponse, type Command, type WeatherRunWindow } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
 import { moodCheckin, undoMoodCheckinDraft } from '../commands.ts';
 import type { QueueItem } from '../queue/queue.ts';
-import { briefLines, checkinDue, morningLines, tasksTodayText, type MorningCardFacts } from './morning-card.ts';
+import { briefLines, checkinDue, morningLines, tasksTodayText, weatherGlance, type MorningCardFacts } from './morning-card.ts';
 
 const ACCOUNT = 'a'.repeat(64);
 const ctx = { baseRevision: '1'.repeat(40) };
@@ -90,13 +90,12 @@ describe('morning card lines', () => {
   it('renders the weather glance from an ok projection', () => {
     const [weather, ...rest] = morningLines({ ...empty, weather: weatherOk() });
     expect(weather!.id).toBe('weather');
-    expect(weather!.text).toContain('lowest-rain window');
-    expect(weather!.text).toContain('One model covers this window');
+    expect(weather!.text).toBe('Wet 10–12 · 14° · light wind');
     expect(rest).toEqual([{ id: 'tasks', text: 'No tasks today' }]);
   });
 
   it('counts only scouts with problems and pluralises the line', () => {
-    expect(morningLines({ ...empty, scouts: scoutsWith('failed') })[0]).toEqual({ id: 'scouts', text: '1 scouts need attention' });
+    expect(morningLines({ ...empty, scouts: scoutsWith('failed') })[0]).toEqual({ id: 'scouts', text: '1 scout needs attention' });
   });
 
   it('summarises the papers from the morning read', () => {
@@ -105,9 +104,9 @@ describe('morning card lines', () => {
   });
 
   it('renders an events line only when events wait and keeps the order', () => {
-    expect(morningLines({ ...empty, eventsToTriage: 1 })[0]).toEqual({ id: 'triage', text: '1 new events' });
+    expect(morningLines({ ...empty, eventsToTriage: 1 })[0]).toEqual({ id: 'triage', text: '1 new event' });
     expect(morningLines({ weather: weatherOk(), weatherFailed: false, scouts: scoutsWith('failed'), morning: morningWith(true, 2), eventsToTriage: 3, tasksToday: 2 }))
-      .toEqual([{ id: 'weather', text: expect.stringContaining('lowest-rain window') }, { id: 'scouts', text: '1 scouts need attention' },
+      .toEqual([{ id: 'weather', text: 'Wet 10–12 · 14° · light wind' }, { id: 'scouts', text: '1 scout needs attention' },
         { id: 'papers', text: 'Reading brief \u00b7 1 explained \u00b7 1 pending' }, { id: 'triage', text: '3 new events' },
         { id: 'tasks', text: '2 tasks today' }]);
   });
@@ -116,6 +115,30 @@ describe('morning card lines', () => {
     expect(tasksTodayText(0)).toBe('No tasks today');
     expect(tasksTodayText(1)).toBe('1 task today');
     expect(tasksTodayText(4)).toBe('4 tasks today');
+  });
+});
+
+describe('weather glance (UX4)', () => {
+  const window = (over: Partial<WeatherRunWindow> = {}): WeatherRunWindow => {
+    const weather = weatherOk();
+    if (weather.status !== 'ok' || !weather.projection.runWindow) throw new Error('fixture missing its run window');
+    return { ...weather.projection.runWindow, ...over };
+  };
+
+  it('reads a short line: condition, two-hour span, warmth and wind', () => {
+    expect(weatherGlance(window({ rainMm: 0, rainRangeMm: { min: 0, max: 0 }, temperatureRangeC: { min: 13, max: 14 }, windRangeMs: { min: 1, max: 2 } })))
+      .toBe('Dry 10–12 · 14° · light wind');
+  });
+
+  it('uses the warmest temperature and grades the wind from its top end', () => {
+    expect(weatherGlance(window({ temperatureRangeC: { min: 3, max: 9.4 }, windRangeMs: { min: 4, max: 6 } })))
+      .toBe('Wet 10–12 · 9° · breezy');
+    expect(weatherGlance(window({ windRangeMs: { min: 8, max: 12 } }))).toBe('Wet 10–12 · 14° · strong wind');
+  });
+
+  it('keeps honest wording when rain is unknown or no window was chosen', () => {
+    expect(weatherGlance(window({ rainMm: null }))).toBe('Rain unknown 10–12 · 14° · light wind');
+    expect(weatherGlance(null)).toBe('No daytime window');
   });
 });
 

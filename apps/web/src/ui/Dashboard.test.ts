@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDashboard, getHealth, getMarketTicker, type Fetched } from '../api.ts';
 import { lastCopies } from '../lastCopy.ts';
-import { Dashboard, MARKET_STALE_MS, mergeTicker, seriesSegments } from './Dashboard.tsx';
+import { Dashboard, MARKET_STALE_MS, mergeTicker, overviewTiles, seriesSegments } from './Dashboard.tsx';
 
 vi.mock('../api.ts', () => ({ getDashboard: vi.fn(), getHealth: vi.fn(), getMarketTicker: vi.fn() }));
 
@@ -74,14 +74,12 @@ describe('BTC/USD market card (DASH1)', () => {
     expect(svg.getAttribute('aria-label')).toContain('3 points');
   });
 
-  it('keeps overview cards honest: no fake numbers for a source that is not connected', async () => {
+  it('hides a placeholder card that only says "Not configured" instead of an empty tile', async () => {
     await render();
-    expect(text()).toContain('AI usage');
-    expect(text()).toContain('Not configured');
-    expect(text()).toContain('No approved usage source is connected yet.');
-    const overviewText = [...document.querySelectorAll('.dash-card')].filter((card) => !card.classList.contains('dash-market')).map((card) => card.textContent ?? '').join(' ');
-    expect(overviewText).not.toMatch(/\$\d/);
-    expect(overviewText).not.toMatch(/\d+ ?(quota|spend|reset)/i);
+    expect(text()).not.toContain('AI usage');
+    expect(text()).not.toContain('Not configured');
+    expect(document.querySelector('.dash-tiles')).toBeNull();
+    expect(text()).toContain('$60,123.45');
   });
 
   it('renders every provider gap as a gap, never as a joined line', async () => {
@@ -97,7 +95,15 @@ describe('BTC/USD market card (DASH1)', () => {
     await render([down, ...overviewCards]);
     expect(text()).toContain('Unavailable');
     expect(text()).toContain('The market provider is unavailable right now.');
-    expect(text()).toContain('AI usage');
+    expect(document.querySelector('.dash-market')).not.toBeNull();
+  });
+});
+
+describe('overviewTiles (UX4)', () => {
+  it('drops placeholders and self-hosted cards, keeping an honest Unavailable tile', () => {
+    const failedUsage: DashboardCard = { id: 'ai-usage', status: 'unavailable', title: 'AI usage', provenance: 'Not configured', observedAt: null, fetchedAt: null, note: 'The source is down.', drillthrough: null };
+    expect(overviewTiles([market(), ...overviewCards, failedUsage]).map((card) => card.status)).toEqual(['unavailable']);
+    expect(overviewTiles([market()])).toEqual([]);
   });
 });
 
@@ -156,7 +162,7 @@ describe('range and freshness (DASH1)', () => {
     await flush();
     expect(text()).toContain('Stale');
     expect(text()).toContain('$60,123.45'); // the known value is still shown, labelled
-    expect(text()).toContain('AI usage');
+    expect(document.querySelector('.dash-market')).not.toBeNull(); // the other cards are still there
   });
 
   it('marks data stale once it is older than the freshness window', async () => {
@@ -290,7 +296,7 @@ describe('inspection and account edges (DASH1)', () => {
 
   it('exposes the drillthrough seam a later detail view can use', async () => {
     const onDrillthrough = vi.fn();
-    const card = { ...overviewCards[0]!, drillthrough: { label: 'Usage detail', view: 'usage' } } as DashboardCard;
+    const card = { ...overviewCards[0]!, status: 'unavailable', note: 'The source is down.', drillthrough: { label: 'Usage detail', view: 'usage' } } as DashboardCard;
     await render([market(), card], onDrillthrough);
     await click(button('Usage detail'));
     expect(onDrillthrough).toHaveBeenCalledWith('usage');

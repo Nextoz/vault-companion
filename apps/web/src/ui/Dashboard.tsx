@@ -197,6 +197,15 @@ function OverviewCard({ card, onDrillthrough }: { card: DashboardCard; onDrillth
   );
 }
 
+/**
+ * UX4: the small overview tiles, minus the ones that only exist to say "Not configured". A placeholder that carries no
+ * fact is hidden here (the Status sheet still lists the source); a card that honestly failed stays, so "Unavailable" is
+ * never lost. Market, weather and the health card have their own spots. Pure.
+ */
+export function overviewTiles(cards: readonly DashboardCard[]): DashboardCard[] {
+  return cards.filter((card) => card.id !== 'market' && card.id !== 'weather' && card.id !== 'health' && card.status !== 'not-configured');
+}
+
 export function Dashboard({ refreshKey, accountKey = null, onDrillthrough }: {
   refreshKey: number | null; accountKey?: string | null; onDrillthrough?: ((view: string) => void) | undefined;
 }) {
@@ -255,6 +264,7 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough }: {
   const notLive = failed || isCopy;
   const stale = notLive || tickerFailed || (market !== null && market.status === 'ok' && shown !== null && !marketFresh(market, at(shown.now)));
   const weatherStale = notLive || (weather !== null && weather.status === 'ok' && shown !== null && !weatherFresh(weather.projection, at(shown.now)));
+  const tiles = shown ? overviewTiles(shown.cards) : [];
 
   return (
     <section className="dash" aria-label="Dashboard">
@@ -271,9 +281,9 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough }: {
       {shown && stale && !isCopy && <p className="dash-stale" role="status">Not refreshed — the times below are from the last success.</p>}
       {shown && market && <MarketView card={market} stale={stale} onDrillthrough={onDrillthrough} />}
       {shown && weather && <WeatherCardView card={weather} stale={weatherStale} onDrillthrough={onDrillthrough} />}
-      {shown && (
+      {tiles.length > 0 && (
         <div className="dash-tiles">
-          {shown.cards.filter((card) => card.id !== 'market' && card.id !== 'weather' && card.id !== 'health').map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}
+          {tiles.map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}
         </div>
       )}
     </section>

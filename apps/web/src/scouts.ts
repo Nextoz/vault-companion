@@ -1,6 +1,7 @@
 import type { ScoutStatus, ScoutsResponse } from '@vault-companion/contracts';
 
 export type DisplayState = 'Running' | 'Failed' | 'Degraded' | 'Healthy' | 'Stale' | 'No status yet';
+type ScoutEntry = ScoutsResponse['scouts'][number];
 const instant = (value: string | null) => value === null ? NaN : Date.parse(value);
 export function displayState(status: ScoutStatus | null, now: string | number): DisplayState {
   if (!status) return 'No status yet';
@@ -51,4 +52,32 @@ export function attentionCount(response: ScoutsResponse): number {
     const state = displayState(entry.state === 'ok' ? entry.status : null, response.now);
     return state === 'Failed' || state === 'Stale';
   }).length;
+}
+
+/** UX4: the noun for a count, so "1 scout" never reads "1 scouts". `plural` defaults to the singular plus an "s". */
+export function pluralNoun(count: number, singular: string, plural = `${singular}s`): string {
+  return count === 1 ? singular : plural;
+}
+
+/** UX4: a counted phrase - "1 scout" / "2 scouts" (see `pluralNoun` for the noun rule). */
+export function pluralise(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${pluralNoun(count, singular, plural)}`;
+}
+
+/** UX4: the one sentence both the morning line and the Scouts tab show, grammatical at every count. */
+export function scoutsNeedAttention(count: number): string {
+  return `${pluralise(count, 'scout')} ${count === 1 ? 'needs' : 'need'} attention`;
+}
+
+/**
+ * UX4: the scouts that belong on "What your scouts found". A Failed or Stale run has no previewable result and is
+ * already the health board's attention row, so the Insights cards do not repeat it; unreadable records pass through
+ * (Insights ignores them anyway). Pure.
+ */
+export function previewableScouts(scouts: readonly ScoutEntry[], now: string): ScoutEntry[] {
+  return scouts.filter((entry) => {
+    if (entry.state !== 'ok') return true;
+    const state = displayState(entry.status, now);
+    return state !== 'Failed' && state !== 'Stale';
+  });
 }

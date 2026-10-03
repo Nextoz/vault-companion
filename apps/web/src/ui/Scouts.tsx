@@ -1,7 +1,7 @@
 import type { ScoutStatus, ScoutsResponse } from '@vault-companion/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { getScoutOutput, getScouts, type Fetched } from '../api.ts';
-import { attentionCount, displayState, exactTime, lastRun, type DisplayState } from '../scouts.ts';
+import { attentionCount, displayState, exactTime, lastRun, pluralise, pluralNoun, previewableScouts, scoutsNeedAttention, type DisplayState } from '../scouts.ts';
 import { Insights } from './Insights.tsx';
 import { ResearchRadar } from './ResearchRadar.tsx';
 import { ScoutTime } from './ScoutTime.tsx';
@@ -74,10 +74,12 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, blocked }: {
   const data = result?.kind === 'ok' ? result.data : null;
   // Stable references: Insights restarts its preview reads whenever the `data` prop identity changes.
   const listed = useMemo(() => data ? data.scouts.filter((candidate) => !isTriageApplier(candidate)) : [], [data]);
-  const insightsData = useMemo(() => data ? { ...data, scouts: listed } : null, [data, listed]);
+  // UX4: the board already carries each Failed/Stale run as its attention row, so Insights shows only scouts with a
+  // result to preview instead of repeating the same "City events: Failed" a second time.
+  const insightsData = useMemo(() => data ? { ...data, scouts: previewableScouts(listed, data.now) } : null, [data, listed]);
   if (!page) {
     const count = data ? attentionCount(data) : 0;
-    return count > 0 ? <button className="scout-attention" onClick={onOpen}>{count} scouts need attention</button> : null;
+    return count > 0 ? <button className="scout-attention" onClick={onOpen}>{scoutsNeedAttention(count)}</button> : null;
   }
   const entry = data?.scouts.find((candidate) => candidate.file === selected);
   const detail = entry?.state === 'ok' ? entry.status : null;
@@ -128,7 +130,7 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, blocked }: {
           const state = entryState(candidate, data.now);
           const run = status ? lastRun(status) : null;
           const label = status
-            ? `${status.displayName}, ${stateLabel(state)}, ${status.findings === null ? 'findings unknown' : `${status.findings} findings`}, last run ${run ? exactTime(run) : 'never'}`
+            ? `${status.displayName}, ${stateLabel(state)}, ${status.findings === null ? 'findings unknown' : pluralise(status.findings, 'finding')}, last run ${run ? exactTime(run) : 'never'}`
             : `${candidate.file}, No status yet`;
           return <li key={candidate.file}>
             <button type="button" className="scout-row" disabled={!status} aria-label={label} onClick={() => setSelected(candidate.file)}>
@@ -140,7 +142,7 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, blocked }: {
               {' '}
               <span className="scout-row-meta">
                 <span className={stateClass(state)}>{stateLabel(state)}</span>
-                <span className="scout-row-findings"><strong className={stateClass(state)}>{status?.findings ?? '—'}</strong> findings</span>
+                <span className="scout-row-findings"><strong className={stateClass(state)}>{status?.findings ?? '—'}</strong> {pluralNoun(status?.findings ?? 0, 'finding')}</span>
               </span>
               {status && status.history.length > 1 && <span className={`scout-row-spark ${stateClass(state)}`}><Sparkline history={status.history} decorative /></span>}
             </button>
