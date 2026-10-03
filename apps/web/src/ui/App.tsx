@@ -437,6 +437,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <>
             <MorningCard key={`morning-card:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey}
               baseRevision={revision} blocked={writeBlocked || frozen} refreshKey={checkedAt} tasksToday={view.today.length}
+              openTasks={tasks?.allOpen ?? []} today={tasks?.today ?? ''}
               onOpenTasks={() => setTab('tasks')} onOpenScouts={() => setTab('scouts')} onOpenStatus={openStatus} />
             {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
             {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
