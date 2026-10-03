@@ -24,6 +24,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 - Parked: stray `sp-read-latency.test.ts` change in `git stash@{0}` (origin unknown).
 
 - **NY1** (Needs You v1): Today card line "Needs you" (hidden at 0) opens `NeedsYouSheet`; pure `ui/needs-you.ts` rows: failed/degraded scouts, Active Work review due, triage pending, queue actions needing attention. Waiting items and registration deadlines not covered (no client data). NY2 Morning Review next.
+- **WL1** (Watchlist backend): dashboard now returns one `watchlist` card per item in `apps/worker/src/watchlist.ts` (BTC, ETH Coinbase; SEK/DKK Frankfurter; RUB/DKK Bank of Russia XML, id R01215, because ECB dropped RUB) plus the legacy `market` card; ranges 1W/1M/3M (1Y open). Web UI is WL2.
 
 ## Next actions (in order)
 

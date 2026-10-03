@@ -4,12 +4,14 @@ import {
   DASHBOARD_RANGE_PLAN,
   MARKET_BASE_URL,
   MARKET_PRODUCT,
+  MARKET_PROVIDER,
   MAX_MARKET_POINTS,
   type DashboardRange,
   type MarketPoint,
   type MarketSeries,
   type MarketTicker,
   type MarketUnavailableReason,
+  type WatchTicker,
 } from '@vault-companion/contracts';
 
 /** A request the provider has not answered by then is abandoned and reported as a timeout. */
@@ -25,29 +27,47 @@ export type MarketFailure = { readonly status: 'unavailable'; readonly reason: M
 export type TickerOutcome = { readonly status: 'ok'; readonly ticker: MarketTicker; readonly fetchedAt: number } | MarketFailure;
 export type SeriesOutcome = { readonly status: 'ok'; readonly series: MarketSeries; readonly fetchedAt: number } | MarketFailure;
 
-/** The only provider URLs the worker may build: a fixed host/product with numeric times and an enum granularity. */
-export const tickerUrl = (): string => `${MARKET_BASE_URL}/products/${MARKET_PRODUCT}/ticker`;
-export const candlesUrl = (range: DashboardRange, startSec: number, endSec: number): string =>
-  `${MARKET_BASE_URL}/products/${MARKET_PRODUCT}/candles?granularity=${DASHBOARD_RANGE_PLAN[range].granularitySeconds}&start=${startSec}&end=${endSec}`;
+/**
+ * The only provider URLs the worker may build: a fixed host with a configured product (BTC-USD for the legacy card,
+ * any allowlisted symbol for a watch item), numeric times and an enum granularity.
+ */
+export const tickerUrl = (product: string = MARKET_PRODUCT): string => `${MARKET_BASE_URL}/products/${product}/ticker`;
+export const candlesUrl = (range: DashboardRange, startSec: number, endSec: number, product: string = MARKET_PRODUCT): string =>
+  `${MARKET_BASE_URL}/products/${product}/candles?granularity=${DASHBOARD_RANGE_PLAN[range].granularitySeconds}&start=${startSec}&end=${endSec}`;
 
 /** B9: Coinbase answers `/candles` with 400 when User-Agent is absent, and a Worker's fetch sends none by default. */
 export const MARKET_HEADERS = { Accept: 'application/json', 'User-Agent': 'vault-companion' } as const;
 
 class TimedOut extends Error {}
 
-async function readJson(fetchImpl: typeof fetch, url: string, timeoutMs: number): Promise<{ ok: true; body: unknown } | { ok: false; reason: MarketUnavailableReason }> {
+export interface BoundedTextOptions {
+  readonly timeoutMs: number;
+  readonly headers?: HeadersInit;
+  /** Optional non-UTF-8 decoder (Bank of Russia answers windows-1251). */
+  readonly decode?: (bytes: Uint8Array) => string;
+}
+
+/**
+ * A bounded, timed provider read shared by every adapter: the caller's timeout aborts the request, a 256 KiB cap is
+ * enforced from content-length and again while streaming, and a decoder can replace the default UTF-8 text. The promise
+ * race also bounds a fetch implementation that ignores the abort signal.
+ */
+export async function readBoundedText(
+  fetchImpl: typeof fetch,
+  url: string,
+  options: BoundedTextOptions,
+): Promise<{ ok: true; text: string } | { ok: false; reason: MarketUnavailableReason }> {
   const abort = new AbortController();
-  // A timer rather than the signal alone: the promise race also bounds a fetch implementation that ignores the signal.
   let timer: ReturnType<typeof setTimeout> | undefined;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   const timedOut = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       abort.abort();
       reject(new TimedOut());
-    }, timeoutMs);
+    }, options.timeoutMs);
   });
   try {
-    const fetching = fetchImpl(url, { signal: abort.signal, headers: MARKET_HEADERS }).then((response) => {
+    const fetching = fetchImpl(url, { signal: abort.signal, headers: options.headers ?? MARKET_HEADERS }).then((response) => {
       if (abort.signal.aborted) void response.body?.cancel().catch(() => {});
       return response;
     });
@@ -76,17 +96,23 @@ async function readJson(fetchImpl: typeof fetch, url: string, timeoutMs: number)
       bytes.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    const text = new TextDecoder().decode(bytes);
-    try {
-      return { ok: true, body: JSON.parse(text) };
-    } catch {
-      return { ok: false, reason: 'malformed' };
-    }
+    const text = (options.decode ?? ((bytes: Uint8Array) => new TextDecoder().decode(bytes)))(bytes);
+    return { ok: true, text };
   } catch (e) {
     return { ok: false, reason: e instanceof TimedOut || abort.signal.aborted ? 'timeout' : 'provider-error' };
   } finally {
     clearTimeout(timer);
     void reader?.cancel().catch(() => {});
+  }
+}
+
+async function readJson(fetchImpl: typeof fetch, url: string, timeoutMs: number): Promise<{ ok: true; body: unknown } | { ok: false; reason: MarketUnavailableReason }> {
+  const res = await readBoundedText(fetchImpl, url, { timeoutMs, headers: MARKET_HEADERS });
+  if (!res.ok) return res;
+  try {
+    return { ok: true, body: JSON.parse(res.text) };
+  } catch {
+    return { ok: false, reason: 'malformed' };
   }
 }
 
@@ -98,6 +124,16 @@ export function parseTicker(body: unknown): MarketTicker | null {
   const time = typeof raw.time === 'string' ? Date.parse(raw.time) : NaN;
   if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(time)) return null;
   return { base: 'BTC', quote: 'USD', provider: 'coinbase', price, providerTime: new Date(time).toISOString() };
+}
+
+/** The same string-number discipline as parseTicker, but for any allowlisted product and its named base/quote. */
+export function parseCoinbaseTicker(body: unknown, base: string, quote: string): WatchTicker | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const raw = body as Record<string, unknown>;
+  const price = Number(raw.price);
+  const time = typeof raw.time === 'string' ? Date.parse(raw.time) : NaN;
+  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(time)) return null;
+  return { base, quote, provider: MARKET_PROVIDER, price, providerTime: new Date(time).toISOString() };
 }
 
 /** One provider bucket: `[time, low, high, open, close, volume]`, oldest or newest first. */
@@ -120,9 +156,8 @@ function parsePoint(row: unknown, granularitySeconds: number, startSec: number, 
  * deduped, capped at MAX_MARKET_POINTS. `missingIntervals` counts window buckets the provider did not return: the client
  * draws those as gaps and never interpolates them.
  */
-export function parseCandles(body: unknown, range: DashboardRange, startSec: number, endSec: number): MarketSeries | null {
+export function parseCandles(body: unknown, range: DashboardRange, startSec: number, endSec: number, granularitySeconds: number = DASHBOARD_RANGE_PLAN[range].granularitySeconds): MarketSeries | null {
   if (!Array.isArray(body)) return null;
-  const granularitySeconds = DASHBOARD_RANGE_PLAN[range].granularitySeconds;
   const byTime = new Map<number, MarketPoint>();
   for (const row of body) {
     const point = parsePoint(row, granularitySeconds, startSec, endSec);
