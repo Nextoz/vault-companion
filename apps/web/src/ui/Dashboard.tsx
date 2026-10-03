@@ -1,11 +1,10 @@
 // Dashboard (DASH1): read-only overview. One BTC/USD card with a 1W/1M/3M series, plus honest overview cards for the
-// AI usage and Health sources that are not connected yet. No writes, no provider calls from the browser.
+// AI usage sources that are not connected yet. No writes, no provider calls from the browser.
 import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketSeries, MarketTickerResponse, WeatherCard } from '@vault-companion/contracts';
 import { useCallback, useEffect, useId, useMemo, useState, type PointerEvent } from 'react';
 import { getDashboard, getMarketTicker } from '../api.ts';
 import './Dashboard.css';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
-import { HealthPanel } from './HealthPanel.tsx';
 import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
 
 export const TICKER_POLL_MS = 60_000;
@@ -272,7 +271,6 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough }: {
       {shown && stale && !isCopy && <p className="dash-stale" role="status">Not refreshed — the times below are from the last success.</p>}
       {shown && market && <MarketView card={market} stale={stale} onDrillthrough={onDrillthrough} />}
       {shown && weather && <WeatherCardView card={weather} stale={weatherStale} onDrillthrough={onDrillthrough} />}
-      <HealthPanel accountKey={accountKey} refreshKey={refreshKey} />
       {shown && (
         <div className="dash-tiles">
           {shown.cards.filter((card) => card.id !== 'market' && card.id !== 'weather' && card.id !== 'health').map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}

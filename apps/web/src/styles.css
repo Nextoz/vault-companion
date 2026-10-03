@@ -212,6 +212,43 @@ textarea:focus-visible {
   margin: 12px 0;
 }
 
+/* UX5: the Mood check-in history at the top of the Log's Progress view. Read-only evidence rows. */
+.log-mood {
+  margin-top: 12px;
+}
+
+.log-mood-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.log-mood-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 0;
+  box-sizing: border-box;
+}
+
+.log-mood-row + .log-mood-row {
+  border-top: 1px solid var(--line);
+}
+
+.log-mood-date {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.log-mood-values {
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
 /* UX2: the compact Today morning card, the check-in line, and the details they open. */
 .morning-card {
   display: flex;

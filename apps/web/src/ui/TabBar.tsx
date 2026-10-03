@@ -9,6 +9,7 @@ export type Tab =
   | 'training'
   | 'scouts'
   | 'history'
+  | 'health'
   | 'status';
 
 /** The five bottom-bar buttons. */
@@ -24,6 +25,7 @@ export function barKey(tab: Tab): BarKey | null {
       return 'tasks';
     case 'training':
     case 'history':
+    case 'health':
       return 'log';
     case 'today':
       return 'today';

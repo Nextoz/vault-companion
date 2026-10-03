@@ -13,6 +13,7 @@ import { copenhagenDay } from '../triage.ts';
 import { weekdayBars } from '../week-chart.ts';
 import { BarChart } from './BarChart.tsx';
 import { History } from './History.tsx';
+import { MoodHistory } from './LogMood.tsx';
 import { NoteScreen } from './Notes.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 import type { OpenLink } from './NoteView.tsx';
@@ -64,6 +65,7 @@ export function Progress({ refreshKey, queue, queued, accountKey, baseRevision, 
   const evidence = { onOpenLink, onOpenNote: setOpenNote };
   return <section aria-label="Progress" className="progress">
     <h1>Progress</h1>
+    <MoodHistory items={queued} />
     <CopyNote view={combineViews([historyView, trainingView, triageView, notesView])} />
     {loading && <p role="status">Loading progress…</p>}
     {week && <section aria-label="This week" className="progress-card">
