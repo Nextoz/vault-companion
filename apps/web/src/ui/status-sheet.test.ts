@@ -1,6 +1,10 @@
 import { AiBudgetResponse, DashboardResponse, HealthResponse, ScoutsResponse } from '@vault-companion/contracts';
 import type { ScoutStatus } from '@vault-companion/contracts';
+import { JSDOM } from 'jsdom';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { ScoutLine } from './StatusSheet.tsx';
 import { budgetFreshness, budgetReset, budgetRows, buildLine, dataSourceRows, scoutRows, shortRevision, stateLabel } from './status-sheet.ts';
 
 const now = Date.parse('2026-09-30T13:00:00Z');
@@ -71,6 +75,33 @@ describe('status sheet helpers', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ name: 'Learning', state: 'Healthy', run: '2026-09-30T11:00:00Z' });
     expect(rows[1]).toMatchObject({ file: 'Scouts/broken.md', name: 'Scouts/broken.md', state: 'No status yet', run: null });
+  });
+
+  it('carries a degraded or failed run\u2019s own error text, never a healthy one\u2019s', () => {
+    const rows = scoutRows(scoutsResponse([
+      { file: 'Scouts/deg.md', state: 'ok', status: scout({ scoutId: 'deg', displayName: 'Degraded', runStatus: 'degraded', lastError: 'one source timed out' }) },
+      { file: 'Scouts/fail.md', state: 'ok', status: scout({ scoutId: 'fail', displayName: 'Failed', runStatus: 'failed', lastError: 'runner could not start' }) },
+      { file: 'Scouts/ok.md', state: 'ok', status: scout({ scoutId: 'ok', displayName: 'Healthy', lastError: 'stale text' }) },
+    ]));
+    expect(rows.map((row) => [row.state, row.error])).toEqual([
+      ['Degraded', 'one source timed out'],
+      ['Failed', 'runner could not start'],
+      ['Healthy', null],
+    ]);
+  });
+
+  it('renders the run\u2019s error text under the scout row', () => {
+    const rows = scoutRows(scoutsResponse([
+      { file: 'Scouts/deg.md', state: 'ok', status: scout({ scoutId: 'deg', displayName: 'Degraded', runStatus: 'degraded', lastError: 'one source timed out' }) },
+      { file: 'Scouts/fail.md', state: 'ok', status: scout({ scoutId: 'fail', displayName: 'Failed', runStatus: 'failed', lastError: 'runner could not start' }) },
+      { file: 'Scouts/ok.md', state: 'ok', status: scout({ scoutId: 'ok', displayName: 'Healthy', lastError: 'stale text' }) },
+    ]));
+    const visible = (row: (typeof rows)[number]) =>
+      new JSDOM(renderToStaticMarkup(createElement(ScoutLine, { row }))).window.document.body.textContent ?? '';
+    expect(visible(rows[0]!)).toContain('Ran with problems');
+    expect(visible(rows[0]!)).toContain('one source timed out');
+    expect(visible(rows[1]!)).toContain('runner could not start');
+    expect(visible(rows[2]!)).not.toContain('stale text');
   });
 
   it('reads each data source time from the copies the app already holds', () => {

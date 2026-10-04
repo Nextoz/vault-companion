@@ -5,6 +5,7 @@
 import type { ActiveWorkResponse, MorningBriefResponse, MorningResponse, ScoutsResponse, TaskView, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
 import { getActiveWork, getMorning, getMorningBrief, getScouts, getTriage, getWeather, type Fetched } from '../api.ts';
+import { prefs } from '../prefs.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { dateIn } from '../time.ts';
 import { deriveTriage } from '../triage.ts';
@@ -12,7 +13,7 @@ import { localDate, MoodCard } from './MoodCard.tsx';
 import { Morning } from './Morning.tsx';
 import { MorningReviewSheet } from './MorningReviewSheet.tsx';
 import { NeedsYouSheet } from './NeedsYouSheet.tsx';
-import { needsYou, type NeedsYouFacts, type NeedsYouTarget } from './needs-you.ts';
+import { liveDismissals, needsYou, sameDismissals, type NeedsYouFacts, type NeedsYouRow, type NeedsYouTarget } from './needs-you.ts';
 import { WeatherMorning } from './WeatherLab.tsx';
 import { briefLines, checkinDue, morningLines, type MorningLineId } from './morning-card.ts';
 
@@ -43,6 +44,8 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [needsOpen, setNeedsOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  // NY3: device-held dismissals for the Needs you scout rows; copied out of prefs so a dismissal re-renders at once.
+  const [dismissedScouts, setDismissedScouts] = useState<Record<string, string>>(() => prefs.needsYouDismissed());
 
   // The Today panels' own reads, plus the Tasks tab's Active Work read (reused for Needs you); no new endpoint.
   useEffect(() => {
@@ -66,12 +69,21 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   // A failed, stale or absent brief yields no rows: the card keeps its existing lines, never a placeholder.
   const briefRows = brief !== null && brief.kind === 'ok' ? briefLines(brief.data, localDate()) : null;
   const eventsToTriage = triageView ? triageView.cards.length + triageView.checkins.length : 0;
+  const scoutData = scouts?.kind === 'ok' ? scouts.data : null;
+  // NY3: drop a stored dismissal once its scout recovers (or its text changes), so a later failure shows again.
+  useEffect(() => {
+    const live = liveDismissals(dismissedScouts, scoutData);
+    if (sameDismissals(dismissedScouts, live)) return;
+    prefs.setNeedsYouDismissed(live);
+    setDismissedScouts(live);
+  }, [dismissedScouts, scoutData]);
   // NY1: the same `attention` state the Actions panel counts; the queue read itself is not repeated here.
   const needsFacts: NeedsYouFacts = {
-    scouts: scouts?.kind === 'ok' ? scouts.data : null,
+    scouts: scoutData,
     activeWork: activeWork?.kind === 'ok' && activeWork.data.status === 'ok' ? activeWork.data : null,
     eventsToTriage,
     actionsNeedingAttention: items.filter((item) => item.state === 'attention').length,
+    dismissedScouts,
   };
   const needsRows = needsYou(needsFacts, dateIn(new Date().toISOString(), 'Europe/Copenhagen'));
   const lines = morningLines({
@@ -96,6 +108,13 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
     if (target.kind === 'actions') return onOpenStatus();
   }
 
+  // NY3: "Got it" remembers the row id and the error text; the row returns only when that text changes.
+  function dismissNeedsRow(row: NeedsYouRow) {
+    const next = { ...dismissedScouts, [row.id]: row.why };
+    prefs.setNeedsYouDismissed(next);
+    setDismissedScouts(next);
+  }
+
   const due = checkinDue(items);
   return <>
     <section className="group morning-card" aria-label="Today at a glance">
@@ -111,7 +130,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
       {open === 'papers' && <Morning refreshKey={refreshKey} />}
       <button type="button" className="morning-line morning-review-open" onClick={() => setReviewOpen(true)}>Review my morning</button>
     </section>
-    {needsOpen && <NeedsYouSheet rows={needsRows} queue={queue} accountKey={accountKey} onNavigate={openNeedsTarget} onClose={() => setNeedsOpen(false)} />}
+    {needsOpen && <NeedsYouSheet rows={needsRows} queue={queue} accountKey={accountKey} onNavigate={openNeedsTarget} onDismiss={dismissNeedsRow} onClose={() => setNeedsOpen(false)} />}
     {reviewOpen && <MorningReviewSheet brief={briefRows} needs={needsRows} open={openTasks} today={today}
       queue={queue} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked}
       onNavigate={openNeedsTarget} onClose={() => setReviewOpen(false)} />}
