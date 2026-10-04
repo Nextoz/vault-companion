@@ -118,7 +118,7 @@ function createFakeFetch(files: Record<string, string>) {
     if (url.hostname === 'oauth2.googleapis.com') {
       call.kind = 'google-token';
       return json(200, {
-        access_token: 'ya29.synthetic',
+        access_token: 'synthetic-access-token',
         scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.metadata',
       });
     }
