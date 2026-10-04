@@ -298,6 +298,42 @@ textarea:focus-visible {
   margin: 0;
 }
 
+/* SIWH: the compact "Since I was here" pane above the morning card. It renders nothing when empty, so it never
+   takes space without something to say. */
+.since-i-was-here {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.group.since-i-was-here h2 {
+  margin: 0;
+}
+
+.siwh-line {
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.siwh-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.siwh-close {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
 .content {
   padding: 8px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));
   max-width: 720px;

@@ -1,4 +1,6 @@
 // Small per-device conveniences in localStorage. None of it is vault content; all of it is optional.
+import { parseSinceIWasHereSnapshot, type SiwhSnapshot } from './ui/since-i-was-here.ts';
+
 export type CaptureKind = 'task' | 'note' | 'active-work';
 
 /** Fresh captures follow the invoking view; other views keep the device preference. */
@@ -57,4 +59,10 @@ export const prefs = {
     }
   },
   setNeedsYouDismissed: (dismissed: Record<string, string>) => write('vc.needsYouDismissed', JSON.stringify(dismissed)),
+  /**
+   * SIWH: the last-seen "since I was here" snapshot, device-held only (never the vault). A malformed or unrecognised
+   * value reads as null, so a bad entry shows nothing rather than announcing a guess.
+   */
+  sinceIWasHereSnapshot: (): SiwhSnapshot | null => parseSinceIWasHereSnapshot(read('vc.sinceIWasHere')),
+  setSinceIWasHereSnapshot: (snapshot: SiwhSnapshot) => write('vc.sinceIWasHere', JSON.stringify(snapshot)),
 };
