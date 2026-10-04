@@ -9,6 +9,7 @@ import {
   calendarChips, calendarErrorMessage, calendarPrefill, timedWindow,
   type CalendarChip, type CalendarEventType, type CalendarTarget,
 } from './calendar-sheet.ts';
+import { isMissingBrief } from './morning-card.ts';
 
 /** A quiet calendar glyph in the row's secondary colour; presentational only. */
 export function CalendarGlyph() {
@@ -46,7 +47,9 @@ export function CalendarSheet({ target, accountKey, onClose, onSaved }: {
   useEffect(() => {
     let live = true;
     void getMorningBrief().then((res) => {
-      if (live && res.kind === 'ok') setChips(calendarChips(res.data.brief.gaps, today));
+      if (live && res.kind === 'ok' && !isMissingBrief(res.data)) {
+        setChips(calendarChips(res.data.brief.gaps, today));
+      }
     });
     return () => { live = false; };
   }, [today]);

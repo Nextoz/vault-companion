@@ -2,7 +2,7 @@
 // line, each tapping through to its detail; weather and papers open the existing panels inline, scouts and events open
 // the Scouts tab where their detail (and triage) now lives. Below it the check-in line, once today has no check-in.
 // NY2 adds "Review my morning": a guided step-through sheet over the brief, the NY1 rows and today's open tasks.
-import type { ActiveWorkResponse, HealthResponse, MorningBriefResponse, MorningResponse, ScoutsResponse, TaskView, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
+import type { ActiveWorkResponse, HealthResponse, MorningBriefReadResponse, MorningResponse, ScoutsResponse, TaskView, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
 import { getActiveWork, getMorning, getMorningBrief, getScouts, getTriage, getWeather, type Fetched } from '../api.ts';
 import { lastCopies } from '../lastCopy.ts';
@@ -18,7 +18,7 @@ import { liveDismissals, needsYou, sameDismissals, type NeedsYouFacts, type Need
 import { SinceIWasHere } from './SinceIWasHere.tsx';
 import { sinceIWasHereFacts, type SiwhTarget } from './since-i-was-here.ts';
 import { WeatherMorning } from './WeatherLab.tsx';
-import { briefLines, checkinDue, morningLines, type MorningLineId } from './morning-card.ts';
+import { briefLines, checkinDue, isMissingBrief, missingBriefText, morningLines, type MorningLineId } from './morning-card.ts';
 
 export interface MorningCardProps {
   queue: PendingQueue;
@@ -41,7 +41,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   const [weather, setWeather] = useState<Fetched<WeatherResponse> | null>(null);
   const [scouts, setScouts] = useState<Fetched<ScoutsResponse> | null>(null);
   const [morning, setMorning] = useState<Fetched<MorningResponse> | null>(null);
-  const [brief, setBrief] = useState<Fetched<MorningBriefResponse> | null>(null);
+  const [brief, setBrief] = useState<Fetched<MorningBriefReadResponse> | null>(null);
   const [triage, setTriage] = useState<TriageResponse | null>(null);
   const [activeWork, setActiveWork] = useState<Fetched<ActiveWorkResponse> | null>(null);
   const [open, setOpen] = useState<MorningLineId | null>(null);
@@ -70,8 +70,12 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   }, [refreshKey, accountKey, blocked]);
 
   const triageView = triage ? deriveTriage(triage, items, accountKey) : null;
-  // A failed, stale or absent brief yields no rows: the card keeps its existing lines, never a placeholder.
-  const briefRows = brief !== null && brief.kind === 'ok' ? briefLines(brief.data, localDate()) : null;
+  // A failed brief yields no rows; a stale date keeps the existing card lines. A missing file for today shows the
+  // job's status reason (ADR-0055) instead of a silent empty card.
+  const briefData = brief !== null && brief.kind === 'ok' ? brief.data : null;
+  const briefFile = briefData !== null && !isMissingBrief(briefData) ? briefData : null;
+  const briefRows = briefFile ? briefLines(briefFile, localDate()) : null;
+  const missingBrief = briefData !== null && isMissingBrief(briefData) ? missingBriefText(briefData.statusError) : null;
   const eventsToTriage = triageView ? triageView.cards.length + triageView.checkins.length : 0;
   const scoutData = scouts?.kind === 'ok' ? scouts.data : null;
   // NY3: drop a stored dismissal once its scout recovers (or its text changes), so a later failure shows again.
@@ -105,7 +109,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
     // Event ids, not just the count: a card handled elsewhere then replaced by a new one on the same count is new.
     triage: triageView ? [...triageView.cards.map((card) => card.eventId), ...triageView.checkins.map((checkin) => checkin.eventId)] : null,
     scouts: scoutData,
-    brief: brief !== null && brief.kind === 'ok' ? brief.data : null,
+    brief: briefFile,
     morning: morning !== null && morning.kind === 'ok' ? morning.data : null,
     health: lastCopies.get<HealthResponse>(accountKey, 'health')?.data ?? null,
     today: localDate(),
@@ -140,6 +144,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   return <>
     <SinceIWasHere facts={siwhFacts} onOpen={openSiwh} />
     <section className="group morning-card" aria-label="Today at a glance">
+      {missingBrief && <p className="morning-line morning-brief-line">{missingBrief}</p>}
       {briefRows?.map((row) => (row.todo
         ? <button key={row.id} type="button" className="morning-line morning-brief-line" onClick={onOpenTasks}>{row.text}</button>
         : <p key={row.id} className={`morning-line morning-brief-line${row.marker ? ' morning-brief-marker' : ''}`}>{row.text}</p>))}

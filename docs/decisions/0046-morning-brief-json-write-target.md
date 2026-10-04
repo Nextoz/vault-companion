@@ -37,3 +37,7 @@ health and mood lines; it must be written safely, idempotently, and readably by 
 `Daily/Morning Digest/Morning Brief - latest.json` becomes a writable JSON path in `paths.ts` and the vault contract.
 The owner accepts one derived-health JSON artifact in the private vault. A leaked Scaleway key spends quota but has no
 write path of its own; the commit path is fixed by allowlist, CAS and deterministic operation IDs.
+
+**Addendum (Lead, 2026-10-04, ADR-0055):** the catch-up window and status record are now specified in ADR-0055. The
+brief is no longer silent on failure, runs in Copenhagen hours 6..11 across two extra catch-up crons, and the
+`BRIEF_ANY_HOUR` plain var is the one live proof-run hook.

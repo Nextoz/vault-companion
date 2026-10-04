@@ -22,7 +22,7 @@ import {
   RadarNoteResponse,
   RadarResponse,
   SessionResponse,
-  MorningBriefResponse,
+  MorningBriefReadResponse,
   MorningResponse,
   ScoutsResponse,
   TasksResponse,
@@ -80,7 +80,7 @@ export async function getJson<S extends z.ZodType>(url: string, schema: S, heade
 export const getSession = () => getJson('/api/session', SessionResponse);
 export const getScouts = () => getJson('/api/scouts', ScoutsResponse.strip());
 export const getMorning = () => getJson('/api/morning', MorningResponse.strip());
-export const getMorningBrief = () => getJson('/api/morning-brief', MorningBriefResponse.strip());
+export const getMorningBrief = () => getJson('/api/morning-brief', z.union(MorningBriefReadResponse.options.map((option) => option.strip())));
 export const getAiBudget = () => getJson('/api/ai-budget', AiBudgetResponse.strip());
 export const getAiUsage = () => getJson('/api/ai-usage', AiUsageResponse.strip());
 export const getTriage = () => getJson('/api/triage', TriageResponse.strip());

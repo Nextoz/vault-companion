@@ -37,6 +37,7 @@ interface WranglerConfig {
   vars?: Record<string, string>;
   secrets?: { required?: string[] };
   triggers?: { crons?: string[] };
+  observability?: { enabled?: boolean };
   assets?: { directory?: string; run_worker_first?: boolean | string[] };
   send_email?: { name?: string; destination_address?: string; allowed_destination_addresses?: string[] }[];
 }
@@ -96,6 +97,10 @@ describe('wrangler.jsonc', () => {
     expect(config.send_email).toEqual([{ name: 'BRIEF_EMAIL' }]);
   });
 
+  it('enables Workers log persistence so brief failures do not disappear with the invocation', () => {
+    expect(config.observability).toEqual({ enabled: true });
+  });
+
   it('allows only same-origin device geolocation while keeping other asset permissions disabled', () => {
     expect(assetHeaders.match(/^\s*Permissions-Policy: (.+)$/m)?.[1]).toBe('camera=(), microphone=(), geolocation=(self), payment=()');
   });
@@ -104,7 +109,7 @@ describe('wrangler.jsonc', () => {
     const expected = [...new Set([...Object.values(EXPLAINER_CRONS), ...Object.values(BRIEF_CRONS)])].sort();
     expect([...(config.triggers?.crons ?? [])].sort()).toEqual(expected);
     expect(Object.values(EXPLAINER_CRONS).map(slotForCron)).toEqual(['primary', 'catchup']);
-    expect(Object.values(BRIEF_CRONS).map(briefSlotForCron)).toEqual(['summer', 'winter']);
+    expect(Object.values(BRIEF_CRONS).map(briefSlotForCron)).toEqual(['summer', 'winter', 'summerCatchup', 'winterCatchup']);
     expect('GEMINI_API_KEY' in vars).toBe(false);
     expect(secrets).not.toContain('GEMINI_API_KEY');
     expect(required).not.toContain('GEMINI_API_KEY');

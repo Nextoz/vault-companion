@@ -1,6 +1,6 @@
 // UX2: the Today morning card's one-liners are a pure projection of reads the card already holds - no fetch here.
 // A line with nothing to say is omitted (never a "Not configured" placeholder); the tasks line is always present.
-import type { MorningBriefResponse, MorningResponse, ScoutsResponse, WeatherResponse, WeatherRunWindow } from '@vault-companion/contracts';
+import type { MorningBriefMissingResponse, MorningBriefReadResponse, MorningBriefResponse, MorningResponse, ScoutsResponse, WeatherResponse, WeatherRunWindow } from '@vault-companion/contracts';
 import type { QueueItem } from '../queue/queue.ts';
 import { attentionCount, pluralise, scoutsNeedAttention } from '../scouts.ts';
 import { localDate, latestCheckin } from './MoodCard.tsx';
@@ -46,6 +46,16 @@ export function briefLines(file: MorningBriefResponse | null, today: string): Br
   });
   if (file.brief.encouragement !== undefined) lines.push({ id: 'encouragement', text: file.brief.encouragement, marker: false, todo: false });
   return lines;
+}
+
+/** True only for the ADR-0055 "no brief file today" response. */
+export function isMissingBrief(file: MorningBriefReadResponse): file is MorningBriefMissingResponse {
+  return 'kind' in file && file.kind === 'missing';
+}
+
+/** ADR-0055: no brief file today. The reason is the job's fixed status error code, never free text. */
+export function missingBriefText(reason: string | null): string {
+  return reason === null ? 'No brief yet' : `No brief yet - ${reason}`;
 }
 
 /** The projections the card has already loaded, plus the client-side counts it can compute on its own. */

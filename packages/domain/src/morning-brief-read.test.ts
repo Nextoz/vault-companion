@@ -1,8 +1,8 @@
-import { MorningBriefResponse } from '@vault-companion/contracts';
+import { MorningBriefResponse, ScoutStatus } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
 import { serializeBriefFile, type BriefFile } from './morning-brief-file.ts';
 import { createMorningBriefReadService } from './morning-brief-read.ts';
-import { MORNING_BRIEF_PATH } from './paths.ts';
+import { MORNING_BRIEF_PATH, MORNING_BRIEF_STATUS_PATH } from './paths.ts';
 import { StoreUnavailable, type VaultStore } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
@@ -21,6 +21,25 @@ const briefFile = (dayLine: string): BriefFile => ({
 });
 
 const read = (store: VaultStore) => createMorningBriefReadService({ store }).readMorningBrief();
+
+const failedStatus = (lastError = 'internal'): ScoutStatus => ScoutStatus.parse({
+  schemaVersion: 1,
+  scoutId: 'morning-brief',
+  displayName: 'Morning Brief',
+  schedule: 'daily 06:31-08:31 Europe/Copenhagen',
+  expectedEveryHours: 24,
+  lastAttemptAt: '2026-10-04T04:31:00+02:00',
+  lastSuccessAt: null,
+  runStatus: 'failed',
+  sources: { configured: 7, successful: 0 },
+  aiHealth: 'failed',
+  findings: 0,
+  added: 0,
+  errors: 1,
+  lastError,
+  latestOutput: null,
+  history: [{ at: '2026-10-04T04:31:00+02:00', status: 'failed', findings: 0, operationId: '00000000-0000-4000-8000-0000000000aa' }],
+});
 
 describe('readMorningBrief (MB2)', () => {
   it('projects the one brief file at the fixed path, and only that file', async () => {
@@ -42,7 +61,17 @@ describe('readMorningBrief (MB2)', () => {
 
   it('an absent file is a typed not-found, never a throw', async () => {
     const store = await InMemoryStore.create({ 'Daily/Morning Digest/decoy.json': serializeBriefFile(briefFile('DECOY')) });
-    await expect(read(store)).resolves.toMatchObject({ code: 'not-found', retryable: false });
+    const result = await read(store);
+    expect(result).toMatchObject({ kind: 'missing', statusError: null });
+    expect(MorningBriefResponse.safeParse(result).success).toBe(false);
+  });
+
+  it('an absent file carries the Morning Brief status error code for the card', async () => {
+    const store = await InMemoryStore.create({
+      [MORNING_BRIEF_STATUS_PATH]: JSON.stringify(failedStatus('not-written:precondition-failed'), null, 2),
+    });
+    const result = await read(store);
+    expect(result).toMatchObject({ kind: 'missing', statusError: 'not-written:precondition-failed' });
   });
 
   it('invalid JSON on disk is a typed invalid error, never a throw', async () => {

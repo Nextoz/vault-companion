@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canReadLinkedNote, canReadRadarSource, canWrite, EXPLAINER_STATUS_PATH, isInboxNotePath, isRadarDecisionPath, isResearchLibraryPath, MORNING_BRIEF_PATH, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
+import { canReadLinkedNote, canReadRadarSource, canWrite, EXPLAINER_STATUS_PATH, isInboxNotePath, isRadarDecisionPath, isResearchLibraryPath, MORNING_BRIEF_PATH, MORNING_BRIEF_STATUS_PATH, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 
 describe('parseVaultPath', () => {
   it.each([
@@ -138,6 +138,11 @@ describe('ADR-0046 Morning Brief write scope', () => {
     expect(canWrite(parseVaultPath(MORNING_BRIEF_PATH)!, 'update')).toBe(true);
     expect(parseVaultPath('Daily/Morning Digest/Morning Brief - 2026-06-15.json')).toBeNull();
     expect(parseVaultPath('Daily/Morning Digest/Other.json')).toBeNull();
+  });
+
+  it('allows the ADR-0055 Morning Brief status record beside the explainer record', () => {
+    expect(canWrite(parseVaultPath(MORNING_BRIEF_STATUS_PATH)!, 'create')).toBe(true);
+    expect(canWrite(parseVaultPath(MORNING_BRIEF_STATUS_PATH)!, 'update')).toBe(true);
   });
 });
 
