@@ -7,6 +7,7 @@ import {
   DashboardResponse,
   MarketTickerResponse,
   TrainingResponse,
+  LearningResponse,
   encodeLinkedNoteHeader,
   encodeNoteHeader,
   HistoryResponse,
@@ -142,6 +143,7 @@ export const postRadarDecision = (body: string, accountKey: string) =>
   });
 
 export const getTraining = () => getJson('/api/training', z.union(TrainingResponse.options.map((option) => option.strip())));
+export const getLearning = () => getJson('/api/learning', z.union(LearningResponse.options.map((option) => option.strip())));
 
 /** Dashboard (DASH1): read-only, `no-store`, never cached by the SW. The range is an enum, never a provider URL. */
 export const getDashboard = (range: DashboardRange) => getJson(`/api/dashboard?range=${range}`, DashboardResponse);

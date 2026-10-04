@@ -13,7 +13,7 @@ export interface PrefetchDeps {
 }
 
 /** Read-only endpoints, in the order the tabs sit in: the Worker's cache is filled without a waterfall. */
-const READ_PATHS = ['/api/notes', '/api/history', '/api/training'] as const;
+const READ_PATHS = ['/api/notes', '/api/history', '/api/training', '/api/learning'] as const;
 
 /** A prefetch the Worker has not answered by then is abandoned; the tab's own read will ask again. */
 const TIMEOUT_MS = 10_000;

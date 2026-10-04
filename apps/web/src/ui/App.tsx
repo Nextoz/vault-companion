@@ -34,6 +34,8 @@ import { Scouts } from './Scouts.tsx';
 import { StatusSheet } from './StatusSheet.tsx';
 import { Training } from './Training.tsx';
 import { TrainingSheet } from './TrainingSheet.tsx';
+import { Learning } from './Learning.tsx';
+import { LearningSheet } from './LearningSheet.tsx';
 import { Triage } from './Triage.tsx';
 import { TaskList } from './TaskList.tsx';
 import { TabBar, type Tab } from './TabBar.tsx';
@@ -49,7 +51,7 @@ const STALE_REREADS = 3;
 /** Review O6: consecutive stale reads after which the device offers to reset its saved-actions history. */
 export const STALE_BEFORE_RESET = 3;
 
-const ACTION_TABS: ReadonlySet<string> = new Set(['today', 'tasks', 'all', 'notes', 'training', 'history']);
+const ACTION_TABS: ReadonlySet<string> = new Set(['today', 'tasks', 'all', 'notes', 'training', 'learning', 'history']);
 const prefetcher = createPrefetcher(browserPrefetchDeps);
 
 export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: DraftStore; receipts: EventTarget }) {
@@ -441,11 +443,12 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           </>
         )}
 
-        {(tab === 'training' || tab === 'history' || tab === 'health') && !signedOut && (
+        {(tab === 'training' || tab === 'history' || tab === 'health' || tab === 'learning') && !signedOut && (
           <div className="segmented log-view" role="group" aria-label="Log view">
             <button type="button" aria-pressed={tab === 'training'} onClick={() => setTab('training')}>Training</button>
             <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')}>Progress</button>
             <button type="button" aria-pressed={tab === 'health'} onClick={() => setTab('health')}>Health</button>
+            <button type="button" aria-pressed={tab === 'learning'} onClick={() => setTab('learning')}>Learning</button>
           </div>
         )}
 
@@ -456,6 +459,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         )}
 
         {tab === 'health' && !signedOut && <HealthPanel key={`health:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
+
+        {tab === 'learning' && !signedOut && <Learning key={`learning:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
 
         {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
           accountKey={accountKey} baseRevision={revision} />}
@@ -529,7 +534,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
       <TabBar tab={tab} onSelect={setTab} inert={noteOpen || editing !== null} />
 
-      <button type="button" className="fab" inert={noteOpen || editing !== null} onClick={() => setCaptureOpen(true)} aria-label={tab === 'training' ? 'Add training' : 'Capture'}>
+      <button type="button" className="fab" inert={noteOpen || editing !== null} onClick={() => setCaptureOpen(true)} aria-label={tab === 'training' ? 'Add training' : tab === 'learning' ? 'Add session' : 'Capture'}>
         +
       </button>
 
@@ -538,10 +543,11 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           blocked={writeBlocked} onClose={() => setEditing(null)} />
       )}
       {captureOpen && tab === 'training' && !signedOut && <TrainingSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} onClose={() => setCaptureOpen(false)} />}
+      {captureOpen && tab === 'learning' && !signedOut && <LearningSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} onClose={() => setCaptureOpen(false)} />}
       {reportOpen && !signedOut && (
         <ReportSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} screen={screenName(tab)} onClose={() => setReportOpen(false)} />
       )}
-      {captureOpen && tab !== 'training' && (
+      {captureOpen && tab !== 'training' && tab !== 'learning' && (
         <CaptureSheet
           defaultKind={captureDefaultForTab(tab)}
           queue={queue}

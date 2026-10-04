@@ -51,15 +51,15 @@ function harness(overrides: Partial<PrefetchDeps> = {}) {
 }
 
 const urls = (sent: readonly Sent[]) => sent.map((s) => s.url);
-const READS = ['/api/notes', '/api/history', '/api/training'];
+const READS = ['/api/notes', '/api/history', '/api/training', '/api/learning'];
 
 describe('createPrefetcher', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('warms notes then history then training, at most once per (account, revision)', async () => {
+  it('warms notes then history then training then learning, at most once per (account, revision)', async () => {
     const h = harness();
-    h.replies.push(reply(), reply(), reply());
+    h.replies.push(reply(), reply(), reply(), reply());
     h.prefetcher.maybePrefetch('acct', 'rev1');
     h.prefetcher.maybePrefetch('acct', 'rev1');
     await h.flush();
@@ -69,7 +69,7 @@ describe('createPrefetcher', () => {
 
   it('warms again for a new revision at the same account', async () => {
     const h = harness();
-    h.replies.push(...Array.from({ length: 6 }, () => reply()));
+    h.replies.push(...Array.from({ length: 8 }, () => reply()));
     h.prefetcher.maybePrefetch('acct', 'rev1');
     await h.flush();
     h.prefetcher.maybePrefetch('acct', 'rev2');
@@ -79,7 +79,7 @@ describe('createPrefetcher', () => {
 
   it('warms again for a new account at the same revision', async () => {
     const h = harness();
-    h.replies.push(...Array.from({ length: 6 }, () => reply()));
+    h.replies.push(...Array.from({ length: 8 }, () => reply()));
     h.prefetcher.maybePrefetch('acct-1', 'rev1');
     await h.flush();
     h.prefetcher.maybePrefetch('acct-2', 'rev1');
@@ -116,12 +116,12 @@ describe('createPrefetcher', () => {
     for (const settle of settleFirst) settle();
     await h.flush();
 
-    expect(urls(sent)).toEqual(['/api/notes', '/api/notes', '/api/history', '/api/training']);
+    expect(urls(sent)).toEqual(['/api/notes', '/api/notes', '/api/history', '/api/training', '/api/learning']);
   });
 
   it('does nothing until the scheduled callback runs', () => {
     const h = harness();
-    h.replies.push(reply(), reply(), reply());
+    h.replies.push(reply(), reply(), reply(), reply());
     h.prefetcher.maybePrefetch('acct', 'rev1');
     expect(h.sent).toEqual([]);
     expect(h.scheduled).toHaveLength(1);
@@ -187,10 +187,10 @@ describe('createPrefetcher', () => {
 
   it('sends plain GETs with the base init, an Accept header and an abort signal', async () => {
     const h = harness();
-    h.replies.push(reply(), reply(), reply());
+    h.replies.push(reply(), reply(), reply(), reply());
     h.prefetcher.maybePrefetch('acct', 'rev1');
     await h.flush();
-    expect(h.sent).toHaveLength(3);
+    expect(h.sent).toHaveLength(4);
     for (const { init } of h.sent) {
       expect(init?.method).toBe('GET');
       expect(init?.redirect).toBe('manual');

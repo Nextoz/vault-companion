@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bindUndoTarget, editTask, exportText, isUndoDraft, reportFeedback, undoReportFeedback, undoReportFeedbackDraft } from './commands.ts';
+import { bindUndoTarget, editTask, exportText, isUndoDraft, logLearning, reportFeedback, undoLogLearning, undoLogLearningDraft, undoReportFeedback, undoReportFeedbackDraft } from './commands.ts';
 import { Command, type TaskLocator } from '@vault-companion/contracts';
 
 const task: TaskLocator = { path: 'Tasks/To-Do List.md', blobSha: '2'.repeat(40), lineIndex: 10,
@@ -54,6 +54,34 @@ describe('reportFeedback (ADR-0040)', () => {
     const token = 'a'.repeat(40);
     const undo = undoReportFeedback(ctx, target, token);
     expect(undo).toMatchObject({ type: 'UndoReportFeedback', payload: { target, targetCommit: token } });
+    expect(Command.safeParse(undo).success).toBe(true);
+    expect(exportText(undo)).toBe(exportText(target));
+  });
+});
+
+const learning = () => logLearning(ctx, { kind: 'dictation', date: '2026-10-04', minutes: 15, score: '3/5', detail: 'acc 8', topic: 'weather report' });
+
+describe('logLearning (ADR-0053)', () => {
+  it('mints a validated envelope and exports its session', () => {
+    const command = learning();
+    expect(command).toMatchObject({ type: 'LogLearning', operationId: ctx.newId(), baseRevision: ctx.baseRevision, schemaVersion: 1 });
+    expect(command.payload.session).toEqual({ kind: 'dictation', date: '2026-10-04', minutes: 15, score: '3/5', detail: 'acc 8', topic: 'weather report' });
+    expect(exportText(command)).toContain('"3/5"');
+  });
+  it('rejects an unknown kind shape and a bad date', () => {
+    expect(() => logLearning(ctx, { kind: 'a|b', date: '2026-10-04' })).toThrow();
+    expect(() => logLearning(ctx, { kind: 'dictation', date: '2026-02-30' })).toThrow();
+  });
+  it('queues an Undo as an unsendable draft, then binds and tokens it', () => {
+    const target = learning();
+    const draft = undoLogLearningDraft(ctx, target);
+    expect(draft).toMatchObject({ type: 'UndoLogLearning', payload: { target } });
+    expect(isUndoDraft(draft)).toBe(true);
+    expect(() => Command.parse(draft)).toThrow();
+    expect(bindUndoTarget(draft, target)).toMatchObject({ type: 'UndoLogLearning', payload: { target } });
+    const token = 'b'.repeat(40);
+    const undo = undoLogLearning(ctx, target, token);
+    expect(undo).toMatchObject({ type: 'UndoLogLearning', payload: { target, targetCommit: token } });
     expect(Command.safeParse(undo).success).toBe(true);
     expect(exportText(undo)).toBe(exportText(target));
   });

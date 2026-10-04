@@ -17,6 +17,9 @@ import {
   decodeNoteHeader,
   HistoryResponse,
   type HistoryItem,
+  LearningResponse,
+  type LearningKind,
+  type LearningRow,
   LINKED_NOTE_HEADER,
   LinkedNoteResponse,
   type LinkedNoteRequest,
@@ -206,6 +209,16 @@ export class MockApi {
   #trainingBefore = new Map<string, TrainingRow[]>();
   /** B12: each applied edit's original row and the row it wrote, so an Undo can swap exactly that row back. */
   #trainingEdits = new Map<string, { before: TrainingRow; after: TrainingRow }>();
+  /** LG1b: the Learning Gym Log read model. */
+  learningKinds: LearningKind[] = [
+    { id: 'dictation', name: 'Dictation', scoreMeans: 'accuracy', status: 'active' },
+    { id: 'reading', name: 'Reading', scoreMeans: 'comprehension', status: 'active' },
+  ];
+  learningRows: LearningRow[] = [];
+  learningUnknownLines: string[] = [];
+  /** `absent`/`refused` answer the Learning read with that status instead of rows. */
+  learningMode: 'ok' | 'absent' | 'refused' = 'ok';
+  #learningBefore = new Map<string, LearningRow[]>();
   session: 'ok' | 'signed-out' = 'ok';
   /** The account the session reports (switch it to simulate signing in as someone else). */
   account = ACCOUNT;
@@ -425,6 +438,10 @@ export class MockApi {
       : this.trainingMode === 'hang' ? new Promise<void>(() => {})
       : this.trainingMode === 'error' ? this.#json(route, 503, ApiError.parse({ code: 'upstream-unavailable', message: 'GitHub is unavailable.', retryable: true }))
       : this.#json(route, 200, TrainingResponse.parse({ status: 'ok', revision: this.#revision, blobSha: this.blobSha, rows: this.trainingRows, unknownLines: this.trainingUnknownLines })));
+    await on('**/api/learning', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
+      : this.learningMode === 'absent' ? this.#json(route, 200, LearningResponse.parse({ status: 'absent', revision: this.#revision }))
+      : this.learningMode === 'refused' ? this.#json(route, 200, LearningResponse.parse({ status: 'refused', revision: this.#revision, code: 'refused:learning-table-missing', message: 'Learning Gym Log table not found — fix it in Obsidian' }))
+      : this.#json(route, 200, LearningResponse.parse({ status: 'ok', revision: this.#revision, blobSha: this.blobSha, kinds: this.learningKinds, rows: this.learningRows, unknownLines: this.learningUnknownLines })));
     await on('**/api/active-work', (route) => this.#activeWork(route));
     await on('**/api/triage', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, TriageResponse.parse({ ...this.triage, revision: this.#revision })));
@@ -811,10 +828,21 @@ export class MockApi {
         this.trainingRows.sort((a, b) => (b.date + b.time).localeCompare(a.date + b.time));
         return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'undone', lineText: '| synthetic session |' } };
       }
-      case 'LogLearning':
+      case 'LogLearning': {
+        const s = command.payload.session;
+        this.#learningBefore.set(command.operationId, structuredClone(this.learningRows));
+        this.learningRows = [{ date: s.date, kind: s.kind,
+          minutes: s.minutes !== undefined ? String(s.minutes) : '',
+          score: s.score !== undefined ? String(s.score) : '',
+          detail: s.detail ?? '', topic: s.topic ?? '', note: s.note ?? '' }, ...this.learningRows];
         return { ...base, path: 'Personal/Learning Gym Log.md', effect: { kind: 'learning', op: 'logged', lineText: '| synthetic learning entry |' } };
-      case 'UndoLogLearning':
+      }
+      case 'UndoLogLearning': {
+        const before = this.#learningBefore.get(command.payload.target.operationId);
+        if (!before) throw new Error('mock: unknown learning undo');
+        this.learningRows = before;
         return { ...base, path: 'Personal/Learning Gym Log.md', effect: { kind: 'learning', op: 'undone', lineText: '| synthetic learning entry |' } };
+      }
       case 'MoodCheckin':
         return { ...base, path: `Journal/Daily/${command.payload.date}.md`, effect: { kind: 'mood', op: 'checked-in' } };
       case 'UndoMoodCheckin':
