@@ -1,18 +1,18 @@
 import { ScoutsResponse, type ScoutStatus } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
 import type { ActiveWorkRead } from '../active-work.ts';
-import { needsYou, needsYouText, type NeedsYouFacts, type NeedsYouRow } from './needs-you.ts';
+import { liveDismissals, needsYou, needsYouText, sameDismissals, type NeedsYouFacts, type NeedsYouRow } from './needs-you.ts';
 
 const REV = 'a'.repeat(40);
 const BLOB = 'b'.repeat(40);
 
-const scout = (file: string, runStatus: ScoutStatus['runStatus'], displayName = 'City events'): ScoutsResponse['scouts'][number] => ({
+const scout = (file: string, runStatus: ScoutStatus['runStatus'], displayName = 'City events', lastError: string | null = null): ScoutsResponse['scouts'][number] => ({
   state: 'ok',
   file,
   status: {
     schemaVersion: 1, scoutId: file.replace('.json', ''), displayName, schedule: null, expectedEveryHours: 24,
     lastAttemptAt: '2026-10-02T09:00:00Z', lastSuccessAt: '2026-10-02T09:00:00Z', runStatus,
-    sources: null, aiHealth: null, findings: 0, added: null, errors: null, lastError: null, latestOutput: null, history: [],
+    sources: null, aiHealth: null, findings: 0, added: null, errors: null, lastError, latestOutput: null, history: [],
   },
 });
 const scouts = (...entries: ScoutsResponse['scouts']): ScoutsResponse =>
@@ -26,7 +26,7 @@ const activeWork = (review: string | null, name = 'Garden'): ActiveWorkRead => (
 });
 
 const facts = (over: Partial<NeedsYouFacts> = {}): NeedsYouFacts =>
-  ({ scouts: null, activeWork: null, eventsToTriage: 0, actionsNeedingAttention: 0, ...over });
+  ({ scouts: null, activeWork: null, eventsToTriage: 0, actionsNeedingAttention: 0, dismissedScouts: {}, ...over });
 const kinds = (rows: readonly NeedsYouRow[]) => rows.map((row) => row.target.kind);
 
 describe('needsYou', () => {
@@ -34,15 +34,37 @@ describe('needsYou', () => {
     expect(needsYou(facts(), '2026-10-03')).toEqual([]);
   });
 
-  it('lists failed and degraded scouts, never healthy ones', () => {
+  it('lists a failed scout with its own error text, never degraded or healthy ones', () => {
     const rows = needsYou(facts({
-      scouts: scouts(scout('city.json', 'failed'), scout('garden.json', 'degraded', 'Garden scout'), scout('ok.json', 'success', 'Healthy')),
+      scouts: scouts(
+        scout('city.json', 'failed', 'City events', 'runner could not start'),
+        scout('garden.json', 'degraded', 'Garden scout', 'one source timed out'),
+        scout('ok.json', 'success', 'Healthy'),
+      ),
     }), '2026-10-03');
-    expect(rows.map((row) => [row.title, row.why])).toEqual([
-      ['City events', 'Its last run failed'],
-      ['Garden scout', 'It ran with problems'],
-    ]);
-    expect(kinds(rows)).toEqual(['scouts', 'scouts']);
+    expect(rows.map((row) => [row.title, row.why])).toEqual([['City events', 'runner could not start']]);
+    expect(kinds(rows)).toEqual(['scouts']);
+  });
+
+  it('falls back to a plain sentence when a failed run leaves no error text', () => {
+    const rows = needsYou(facts({ scouts: scouts(scout('city.json', 'failed', 'City events', '   ')) }), '2026-10-03');
+    expect(rows.map((row) => row.why)).toEqual(['Its last run failed']);
+  });
+
+  it('hides a scout row only while the dismissed error text persists', () => {
+    const current = scouts(scout('city.json', 'failed', 'City events', 'runner could not start'));
+    const same = needsYou(facts({ scouts: current, dismissedScouts: { 'scouts:city.json': 'runner could not start' } }), '2026-10-03');
+    expect(same).toEqual([]);
+    const changed = needsYou(facts({ scouts: current, dismissedScouts: { 'scouts:city.json': 'an older error' } }), '2026-10-03');
+    expect(changed.map((row) => row.why)).toEqual(['runner could not start']);
+  });
+
+  it('never lets a stored scout dismissal hide triage or actions rows', () => {
+    const rows = needsYou(facts({
+      eventsToTriage: 1, actionsNeedingAttention: 1,
+      dismissedScouts: { triage: 'x', actions: 'y', 'scouts:city.json': 'runner could not start' },
+    }), '2026-10-03');
+    expect(kinds(rows)).toEqual(['triage', 'actions']);
   });
 
   it('lists Active Work due today or earlier, never tomorrow or an undated item', () => {
@@ -67,6 +89,16 @@ describe('needsYou', () => {
       scouts: scouts(scout('city.json', 'failed')), activeWork: activeWork('2026-10-03'), eventsToTriage: 1, actionsNeedingAttention: 2,
     }), '2026-10-03');
     expect(kinds(rows)).toEqual(['scouts', 'active-work', 'triage', 'actions']);
+  });
+
+  it('drops a stored dismissal once its scout recovers or its text changes', () => {
+    const dismissed = { 'scouts:city.json': 'runner could not start' };
+    expect(liveDismissals(dismissed, scouts(scout('city.json', 'failed', 'City events', 'runner could not start')))).toEqual(dismissed);
+    expect(liveDismissals(dismissed, scouts(scout('city.json', 'success', 'City events', 'runner could not start')))).toEqual({});
+    expect(liveDismissals(dismissed, scouts(scout('city.json', 'failed', 'City events', 'a new error')))).toEqual({});
+    expect(sameDismissals(dismissed, { 'scouts:city.json': 'runner could not start' })).toBe(true);
+    expect(sameDismissals(dismissed, {})).toBe(false);
+    expect(sameDismissals(dismissed, { 'scouts:city.json': 'other' })).toBe(false);
   });
 
   it('words the morning line for its count', () => {
