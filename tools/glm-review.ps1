@@ -61,10 +61,12 @@ $tokens = 0; $items = $null; $r = $null
 New-Item -ItemType Directory -Force (Split-Path $ledger) | Out-Null
 # GLM at "low" can still spend its whole budget reasoning on a large diff (seen 2026-10-02, finish=length): then one
 # retry at "none" (seconds, few tokens; it also found the benchmark's major issue).
-foreach ($e in @($Effort) + @(if ($Effort -ne 'none') { 'none' })) {
+foreach ($e in @($Effort) + @(if ($Effort -ne 'none' -and $Model -like 'glm*') { 'none' })) {
     try {
-        $body = @{ model = $Model; max_tokens = 12000; temperature = 0.2; reasoning_effort = $e
+        $body = @{ model = $Model; max_tokens = 12000; temperature = 0.2
             messages = @(@{ role = 'system'; content = $system }, @{ role = 'user'; content = "Diff:`n$diff" }) } | ConvertTo-Json -Depth 6
+        # reasoning_effort is a GLM-family knob; other Scaleway models may reject the unknown parameter.
+        if ($Model -like 'glm*') { $body.reasoning_effort = $e }
         $r = Invoke-RestMethod -Uri 'https://api.scaleway.ai/v1/chat/completions' -Method Post -Headers @{ Authorization = "Bearer $key" } `
             -ContentType 'application/json' -Body $body -TimeoutSec 240
     } catch { $r = $null; continue }
