@@ -57,6 +57,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 - **SP3**: Status sheet Speed group shows per route last total, median total (last 10 reads), median Worker time and read count (`speedRows` in `timings.ts`); in memory, measurement only. GitHub-time split not done (would need Worker timing). Open: phone check, then SP step 2 decision.
 
+- **PW1** (test tooling): `pnpm tour` (root script -> `tools/tour.mjs` sets `VC_TOUR=1`) runs `apps/web/e2e/tour.spec.ts` on the mock app, 390x844 WebKit, writes 16 named PNGs + `index.md` to `apps/web/test-results/tour/`; excluded from `pnpm e2e`/CI unless `VC_TOUR=1`. No live API.
+
 ## Next actions (in order)
 
 0. **Order from the vault Ready Backlog (owner 2026-10-04):** SP phone measurement -> RR (SC2, JV1 done). Items 1-2 below are history.
