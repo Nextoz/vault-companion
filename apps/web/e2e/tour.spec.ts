@@ -67,7 +67,7 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
   await shot('Today - morning card', async () => {
     await goTo(page, 'Today');
     await expect(page.getByRole('region', { name: 'Today at a glance' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Reading brief/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Morning Brief', exact: true })).toBeVisible();
   });
 
   await shot('Today - Needs You', async () => {

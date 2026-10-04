@@ -231,13 +231,15 @@ interface RadarNoteView {
   readonly message: string | null;
 }
 
-export function ResearchRadar({ accountKey, refreshKey, blocked }: {
+/** `defaultOpen` shows the papers at once on the dedicated Radar screen; the Scouts/panel use keeps it collapsed. */
+export function ResearchRadar({ accountKey, refreshKey, blocked, defaultOpen = false }: {
   accountKey: string | null;
   refreshKey: number | null;
   blocked: boolean;
+  defaultOpen?: boolean;
 }) {
   const [read, setRead] = useState<RadarResponse | null>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [error, setError] = useState<string | null>(null);
   const [intents, setIntents] = useState<RadarIntent[]>(() => loadRadarIntents(accountKey));
   const [savingIds, setSavingIds] = useState<ReadonlySet<string>>(new Set());
