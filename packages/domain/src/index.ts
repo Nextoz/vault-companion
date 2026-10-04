@@ -4,6 +4,7 @@ export * from './time.ts';
 export * from './payload-hash.ts';
 export * from './execute.ts';
 export * from './commands.ts';
+export * from './calendar-links.ts';
 export * from './linked-notes.ts';
 export * from './active-work.ts';
 export * from './scouts.ts';

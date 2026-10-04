@@ -383,6 +383,8 @@ export const ErrorCode = z.enum([
   'google-scope-mismatch',
   /** ADR-0044: the OAuth refresh token was revoked/expired (`invalid_grant`). */
   'google-reauth-needed',
+  /** ADR-0052: the calendar-write credential is not configured, so event writes are unavailable. */
+  'calendar-write-unavailable',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 
