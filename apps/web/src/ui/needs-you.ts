@@ -32,11 +32,18 @@ export interface NeedsYouFacts {
   readonly eventsToTriage: number;
   /** Queue items in the `attention` state (the Actions panel's predicate): refused, failed or unresolved. */
   readonly actionsNeedingAttention: number;
+  /** NY3: scout rows dismissed on this device, as row id -> the error text shown when it was dismissed. */
+  readonly dismissedScouts: Readonly<Record<string, string>>;
 }
 
-/** A failed or degraded scout is one the owner must look at; healthy, stale and absent states are not this line. */
-const scoutProblem = (state: DisplayState): string | null =>
-  state === 'Failed' ? 'Its last run failed' : state === 'Degraded' ? 'It ran with problems' : null;
+/**
+ * NY3: only a Failed run is a Needs you row - a Degraded run is the Status sheet's own line, never this one. The
+ * reason is the run's own `lastError` in full; an empty one falls back to a plain sentence, never a guess. Pure.
+ */
+const scoutProblem = (state: DisplayState, lastError: string | null): string | null => {
+  if (state !== 'Failed') return null;
+  return lastError !== null && lastError.trim() !== '' ? lastError : 'Its last run failed';
+};
 
 /** `review` is a YYYY-MM-DD Copenhagen date; `dateIn` keeps the compare a calendar-date compare, never an instant. */
 const reviewDate = (review: string): string => dateIn(`${review}T00:00:00Z`, ZONE);
@@ -53,9 +60,12 @@ export function needsYou(facts: NeedsYouFacts, today: string): NeedsYouRow[] {
   if (scouts) {
     for (const entry of scouts.scouts) {
       const status = entry.state === 'ok' ? entry.status : null;
-      const why = scoutProblem(displayState(status, scouts.now));
-      if (status === null || why === null) continue;
-      rows.push({ id: `scouts:${entry.file}`, title: status.displayName, why, target: { kind: 'scouts' } });
+      if (status === null) continue;
+      const id = `scouts:${entry.file}`;
+      const why = scoutProblem(displayState(status, scouts.now), status.lastError);
+      // NY3: a row stays hidden only while the same error text persists; a new text (or recovery) shows it again.
+      if (why === null || facts.dismissedScouts[id] === why) continue;
+      rows.push({ id, title: status.displayName, why, target: { kind: 'scouts' } });
     }
   }
 
@@ -92,6 +102,33 @@ export function needsYou(facts: NeedsYouFacts, today: string): NeedsYouRow[] {
   }
 
   return rows;
+}
+
+/** Order-independent equality for two dismissal maps, so a pruned map is only written when it actually changed. */
+export function sameDismissals(a: Readonly<Record<string, string>>, b: Readonly<Record<string, string>>): boolean {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => b[key] === a[key]);
+}
+
+/**
+ * NY3: the dismissals still relevant to the current scout read. An entry survives only while that scout is
+ * currently Failed with the same error text; a recovered scout (or a changed text) drops it, so a later failure
+ * shows again. With no scout read in hand nothing is dropped. Pure.
+ */
+export function liveDismissals(
+  dismissed: Readonly<Record<string, string>>,
+  scouts: ScoutsResponse | null,
+): Record<string, string> {
+  if (!scouts) return { ...dismissed };
+  const live: Record<string, string> = {};
+  for (const entry of scouts.scouts) {
+    const status = entry.state === 'ok' ? entry.status : null;
+    if (status === null) continue;
+    const id = `scouts:${entry.file}`;
+    const why = scoutProblem(displayState(status, scouts.now), status.lastError);
+    if (why !== null && dismissed[id] === why) live[id] = why;
+  }
+  return live;
 }
 
 /** The morning line's count text; the card renders no line at all when there are no rows. */

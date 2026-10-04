@@ -31,19 +31,23 @@ export interface ScoutRow {
   readonly name: string;
   readonly state: DisplayState;
   readonly run: string | null;
+  /** NY3: a Degraded or Failed run's own `lastError` text, shown under the row; null for any other state. */
+  readonly error: string | null;
 }
 
-/** One line per scout: state chip plus last run, from the same read the Scouts tab makes. */
+/** One line per scout: state chip plus last run, and (NY3) the run's own error text when it is Degraded or Failed. */
 export function scoutRows(scouts: ScoutsResponse): ScoutRow[] {
   return scouts.scouts
     .filter((entry) => !(entry.state === 'ok' && entry.status.scoutId === TRIAGE_APPLIER_ID))
     .map((entry) => {
       const status = entry.state === 'ok' ? entry.status : null;
+      const state = displayState(status, scouts.now);
       return {
         file: entry.file,
         name: status?.displayName ?? entry.file,
-        state: displayState(status, scouts.now),
+        state,
         run: status ? lastRun(status) : null,
+        error: status !== null && (state === 'Degraded' || state === 'Failed') ? status.lastError : null,
       };
     });
 }
