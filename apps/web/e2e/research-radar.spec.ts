@@ -1,7 +1,13 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
 import { ApiError } from '@vault-companion/contracts';
 import { goTo } from './nav.ts';
+
+// UX7: Research Radar is its own screen, opened from Today's single research entry. Its behaviour (Keep/Remove, reads)
+// is unchanged; only where it is mounted changed.
+const openRadar = async (page: Page) => {
+  await page.getByRole('button', { name: 'Research · 2 highlights', exact: true }).click();
+};
 
 test('a refused Radar decision can be discarded and stays cleared after reload', async ({ page }) => {
   const api = new MockApi();
@@ -14,10 +20,9 @@ test('a refused Radar decision can be discarded and stays cleared after reload',
     })) });
   });
   await page.goto('/');
-  await goTo(page, 'Scouts');
+  await goTo(page, 'Today');
+  await openRadar(page);
   const radar = page.getByRole('region', { name: 'Research Radar' });
-  const toggle = radar.getByRole('button', { name: /^Research Radar(?:\s+[▸▾])?$/ });
-  await toggle.click();
   const cards = radar.getByTestId('radar-card');
   await expect(cards).toHaveCount(2);
   await cards.first().getByRole('button', { name: 'Remove', exact: true }).click();
@@ -31,23 +36,27 @@ test('a refused Radar decision can be discarded and stays cleared after reload',
     .filter(([key]) => key.startsWith('vault-companion:radar-pending:'))
     .reduce((total, [, value]) => total + (JSON.parse(value) as unknown[]).length, 0))).toBe(0);
   await page.reload();
-  await goTo(page, 'Scouts');
-  await toggle.click();
+  await goTo(page, 'Today');
+  await openRadar(page);
   await expect(cards).toHaveCount(2);
   await expect(radar.getByTestId('radar-decision')).toHaveCount(0);
   expect(attempts).toBe(1);
 });
 
-test('Radar mounts on Scouts, expands/collapses, reads a note and keeps decisions honest', async ({ page }) => {
+test('Research Radar opens from Today as its own screen, expands/collapses, reads a note and keeps decisions honest', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
-  await goTo(page, 'Scouts');
+  await goTo(page, 'Today');
+  await openRadar(page);
 
   const radar = page.getByRole('region', { name: 'Research Radar' });
   await expect(radar).toBeVisible();
+  // The dedicated screen opens expanded; the toggle still collapses and expands it.
   const toggle = radar.getByRole('button', { name: /^Research Radar(?:\s+[▸▾])?$/ });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');

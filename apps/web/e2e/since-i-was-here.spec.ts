@@ -41,10 +41,12 @@ test('a first run shows nothing and only stores the baseline', async ({ page }) 
   await api.install(page);
   await page.goto('/');
 
-  // Wait for the Today reads to land (the morning line proves the card rendered), then the pane is still silent.
-  await expect(page.getByRole('button', { name: /Reading brief/ })).toBeVisible();
+  // Wait for the Today reads to land (the stored baseline proves them), then the pane is still silent.
+  await expect.poll(async () => {
+    const raw = await page.evaluate(() => window.localStorage.getItem('vc.sinceIWasHere'));
+    return raw === null ? null : JSON.parse(raw);
+  }).toMatchObject({ brief: TODAY, scouts: { learning: 4 } });
   await expect(page.getByRole('region', { name: 'Since I was here' })).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => window.localStorage.getItem('vc.sinceIWasHere'))).not.toBeNull();
   const stored = JSON.parse((await page.evaluate(() => window.localStorage.getItem('vc.sinceIWasHere')))!);
   expect(stored).toMatchObject({ brief: TODAY, scouts: { learning: 4 } });
   expect(stored.triage).toHaveLength(2);

@@ -28,9 +28,10 @@ export function morningSummary(data: MorningResponse): string {
   return parts.join(' · ');
 }
 
-export function Morning({ refreshKey }: { refreshKey: number | null }) {
+/** `startOpen` renders the panel expanded (the Morning Brief sheet's Reading section). */
+export function Morning({ refreshKey, startOpen = false }: { refreshKey: number | null; startOpen?: boolean }) {
   const [result, setResult] = useState<Fetched<MorningResponse> | null>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [render, setRender] = useState<Render | 'failed' | null>(null);
   useEffect(() => {
     let live = true;

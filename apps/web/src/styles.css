@@ -281,6 +281,31 @@ textarea:focus-visible {
   border-color: var(--accent);
 }
 
+/* UX7: the Morning Brief button leads the card; its sheet holds the brief and the Reading section. */
+.morning-brief-open {
+  font-weight: 600;
+}
+
+.morning-brief-sheet {
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.morning-brief-reading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.morning-brief-reading h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.morning-brief-reading .link {
+  align-self: flex-start;
+}
+
 .morning-brief-marker {
   font-size: 0.75rem;
   letter-spacing: 0.04em;

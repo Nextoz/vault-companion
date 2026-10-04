@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { getScoutOutput, getScouts, type Fetched } from '../api.ts';
 import { attentionCount, displayState, exactTime, lastRun, pluralise, pluralNoun, previewableScouts, scoutsNeedAttention, type DisplayState } from '../scouts.ts';
 import { Insights } from './Insights.tsx';
-import { ResearchRadar } from './ResearchRadar.tsx';
 import { ScoutTime } from './ScoutTime.tsx';
 import './Scouts.css';
 
@@ -56,12 +55,14 @@ function FindingsNote({ id }: { id: string }) {
   }, [id]);
   return 'html' in content ? <article className="note-body scout-findings" data-testid="scout-findings" dangerouslySetInnerHTML={{ __html: content.html }} /> : <p role="status">{content.message}</p>;
 }
-export function Scouts({ page, onOpen, refreshKey, accountKey, blocked }: {
+export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar }: {
   page: boolean;
   onOpen: () => void;
   refreshKey: number | null;
   accountKey: string | null;
+  /** Retained for callers; Radar now lives on its own screen, reached from the small link below. */
   blocked: boolean;
+  onOpenRadar?: () => void;
 }) {
   const [result, setResult] = useState<Fetched<ScoutsResponse> | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -151,6 +152,8 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, blocked }: {
       </ul>
     </>)}
     {insightsData && <Insights data={insightsData} hidden={!!detail} onSelect={setSelected} />}
-    {page && accountKey && <ResearchRadar accountKey={accountKey} refreshKey={refreshKey} blocked={blocked} />}
+    {page && accountKey && onOpenRadar && (
+      <button type="button" className="link scout-radar-link" onClick={onOpenRadar}>Research Radar</button>
+    )}
   </section>;
 }

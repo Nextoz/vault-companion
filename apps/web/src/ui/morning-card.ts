@@ -1,14 +1,17 @@
 // UX2: the Today morning card's one-liners are a pure projection of reads the card already holds - no fetch here.
 // A line with nothing to say is omitted (never a "Not configured" placeholder); the tasks line is always present.
-import type { MorningBriefMissingResponse, MorningBriefReadResponse, MorningBriefResponse, MorningResponse, ScoutsResponse, WeatherResponse, WeatherRunWindow } from '@vault-companion/contracts';
+// UX7: the weather line is plain day language plus the run window's own wording, and one research entry replaces the
+// old reading-brief line (its content now lives in the Morning Brief sheet). Pure.
+import { effectiveRadarDecisions, WEATHER_TIME_ZONE } from '@vault-companion/contracts';
+import type { MorningBriefMissingResponse, MorningBriefReadResponse, MorningBriefResponse, RadarResponse, ScoutsResponse, WeatherProjection, WeatherResponse, WeatherRunWindow } from '@vault-companion/contracts';
 import type { QueueItem } from '../queue/queue.ts';
 import { attentionCount, pluralise, scoutsNeedAttention } from '../scouts.ts';
+import { dateIn } from '../time.ts';
 import { localDate, latestCheckin } from './MoodCard.tsx';
-import { morningSummary } from './Morning.tsx';
 import { needsYouText, type NeedsYouRow } from './needs-you.ts';
 
 /** One line on the morning card; `id` is both the React key and which detail the line opens. */
-export type MorningLineId = 'needs' | 'weather' | 'scouts' | 'papers' | 'triage' | 'tasks';
+export type MorningLineId = 'needs' | 'weather' | 'scouts' | 'research' | 'triage' | 'tasks';
 
 export interface MorningLine {
   readonly id: MorningLineId;
@@ -64,9 +67,10 @@ export interface MorningCardFacts {
   /** A failed weather read (offline/error): still offer the line so the panel, and its retry, stays reachable. */
   readonly weatherFailed: boolean;
   readonly scouts: ScoutsResponse | null;
-  readonly morning: MorningResponse | null;
   readonly eventsToTriage: number;
   readonly tasksToday: number;
+  /** UX7: research highlights left after the Radar Remove/Keep decisions; null hides the line (read unavailable). */
+  readonly researchHighlights: number | null;
   /** NY1: rows for the "Needs you" sheet, already built by the card; empty hides the line. */
   readonly needs: readonly NeedsYouRow[];
 }
@@ -77,22 +81,82 @@ export function tasksTodayText(count: number): string {
   return count === 1 ? '1 task today' : `${count} tasks today`;
 }
 
-/**
- * UX4: the weather card's short glance - "Dry 08-10 · 14° · light wind". The full window summary, agreement and model
- * detail stay in the weather panel this line opens. Rain, temperature and wind keep honest wording; a run window the
- * forecast could not choose reads as "No daytime window" rather than a guess. Pure.
- */
-export function weatherGlance(window: WeatherRunWindow | null): string {
-  if (!window) return 'No daytime window';
-  const condition = window.rainMm === null ? 'Rain unknown' : window.rainMm < 0.1 ? 'Dry' : 'Wet';
-  const start = window.start.slice(11, 13);
-  const end = window.end.slice(11, 13);
-  const temp = `${Math.round(window.temperatureRangeC.max)}°`;
-  const wind = window.windRangeMs.max <= 3.4 ? 'light wind' : window.windRangeMs.max <= 7.9 ? 'breezy' : 'strong wind';
-  return `${condition} ${start}–${end} · ${temp} · ${wind}`;
+/** The Copenhagen local hour (0-23) of an instant; -1 when unreadable, so it never lands inside a daytime window. */
+function hourIn(iso: string, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(iso));
+  const value = Number(parts.find((part) => part.type === 'hour')?.value ?? Number.NaN);
+  return Number.isInteger(value) ? value : -1;
 }
 
-/** Needs you, then weather glance, scouts, papers, events and the tasks line - each omitted when it has nothing to say. */
+/**
+ * UX7: the day's plain-weather glance - "Rain all day · 11° · breezy", "Dry · 14°". Rain is read from the day's
+ * Copenhagen daytime points (08:00-20:00), temperature is the warmest returned, and wind shows only when it matters.
+ * A gap in the forecast stays "Rain unknown" - never a guess. Pure.
+ */
+export function weatherDayGlance(projection: WeatherProjection): string {
+  const day = dateIn(projection.now, WEATHER_TIME_ZONE);
+  const points = projection.models.flatMap((series) => series.points)
+    .filter((point) => dateIn(point.time, WEATHER_TIME_ZONE) === day)
+    .filter((point) => { const hour = hourIn(point.time, WEATHER_TIME_ZONE); return hour >= 8 && hour < 20; });
+  const rains = points.map((point) => point.rainMm).filter((value): value is number => value !== null);
+  const temps = points.map((point) => point.temperatureC).filter((value): value is number => value !== null);
+  const winds = points.map((point) => point.windMs).filter((value): value is number => value !== null);
+  const rain = rains.length === 0 ? 'Rain unknown'
+    : rains.every((mm) => mm < 0.1) ? 'Dry' : rains.every((mm) => mm >= 0.1) ? 'Rain all day' : 'Showers';
+  // A gap is never filled with the run window's narrower range unless no daytime temperature was returned at all.
+  const temp = temps.length > 0 ? Math.round(Math.max(...temps))
+    : projection.runWindow === null ? null : Math.round(projection.runWindow.temperatureRangeC.max);
+  const windMax = winds.length > 0 ? Math.max(...winds) : projection.runWindow?.windRangeMs.max ?? null;
+  const wind = windMax === null ? null : windMax > 7.9 ? 'strong wind' : windMax > 3.4 ? 'breezy' : null;
+  return [rain, temp === null ? null : `${temp}°`, wind].filter((part): part is string => part !== null).join(' · ');
+}
+
+/**
+ * UX7: the chosen run window's own wording - "Run window 08-10, dry". Null when the forecast chose no window, so the
+ * card simply omits it (never a bare "No daytime window"). Pure.
+ */
+export function runWindowGlance(window: WeatherRunWindow | null): string | null {
+  if (window === null) return null;
+  const start = String(hourIn(window.start, WEATHER_TIME_ZONE)).padStart(2, '0');
+  const end = String(hourIn(window.end, WEATHER_TIME_ZONE)).padStart(2, '0');
+  const condition = window.rainMm === null ? 'rain unknown' : window.rainMm < 0.1 ? 'dry' : 'wet';
+  return `Run window ${start}-${end}, ${condition}`;
+}
+
+/** The weather line: the day's plain language, plus the run window's own wording when one exists. Pure. */
+export function weatherLine(projection: WeatherProjection): string {
+  const window = runWindowGlance(projection.runWindow);
+  return window === null ? weatherDayGlance(projection) : `${weatherDayGlance(projection)} · ${window}`;
+}
+
+/** UX7: the Radar cards left after Remove/Keep - the same filter `deriveRadar` shows as "papers ranked". Pure. */
+export function radarHighlights(read: RadarResponse): number {
+  const decisions = effectiveRadarDecisions(read.decisions);
+  return read.papers.filter((paper) => !decisions.removed.has(paper.paperId) && !decisions.kept.has(paper.paperId)).length;
+}
+
+/** One research entry: "Research · 3 highlights"; "No research highlights" keeps Radar reachable when nothing ranked. */
+export function researchHighlightsText(count: number): string {
+  if (count === 0) return 'No research highlights';
+  return count === 1 ? 'Research · 1 highlight' : `Research · ${count} highlights`;
+}
+
+/** UX7: the Morning Brief sheet's own state. A usable brief for today yields its rows; anything else (no file, a stale
+ *  date, or a failed read) yields the ADR-0055 reason line and no rows. Pure. */
+export interface MorningBriefSheetState {
+  readonly missing: string | null;
+  readonly lines: readonly BriefLine[];
+}
+
+export function morningBriefSheet(brief: MorningBriefReadResponse | null, today: string): MorningBriefSheetState {
+  if (brief !== null && !isMissingBrief(brief)) {
+    const lines = briefLines(brief, today);
+    if (lines !== null) return { missing: null, lines };
+  }
+  return { missing: missingBriefText(brief !== null && isMissingBrief(brief) ? brief.statusError : null), lines: [] };
+}
+
+/** Needs you, weather, scouts, the research entry, events and the tasks line - each omitted when it has nothing to say. */
 export function morningLines(facts: MorningCardFacts): MorningLine[] {
   const lines: MorningLine[] = [];
   // NY1: what only the owner can decide leads the card; nothing to decide hides the line entirely.
@@ -100,15 +164,13 @@ export function morningLines(facts: MorningCardFacts): MorningLine[] {
   // An unavailable forecast is still something to say: the line carries the honest reason, not a placeholder.
   if (facts.weather) {
     lines.push({ id: 'weather', text: facts.weather.status === 'ok'
-      ? weatherGlance(facts.weather.projection.runWindow) : facts.weather.message });
+      ? weatherLine(facts.weather.projection) : facts.weather.message });
   } else if (facts.weatherFailed) {
     lines.push({ id: 'weather', text: 'Weather unavailable' });
   }
   const problems = facts.scouts ? attentionCount(facts.scouts) : 0;
   if (problems > 0) lines.push({ id: 'scouts', text: scoutsNeedAttention(problems) });
-  if (facts.morning && (facts.morning.brief !== null || facts.morning.explained.length > 0)) {
-    lines.push({ id: 'papers', text: morningSummary(facts.morning) });
-  }
+  if (facts.researchHighlights !== null) lines.push({ id: 'research', text: researchHighlightsText(facts.researchHighlights) });
   if (facts.eventsToTriage > 0) lines.push({ id: 'triage', text: pluralise(facts.eventsToTriage, 'new event') });
   lines.push({ id: 'tasks', text: tasksTodayText(facts.tasksToday) });
   return lines;

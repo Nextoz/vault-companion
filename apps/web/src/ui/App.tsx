@@ -28,6 +28,7 @@ import { NoteView, type OpenLink } from './NoteView.tsx';
 import { VaultStatus } from './VaultStatus.tsx';
 import { Progress } from './Progress.tsx';
 import { MorningCard } from './MorningCard.tsx';
+import { ResearchRadar } from './ResearchRadar.tsx';
 import { ReportSheet, screenName } from './ReportSheet.tsx';
 import { Notes } from './Notes.tsx';
 import { Scouts } from './Scouts.tsx';
@@ -66,6 +67,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const [tab, setTab] = useState<Tab>('today');
   // Where the header's Status screen returns to (the tab that opened it).
   const [statusReturn, setStatusReturn] = useState<Tab>('today');
+  // Where the full-screen Research Radar returns to (the screen that opened it).
+  const [radarReturn, setRadarReturn] = useState<Tab>('today');
   const [editing, setEditing] = useState<{ task: TaskView; account: string | null; revision: string } | null>(null);
   // CAL-b: the item keys the calendar link file names, and the row whose sheet is open.
   const [calendarLinks, setCalendarLinks] = useState<ReadonlySet<string>>(() => new Set<string>());
@@ -355,6 +358,11 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
     setStatusReturn((prev) => (tab === 'status' ? prev : tab));
     setTab('status');
   };
+  // UX7: Research Radar is its own screen (no bottom-bar button), reached from Today or the Scouts link.
+  const openRadar = useCallback(() => {
+    setRadarReturn((prev) => (tab === 'radar' ? prev : tab));
+    setTab('radar');
+  }, [tab]);
 
   return (
     <div className="app" data-tab={tab}>
@@ -431,7 +439,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           </div>
         ))}
 
-        {needsAttention && tab !== 'status' && (
+        {needsAttention && tab !== 'status' && tab !== 'radar' && (
           <ActionsPanel queue={queue} items={snapshot.items} read={tasks} onRefresh={() => refreshTasks()} onDiscard={discard} />
         )}
 
@@ -440,6 +448,13 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             <Back onBack={() => setTab(statusReturn)} />
             <StatusSheet read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0}
               onRefresh={() => refreshTasks()} accountKey={accountKey} queue={queue} items={snapshot.items} onDiscard={discard} />
+          </>
+        )}
+
+        {tab === 'radar' && !signedOut && (
+          <>
+            <Back onBack={() => setTab(radarReturn)} />
+            <ResearchRadar accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} defaultOpen />
           </>
         )}
 
@@ -469,18 +484,19 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {tab === 'scouts' && !signedOut && (
           <>
             <Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} />
-            <Scouts key={`scouts:${accountKey}`} page onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} />
+            <Scouts key={`scouts:${accountKey}`} page onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} onOpenRadar={openRadar} />
           </>
         )}
 
         {/* Today is the cockpit (UX2): the morning card, the check-in line, then the Dashboard boards. Each card line
-            keeps its detail reachable (weather/papers inline; scouts and events on the Scouts tab). */}
+            keeps its detail reachable (weather inline; the brief and Reading in its sheet; scouts, events and the
+            research entry on their own screens). */}
         {tab === 'today' && !signedOut && (
           <>
             <MorningCard key={`morning-card:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey}
               baseRevision={revision} blocked={writeBlocked || frozen} refreshKey={checkedAt} tasksToday={view.today.length}
-              openTasks={tasks?.allOpen ?? []} today={tasks?.today ?? ''}
-              onOpenTasks={() => setTab('tasks')} onOpenScouts={() => setTab('scouts')} onOpenHealth={() => setTab('health')} onOpenStatus={openStatus} />
+              onOpenTasks={() => setTab('tasks')} onOpenScouts={() => setTab('scouts')} onOpenRadar={openRadar}
+              onOpenHealth={() => setTab('health')} onOpenStatus={openStatus} />
             {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
             {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} />}
           </>

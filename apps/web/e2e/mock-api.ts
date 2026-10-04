@@ -29,6 +29,7 @@ import {
   Receipt,
   SessionResponse,
   MorningBriefResponse,
+  MorningBriefMissingResponse,
   MorningResponse,
   RADAR_PAPER_HEADER,
   RadarDecisionLine,
@@ -351,8 +352,9 @@ export class MockApi {
 
   /** "This morning" (ADR-0029 Part 2): empty by default (the panel then stays hidden); morning.spec sets SAMPLE_MORNING. */
   morning: MorningResponse | null = null;
-  /** Morning Brief (MB2): a stale-dated brief by default, so the card shows no brief rows and no unmocked 404 appears. */
-  morningBrief: MorningBriefResponse = {
+  /** Morning Brief (MB2): a stale-dated brief by default, so the card shows "No brief yet" and no unmocked 404 appears.
+   *  A `missing` shape (ADR-0055) can be set to serve the job's fixed status error code. */
+  morningBrief: MorningBriefResponse | MorningBriefMissingResponse = {
     revision: 'b'.repeat(40), date: '2000-01-01', generatedAt: '2000-01-01T04:31:00+01:00', source: 'fallback',
     unavailable: [], brief: { source: 'fallback', dayLine: 'Stale', gaps: [], todos: [] },
   };
@@ -405,8 +407,11 @@ export class MockApi {
     await on('**/api/health', (route) => this.#health(route));
     await on('**/api/morning', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, MorningResponse.parse(this.morning ?? { revision: 'a'.repeat(40), date: '2026-09-30', brief: null, explained: [] })));
-    await on('**/api/morning-brief', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
-      : this.#json(route, 200, MorningBriefResponse.parse(this.morningBrief)));
+    await on('**/api/morning-brief', (route) => {
+      if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+      const body = 'kind' in this.morningBrief ? MorningBriefMissingResponse.parse(this.morningBrief) : MorningBriefResponse.parse(this.morningBrief);
+      return this.#json(route, 200, body);
+    });
     await on('**/api/calendar/links', (route) => this.#calendarReadLinks(route));
     await on('**/api/calendar/events', (route) => this.#calendarCreate(route));
     await on('**/api/calendar/events/remove', (route) => this.#calendarRemove(route));
