@@ -4,6 +4,7 @@ import { TrainingResponse, type TrainingRow } from '@vault-companion/contracts';
 import {
   ActiveWorkResponse,
   AiBudgetResponse,
+  AiUsageResponse,
   ApiError,
   Command,
   DASHBOARD_RANGE_PLAN,
@@ -45,6 +46,13 @@ const TODAY = '2026-09-24';
 
 let counter = 0;
 const sha = () => (++counter).toString(16).padStart(40, '0');
+
+/** AB3b: ten synthetic daily usage rows, oldest first, ending on the Dashboard's own day. */
+const USAGE_END = Date.parse('2026-09-30T00:00:00Z');
+const usageRow = (index: number, over: Record<string, number> = {}) => ({
+  date: new Date(USAGE_END - (9 - index) * 86_400_000).toISOString().slice(0, 10),
+  calls: index + 1, inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, cost: 0, ...over,
+});
 
 /** B12: the eight cells that identify a session row; the mock matches an edit on all of them. */
 const sameTrainingRow = (a: TrainingRow, b: TrainingRow): boolean =>
@@ -322,6 +330,17 @@ export class MockApi {
     ],
     freeRamGb: null,
   };
+  /** AB3b: a synthetic per-provider usage summary ending on the Dashboard's own day. */
+  aiUsage: AiUsageResponse = {
+    revision: 'd'.repeat(40), generatedAt: '2026-09-30T11:45:00Z', skipped: 0,
+    providers: {
+      claude: { label: 'Claude Code', days: Array.from({ length: 10 }, (_, index) => usageRow(index, { outputTokens: (index + 1) * 100, cacheWriteTokens: 5, cacheReadTokens: 999_999 })) },
+      codex: { label: 'Codex', days: Array.from({ length: 10 }, (_, index) => usageRow(index, { outputTokens: (index + 1) * 50, cacheWriteTokens: 0, cacheReadTokens: 999_999 })) },
+      jev: { label: 'Jev', days: Array.from({ length: 10 }, (_, index) => usageRow(index, { calls: index + 2 })) },
+      deepseek: { label: 'DeepSeek', currency: 'USD', days: Array.from({ length: 10 }, (_, index) => usageRow(index, { cost: (index + 1) / 10 })) },
+      scaleway: { label: 'Scaleway', currency: 'EUR', days: Array.from({ length: 10 }, (_, index) => usageRow(index, { cost: (index + 1) / 4 })) },
+    },
+  };
 
   static readonly SAMPLE_MORNING: MorningResponse = MorningResponse.parse({
     revision: 'a'.repeat(40), date: '2026-09-30',
@@ -355,6 +374,8 @@ export class MockApi {
       : this.#json(route, 200, MorningBriefResponse.parse(this.morningBrief)));
     await on('**/api/ai-budget', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, AiBudgetResponse.parse(this.aiBudget)));
+    await on('**/api/ai-usage', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
+      : this.#json(route, 200, AiUsageResponse.parse(this.aiUsage)));
     await on('**/api/scouts', (route) => this.session === 'signed-out'
       ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, ScoutsResponse.parse(this.scouts)));
