@@ -5,7 +5,6 @@ import {
   morningBriefOperationId,
   parseBriefFile,
   serializeBriefFile,
-  TRAILER_OP,
   type BriefFile,
 } from '@vault-companion/domain';
 import { ScoutStatus } from '@vault-companion/contracts';

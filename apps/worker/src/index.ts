@@ -164,7 +164,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
 /** Read-only view over the same store whose `head()` returns the caller-pinned commit without another fetch. */
 function withPinnedHead(store: VaultStore, commitSha: string): VaultStore {
   return new Proxy(store, {
-    get(target, prop, receiver) {
+    get(target, prop) {
       if (prop === 'head') return async () => ({ commitSha });
       const value = Reflect.get(target, prop, target);
       return typeof value === 'function' ? value.bind(target) : value;
