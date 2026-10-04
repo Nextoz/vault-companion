@@ -1,6 +1,10 @@
 import { AiBudgetResponse, DashboardResponse, HealthResponse, ScoutsResponse } from '@vault-companion/contracts';
 import type { ScoutStatus } from '@vault-companion/contracts';
+import { JSDOM } from 'jsdom';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { ScoutLine } from './StatusSheet.tsx';
 import { budgetFreshness, budgetReset, budgetRows, buildLine, dataSourceRows, scoutRows, shortRevision, stateLabel } from './status-sheet.ts';
 
 const now = Date.parse('2026-09-30T13:00:00Z');
@@ -84,6 +88,20 @@ describe('status sheet helpers', () => {
       ['Failed', 'runner could not start'],
       ['Healthy', null],
     ]);
+  });
+
+  it('renders the run\u2019s error text under the scout row', () => {
+    const rows = scoutRows(scoutsResponse([
+      { file: 'Scouts/deg.md', state: 'ok', status: scout({ scoutId: 'deg', displayName: 'Degraded', runStatus: 'degraded', lastError: 'one source timed out' }) },
+      { file: 'Scouts/fail.md', state: 'ok', status: scout({ scoutId: 'fail', displayName: 'Failed', runStatus: 'failed', lastError: 'runner could not start' }) },
+      { file: 'Scouts/ok.md', state: 'ok', status: scout({ scoutId: 'ok', displayName: 'Healthy', lastError: 'stale text' }) },
+    ]));
+    const visible = (row: (typeof rows)[number]) =>
+      new JSDOM(renderToStaticMarkup(createElement(ScoutLine, { row }))).window.document.body.textContent ?? '';
+    expect(visible(rows[0]!)).toContain('Ran with problems');
+    expect(visible(rows[0]!)).toContain('one source timed out');
+    expect(visible(rows[1]!)).toContain('runner could not start');
+    expect(visible(rows[2]!)).not.toContain('stale text');
   });
 
   it('reads each data source time from the copies the app already holds', () => {

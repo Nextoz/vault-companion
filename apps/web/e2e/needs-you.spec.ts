@@ -8,12 +8,14 @@ test('a degraded scout is never a Needs you row', async ({ page }) => {
   if (learning?.state !== 'ok') throw new Error('missing fixture');
   learning.status.runStatus = 'degraded';
   learning.status.lastError = 'one source timed out';
-  api.scouts.scouts = [learning];
+  // A stale peer renders the card's scouts line, so the read has visibly landed before the absence below is checked.
+  const stale = { state: 'ok' as const, file: 'stale.json', status: { ...learning.status, scoutId: 'stale',
+    displayName: 'Stale scout', runStatus: 'success' as const,
+    lastAttemptAt: '2026-09-01T07:00:00+02:00', lastSuccessAt: '2026-09-01T07:00:00+02:00' } };
+  api.scouts.scouts = [learning, stale];
   await api.install(page);
-  // Wait for the scouts read so "no line" cannot pass before the card has its data.
-  const loaded = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/scouts');
   await page.goto('/');
-  await loaded;
+  await expect(page.getByRole('button', { name: '1 scout needs attention' })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Needs you/ })).toHaveCount(0);
 });
 
@@ -33,10 +35,11 @@ test('a failed scout row shows its error, hides on Got it, and the line disappea
   await expect(sheet.getByRole('button', { name: /City events/ })).toHaveCount(0);
 
   await sheet.getByRole('button', { name: 'Close' }).click();
+  // The Failed scout's line proves the card rendered its read while the dismissed row stays hidden.
+  await expect(page.getByRole('button', { name: '1 scout needs attention' })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Needs you/ })).toHaveCount(0);
   // Device-held: the dismissal survives a reload while the same error text persists.
-  const reloaded = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/scouts');
   await page.reload();
-  await reloaded;
+  await expect(page.getByRole('button', { name: '1 scout needs attention' })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Needs you/ })).toHaveCount(0);
 });

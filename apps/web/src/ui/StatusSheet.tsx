@@ -29,7 +29,7 @@ function newestDashboard(accountKey: string | null): DashboardResponse | null {
   return newest;
 }
 
-function ScoutLine({ row }: { row: ScoutRow }) {
+export function ScoutLine({ row }: { row: ScoutRow }) {
   return (
     <li className="status-sheet-scout">
       <span className={`status-sheet-scout-name ${stateClass(row.state)}`}>{row.name}</span>

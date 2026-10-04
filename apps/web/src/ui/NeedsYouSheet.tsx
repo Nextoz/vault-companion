@@ -17,6 +17,7 @@ export function NeedsYouSheet({ rows, queue, accountKey, onNavigate, onDismiss, 
 }) {
   const [editing, setEditing] = useState<{ item: ActiveWorkItem; revision: string } | null>(null);
   const dialog = useRef<HTMLDivElement>(null);
+  const dismissed = useRef(false);
   // Move focus into the dialog on open, so the Tab-trap below keeps the background unreachable, and return it to
   // the control that opened the sheet on close (same lifecycle as EditSheet).
   useEffect(() => {
@@ -24,6 +25,14 @@ export function NeedsYouSheet({ rows, queue, accountKey, onNavigate, onDismiss, 
     dialog.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
     return () => { if (invoker instanceof HTMLElement) invoker.focus(); };
   }, []);
+  // NY3: "Got it" removes the focused row, so keep keyboard focus inside the sheet on the next row or the Close button.
+  useEffect(() => {
+    if (!dismissed.current) return;
+    dismissed.current = false;
+    const next = dialog.current?.querySelector<HTMLElement>('.needs-you-row:not(:disabled)')
+      ?? dialog.current?.querySelector<HTMLElement>('.sheet-buttons button:not(:disabled)');
+    next?.focus();
+  }, [rows]);
 
   // An Active Work row reuses the item's own edit sheet; every other row hands its target to the caller and closes.
   function open(row: NeedsYouRow) {
@@ -64,7 +73,8 @@ export function NeedsYouSheet({ rows, queue, accountKey, onNavigate, onDismiss, 
                     <span className="muted small">{row.why}</span>
                   </button>
                   {row.target.kind === 'scouts' && (
-                    <button type="button" className="needs-you-dismiss" onClick={() => onDismiss(row)}>Got it</button>
+                    <button type="button" className="needs-you-dismiss"
+                      onClick={() => { dismissed.current = true; onDismiss(row); }}>Got it</button>
                   )}
                 </li>
               ))}
