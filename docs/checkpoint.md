@@ -1,4 +1,4 @@
-# Checkpoint — 2026-10-04 (LG1a)
+# Checkpoint — 2026-10-04 (SIWH)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
@@ -48,9 +48,11 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 - **LG1a** (ADR-0053, backend only): update-only write target `Personal/Learning Gym Log.md`; `GET /api/learning` (kinds from the Kinds table, rows, unknown lines), `LogLearning` (row at end of `## Log`, kind must exist) + exact `UndoLogLearning`, paste-line parser `parseLearningPasteLine` (needs min, score and topic; kinds without a score need the Add sheet). Edit row not built. GLM review crashed again (`glm-review.ps1` null array). **LG1b** (Log -> Learning section UI) next.
 
+- **SIWH**: closable pane above the Today morning card (`since-i-was-here.ts`, `SinceIWasHere.tsx`): lines for new triage event ids, scouts with more findings, a new brief, new explained papers, a new health day; device-held snapshot `vc.sinceIWasHere`, advances only on close/Dismiss all, first install and unavailable sources are silent, max 5 lines. No fetch, no vault write. Open: phone check.
+
 ## Next actions (in order)
 
-0. **Order from the vault Ready Backlog (owner 2026-10-04):** LG1b (UI) -> SIWH (worker done, in review) -> JV1 -> SC2 spike -> SP/RR. Items 1-2 below are history.
+0. **Order from the vault Ready Backlog (owner 2026-10-04):** LG1b (UI, worker running) -> JV1 -> SC2 spike -> SP/RR. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the

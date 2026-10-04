@@ -2,9 +2,10 @@
 // line, each tapping through to its detail; weather and papers open the existing panels inline, scouts and events open
 // the Scouts tab where their detail (and triage) now lives. Below it the check-in line, once today has no check-in.
 // NY2 adds "Review my morning": a guided step-through sheet over the brief, the NY1 rows and today's open tasks.
-import type { ActiveWorkResponse, MorningBriefResponse, MorningResponse, ScoutsResponse, TaskView, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
+import type { ActiveWorkResponse, HealthResponse, MorningBriefResponse, MorningResponse, ScoutsResponse, TaskView, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
 import { getActiveWork, getMorning, getMorningBrief, getScouts, getTriage, getWeather, type Fetched } from '../api.ts';
+import { lastCopies } from '../lastCopy.ts';
 import { prefs } from '../prefs.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { dateIn } from '../time.ts';
@@ -14,6 +15,8 @@ import { Morning } from './Morning.tsx';
 import { MorningReviewSheet } from './MorningReviewSheet.tsx';
 import { NeedsYouSheet } from './NeedsYouSheet.tsx';
 import { liveDismissals, needsYou, sameDismissals, type NeedsYouFacts, type NeedsYouRow, type NeedsYouTarget } from './needs-you.ts';
+import { SinceIWasHere } from './SinceIWasHere.tsx';
+import { sinceIWasHereFacts, type SiwhTarget } from './since-i-was-here.ts';
 import { WeatherMorning } from './WeatherLab.tsx';
 import { briefLines, checkinDue, morningLines, type MorningLineId } from './morning-card.ts';
 
@@ -30,10 +33,11 @@ export interface MorningCardProps {
   today: string;
   onOpenTasks: () => void;
   onOpenScouts: () => void;
+  onOpenHealth: () => void;
   onOpenStatus: () => void;
 }
 
-export function MorningCard({ queue, items, accountKey, baseRevision, blocked, refreshKey, tasksToday, openTasks, today, onOpenTasks, onOpenScouts, onOpenStatus }: MorningCardProps) {
+export function MorningCard({ queue, items, accountKey, baseRevision, blocked, refreshKey, tasksToday, openTasks, today, onOpenTasks, onOpenScouts, onOpenHealth, onOpenStatus }: MorningCardProps) {
   const [weather, setWeather] = useState<Fetched<WeatherResponse> | null>(null);
   const [scouts, setScouts] = useState<Fetched<ScoutsResponse> | null>(null);
   const [morning, setMorning] = useState<Fetched<MorningResponse> | null>(null);
@@ -95,6 +99,17 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
     tasksToday,
     needs: needsRows,
   });
+  // SIWH: the same reads the card already holds, narrowed to counts and keys. No read is added for the pane; the health
+  // day comes from the app's in-memory last copy (populated when the Health screen has been visited this session).
+  const siwhFacts = sinceIWasHereFacts({
+    // Event ids, not just the count: a card handled elsewhere then replaced by a new one on the same count is new.
+    triage: triageView ? [...triageView.cards.map((card) => card.eventId), ...triageView.checkins.map((checkin) => checkin.eventId)] : null,
+    scouts: scoutData,
+    brief: brief !== null && brief.kind === 'ok' ? brief.data : null,
+    morning: morning !== null && morning.kind === 'ok' ? morning.data : null,
+    health: lastCopies.get<HealthResponse>(accountKey, 'health')?.data ?? null,
+    today: localDate(),
+  });
 
   function openLine(id: MorningLineId) {
     if (id === 'needs') return setNeedsOpen(true);
@@ -108,6 +123,12 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
     if (target.kind === 'actions') return onOpenStatus();
   }
 
+  function openSiwh(target: SiwhTarget) {
+    if (target === 'health') return onOpenHealth();
+    if (target === 'papers') return setOpen('papers');
+    onOpenScouts();
+  }
+
   // NY3: "Got it" remembers the row id and the error text; the row returns only when that text changes.
   function dismissNeedsRow(row: NeedsYouRow) {
     const next = { ...dismissedScouts, [row.id]: row.why };
@@ -117,6 +138,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
 
   const due = checkinDue(items);
   return <>
+    <SinceIWasHere facts={siwhFacts} onOpen={openSiwh} />
     <section className="group morning-card" aria-label="Today at a glance">
       {briefRows?.map((row) => (row.todo
         ? <button key={row.id} type="button" className="morning-line morning-brief-line" onClick={onOpenTasks}>{row.text}</button>
