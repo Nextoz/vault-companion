@@ -97,7 +97,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   // AB3b: read the usage summary and the budget rows while the Dashboard is on screen; both are read-only. The old
   // answer stays until the new one arrives, so a refresh never blanks the panel.
   useEffect(() => {
-    if (signedOut || tab !== 'today') return;
+    if (signedOut) { setAiUsage(null); setAiBudget(null); return; }
+    if (tab !== 'today') return;
     let live = true;
     void getAiUsage().then((result) => { if (live) setAiUsage(result); });
     void getAiBudget().then((result) => { if (live) setAiBudget(result); });
