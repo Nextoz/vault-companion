@@ -40,9 +40,18 @@ import {
   type WeatherResponse,
 } from '@vault-companion/contracts';
 import { Hono } from 'hono';
+import {
+  CalendarEventCreateRequest,
+  CalendarEventRemoveRequest,
+  type CalendarEventCreateRequest as CalendarEventCreateRequestType,
+  type CalendarEventRemoveRequest as CalendarEventRemoveRequestType,
+  type CalendarEventCreateResponse,
+  type CalendarEventRemoveResponse,
+  type CalendarLinksResponse,
+  type HealthIngestOutcome,
+} from '@vault-companion/domain';
 import type { Identity, ServiceTokenIdentity } from './auth.ts';
 import { diagnosticDetail, hashPath, sanitize, type LogSink } from './log.ts';
-import type { HealthIngestOutcome } from '@vault-companion/domain';
 
 export interface Services {
   readTasks(known: readonly string[]): Promise<TasksResponse | ApiError>;
@@ -87,6 +96,12 @@ export interface Services {
   readHealthHistory?(): Promise<HealthHistoryResponse | ApiError>;
   /** Health sample ingest (HC3a). Optional: without it the route answers 404. */
   ingestHealth?(body: string): Promise<HealthIngestOutcome>;
+  /** Calendar links read (ADR-0052). Optional: without it the route answers 404. */
+  readCalendarLinks?(): Promise<CalendarLinksResponse | ApiError>;
+  /** Calendar event create plus links-file write (ADR-0048/0052). Optional: without it the route answers 404. */
+  createCalendarEvent?(request: CalendarEventCreateRequestType, raw: unknown): Promise<CalendarEventCreateResponse | ApiError>;
+  /** Calendar event remove plus links-file removal (ADR-0048/0052). Optional: without it the route answers 404. */
+  removeCalendarEvent?(request: CalendarEventRemoveRequestType, raw: unknown): Promise<CalendarEventRemoveResponse | ApiError>;
 }
 
 export interface AppDeps {
@@ -109,6 +124,7 @@ export function statusFor(code: ErrorCode): number {
   if (code === 'invalid' || code === 'clock-skew' || code === 'refused:path') return 400;
   if (code === 'not-found') return 404;
   if (code === 'upstream-unavailable') return 503;
+  if (code === 'calendar-write-unavailable' || code === 'google-reauth-needed' || code === 'google-scope-mismatch') return 503;
   if (code.startsWith('refused:')) return 422;
   return 409; // conflict:*, operation-id-reused, dedupe-unknown
 }
@@ -124,7 +140,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | MorningBriefResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | MorningBriefResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -606,6 +622,89 @@ export function createApp(deps: AppDeps) {
     }
     meta.pathHash = await hashPath(result.path);
     meta.commitSha = result.commitSha;
+    return c.json(result);
+  });
+
+  // Calendar links read (ADR-0052): per-item event ids only. Read-only, so no origin/account CSRF guards.
+  app.get('/api/calendar/links', async (c) => {
+    const read = deps.services.readCalendarLinks;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Calendar event create (ADR-0048/0052). Same origin/account/body guards as radar decisions.
+  app.post('/api/calendar/events', async (c) => {
+    if (c.req.header('Origin') !== deps.appOrigin || c.req.header('X-VC-Request') !== '1') {
+      return c.json(err('forbidden', 'request origin not allowed'), 403);
+    }
+    if (!(c.req.header('Content-Type') ?? '').toLowerCase().startsWith('application/json')) {
+      return c.json(err('forbidden', 'JSON required'), 403);
+    }
+    if (c.req.header('X-VC-Account') !== c.get('identity').accountKey) {
+      return c.json(err('account-mismatch', 'this action was saved under a different sign-in'), 409);
+    }
+    const create = deps.services.createCalendarEvent;
+    if (!create) return c.json(err('invalid', 'not found'), 404);
+    const text = await c.req.text();
+    if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return c.json(err('invalid', 'body too large'), 400);
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      return c.json(err('invalid', 'body is not JSON'), 400);
+    }
+    const parsed = CalendarEventCreateRequest.safeParse(raw);
+    if (!parsed.success) {
+      const fields = [...new Set(parsed.error.issues.map((i) => i.path.join('.') || '(root)'))].join(', ');
+      return c.json(err('invalid', `invalid calendar event: ${fields}`), 400);
+    }
+    const meta = c.get('logMeta');
+    meta.operationId = parsed.data.operationId;
+    const result = await create(parsed.data, raw);
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json({ ...result, operationId: parsed.data.operationId }, statusFor(result.code) as 400);
+    }
+    return c.json(result);
+  });
+
+  // Calendar event remove (ADR-0048/0052): POST is used so the event id is never put in a URL or access log.
+  app.post('/api/calendar/events/remove', async (c) => {
+    if (c.req.header('Origin') !== deps.appOrigin || c.req.header('X-VC-Request') !== '1') {
+      return c.json(err('forbidden', 'request origin not allowed'), 403);
+    }
+    if (!(c.req.header('Content-Type') ?? '').toLowerCase().startsWith('application/json')) {
+      return c.json(err('forbidden', 'JSON required'), 403);
+    }
+    if (c.req.header('X-VC-Account') !== c.get('identity').accountKey) {
+      return c.json(err('account-mismatch', 'this action was saved under a different sign-in'), 409);
+    }
+    const remove = deps.services.removeCalendarEvent;
+    if (!remove) return c.json(err('invalid', 'not found'), 404);
+    const text = await c.req.text();
+    if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return c.json(err('invalid', 'body too large'), 400);
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      return c.json(err('invalid', 'body is not JSON'), 400);
+    }
+    const parsed = CalendarEventRemoveRequest.safeParse(raw);
+    if (!parsed.success) return c.json(err('invalid', 'invalid calendar removal'), 400);
+    const meta = c.get('logMeta');
+    meta.operationId = parsed.data.operationId;
+    const result = await remove(parsed.data, raw);
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json({ ...result, operationId: parsed.data.operationId }, statusFor(result.code) as 400);
+    }
     return c.json(result);
   });
 

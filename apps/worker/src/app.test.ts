@@ -381,3 +381,115 @@ describe('GET /api/ai-usage (AB3a)', () => {
     expect(body.providers.claude).not.toHaveProperty('extra');
   });
 });
+
+describe('calendar routes (ADR-0048/0052)', () => {
+  const OP = '33333333-3333-4333-8333-333333333333';
+  const createBody = {
+    operationId: OP,
+    itemKey: 'todo:1',
+    title: `${SENTINEL} calendar title`,
+    start: '2026-10-05T08:00:00+02:00',
+    end: '2026-10-05T08:30:00+02:00',
+    type: 'none',
+    notes: `${SENTINEL} calendar notes`,
+  };
+  const removeBody = { operationId: OP, itemKey: 'todo:1' };
+  const link = { eventId: 'event-1', operationId: OP, createdAt: '2026-10-04T08:00:00.000Z' };
+
+  function app(over: Partial<Services> = {}) {
+    const services: Services = {
+      async readTasks() { return { code: 'upstream-unavailable', message: 'x', retryable: true }; },
+      async execute() { return receipt; },
+      ...over,
+    };
+    return createApp({
+      verify: async (t) => (t === 'good' ? { ok: true, email: 'owner@example.com', accountKey: ACCOUNT } : { ok: false }),
+      appOrigin: ORIGIN,
+      services,
+      log: (r) => logs.push(r),
+    });
+  }
+
+  const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
+    app({
+      readCalendarLinks: async () => ({ revision: '9'.repeat(40), links: { 'todo:1': 'event-1' } }),
+      createCalendarEvent: async () => ({ eventId: 'event-1', link }),
+      removeCalendarEvent: async () => ({ removed: true }),
+    }).request(path, {
+      method: 'POST',
+      headers: {
+        'Cf-Access-Jwt-Assertion': 'good',
+        Origin: ORIGIN,
+        'X-VC-Request': '1',
+        'X-VC-Account': ACCOUNT,
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    });
+
+  it('GET links is 404 when the service is absent', async () => {
+    const res = await app().request('/api/calendar/links', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+
+  it.each([
+    ['foreign Origin', { Origin: 'https://evil.example.com' }],
+    ['missing X-VC-Request', { 'X-VC-Request': '' }],
+  ])('%s is 403 and the service never runs', async (_n, headers) => {
+    let called = 0;
+    const testApp = app({ createCalendarEvent: async () => { called++; return { eventId: 'event-1', link }; } });
+    const res = await testApp.request('/api/calendar/events', {
+      method: 'POST',
+      headers: { 'Cf-Access-Jwt-Assertion': 'good', 'X-VC-Account': ACCOUNT, 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(createBody),
+    });
+    expect(res.status).toBe(403);
+    expect(called).toBe(0);
+  });
+
+  it.each([
+    ['missing X-VC-Account', { 'X-VC-Account': '' }],
+    ['another account', { 'X-VC-Account': 'b'.repeat(64) }],
+  ])('%s is 409 and the service never runs', async (_n, headers) => {
+    let called = 0;
+    const testApp = app({ createCalendarEvent: async () => { called++; return { eventId: 'event-1', link }; } });
+    const res = await testApp.request('/api/calendar/events', {
+      method: 'POST',
+      headers: { 'Cf-Access-Jwt-Assertion': 'good', Origin: ORIGIN, 'X-VC-Request': '1', 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(createBody),
+    });
+    expect(res.status).toBe(409);
+    expect(called).toBe(0);
+  });
+
+  it('create returns the event link and logs operationId only, never text or event ids', async () => {
+    const res = await post('/api/calendar/events', createBody);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ eventId: 'event-1', link });
+    expect(logs.at(-1)).toMatchObject({ operationId: OP, status: 200 });
+    expect(logs.at(-1)).not.toHaveProperty('eventId');
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+    expect(JSON.stringify(logs)).not.toContain('event-1');
+  });
+
+  it('maps calendar-write-unavailable to 503 and logs only operationId and errorCode', async () => {
+    const testApp = app({ createCalendarEvent: async () => ({ code: 'calendar-write-unavailable', message: 'calendar writer is not configured', retryable: false }) });
+    const res = await testApp.request('/api/calendar/events', {
+      method: 'POST',
+      headers: { 'Cf-Access-Jwt-Assertion': 'good', Origin: ORIGIN, 'X-VC-Request': '1', 'X-VC-Account': ACCOUNT, 'Content-Type': 'application/json' },
+      body: JSON.stringify(createBody),
+    });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: 'calendar-write-unavailable', operationId: OP });
+    expect(logs.at(-1)).toMatchObject({ operationId: OP, errorCode: 'calendar-write-unavailable' });
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+
+  it('remove returns success and does not put the item or event id in the URL', async () => {
+    const res = await post('/api/calendar/events/remove', removeBody);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ removed: true });
+  });
+});

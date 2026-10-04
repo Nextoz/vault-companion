@@ -1,6 +1,6 @@
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
-import { createTrainingService, createActiveWorkService, createAiBudgetReadService, createAiUsageReadService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, slotForCron } from '@vault-companion/domain';
+import { createTrainingService, createActiveWorkService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, slotForCron } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
 import { WEATHER_TIME_ZONE, type ApiError } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
@@ -10,6 +10,8 @@ import { createMarketSource } from './market.ts';
 import { createWatchlistSource } from './watchlist.ts';
 import { createWeatherProvider } from './weather-provider.ts';
 import { createGoogleReader } from './google-reader.ts';
+import { createCalendarWriter } from './calendar-writer.ts';
+import { createCalendarService } from './calendar-service.ts';
 import { createAccessVerifier, createServiceTokenVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
 import { createScalewayChat } from './scaleway-chat.ts';
@@ -50,6 +52,10 @@ export interface Env {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REFRESH_TOKEN?: string;
+  /** ADR-0048: calendar write credential, exactly `calendar.events`. Optional; unset makes writes unavailable. */
+  GOOGLE_CAL_WRITE_CLIENT_ID?: string;
+  GOOGLE_CAL_WRITE_CLIENT_SECRET?: string;
+  GOOGLE_CAL_WRITE_REFRESH_TOKEN?: string;
 }
 
 /** The two members of Cloudflare's ScheduledController/ExecutionContext the cron handler uses. */
@@ -138,6 +144,16 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
       now: () => new Date(),
     }),
     ...weatherService,
+    ...createCalendarService({
+      links: createCalendarLinksService({ store, now: () => Date.now() }),
+      writer: createCalendarWriter({
+        clientId: env.GOOGLE_CAL_WRITE_CLIENT_ID ?? '',
+        clientSecret: env.GOOGLE_CAL_WRITE_CLIENT_SECRET ?? '',
+        refreshToken: env.GOOGLE_CAL_WRITE_REFRESH_TOKEN ?? '',
+        fetch: fetchImpl,
+        now: () => Date.now(),
+      }),
+    }),
   };
   return createApp({ verify, verifyIngest, appOrigin: env.APP_ORIGIN, services, log });
 }
