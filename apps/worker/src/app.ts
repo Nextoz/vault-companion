@@ -14,6 +14,7 @@ import {
   ScoutStatus,
   WeatherLocationRequest,
   type AiBudgetResponse,
+  type AiUsageResponse,
   type MarketTickerResponse,
   type MorningBriefResponse,
   type MorningResponse,
@@ -60,6 +61,8 @@ export interface Services {
   readMorningBrief?(): Promise<MorningBriefResponse | ApiError>;
   /** AI budget card (AB2). Optional: without it the route answers 404. */
   readAiBudget?(): Promise<AiBudgetResponse | ApiError>;
+  /** AI usage summary (AB3a). Optional: without it the route answers 404. */
+  readAiUsage?(): Promise<AiUsageResponse | ApiError>;
   /** "This morning" (ADR-0029 Part 2). Optional: without it the route answers 404. */
   readMorning?(): Promise<MorningResponse | ApiError>;
   /** Completion history (ADR-0021). Optional: without it the route answers 404. */
@@ -121,7 +124,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | MorningBriefResponse | AiBudgetResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | MorningBriefResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -311,6 +314,21 @@ export function createApp(deps: AppDeps) {
   // logs carry only the commit SHA, never any provider value.
   app.get('/api/ai-budget', async (c) => {
     const read = deps.services.readAiBudget;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // AI usage summary (AB3a): ONE fixed read-only JSON file written by the vault-side writer (ADR-0051). No request
+  // input; logs carry only the commit SHA, never any provider or day value.
+  app.get('/api/ai-usage', async (c) => {
+    const read = deps.services.readAiUsage;
     if (!read) return c.json(err('invalid', 'not found'), 404);
     const result = await read();
     const meta = c.get('logMeta');

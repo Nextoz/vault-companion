@@ -8,7 +8,8 @@
      logs or env files; refuses if such paths are already in the committed delta.
   2. Tests: runs -TestCmd (the brief's touched-test command) in the clone; failure => exit 20, no review spent.
   3. Review: `cr review --agent --committed --base-commit <Base> --fresh` over the complete task delta, or GLM-5.2 via
-     tools/glm-review.ps1 when CodeRabbit is out of hourly reviews (-Reviewer auto|coderabbit|glm|both). Never
+     tools/glm-review.ps1 when CodeRabbit is out of hourly reviews (-Reviewer auto|coderabbit|glm|both). `all` runs
+     CodeRabbit + GLM-5.2 + qwen3.5-397b-a17b (the last two via glm-review.ps1 -Model). Never
      `--use-credits`. Incomplete/unavailable review => exit 30 (not "clean").
   4. Triage: each finding gets one Jev choice (~400 tokens). Deterministic floor: critical/major always go to
      the fix list. Jev "must-fix" (p >= 0.5) also goes to the fix list; everything else is listed as skipped.
@@ -29,7 +30,8 @@ param(
     # Reuse a saved CodeRabbit JSONL instead of spending a review (testing, or re-triage after a crash).
     [string]$FindingsFile,
     # auto: CodeRabbit while it has hourly reviews, else GLM-5.2. both: CodeRabbit + GLM (high-risk second opinion).
-    [ValidateSet('auto', 'coderabbit', 'glm', 'both')][string]$Reviewer = 'auto',
+    # all: CodeRabbit + GLM-5.2 + qwen3.5-397b-a17b.
+    [ValidateSet('auto', 'coderabbit', 'glm', 'both', 'all')][string]$Reviewer = 'auto',
     [switch]$NoJev
 )
 $ErrorActionPreference = 'Stop'
@@ -76,13 +78,19 @@ function Read-Review([string]$file, [string]$name) {
         $lines.Add("${name}: NOT COMPLETED ($($err.message ?? $err.status ?? 'no output')).")
         return $null
     }
+    foreach ($s in @($ev | Where-Object { $_.type -eq 'status' -and $_.message })) { $lines.Add("${name}: $($s.message)") }
     $miss = @($delta | Where-Object { $_ -notin $done.reviewedFiles -and $_ -match '\.(ts|tsx|js|mjs|css|ps1|sh)$' })
     $fs = @($ev | Where-Object type -eq 'finding' | ForEach-Object { $_ | Add-Member -Force reviewer $name -PassThru })
     $lines.Add("${name}: completed, $($fs.Count) finding(s), $(@($done.reviewedFiles).Count) file(s) reviewed$(if ($miss) {"; NOT reviewed: $($miss -join ', ')"})")
     return , $fs
 }
 function Invoke-CodeRabbit { $f = Join-Path $agent "cr-$Task.jsonl"; & cr review --agent --committed --base-commit $Base --fresh 2>&1 | Out-File -LiteralPath $f -Encoding utf8; Read-Review $f 'CodeRabbit' }
-function Invoke-Glm { $f = Join-Path $agent "glm-$Task.jsonl"; & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'glm-review.ps1') -Clone $Clone -Base $Base -Out $f | Out-Null; Read-Review $f 'GLM-5.2' }
+function Invoke-Glm([string]$Model, [string]$Name) {
+    $safe = $Model -replace '[^A-Za-z0-9.\-]', '_'
+    $f = Join-Path $agent "glm-$Task-$safe.jsonl"
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'glm-review.ps1') -Clone $Clone -Base $Base -Out $f -Model $Model | Out-Null
+    Read-Review $f $Name
+}
 
 $results = @()
 if ($FindingsFile) { $results += , (Read-Review $FindingsFile 'saved review') }
@@ -91,11 +99,16 @@ elseif ($Reviewer -eq 'auto') {
     $left = [regex]::Match((cr usage 2>&1 | Out-String), 'Remaining\s*:\s*(\d+)').Groups[1].Value
     $cr = if ($left -eq '0') { $lines.Add('CodeRabbit: 0 reviews left this hour -> GLM-5.2.'); $null } else { Invoke-CodeRabbit }
     $results += , $cr
-    if ($null -eq $cr) { $results += , (Invoke-Glm) }
+    if ($null -eq $cr) { $results += , (Invoke-Glm 'glm-5.2' 'GLM-5.2') }
+}
+elseif ($Reviewer -eq 'all') {
+    $results += , (Invoke-CodeRabbit)
+    $results += , (Invoke-Glm 'glm-5.2' 'GLM-5.2')
+    $results += , (Invoke-Glm 'qwen3.5-397b-a17b' 'qwen3.5-397b-a17b')
 }
 else {
     if ($Reviewer -in 'coderabbit', 'both') { $results += , (Invoke-CodeRabbit) }
-    if ($Reviewer -in 'glm', 'both') { $results += , (Invoke-Glm) }
+    if ($Reviewer -in 'glm', 'both') { $results += , (Invoke-Glm 'glm-5.2' 'GLM-5.2') }
 }
 $completed = @($results | Where-Object { $null -ne $_ })
 if ($completed.Count -eq 0) { $lines.Add('No review completed. Not a clean review.'); Finish 30 'REVIEW UNAVAILABLE' }
