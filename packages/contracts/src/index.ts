@@ -669,6 +669,42 @@ export const AiBudgetResponse = z.strictObject({
 });
 export type AiBudgetResponse = z.infer<typeof AiBudgetResponse>;
 
+// ---- AI usage summary (AB3a): per-provider daily usage under AI/Usage (ADR-0051), read-only ----
+
+/** One daily usage row. Days parse one-by-one, so a malformed row drops only itself and counts toward `skipped`. */
+export const AiUsageDay = z.object({
+  date: z.iso.date(),
+  calls: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  cacheWriteTokens: z.number().int().nonnegative(),
+  cacheReadTokens: z.number().int().nonnegative(),
+  cost: z.number(),
+});
+export type AiUsageDay = z.infer<typeof AiUsageDay>;
+
+/**
+ * One provider's rollup. Unknown provider ids are kept and unknown extra fields ignored, so the vault side can add
+ * providers or fields without a break; the reader drops only a provider whose known fields are malformed.
+ */
+export const AiUsageProvider = z.object({
+  label: z.string().optional(),
+  currency: z.string().optional(),
+  days: z.array(AiUsageDay),
+  since: z.iso.date().optional(),
+});
+export type AiUsageProvider = z.infer<typeof AiUsageProvider>;
+
+/** `AI/Usage/AI Usage Summary.json`, projected read-only. No path or value is client input. */
+export const AiUsageResponse = z.strictObject({
+  revision: commitSha,
+  generatedAt: isoInstant,
+  providers: z.record(z.string(), AiUsageProvider),
+  /** Malformed provider or day entries dropped from the file. */
+  skipped: z.number().int().nonnegative(),
+});
+export type AiUsageResponse = z.infer<typeof AiUsageResponse>;
+
 export const ScoutsResponse = z.strictObject({
   revision: commitSha,
   /** Server time: staleness never depends on the phone clock. */

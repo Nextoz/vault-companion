@@ -36,9 +36,11 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 - **NY3**: Needs You only lists what can be resolved: Degraded scouts moved to the Status sheet (yellow, with their `lastError`), Failed scouts show the full error and a device-held "Got it" (`vc.needsYouDismissed`, keyed by row + error text, pruned on recovery or text change). Deployed together with AB-registry. Open: phone check.
 
+- **AB3a** (ADR-0051): `GET /api/ai-usage` reads fixed `AI/Usage/AI Usage Summary.json` (schema 1, read-only; bad provider/day dropped and counted in `skipped`, unknown providers kept). Backend only; AB3b panel UI next. e2e not run (no UI).
+
 ## Next actions (in order)
 
-0. **Order from the vault Ready Backlog (owner 2026-10-04):** UX6 -> SC1 (in flight) -> AB3 (AB3a backend in flight) -> AB3 -> CAL (high-risk) -> LG1 -> SIWH -> SC2 spike -> SP/RR. Items 1-2 below are history.
+0. **Order from the vault Ready Backlog (owner 2026-10-04):** UX6 (in flight) -> SC1 (fix round in flight) -> AB3b panel UI -> CAL (high-risk) -> LG1 -> SIWH -> SC2 spike -> SP/RR. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the

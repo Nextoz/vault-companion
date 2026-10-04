@@ -3,6 +3,7 @@
 import {
   ActiveWorkResponse,
   AiBudgetResponse,
+  AiUsageResponse,
   DashboardResponse,
   MarketTickerResponse,
   TrainingResponse,
@@ -80,6 +81,7 @@ export const getScouts = () => getJson('/api/scouts', ScoutsResponse.strip());
 export const getMorning = () => getJson('/api/morning', MorningResponse.strip());
 export const getMorningBrief = () => getJson('/api/morning-brief', MorningBriefResponse.strip());
 export const getAiBudget = () => getJson('/api/ai-budget', AiBudgetResponse.strip());
+export const getAiUsage = () => getJson('/api/ai-usage', AiUsageResponse.strip());
 export const getTriage = () => getJson('/api/triage', TriageResponse.strip());
 export const getRadar = () => getJson('/api/radar', RadarResponse.strip());
 export const getRadarNote = (paperId: string) =>

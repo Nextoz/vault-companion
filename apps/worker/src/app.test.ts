@@ -1,5 +1,7 @@
-import { AiBudgetResponse, MorningBriefResponse } from '@vault-companion/contracts';
+import { AiBudgetResponse, AiUsageResponse, MorningBriefResponse } from '@vault-companion/contracts';
 import type { ApiError, Command, Receipt } from '@vault-companion/contracts';
+import { AI_USAGE_PATH, createAiUsageReadService } from '@vault-companion/domain';
+import { InMemoryStore } from '@vault-companion/domain/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp, statusFor, type Services } from './app.ts';
 import { sanitize, type LogRecord } from './log.ts';
@@ -279,5 +281,103 @@ describe('GET /api/ai-budget (AB2)', () => {
     expect(await res.json()).toEqual(sample());
     expect(logs.at(-1)).toMatchObject({ commitSha: '5'.repeat(40) });
     expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+});
+
+describe('GET /api/ai-usage (AB3a)', () => {
+  const day = (over: Record<string, unknown> = {}) => ({
+    date: '2026-10-01',
+    calls: 3,
+    inputTokens: 100,
+    outputTokens: 200,
+    cacheWriteTokens: 10,
+    cacheReadTokens: 20,
+    cost: 0.42,
+    ...over,
+  });
+  const provider = (over: Record<string, unknown> = {}) => ({ label: `${SENTINEL} usage`, days: [day()], ...over });
+  const fileBytes = (providers: Record<string, unknown>, over: Record<string, unknown> = {}) =>
+    new TextEncoder().encode(JSON.stringify({ schema: 1, generatedAt: '2026-10-04T06:31:00+02:00', providers, ...over }));
+
+  const sample = (): AiUsageResponse => AiUsageResponse.parse({
+    revision: '6'.repeat(40),
+    generatedAt: '2026-10-04T06:31:00+02:00',
+    providers: { claude: { label: `${SENTINEL} usage`, days: [day()] } },
+    skipped: 0,
+  });
+
+  function app(readAiUsage?: Services['readAiUsage']) {
+    const services: Services = {
+      async readTasks() { return { code: 'upstream-unavailable', message: 'x', retryable: true }; },
+      async execute() { return receipt; },
+      ...(readAiUsage ? { readAiUsage } : {}),
+    };
+    return createApp({
+      verify: async (t) => (t === 'good' ? { ok: true, email: 'owner@example.com', accountKey: ACCOUNT } : { ok: false }),
+      appOrigin: ORIGIN,
+      services,
+      log: (r) => logs.push(r),
+    });
+  }
+  const get = (readAiUsage?: Services['readAiUsage']) =>
+    app(readAiUsage).request('/api/ai-usage', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+
+  it('404s without a service, and logs nothing from the usage file', async () => {
+    const res = await get();
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+
+  it.each([
+    [{ code: 'not-found', retryable: false }, 404],
+    [{ code: 'invalid', retryable: false }, 400],
+    [{ code: 'upstream-unavailable', retryable: true }, 503],
+  ] as const)('maps %o to %i', async (error, status) => {
+    const res = await get(async () => ({ ...error, message: 'm' }));
+    expect(res.status).toBe(status);
+    expect(logs.at(-1)).toMatchObject({ errorCode: error.code });
+  });
+
+  it('returns the summary and logs only the revision', async () => {
+    const res = await get(async () => sample());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(sample());
+    expect(logs.at(-1)).toMatchObject({ commitSha: '6'.repeat(40) });
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+
+  // End-to-end over the real domain reader and an in-memory vault: the route must read the fixed file and keep
+  // per-entry isolation (one malformed provider or day never hides the rest).
+  const getFromVault = async (files: Record<string, string | Uint8Array>) =>
+    app(createAiUsageReadService({ store: await InMemoryStore.create(files) }).readAiUsage)
+      .request('/api/ai-usage', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+
+  it('reads the fixed file and returns the validated projection (ok)', async () => {
+    const res = await getFromVault({ [AI_USAGE_PATH]: fileBytes({ claude: provider() }) });
+    expect(res.status).toBe(200);
+    const body = AiUsageResponse.parse(await res.json());
+    expect(body).toMatchObject({ skipped: 0, providers: { claude: { days: [{ calls: 3 }] } } });
+  });
+
+  it('404s when the fixed file is missing (missing)', async () => {
+    const res = await getFromVault({ 'AI/Usage/decoy.json': fileBytes({ claude: provider() }) });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: 'not-found' });
+  });
+
+  it('drops one malformed provider, keeps the rest, and keeps an unknown provider id', async () => {
+    const res = await getFromVault({ [AI_USAGE_PATH]: fileBytes({ claude: provider(), mystery: provider({ label: 'Unknown vendor' }), broken: { days: 'nope' }, codex: provider() }) });
+    expect(res.status).toBe(200);
+    const body = AiUsageResponse.parse(await res.json());
+    expect(body.skipped).toBe(1);
+    expect(Object.keys(body.providers)).toEqual(['claude', 'mystery', 'codex']);
+  });
+
+  it('ignores unknown extra fields', async () => {
+    const res = await getFromVault({ [AI_USAGE_PATH]: fileBytes({ claude: provider({ extra: true, days: [day({ extra: 1 })] }) }, { extraTop: 1 }) });
+    expect(res.status).toBe(200);
+    const body = AiUsageResponse.parse(await res.json());
+    expect(body.skipped).toBe(0);
+    expect(body.providers.claude).not.toHaveProperty('extra');
   });
 });
