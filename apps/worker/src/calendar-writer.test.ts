@@ -162,6 +162,24 @@ describe('credential and network failures', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('clears a failed cached token so the next request refreshes again', async () => {
+    let tokenCalls = 0;
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.hostname === 'oauth2.googleapis.com') {
+        tokenCalls++;
+        return tokenCalls === 1 ? new Response(null, { status: 503 }) : json({ access_token: TOKEN, scope: GOOD_SCOPE });
+      }
+      if (init?.method === 'POST') return json({ id: 'event-1' });
+      return json({ items: [] });
+    }) as typeof fetch;
+
+    const writer = makeWriter(fetchImpl);
+    await expect(writer.insert(timedRequest())).resolves.toMatchObject({ code: 'upstream-unavailable', retryable: true });
+    await expect(writer.insert(timedRequest())).resolves.toEqual({ eventId: 'event-1' });
+    expect(tokenCalls).toBe(2);
+  });
+
   it('returns typed upstream-unavailable instead of throwing on network failure', async () => {
     const fetchImpl = vi.fn(async () => { throw new Error('network down'); }) as typeof fetch;
     await expect(makeWriter(fetchImpl).insert(timedRequest())).resolves.toMatchObject({ code: 'upstream-unavailable', retryable: true });

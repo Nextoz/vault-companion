@@ -1,4 +1,4 @@
-# Checkpoint — 2026-10-04 (AB3b)
+# Checkpoint — 2026-10-04 (CAL-a)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
@@ -44,9 +44,11 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 - **AB3b**: Today → Dashboard shows an "AI usage" panel (pure `ui/ai-usage.ts`, `AiUsagePanel.tsx`): one tile per provider from `GET /api/ai-usage` (Claude/Codex output + cache-write, cache-read excluded; Jev calls; DeepSeek/Scaleway cost), 7 d/30 d sparkline without zero-fill, budget-left line from `/api/ai-budget`, stale > 2 h, honest failed state. App feeds it and clears it on sign-out. No real data until the vault-side usage writer exists. Open: phone check.
 
+- **CAL-a** (ADR-0052, backend only, no UI): `calendar-writer.ts` (own `calendar.events` token, exact-scope guard, list-dedupe on `vcOperationId`, delete only marked events, colour map, `suggestType`), `calendar-service.ts` + links file `Automation/Calendar Links.json` (CAS, one writer), routes `GET /api/calendar/links`, `POST /api/calendar/events`, `POST /api/calendar/events/remove`. Removing an unmarked event drops the link and keeps the event (`eventKept`). 503 `calendar-write-unavailable` until the owner secrets exist in the Worker (they do per 2026-10-03). Review: CodeRabbit + Lead read (GLM crashed: `glm-review.ps1` null array). Deploy: not yet (no UI). **CAL-b (UI: glyph, sheet, free-block chips, e2e) is next.**
+
 ## Next actions (in order)
 
-0. **Order from the vault Ready Backlog (owner 2026-10-04):** CAL (high-risk) -> LG1 -> SIWH -> SC2 spike -> SP/RR. Items 1-2 below are history.
+0. **Order from the vault Ready Backlog (owner 2026-10-04):** CAL-b (UI) -> LG1 -> SIWH -> SC2 spike -> SP/RR. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the

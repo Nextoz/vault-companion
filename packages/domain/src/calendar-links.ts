@@ -80,7 +80,10 @@ export const CalendarEventCreateResponse = z.strictObject({
 });
 export type CalendarEventCreateResponse = z.infer<typeof CalendarEventCreateResponse>;
 
-export const CalendarEventRemoveResponse = z.strictObject({ removed: z.literal(true) });
+export const CalendarEventRemoveResponse = z.strictObject({
+  removed: z.literal(true),
+  eventKept: z.literal(true).optional(),
+});
 export type CalendarEventRemoveResponse = z.infer<typeof CalendarEventRemoveResponse>;
 
 /** Validate raw bytes/text/JSON into a links file; never throws. */

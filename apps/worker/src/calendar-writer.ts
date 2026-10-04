@@ -112,9 +112,11 @@ export function createCalendarWriter(deps: CalendarWriterDeps): CalendarWriter {
     }
   };
 
-  const ensureToken = (): Promise<string | ApiError> => {
+  const ensureToken = async (): Promise<string | ApiError> => {
     if (!tokenPromise) tokenPromise = refresh();
-    return tokenPromise;
+    const token = await tokenPromise;
+    if (isApiError(token)) tokenPromise = null;
+    return token;
   };
 
   const insert = async (input: CalendarEventCreateRequest): Promise<CalendarEventWriteResult | ApiError> => {

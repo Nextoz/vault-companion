@@ -61,7 +61,16 @@ export function createCalendarService(deps: CalendarServiceDeps): CalendarServic
       if (!existing) return { removed: true };
 
       const removed = await deps.writer.remove(existing.eventId);
-      if (isApiError(removed)) return removed;
+      if (isApiError(removed)) {
+        if (removed.code !== 'invalid') return removed;
+        const unlinked = await deps.links.removeCalendarLink({
+          operationId: request.operationId,
+          itemKey: request.itemKey,
+          raw,
+        });
+        if (isApiError(unlinked)) return unlinked;
+        return { removed: true, eventKept: true };
+      }
 
       const unlinked = await deps.links.removeCalendarLink({
         operationId: request.operationId,
