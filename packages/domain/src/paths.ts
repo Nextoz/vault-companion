@@ -1,5 +1,5 @@
 // Path policy: docs/vault-contract.md §1. Every path passes here before an adapter sees it.
-import { RADAR_APPLIED_PATH, RADAR_DECISIONS_DIR, SCOUT_STATUS_DIR, TRAINING_PATH } from '@vault-companion/contracts';
+import { LEARNING_PATH, RADAR_APPLIED_PATH, RADAR_DECISIONS_DIR, SCOUT_STATUS_DIR, TRAINING_PATH } from '@vault-companion/contracts';
 import type { VaultPath } from './store.ts';
 
 export const TODO_LIST_PATH = 'Tasks/To-Do List.md';
@@ -109,7 +109,7 @@ export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
   // Create; update only replaces this job's own pending note (blob-SHA checked by the job, ADR-0029 amendment 2).
   if (isExplainedNotePath(path)) return true;
   if (isDailyJournalPath(path)) return true;
-  if (path === TRAINING_PATH || path === TODO_LIST_PATH || path === 'Tasks/Active Work Now.md') return kind === 'update';
+  if (path === TRAINING_PATH || path === LEARNING_PATH || path === TODO_LIST_PATH || path === 'Tasks/Active Work Now.md') return kind === 'update';
   if (kind === 'update') return isInboxNotePath(path);
   const segments = path.split('/');
   return segments.length === 2 && segments[0] === INBOX_DIR;

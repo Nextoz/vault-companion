@@ -811,6 +811,10 @@ export class MockApi {
         this.trainingRows.sort((a, b) => (b.date + b.time).localeCompare(a.date + b.time));
         return { ...base, path: 'Health/Training Log.md', effect: { kind: 'training', op: 'undone', lineText: '| synthetic session |' } };
       }
+      case 'LogLearning':
+        return { ...base, path: 'Personal/Learning Gym Log.md', effect: { kind: 'learning', op: 'logged', lineText: '| synthetic learning entry |' } };
+      case 'UndoLogLearning':
+        return { ...base, path: 'Personal/Learning Gym Log.md', effect: { kind: 'learning', op: 'undone', lineText: '| synthetic learning entry |' } };
       case 'MoodCheckin':
         return { ...base, path: `Journal/Daily/${command.payload.date}.md`, effect: { kind: 'mood', op: 'checked-in' } };
       case 'UndoMoodCheckin':
