@@ -253,7 +253,7 @@ async function postCalendar(url: string, body: unknown, accountKey: string): Pro
   }
   if (res.type === 'opaqueredirect' || res.status === 401) return { kind: 'signed-out' };
   if (!res.ok) {
-    const parsed = z.strictObject({ code: z.string() }).safeParse(await res.json().catch(() => undefined));
+    const parsed = z.object({ code: z.string() }).safeParse(await res.json().catch(() => undefined));
     return { kind: 'error', code: parsed.success ? parsed.data.code : null };
   }
   return { kind: 'ok' };

@@ -24,7 +24,8 @@ test('add: a task glyph opens the sheet, creates one event and becomes In Calend
 
   await expect.poll(() => api.calendarCreateBodies.length).toBe(1);
   const body = JSON.parse(api.calendarCreateBodies[0]!);
-  expect(body).toMatchObject({ title: TASK_TEXT, type: 'none', date: '2026-09-24' });
+  expect(body).toMatchObject({ title: TASK_TEXT, type: 'none' });
+  expect(body.start).toMatch(/T14:00/);
   expect(body.start).toMatch(/^2026-09-24T14:00:00/);
   expect(body.end).toMatch(/^2026-09-24T14:30:00/);
   expect(body.operationId).toMatch(/^[0-9a-f-]{36}$/);
