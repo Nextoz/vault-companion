@@ -1,0 +1,27 @@
+{
+  "name": "merge-124-ab-card",
+  "source": "6755576 Merge pull request #124 from Nextoz/feat/ab-card",
+  "paths": [
+    "apps/web/e2e/mock-api.ts",
+    "apps/web/e2e/vault-status.spec.ts",
+    "apps/web/src/api.ts",
+    "apps/web/src/styles.css",
+    "apps/web/src/ui/StatusSheet.tsx",
+    "apps/web/src/ui/status-sheet.test.ts",
+    "apps/web/src/ui/status-sheet.ts",
+    "apps/worker/src/app.test.ts",
+    "apps/worker/src/app.ts",
+    "apps/worker/src/index.ts",
+    "docs/checkpoint.md",
+    "docs/decisions/0049-ai-budget-card.md",
+    "packages/contracts/src/contracts.test.ts",
+    "packages/contracts/src/index.ts",
+    "packages/domain/src/ai-budget-read.test.ts",
+    "packages/domain/src/ai-budget-read.ts",
+    "packages/domain/src/index.ts"
+  ],
+  "expected": {
+    "tier": "full-e2e",
+    "source": "floor"
+  }
+}

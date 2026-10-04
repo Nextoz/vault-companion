@@ -1,0 +1,24 @@
+{
+  "name": "merge-139-cal-a",
+  "source": "3d19b4f Merge pull request #139 from Nextoz/feat/cal-a",
+  "paths": [
+    "apps/worker/src/app.test.ts",
+    "apps/worker/src/app.ts",
+    "apps/worker/src/calendar-service.test.ts",
+    "apps/worker/src/calendar-service.ts",
+    "apps/worker/src/calendar-writer.test.ts",
+    "apps/worker/src/calendar-writer.ts",
+    "apps/worker/src/index.ts",
+    "docs/checkpoint.md",
+    "docs/decisions/0052-calendar-links-file.md",
+    "packages/contracts/src/index.ts",
+    "packages/domain/src/calendar-links.test.ts",
+    "packages/domain/src/calendar-links.ts",
+    "packages/domain/src/index.ts",
+    "packages/domain/src/paths.ts"
+  ],
+  "expected": {
+    "tier": "full-e2e",
+    "source": "floor"
+  }
+}

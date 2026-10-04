@@ -1,0 +1,22 @@
+{
+  "name": "merge-132-wl3",
+  "source": "5461499 Merge pull request #132 from Nextoz/feat/wl3",
+  "paths": [
+    "apps/web/src/ui/Dashboard.test.ts",
+    "apps/web/src/ui/Dashboard.tsx",
+    "apps/web/src/ui/watchlist.test.ts",
+    "apps/worker/src/dashboard.test.ts",
+    "apps/worker/src/market.test.ts",
+    "apps/worker/src/market.ts",
+    "apps/worker/src/watchlist.test.ts",
+    "apps/worker/src/watchlist.ts",
+    "docs/checkpoint.md",
+    "docs/decisions/0050-watchlist-1y-range-windowing.md",
+    "packages/contracts/src/dashboard.test.ts",
+    "packages/contracts/src/dashboard.ts"
+  ],
+  "expected": {
+    "tier": "full-e2e",
+    "source": "floor"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "merge-128-wl1",
+  "source": "e0a09fb Merge pull request #128 from Nextoz/feat/wl1",
+  "paths": [
+    "apps/worker/src/dashboard.test.ts",
+    "apps/worker/src/dashboard.ts",
+    "apps/worker/src/index.ts",
+    "apps/worker/src/market.ts",
+    "apps/worker/src/watchlist.test.ts",
+    "apps/worker/src/watchlist.ts",
+    "docs/checkpoint.md",
+    "packages/contracts/src/dashboard.ts"
+  ],
+  "expected": {
+    "tier": "full-e2e",
+    "source": "floor"
+  }
+}

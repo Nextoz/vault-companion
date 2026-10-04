@@ -1,0 +1,11 @@
+{
+  "name": "docs-checkpoint-siwh",
+  "source": "656b91a docs: checkpoint SIWH",
+  "paths": [
+    "docs/checkpoint.md"
+  ],
+  "expected": {
+    "tier": "none",
+    "source": "floor"
+  }
+}

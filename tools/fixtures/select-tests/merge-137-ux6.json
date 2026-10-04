@@ -1,0 +1,18 @@
+{
+  "name": "merge-137-ux6",
+  "source": "ba0f842 Merge pull request #137 from Nextoz/feat/ux6",
+  "paths": [
+    "apps/web/e2e/mood.spec.ts",
+    "apps/web/src/styles.css",
+    "apps/web/src/ui/LogMood.test.ts",
+    "apps/web/src/ui/LogMood.tsx",
+    "apps/web/src/ui/MoodCard.test.ts",
+    "apps/web/src/ui/MoodCard.tsx",
+    "apps/web/src/ui/Progress.tsx",
+    "docs/checkpoint.md"
+  ],
+  "expected": {
+    "tier": "unit-only",
+    "source": "floor"
+  }
+}

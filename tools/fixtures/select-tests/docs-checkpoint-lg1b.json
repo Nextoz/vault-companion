@@ -1,0 +1,11 @@
+{
+  "name": "docs-checkpoint-lg1b",
+  "source": "1721fb1 docs: checkpoint LG1b",
+  "paths": [
+    "docs/checkpoint.md"
+  ],
+  "expected": {
+    "tier": "none",
+    "source": "floor"
+  }
+}

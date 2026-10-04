@@ -1,0 +1,29 @@
+{
+  "name": "merge-141-lg1a",
+  "source": "b426b8f Merge pull request #141 from Nextoz/feat/lg1a",
+  "paths": [
+    "apps/web/e2e/mock-api.ts",
+    "apps/web/src/commands.ts",
+    "apps/web/src/ui/ActionsPanel.tsx",
+    "apps/worker/src/app.ts",
+    "apps/worker/src/index.ts",
+    "apps/worker/src/learning.test.ts",
+    "docs/checkpoint.md",
+    "docs/decisions/0053-learning-gym-log.md",
+    "packages/contracts/src/index.ts",
+    "packages/contracts/src/learning.test.ts",
+    "packages/domain/src/commands.ts",
+    "packages/domain/src/index.ts",
+    "packages/domain/src/learning.test.ts",
+    "packages/domain/src/learning.ts",
+    "packages/domain/src/paths.ts",
+    "packages/vault-markdown/src/api.ts",
+    "packages/vault-markdown/src/index.ts",
+    "packages/vault-markdown/src/learning.test.ts",
+    "packages/vault-markdown/src/learning.ts"
+  ],
+  "expected": {
+    "tier": "full-e2e",
+    "source": "floor"
+  }
+}

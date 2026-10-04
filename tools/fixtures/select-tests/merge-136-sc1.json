@@ -1,0 +1,13 @@
+{
+  "name": "merge-136-sc1",
+  "source": "2f8672b Merge pull request #136 from Nextoz/feat/sc1",
+  "paths": [
+    "docs/checkpoint.md",
+    "tools/glm-review.ps1",
+    "tools/handoff-check.ps1"
+  ],
+  "expected": {
+    "tier": "unit-only",
+    "source": "floor"
+  }
+}

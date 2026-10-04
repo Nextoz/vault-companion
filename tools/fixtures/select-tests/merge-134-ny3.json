@@ -1,0 +1,20 @@
+{
+  "name": "merge-134-ny3",
+  "source": "88c818e Merge pull request #134 from Nextoz/feat/ny3",
+  "paths": [
+    "apps/web/e2e/needs-you.spec.ts",
+    "apps/web/src/prefs.ts",
+    "apps/web/src/ui/MorningCard.tsx",
+    "apps/web/src/ui/NeedsYouSheet.tsx",
+    "apps/web/src/ui/StatusSheet.tsx",
+    "apps/web/src/ui/needs-you.test.ts",
+    "apps/web/src/ui/needs-you.ts",
+    "apps/web/src/ui/status-sheet.test.ts",
+    "apps/web/src/ui/status-sheet.ts",
+    "docs/checkpoint.md"
+  ],
+  "expected": {
+    "tier": "unit-only",
+    "source": "floor"
+  }
+}

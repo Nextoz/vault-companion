@@ -1,0 +1,31 @@
+{
+  "name": "merge-143-lg1b",
+  "source": "4adeb27 Merge pull request #143 from Nextoz/feat/lg1b",
+  "paths": [
+    "apps/web/e2e/learning.spec.ts",
+    "apps/web/e2e/mock-api.ts",
+    "apps/web/package.json",
+    "apps/web/src/api.ts",
+    "apps/web/src/commands.test.ts",
+    "apps/web/src/commands.ts",
+    "apps/web/src/learning.ts",
+    "apps/web/src/prefetch.test.ts",
+    "apps/web/src/prefetch.ts",
+    "apps/web/src/queue/queue.ts",
+    "apps/web/src/styles.css",
+    "apps/web/src/ui/ActionsPanel.tsx",
+    "apps/web/src/ui/App.tsx",
+    "apps/web/src/ui/Learning.tsx",
+    "apps/web/src/ui/LearningSheet.test.ts",
+    "apps/web/src/ui/LearningSheet.tsx",
+    "apps/web/src/ui/TabBar.tsx",
+    "apps/web/src/ui/learning-view.test.ts",
+    "apps/web/src/ui/learning.test.ts",
+    "docs/checkpoint.md",
+    "pnpm-lock.yaml"
+  ],
+  "expected": {
+    "tier": "full-e2e",
+    "source": "floor"
+  }
+}

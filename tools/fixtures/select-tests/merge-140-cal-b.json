@@ -1,0 +1,21 @@
+{
+  "name": "merge-140-cal-b",
+  "source": "664e98d Merge pull request #140 from Nextoz/feat/cal-b",
+  "paths": [
+    "apps/web/e2e/calendar.spec.ts",
+    "apps/web/e2e/mock-api.ts",
+    "apps/web/src/api.ts",
+    "apps/web/src/styles.css",
+    "apps/web/src/ui/ActiveWorkCard.tsx",
+    "apps/web/src/ui/App.tsx",
+    "apps/web/src/ui/CalendarSheet.tsx",
+    "apps/web/src/ui/TaskList.tsx",
+    "apps/web/src/ui/calendar-sheet.test.ts",
+    "apps/web/src/ui/calendar-sheet.ts",
+    "docs/checkpoint.md"
+  ],
+  "expected": {
+    "tier": "unit-only",
+    "source": "floor"
+  }
+}
