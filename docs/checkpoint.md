@@ -1,4 +1,4 @@
-# Checkpoint — 2026-10-04 (LG1b)
+# Checkpoint — 2026-10-04 (JV1)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
@@ -52,9 +52,11 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 - **LG1b**: Log -> **Learning** tab (`Learning.tsx`, `LearningSheet.tsx`, pure `apps/web/src/learning.ts`): kind chips from the Kinds table, Add session sheet, Paste line (grammar mirrored in web because `src` may not import vault-markdown; a test cross-checks it against `parseLearningPasteLine`), recent sessions, sessions per week, per-kind score sparkline, no streaks/targets, offline queue + Undo via Status -> Actions. LG1a+SIWH deployed as aed3278c. Open: phone check (paste a real ChatGPT dictation line); Edit row not built.
 
+- **JV1** (tooling only): `tools/select-tests.ps1` picks a test tier from changed paths (deterministic floor first: worker/contracts/auth/vault-markdown/deps => full-e2e, docs-only => none; one 25 s Jev choice only when open; any failure => full-e2e). `handoff-check.ps1` prints the tier (advisory, does not yet change which tests run) and an advisory Jev "Unverified" list per brief bullet (never blocks). Self-check replays 10+ real merged diffs from `tools/fixtures/select-tests`. Open: use it on the next few slices and note Jev misses.
+
 ## Next actions (in order)
 
-0. **Order from the vault Ready Backlog (owner 2026-10-04):** JV1 -> SC2 spike -> SP/RR. Items 1-2 below are history.
+0. **Order from the vault Ready Backlog (owner 2026-10-04):** SC2 spike -> SP/RR (JV1 done). Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the
