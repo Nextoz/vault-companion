@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AiBudgetProvider, AiBudgetResponse, CaptureNotePayload, CaptureTaskPayload, ScoutStatus, TasksResponse } from './index.ts';
+import { AiBudgetProvider, AiBudgetResponse, AiUsageDay, AiUsageProvider, AiUsageResponse, CaptureNotePayload, CaptureTaskPayload, ScoutStatus, TasksResponse } from './index.ts';
 
 describe('capture context', () => {
   it.each(['[[Projects/Boat]]', '[[Boat|the boat]]', 'https://example.com/a?b=c'])('accepts %j', (context) => {
@@ -98,5 +98,34 @@ describe('ai budget schema', () => {
     expect(AiBudgetResponse.safeParse({ ...ok, extra: 1 }).success).toBe(false);
     expect(AiBudgetResponse.safeParse({ ...ok, revision: 'nope' }).success).toBe(false);
     expect(AiBudgetResponse.safeParse({ ...ok, generatedAt: '2026-10-03' }).success).toBe(false);
+  });
+});
+
+describe('ai usage schema', () => {
+  const day = { date: '2026-10-01', calls: 3, inputTokens: 100, outputTokens: 200, cacheWriteTokens: 10, cacheReadTokens: 20, cost: 0.42 };
+  const provider = { label: 'Claude', currency: 'USD', days: [day], since: '2026-09-01' };
+
+  it('accepts a day, including a provider without the optional fields', () => {
+    expect(AiUsageDay.safeParse(day).success).toBe(true);
+    expect(AiUsageProvider.safeParse({ days: [] }).success).toBe(true);
+    expect(AiUsageProvider.safeParse({ label: 'Claude', currency: 'USD', days: [day], since: '2026-09-01' }).success).toBe(true);
+  });
+
+  it('rejects a malformed day and ignores unknown extra fields on a provider', () => {
+    expect(AiUsageDay.safeParse({ ...day, date: '2026-10-01T00:00:00Z' }).success).toBe(false);
+    expect(AiUsageDay.safeParse({ ...day, calls: -1 }).success).toBe(false);
+    expect(AiUsageDay.safeParse({ ...day, cost: 'free' }).success).toBe(false);
+    const parsed = AiUsageProvider.safeParse({ ...provider, extra: 1 });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data).not.toHaveProperty('extra');
+  });
+
+  it('is a strict response envelope keyed by provider id, with a skipped count', () => {
+    const rev = 'b'.repeat(40);
+    const ok = { revision: rev, generatedAt: '2026-10-04T06:31:00+02:00', providers: { claude: provider, mystery: { days: [] } }, skipped: 1 };
+    expect(AiUsageResponse.safeParse(ok).success).toBe(true);
+    expect(AiUsageResponse.safeParse({ ...ok, extra: 1 }).success).toBe(false);
+    expect(AiUsageResponse.safeParse({ ...ok, revision: 'nope' }).success).toBe(false);
+    expect(AiUsageResponse.safeParse({ ...ok, skipped: -1 }).success).toBe(false);
   });
 });
