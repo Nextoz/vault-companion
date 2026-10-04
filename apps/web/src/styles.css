@@ -244,6 +244,7 @@ textarea:focus-visible {
 }
 
 .log-mood-values {
+  margin-left: auto;
   color: var(--muted);
   text-align: right;
   font-variant-numeric: tabular-nums;

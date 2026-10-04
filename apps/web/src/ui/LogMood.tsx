@@ -2,15 +2,17 @@
 // device already holds in its local queue (pending items and saved receipts). There is no server read for mood
 // history, so anything evicted under the saved-actions watermark is simply not here.
 import type { MoodCheckinPayload } from '@vault-companion/contracts';
+import { useState } from 'react';
 import { dayHeading } from '../history.ts';
-import type { QueueItem } from '../queue/queue.ts';
-import { chipLabel } from './MoodCard.tsx';
+import type { PendingQueue, QueueItem } from '../queue/queue.ts';
+import { chipLabel, localDate, MoodCheckinForm } from './MoodCard.tsx';
 
 /** How many check-ins the Log shows. */
 export const MOOD_HISTORY_LIMIT = 14;
 
 export interface MoodEntry {
   operationId: string;
+  seq: number;
   payload: MoodCheckinPayload;
 }
 
@@ -26,15 +28,34 @@ export function recentCheckins(items: readonly QueueItem[], limit: number = MOOD
   const entries: MoodEntry[] = [];
   for (const item of items) {
     if (item.envelope.type !== 'MoodCheckin' || undone.has(item.operationId)) continue;
-    entries.push({ operationId: item.operationId, payload: item.envelope.payload });
+    entries.push({ operationId: item.operationId, seq: item.seq, payload: item.envelope.payload });
   }
   entries.sort((a, b) => b.payload.checkinAt.localeCompare(a.payload.checkinAt));
   return entries.slice(0, limit);
 }
 
-/** Recent check-ins for the Progress view. Read-only and tap-free: the rows are evidence, not controls. */
-export function MoodHistory({ items }: { items: readonly QueueItem[] }) {
+export interface MoodHistoryProps {
+  items: readonly QueueItem[];
+  queue: PendingQueue;
+  accountKey: string | null;
+  baseRevision: string | null;
+  blocked: boolean;
+}
+
+/**
+ * Recent check-ins for the Progress view. The rows are evidence; only today's entry carries an Edit control (UX6),
+ * which opens the shared check-in form prefilled and enqueues a normal MoodCheckin on save.
+ */
+export function MoodHistory({ items, queue, accountKey, baseRevision, blocked }: MoodHistoryProps) {
   const entries = recentCheckins(items);
+  const today = localDate();
+  // Only today's effective check-in is editable: the newest queue sequence for the day, the same rule latestCheckin
+  // uses, so a later edit of the day does not leave the superseded row with its own Edit control.
+  const activeToday = entries
+    .filter((e) => e.payload.date === today)
+    .reduce<MoodEntry | null>((best, e) => (!best || e.seq > best.seq ? e : best), null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const editingEntry = entries.find((e) => e.operationId === editing) ?? null;
   return <section aria-label="Mood" className="progress-card log-mood">
     <h2>Mood</h2>
     {entries.length === 0
@@ -47,8 +68,12 @@ export function MoodHistory({ items }: { items: readonly QueueItem[] }) {
             <span className="log-mood-values">
               {chipLabel('Mood', entry.payload.mood)} · {chipLabel('Energy', entry.payload.energy)} · Sleep {entry.payload.sleep} h
             </span>
+            {activeToday?.operationId === entry.operationId && <button type="button" className="link" onClick={() => setEditing(entry.operationId)}>Edit</button>}
           </li>)}
         </ul>
       </>}
+    {editingEntry && <MoodCheckinForm key={editingEntry.operationId} queue={queue} accountKey={accountKey} baseRevision={baseRevision}
+      blocked={blocked} date={editingEntry.payload.date} initial={editingEntry.payload}
+      onSaved={() => setEditing(null)} onCancel={() => setEditing(null)} />}
   </section>;
 }
