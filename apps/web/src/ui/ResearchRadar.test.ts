@@ -678,6 +678,71 @@ describe('deriveRadar Keep save status', () => {
   });
 });
 
+describe('deriveRadar Kept list', () => {
+  const keepLine = decision();
+  const applied = (over: Partial<NonNullable<RadarResponse['applied'][string]>> = {}) => ({
+    [OP]: { status: 'applied' as const, at: '2026-09-30T10:00:00Z', message: '', libraryPath: 'Research/Library/Paper.md', ...over },
+  });
+
+  it('lists a saved keep with its paper title and status', () => {
+    const view = deriveRadar(response([], [keepLine], applied()), [], new Set());
+    expect(view.kept).toEqual([{ paperId: paperId(1), title: 'Paper 1', saveStatus: 'saved', at: '2026-09-30T10:00:00Z' }]);
+  });
+
+  it('lists failed and pending keeps without claiming a save', () => {
+    const failed = deriveRadar(response([], [keepLine], applied({ status: 'failed', libraryPath: null })), [], new Set());
+    expect(failed.kept[0]!.saveStatus).toBe('failure');
+    const pending = deriveRadar(response([], [keepLine]), [], new Set());
+    expect(pending.kept[0]!.saveStatus).toBe('pending');
+  });
+
+  it('lists a saving local keep while its intent is in flight', () => {
+    const intent: RadarIntent = {
+      command: ResearchRadarDecideCommand.parse({
+        schemaVersion: 1, operationId: OP, type: 'ResearchRadarDecide', occurredAt: '2026-09-30T10:00:00Z', baseRevision: REV,
+        payload: { paperId: paperId(1), decision: 'keep', undoes: null, card: { title: 'Paper 1', source: 'https://example.com/paper-1', topic: 'rl' } },
+      }),
+      attempts: 0,
+      status: 'pending',
+      error: null,
+    };
+    const view = deriveRadar(response([], [keepLine]), [intent], new Set([OP]));
+    expect(view.kept[0]!.saveStatus).toBe('saving');
+  });
+});
+
+describe('ResearchRadar Library reads', () => {
+  it('opens the Library note from a saved keep and requests only the paper ID', async () => {
+    vi.mocked(getRadar).mockResolvedValue({ kind: 'ok', data: response([], [decision()], {
+      [OP]: { status: 'applied', at: '2026-09-30T10:00:00Z', message: '', libraryPath: 'Research/Library/Paper 1.md' },
+    }) });
+    vi.mocked(getRadarNote).mockResolvedValue({ kind: 'ok', data: {
+      status: 'ok', revision: REV, path: 'Research/Library/Paper 1.md', blobSha: 'b'.repeat(40), markdown: '# Saved Library note',
+    } });
+    await render();
+    await open();
+    const kept = document.querySelector('[data-testid="radar-kept"]')!;
+    expect(kept.textContent).toContain('Paper 1');
+    const openButton = [...kept.querySelectorAll('button')].find((b) => b.textContent === 'Saved to Library')!;
+    await act(async () => { openButton.click(); });
+    await flush();
+    expect(vi.mocked(getRadarNote)).toHaveBeenCalledExactlyOnceWith(paperId(1));
+    expect(document.querySelector('[data-testid="radar-note-view"]')?.textContent).toContain('Saved Library note');
+  });
+
+  it('shows a failed Library save in the Kept list without offering the note', async () => {
+    vi.mocked(getRadar).mockResolvedValue({ kind: 'ok', data: response([], [decision()], {
+      [OP]: { status: 'failed', at: '2026-09-30T10:00:00Z', message: '', libraryPath: null },
+    }) });
+    await render();
+    await open();
+    const kept = document.querySelector('[data-testid="radar-kept"]')!;
+    expect(kept.textContent).toContain('Library save failed');
+    expect([...kept.querySelectorAll('button')].some((b) => b.textContent === 'Saved to Library')).toBe(false);
+    expect(vi.mocked(getRadarNote)).not.toHaveBeenCalled();
+  });
+});
+
 describe('deriveRadar Undo eligibility', () => {
   it('marks only current and previous server file months as undoable', () => {
     const current = deriveRadar(response([], [decision({ month: '2026-09' })]), [], new Set());

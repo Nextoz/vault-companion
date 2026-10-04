@@ -10,6 +10,36 @@ const NOW = new Date('2026-09-30T10:00:00Z');
 const AT = '2026-09-30T12:00:00+02:00';
 const SOURCE = 'https://example.com/radar-paper';
 const TITLE = 'Synthetic radar paper';
+const SCOUT_PATH = 'Research/Daily Research Scout/Daily Research Scout - 2026-09-29.md';
+const DECISION_ID = '55555555-5555-4555-8555-555555555555';
+const LIBRARY_PATH = 'Research/Library/Saved Synthetic Paper.md';
+
+const scoutNote = (): string => `---
+created: 2026-09-29
+status: complete
+scout_health: ok
+confidence: 0.9
+source: synthetic
+tags:
+  - ai
+  - radar
+---
+## Most relevant items
+- ${TITLE}
+- ${SOURCE}
+- why synthetic 85/100
+`;
+
+const keepLine = (paperId: string): string => `${JSON.stringify({
+  schemaVersion: 1, decisionId: DECISION_ID, paperId, decision: 'keep', undoes: null, at: AT,
+  card: { title: TITLE, source: SOURCE, topic: 'radar' },
+})}\n`;
+
+const appliedFile = (libraryPath: string | null, status: 'applied' | 'failed' = 'applied'): string => JSON.stringify({
+  schemaVersion: 1,
+  updatedAt: '2026-09-30T12:00:00+02:00',
+  decisions: { [DECISION_ID]: { status, at: AT, message: 'synthetic', libraryPath } },
+});
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -177,4 +207,69 @@ it('maps a Radar store outage to a retryable 503 and logs no task text', async (
   expect(res.status).toBe(503);
   expect(await res.json()).toMatchObject({ code: 'upstream-unavailable', retryable: true });
   expect(JSON.stringify([logs, consoleCalls])).not.toContain(TITLE);
+});
+
+it('returns the applied Library note for a kept paper and rejects a client-supplied path', async () => {
+  const paperId = (await radarPaperId(SOURCE))!;
+  const store = await InMemoryStore.create({
+    [SCOUT_PATH]: scoutNote(),
+    'Research/Radar/Decisions/2026-09.jsonl': keepLine(paperId),
+    'Research/Radar/applied.json': appliedFile(LIBRARY_PATH),
+    [LIBRARY_PATH]: '# Saved Synthetic Paper\n\nSynthetic Library body.',
+  });
+  const { app } = makeApp(store, true);
+  const ok = await app.request('/api/radar/read', { headers: { ...auth, [RADAR_PAPER_HEADER]: paperId } });
+  expect(ok.status).toBe(200);
+  const body = RadarNoteResponse.parse(await ok.json());
+  expect(body).toMatchObject({ status: 'ok', path: LIBRARY_PATH });
+  if (body.status === 'ok') {
+    expect(body.markdown).toContain('Synthetic Library body.');
+    expect(body.markdown).not.toContain('Most relevant items');
+  }
+
+  // The client still sends only a paper ID: a path in the header is never a read target.
+  const pathHeader = await app.request('/api/radar/read', { headers: { ...auth, [RADAR_PAPER_HEADER]: LIBRARY_PATH } });
+  expect(pathHeader.status).toBe(400);
+  const missingHeader = await app.request('/api/radar/read', { headers: auth });
+  expect(missingHeader.status).toBe(400);
+});
+
+it('does not offer a Library read for failed or pending applied entries', async () => {
+  const paperId = (await radarPaperId(SOURCE))!;
+  const files = {
+    [SCOUT_PATH]: scoutNote(),
+    'Research/Radar/Decisions/2026-09.jsonl': keepLine(paperId),
+    [LIBRARY_PATH]: '# Saved Synthetic Paper\n\nSynthetic Library body.',
+  };
+  const failed = await InMemoryStore.create({ ...files, 'Research/Radar/applied.json': appliedFile(null, 'failed') });
+  const failedRes = await makeApp(failed, true).app.request('/api/radar/read', { headers: { ...auth, [RADAR_PAPER_HEADER]: paperId } });
+  const failedBody = RadarNoteResponse.parse(await failedRes.json());
+  expect(failedBody).toMatchObject({ status: 'refused', code: 'missing' });
+  if (failedBody.status === 'refused') expect(failedBody.message).not.toContain('Synthetic Library body.');
+
+  const pending = await InMemoryStore.create(files);
+  const pendingRes = await makeApp(pending, true).app.request('/api/radar/read', { headers: { ...auth, [RADAR_PAPER_HEADER]: paperId } });
+  expect(RadarNoteResponse.parse(await pendingRes.json())).toMatchObject({ status: 'refused', code: 'missing' });
+});
+
+it('reports a missing Library note honestly and never reads an unvalidated applied path', async () => {
+  const paperId = (await radarPaperId(SOURCE))!;
+  const absent = await InMemoryStore.create({
+    [SCOUT_PATH]: scoutNote(),
+    'Research/Radar/Decisions/2026-09.jsonl': keepLine(paperId),
+    'Research/Radar/applied.json': appliedFile('Research/Library/Absent Synthetic Paper.md'),
+  });
+  const absentRes = await makeApp(absent, true).app.request('/api/radar/read', { headers: { ...auth, [RADAR_PAPER_HEADER]: paperId } });
+  expect(RadarNoteResponse.parse(await absentRes.json())).toMatchObject({ status: 'refused', code: 'missing' });
+
+  // An `applied` entry whose path is not a Library path is dropped by the applied.json guard: the real scout note at
+  // that path must never be served (this assertion fails if `isResearchLibraryPath` validation is removed).
+  const escaped = await InMemoryStore.create({
+    [SCOUT_PATH]: scoutNote(),
+    'Research/Radar/Decisions/2026-09.jsonl': keepLine(paperId),
+    'Research/Radar/applied.json': appliedFile(SCOUT_PATH),
+  });
+  const escapedRes = await makeApp(escaped, true).app.request('/api/radar/read', { headers: { ...auth, [RADAR_PAPER_HEADER]: paperId } });
+  const escapedBody = RadarNoteResponse.parse(await escapedRes.json());
+  expect(escapedBody).toMatchObject({ status: 'refused', code: 'missing' });
 });

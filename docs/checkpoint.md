@@ -58,6 +58,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 - **UX7**: Today leads with a **Morning Brief** button (sheet: whole brief or "No brief yet" + code, Reading section, Radar link; "Review my morning" and `morning-review.ts` removed). One "Research · N highlights" line opens Research Radar as its own screen (no bar button; Scouts keeps a link). Weather line is plain language, run window worded separately (`weatherDayGlance`/`runWindowGlance`). Presentation only.
 
+- **RR3**: tapping "Saved to Library" (and a new **Kept** list on Radar: Saving/Saved/Failed) opens the Library note read-only. `readRadarLibraryNote` in `research-radar.ts` resolves the paper ID to the validated `applied.json` `libraryPath` (re-checked against `Research/Library/`); client never sends a path; pending/failed fall through; missing file = honest refusal. No new write target.
+
 - **SP3**: Status sheet Speed group shows per route last total, median total (last 10 reads), median Worker time and read count (`speedRows` in `timings.ts`); in memory, measurement only. GitHub-time split not done (would need Worker timing). Open: phone check, then SP step 2 decision.
 
 - **PW1** (test tooling): `pnpm tour` (root script -> `tools/tour.mjs` sets `VC_TOUR=1`) runs `apps/web/e2e/tour.spec.ts` on the mock app, 390x844 WebKit, writes 16 named PNGs + `index.md` to `apps/web/test-results/tour/`; excluded from `pnpm e2e`/CI unless `VC_TOUR=1`. No live API.
@@ -66,7 +68,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-0. **Order from the vault Ready Backlog (owner 2026-10-04):** RR3 -> SP phone check (UX7, SC2, JV1 done). Before that: one MB live proof run with `BRIEF_ANY_HOUR=1`, then day-8 re-run gate. Items 1-2 below are history.
+0. **Order from the vault Ready Backlog (owner 2026-10-04):** SP phone check (RR3, UX7, SC2, JV1 done). Before that: one MB live proof run with `BRIEF_ANY_HOUR=1`, then day-8 re-run gate. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the

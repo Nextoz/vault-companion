@@ -1,13 +1,32 @@
 import { expect, test, type Page } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
-import { ApiError } from '@vault-companion/contracts';
+import { ApiError, RadarDecisionLine } from '@vault-companion/contracts';
 import { goTo } from './nav.ts';
 
 // UX7: Research Radar is its own screen, opened from Today's single research entry. Its behaviour (Keep/Remove, reads)
 // is unchanged; only where it is mounted changed.
 const openRadar = async (page: Page) => {
-  await page.getByRole('button', { name: 'Research · 2 highlights', exact: true }).click();
+  await page.getByRole('button', { name: /^Research · \d+ highlights?$/ }).click();
 };
+
+const DECISION_ID = '77777777-7777-4777-8777-777777777777';
+const KEPT_PAPER = '00000000000000000001';
+const KEPT_TITLE = 'Synthetic sparse routing';
+const LIBRARY_PATH = 'Research/Library/Synthetic sparse routing.md';
+
+/** RR3: a durable server Keep record for the first mocked paper; the desktop applied.json is set per test. */
+const keepLine = () => ({
+  ...RadarDecisionLine.parse({
+    schemaVersion: 1,
+    decisionId: DECISION_ID,
+    paperId: KEPT_PAPER,
+    decision: 'keep',
+    undoes: null,
+    at: '2026-09-30T10:00:00Z',
+    card: { title: KEPT_TITLE, source: 'https://example.com/paper-1', topic: 'systems' },
+  }),
+  month: '2026-09',
+});
 
 test('a refused Radar decision can be discarded and stays cleared after reload', async ({ page }) => {
   const api = new MockApi();
@@ -89,4 +108,50 @@ test('Research Radar opens from Today as its own screen, expands/collapses, read
   await expect(kept).toContainText('Keep');
   await expect(kept).toContainText('Saving to Library pending');
   await expect(kept).not.toContainText('Saved to Library');
+});
+
+test('a saved Library keep opens its note from the Kept list', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  api.radar.decisions = [keepLine()];
+  api.radar.applied = { [DECISION_ID]: { status: 'applied', at: '2026-09-30T10:00:00Z', message: 'synthetic', libraryPath: LIBRARY_PATH } };
+  api.radarNotes.set(KEPT_PAPER, ['# Saved Library note', '', 'Synthetic Library body.'].join('\n'));
+  await page.goto('/');
+  await goTo(page, 'Today');
+  await openRadar(page);
+  const radar = page.getByRole('region', { name: 'Research Radar' });
+  const kept = radar.getByTestId('radar-kept');
+  await expect(kept).toHaveCount(1);
+  await expect(kept).toContainText(KEPT_TITLE);
+  await kept.getByRole('button', { name: 'Saved to Library', exact: true }).click();
+  const note = radar.getByTestId('radar-note-view');
+  await expect(note).toContainText('Synthetic Library body.');
+});
+
+test('a failed Library keep is listed but never offered as a note', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  api.radar.decisions = [keepLine()];
+  api.radar.applied = { [DECISION_ID]: { status: 'failed', at: '2026-09-30T10:00:00Z', message: 'synthetic', libraryPath: null } };
+  api.radarNotes.set(KEPT_PAPER, ['# Should never open', '', 'Synthetic body.'].join('\n'));
+  await page.goto('/');
+  await goTo(page, 'Today');
+  await openRadar(page);
+  const radar = page.getByRole('region', { name: 'Research Radar' });
+  const kept = radar.getByTestId('radar-kept');
+  await expect(kept).toContainText('Library save failed');
+  await expect(kept.getByRole('button', { name: 'Saved to Library', exact: true })).toHaveCount(0);
+});
+
+test('a saved Library keep whose note is missing reports an honest message', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  api.radar.decisions = [keepLine()];
+  api.radar.applied = { [DECISION_ID]: { status: 'applied', at: '2026-09-30T10:00:00Z', message: 'synthetic', libraryPath: LIBRARY_PATH } };
+  await page.goto('/');
+  await goTo(page, 'Today');
+  await openRadar(page);
+  const radar = page.getByRole('region', { name: 'Research Radar' });
+  await radar.getByTestId('radar-kept').getByRole('button', { name: 'Saved to Library', exact: true }).click();
+  await expect(radar.getByTestId('radar-note-view')).toContainText('No Radar note for this paper.');
 });

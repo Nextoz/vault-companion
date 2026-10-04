@@ -41,6 +41,15 @@ export interface RadarDecisionView extends RadarDecisionLine {
   undoable: boolean;
 }
 
+/** A kept paper, with the desktop Library save status; Saved ones open their Library note. */
+export interface RadarKeptView {
+  readonly paperId: string;
+  readonly title: string;
+  readonly saveStatus: RadarSaveStatus | null;
+  /** Authoritative `at` of the owning Keep decision, for stable newest-first ordering. */
+  readonly at: string;
+}
+
 function previousMonth(month: string): string {
   const year = Number(month.slice(0, 4));
   const index = Number(month.slice(5, 7)) - 1;
@@ -121,6 +130,7 @@ export interface RadarView {
   cards: RadarCardView[];
   topics: readonly { topic: string; count: number }[];
   decisions: readonly RadarDecisionView[];
+  kept: readonly RadarKeptView[];
 }
 
 export function deriveRadar(
@@ -180,7 +190,19 @@ export function deriveRadar(
     });
   }
   decisionViews.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  return { cards, topics: read.topics, decisions: decisionViews };
+  const kept: RadarKeptView[] = [];
+  for (const paperId of state.kept) {
+    const latest = state.latestByPaper.get(paperId);
+    if (!latest || latest.decision !== 'keep') continue;
+    kept.push({
+      paperId,
+      title: latest.card.title,
+      saveStatus: intentStatus(state.keepDecisionByPaper.get(paperId) ?? latest.decisionId, 'keep', read, intents, savingIds),
+      at: latest.at,
+    });
+  }
+  kept.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return { cards, topics: read.topics, decisions: decisionViews, kept };
 }
 
 const STORAGE_PREFIX = 'vault-companion:radar-pending:v1:';
@@ -371,33 +393,37 @@ export function ResearchRadar({ accountKey, refreshKey, blocked, defaultOpen = f
     setError(null);
   }
 
-  async function readPaper(paper: RadarPaper) {
-    if (paper.read.kind === 'source') return;
+  async function readNote(paperId: string, title: string) {
     const startAccount = accountRef.current;
     if (!startAccount || blockedRef.current) return;
     const requestId = ++noteRequestRef.current;
-    setNoteView({ paperId: paper.paperId, title: paper.title, html: null, message: 'Loading Radar note…' });
-    const result = await getRadarNote(paper.paperId);
+    setNoteView({ paperId, title, html: null, message: 'Loading Radar note…' });
+    const result = await getRadarNote(paperId);
     if (!mountedRef.current || requestId !== noteRequestRef.current || accountRef.current !== startAccount || blockedRef.current) return;
     if (result.kind !== 'ok') {
       setNoteView({
-        paperId: paper.paperId,
-        title: paper.title,
+        paperId,
+        title,
         html: null,
         message: result.kind === 'signed-out' ? 'Sign in to read this Radar note.' : result.kind === 'offline' ? 'The Radar note is unavailable offline.' : result.message,
       });
       return;
     }
     if (result.data.status !== 'ok') {
-      setNoteView({ paperId: paper.paperId, title: paper.title, html: null, message: result.data.message });
+      setNoteView({ paperId, title, html: null, message: result.data.message });
       return;
     }
     try {
       const html = createNoteRenderer(window)(result.data.markdown);
-      setNoteView({ paperId: paper.paperId, title: paper.title, html, message: null });
+      setNoteView({ paperId, title, html, message: null });
     } catch {
-      setNoteView({ paperId: paper.paperId, title: paper.title, html: null, message: 'The Radar note could not be displayed.' });
+      setNoteView({ paperId, title, html: null, message: 'The Radar note could not be displayed.' });
     }
+  }
+
+  async function readPaper(paper: RadarPaper) {
+    if (paper.read.kind === 'source') return;
+    await readNote(paper.paperId, paper.title);
   }
 
   useEffect(() => {
@@ -491,6 +517,21 @@ export function ResearchRadar({ accountKey, refreshKey, blocked, defaultOpen = f
                 : <p role="status">{noteView.message}</p>}
             </div>
           )}
+          {!noteView && view.kept.length > 0 && (
+            <ul className="radar-kept" aria-label="Kept papers">
+              {view.kept.map((item) => (
+                <li key={item.paperId} className="radar-kept-item" data-testid="radar-kept">
+                  <span className="radar-kept-title">{item.title}</span>
+                  {item.saveStatus === 'saving' && <span role="status">Saving to Library…</span>}
+                  {item.saveStatus === 'pending' && <span className="muted small">Saving to Library pending</span>}
+                  {item.saveStatus === 'failure' && <span className="error">Library save failed</span>}
+                  {item.saveStatus === 'saved' && (
+                    <button type="button" className="radar-read" data-read-kind="library" onClick={() => void readNote(item.paperId, item.title)}>Saved to Library</button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
           {!noteView && view.cards.length === 0 && <p>No eligible papers in the last seven days.</p>}
           {!noteView && (
             <ul className="radar-cards">
@@ -529,7 +570,9 @@ export function ResearchRadar({ accountKey, refreshKey, blocked, defaultOpen = f
                   <span className="radar-decision-title">{line.card.title}</span>
                   {line.decision === 'keep' && line.saveStatus === 'saving' && <span role="status">Saving to Library…</span>}
                   {line.decision === 'keep' && line.saveStatus === 'pending' && <span className="muted small">Saving to Library pending</span>}
-                  {line.decision === 'keep' && line.saveStatus === 'saved' && <span role="status">Saved to Library</span>}
+                  {line.decision === 'keep' && line.saveStatus === 'saved' && (
+                    <button type="button" className="radar-read" data-read-kind="library" onClick={() => void readNote(line.paperId, line.card.title)}>Saved to Library</button>
+                  )}
                   {line.decision === 'keep' && line.saveStatus === 'failure' && <span className="error">Library save failed</span>}
                   {line.intent?.error && <span className="error">{line.intent.error}</span>}
                   {line.intent && !savingIds.has(line.decisionId) && <button type="button" onClick={() => retryIntent(line.intent!)}>Retry</button>}
