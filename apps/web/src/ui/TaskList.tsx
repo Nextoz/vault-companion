@@ -3,6 +3,8 @@ import { UNRESOLVED_TEXT } from '../attention.ts';
 import { plainWikilinks, readOnlyText, taskSegments } from '../text.ts';
 import { occurrenceKey, type Row } from '../view.ts';
 import { attentionText } from './ActionsPanel.tsx';
+import { CalendarGlyph } from './CalendarSheet.tsx';
+import { taskCalendarKey } from './calendar-sheet.ts';
 import type { OpenLink } from './NoteView.tsx';
 import { StateChip } from './StateChip.tsx';
 
@@ -24,6 +26,10 @@ interface Props {
   frozen?: boolean;
   /** A group that starts collapsed behind a summary such as "3 overdue" (ADR-0012). */
   collapsible?: { open: boolean; summary: string; onToggle: () => void };
+  /** CAL-b: item keys already linked to a Google event; absent means no calendar affordance is shown. */
+  calendarLinks?: ReadonlySet<string>;
+  /** CAL-b: open the Add to Calendar / In Calendar sheet for a row. */
+  onCalendar?: (task: TaskView) => void;
 }
 
 export function TaskList({
@@ -39,6 +45,8 @@ export function TaskList({
   empty,
   frozen = false,
   collapsible,
+  calendarLinks,
+  onCalendar,
 }: Props) {
   if (rows.length === 0 && !empty) return null;
   const shown = collapsible?.open ?? true;
@@ -68,6 +76,8 @@ export function TaskList({
               onEdit={onEdit}
               onUndo={onUndo}
               onOpenLink={onOpenLink}
+              calendarLinks={calendarLinks}
+              onCalendar={onCalendar}
             />
           ))}
         </ul>
@@ -85,6 +95,8 @@ function TaskRow({
   onEdit,
   onUndo,
   onOpenLink,
+  calendarLinks,
+  onCalendar,
 }: {
   row: Row;
   tapped: ReadonlySet<string>;
@@ -94,6 +106,8 @@ function TaskRow({
   onUndo: Props['onUndo'];
   onEdit: Props['onEdit'];
   onOpenLink: (link: OpenLink) => void;
+  calendarLinks: Props['calendarLinks'];
+  onCalendar: Props['onCalendar'];
 }) {
   const { task, action, undo } = row;
   const busy = action !== null && action.state !== 'attention' && (action.state !== 'saved' || action.type === 'EditTask');
@@ -106,6 +120,9 @@ function TaskRow({
   const text = plainWikilinks(row.description);
   // A description made only of wikilinks has no text segment to tap: offer a named Edit button instead (CodeRabbit #26).
   const textTappable = task !== null && taskSegments(row.description, task.links).some((seg) => seg.kind === 'text' && seg.text.trim() !== '');
+  // CAL-b: the link state is read from the item key; the key itself is stable for the read's locator.
+  const calendarKey = task ? taskCalendarKey(task.locator) : null;
+  const inCalendar = calendarKey !== null && (calendarLinks?.has(calendarKey) ?? false);
 
   return (
     <li className={`task${row.done ? ' task-done' : ''}`} data-testid="task">
@@ -154,6 +171,17 @@ function TaskRow({
             <button type="button" className="task-edit-link" aria-label={`Edit: ${text}`} onClick={() => onEdit?.(task)}>
               Edit
             </button>
+          )}
+          {!row.done && task && onCalendar && (
+            inCalendar ? (
+              <button type="button" className="calendar-link" aria-label={`In Calendar: ${text}`} onClick={() => onCalendar(task)}>
+                In Calendar
+              </button>
+            ) : (
+              <button type="button" className="calendar-glyph" aria-label={`Add to Calendar: ${text}`} onClick={() => onCalendar(task)}>
+                <CalendarGlyph />
+              </button>
+            )
           )}
         </span>
         {action?.state === 'attention' && action.error ? (

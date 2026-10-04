@@ -7,11 +7,16 @@ import { prefs } from '../prefs.ts';
 import type { PendingQueue } from '../queue/queue.ts';
 import { activeWorkState } from '../reads.ts';
 import { ActiveWorkEditSheet } from './ActiveWorkEditSheet.tsx';
+import { CalendarGlyph } from './CalendarSheet.tsx';
+import { activeWorkCalendarKey } from './calendar-sheet.ts';
 import type { OpenLink } from './NoteView.tsx';
 import { StateChip } from './StateChip.tsx';
 
-export function ActiveWorkCard({ revision, queue, accountKey, onOpenLink }: {
+export function ActiveWorkCard({ revision, queue, accountKey, onOpenLink, calendarLinks, onCalendar }: {
   revision: string | null; queue: PendingQueue; accountKey: string | null; onOpenLink: (link: OpenLink) => void;
+  /** CAL-b: item keys already linked to a Google event; absent means no calendar affordance is shown. */
+  calendarLinks?: ReadonlySet<string>;
+  onCalendar?: (item: ActiveWorkItem) => void;
 }) {
   const [res, setRes] = useState<Fetched<ActiveWorkResponse> | null>(null);
   const [collapsed, setCollapsed] = useState(prefs.activeWorkCollapsed);
@@ -68,8 +73,18 @@ export function ActiveWorkCard({ revision, queue, accountKey, onOpenLink }: {
         onClick={() => { setCollapsed(!collapsed); prefs.setActiveWorkCollapsed(!collapsed); }}>Active work</button></h2>
       {!collapsed && <div id="active-work-content" data-testid="active-work-body">
         {state.kind === 'message' && <p className="muted">{state.text}</p>}
-        {read && activeWorkRows(read, snapshot.items, accountKey).map(({ item, action, blocked }) => <article className="active-work-item" key={item.locator.lineIndex + ':' + item.locator.lineText}>
+        {read && activeWorkRows(read, snapshot.items, accountKey).map(({ item, action, blocked }) => {
+          // CAL-b: the link state is read from the item key, built from the same locator identity the actions use.
+          const inCalendar = calendarLinks?.has(activeWorkCalendarKey(item.locator)) ?? false;
+          return <article className="active-work-item" key={item.locator.lineIndex + ':' + item.locator.lineText}>
           <button type="button" className="link" disabled={busy || blocked || !accountKey} aria-label={'Edit: ' + item.name} onClick={() => setEditing(item)}>{item.name}</button>
+          {onCalendar && (
+            inCalendar ? (
+              <button type="button" className="calendar-link" aria-label={'In Calendar: ' + item.name} onClick={() => onCalendar(item)}>In Calendar</button>
+            ) : (
+              <button type="button" className="calendar-glyph" aria-label={'Add to Calendar: ' + item.name} onClick={() => onCalendar(item)}><CalendarGlyph /></button>
+            )
+          )}
           {item.next && <p>Next: {item.next}</p>}
           {item.review && <p className="muted small">Review: {item.review}</p>}
           {item.link && <button type="button" className="link" aria-label={'Open note: ' + item.link} onClick={(e) => onOpenLink({
@@ -82,7 +97,8 @@ export function ActiveWorkCard({ revision, queue, accountKey, onOpenLink }: {
             <button type="button" key={a} aria-label={`${a[0]?.toUpperCase()}${a.slice(1)}: ${item.name}`}
               disabled={busy || blocked || !accountKey} onClick={() => a === 'drop' ? (setDropping(item), setReason('')) : void review(item, a)}>
               {a[0]?.toUpperCase()}{a.slice(1)}</button>)}</div>
-        </article>)}
+        </article>;
+        })}
         {read && read.unknownNowLines.length > 0 && <div className="active-work-unknown"><p className="muted small">edited in Obsidian</p>
           <pre>{read.unknownNowLines.join('\n')}</pre></div>}
         {error && <p role="alert" className="error">{error}</p>}

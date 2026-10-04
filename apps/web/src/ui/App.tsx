@@ -1,6 +1,7 @@
 import type { AiBudgetResponse, AiUsageResponse, CompleteTaskCommand, TaskView } from '@vault-companion/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { getAiBudget, getAiUsage, getSession, getTasks, type Fetched } from '../api.ts';
+import { getAiBudget, getAiUsage, getCalendarLinks, getSession, getTasks, type Fetched } from '../api.ts';
+import type { ActiveWorkItem } from '../active-work.ts';
 import { coalescedRead, type ReadReason } from '../coalescedRead.ts';
 import { notRedoneBy, stillUnresolved, UNRESOLVED_TEXT, unresolvedFrom, type Unresolved } from '../attention.ts';
 import { completeTask, undoCompleteTask, undoDraft } from '../commands.ts';
@@ -17,6 +18,8 @@ import { buildView, occurrenceKey, overdueSummary } from '../view.ts';
 import { FROZEN_NOTE, taskListLock } from '../writeBlock.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
 import { ActiveWorkCard } from './ActiveWorkCard.tsx';
+import { CalendarSheet } from './CalendarSheet.tsx';
+import { activeWorkCalendarKey, taskCalendarKey, type CalendarTarget } from './calendar-sheet.ts';
 import { Dashboard } from './Dashboard.tsx';
 import { HealthPanel } from './HealthPanel.tsx';
 import { EditSheet } from './EditSheet.tsx';
@@ -62,6 +65,9 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   // Where the header's Status screen returns to (the tab that opened it).
   const [statusReturn, setStatusReturn] = useState<Tab>('today');
   const [editing, setEditing] = useState<{ task: TaskView; account: string | null; revision: string } | null>(null);
+  // CAL-b: the item keys the calendar link file names, and the row whose sheet is open.
+  const [calendarLinks, setCalendarLinks] = useState<ReadonlySet<string>>(() => new Set<string>());
+  const [calendar, setCalendar] = useState<CalendarTarget | null>(null);
   const [captureOpen, setCaptureOpen] = useState(false);
   // ADR-0040: one bug/wish report from any screen; enqueued like every capture, so it works offline.
   const [reportOpen, setReportOpen] = useState(false);
@@ -104,6 +110,24 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
     void getAiBudget().then((result) => { if (live) setAiBudget(result); });
     return () => { live = false; };
   }, [checkedAt, signedOut, tab]);
+  // CAL-b: the calendar affordance exists only on the Tasks screens (Today/All) and only while signed in. The read is
+  // re-checked whenever the task read is, so a link written elsewhere appears after the next refresh.
+  const refreshCalendarLinks = useCallback(async () => {
+    const res = await getCalendarLinks();
+    setCalendarLinks(new Set(res.kind === 'ok' ? Object.keys(res.data.links) : []));
+  }, []);
+  useEffect(() => {
+    if (!accountKey || signedOut || (tab !== 'tasks' && tab !== 'all')) return;
+    void refreshCalendarLinks();
+  }, [accountKey, signedOut, tab, checkedAt, refreshCalendarLinks]);
+  const openCalendarForTask = useCallback((task: TaskView) => {
+    const itemKey = taskCalendarKey(task.locator);
+    setCalendar({ itemKey, text: task.description, due: task.due, scheduled: task.scheduled, linked: calendarLinks.has(itemKey) });
+  }, [calendarLinks]);
+  const openCalendarForActiveWork = useCallback((item: ActiveWorkItem) => {
+    const itemKey = activeWorkCalendarKey(item.locator);
+    setCalendar({ itemKey, text: item.name, due: item.review, scheduled: null, linked: calendarLinks.has(itemKey) });
+  }, [calendarLinks]);
   const openNote = useCallback((link: OpenLink) => setOpenLink({ ...link, account: accountKey }), [accountKey]);
   // A read checked against an older watermark than the snapshot's may predate receipts evicted since (G3-1).
   const fresh = rendered !== null && renderable(rendered, snapshot.watermark);
@@ -469,10 +493,10 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             <button type="button" aria-pressed={tab === 'all'} onClick={() => setTab('all')}>All</button>
           </div>
         )}
-        {tab === 'tasks' && !signedOut && <ActiveWorkCard key={accountKey} revision={tasks?.revision ?? null} queue={queue} accountKey={accountKey} onOpenLink={openNote} />}
+        {tab === 'tasks' && !signedOut && <ActiveWorkCard key={accountKey} revision={tasks?.revision ?? null} queue={queue} accountKey={accountKey} onOpenLink={openNote} calendarLinks={calendarLinks} onCalendar={openCalendarForActiveWork} />}
         {tasks && tab === 'tasks' && (
           <>
-            <TaskList title="Today" rows={view.today} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} empty="Nothing due today." />
+            <TaskList title="Today" rows={view.today} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} calendarLinks={calendarLinks} onCalendar={openCalendarForTask} empty="Nothing due today." />
             <TaskList
               title="Overdue"
               rows={view.overdue}
@@ -481,6 +505,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
               frozen={frozen}
               onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })}
               onOpenLink={openNote}
+              calendarLinks={calendarLinks}
+              onCalendar={openCalendarForTask}
               overdue
               collapsible={{
                 open: overdueOpen,
@@ -492,7 +518,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           </>
         )}
         {tasks && tab === 'all' && (
-          <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} empty="No open tasks." />
+          <TaskList title="All tasks" rows={view.all} tapped={tapped} blocked={writeBlocked} frozen={frozen} onComplete={complete} onEdit={(task) => tasks && setEditing({ task, account: accountKey, revision: tasks.revision })} onOpenLink={openNote} calendarLinks={calendarLinks} onCalendar={openCalendarForTask} empty="No open tasks." />
         )}
 
         {/* B2: on the tabs where actions are taken; an action needing attention shows on every tab (above). */}
@@ -525,6 +551,12 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           taskBlocked={lock ? lock.banner : null}
           onClose={() => setCaptureOpen(false)}
         />
+      )}
+
+      {calendar && !signedOut && (
+        <CalendarSheet key={calendar.itemKey} target={calendar} accountKey={accountKey}
+          onClose={() => setCalendar(null)}
+          onSaved={() => { setCalendar(null); void refreshCalendarLinks(); }} />
       )}
 
       {noteOpen && <NoteView link={openLink} onClose={closeNote} />}
