@@ -13,7 +13,7 @@ import {
   type RadarReadTarget,
   type RadarResponse,
 } from '@vault-companion/contracts';
-import { canReadRadarSource, parseVaultPath } from './paths.ts';
+import { canReadRadarSource, isResearchLibraryPath, parseVaultPath } from './paths.ts';
 import {
   canonicalRadarUrl,
   effectiveRadarDecisions,
@@ -821,6 +821,32 @@ export async function buildResearchRadar(deps: ResearchRadarServiceDeps): Promis
   return (await loadResearchRadar(deps)).response;
 }
 
+/**
+ * RR3: read a desktop-owned Library note that `Radar/applied.json` recorded for a Keep decision. The path comes from
+ * validated `applied.json` state (never client input) and is re-checked against the `Research/Library/` allowlist.
+ */
+async function readRadarLibraryNote(store: VaultStore, revision: string, rawPath: string): Promise<RadarNoteResponse> {
+  const refused = (code: RadarNoteRefusalCode, message: string): RadarNoteResponse => ({ status: 'refused', revision, code, message });
+  const path = parseVaultPath(rawPath);
+  if (!path || !isResearchLibraryPath(path)) return refused('missing', 'this paper has no readable Library note');
+  let file;
+  try {
+    file = await store.readFile(path, revision);
+  } catch (e) {
+    if (e instanceof FileTooLarge) return refused('too-large', 'the Library note is larger than 1 MB');
+    throw e;
+  }
+  if (!file) return refused('missing', 'the Library note no longer exists at this revision');
+  if (file.bytes.length > MAX_NOTE_BYTES) return refused('too-large', 'the Library note is larger than 1 MB');
+  let markdown: string;
+  try {
+    markdown = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(file.bytes);
+  } catch {
+    return refused('encoding', 'the Library note is not valid UTF-8');
+  }
+  return { status: 'ok', revision, path: rawPath, blobSha: file.blobSha, markdown };
+}
+
 export function createResearchRadarService(deps: ResearchRadarServiceDeps) {
   const readError = (message: string): ApiError => ({ code: 'upstream-unavailable', message, retryable: true });
   const refused = (revision: string, code: RadarNoteRefusalCode, message: string): RadarNoteResponse =>
@@ -848,6 +874,13 @@ export function createResearchRadarService(deps: ResearchRadarServiceDeps) {
       }
       try {
         const { response, notesByPath } = await loadResearchRadar(deps);
+        // RR3: a Keep that the desktop applied to a Library note wins over the intake/explanation note. Failed or
+        // pending entries are not applied and fall through to the existing read resolution below.
+        const keepDecisionId = effectiveRadarDecisions(response.decisions).keepDecisionByPaper.get(paperId);
+        const appliedEntry = keepDecisionId ? response.applied[keepDecisionId] : undefined;
+        if (appliedEntry?.status === 'applied' && appliedEntry.libraryPath !== null) {
+          return await readRadarLibraryNote(deps.store, response.revision, appliedEntry.libraryPath);
+        }
         const paper = response.papers.find((p) => p.paperId === paperId);
         if (!paper || (paper.read.kind !== 'note' && paper.read.kind !== 'explanation')) {
           return refused(response.revision, 'missing', 'this paper has no readable Radar note');

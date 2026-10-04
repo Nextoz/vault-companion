@@ -271,7 +271,7 @@ export function createApp(deps: AppDeps) {
   });
 
   // Radar note read: the paper ID rides in a header, never in the URL; the service resolves it server-side from the
-  // allowlisted research folders at a pinned revision. No note text or path is logged.
+  // allowlisted research folders (or an applied Keep's Library note) at a pinned revision. No note text or path is logged.
   app.get('/api/radar/read', async (c) => {
     const read = deps.services.readRadarNote;
     if (!read) return c.json(err('invalid', 'not found'), 404);
