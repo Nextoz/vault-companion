@@ -1,0 +1,13 @@
+{
+  "name": "merge-133-ab-registry",
+  "source": "225ed9e Merge pull request #133 from Nextoz/fix/ab-registry",
+  "paths": [
+    "docs/checkpoint.md",
+    "packages/domain/src/scouts.test.ts",
+    "packages/domain/src/scouts.ts"
+  ],
+  "expected": {
+    "tier": "unit-only",
+    "source": "floor"
+  }
+}

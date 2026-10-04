@@ -1,0 +1,23 @@
+{
+  "name": "merge-branch-sc1",
+  "source": "74368e9 Merge branch 'main' of https://github.com/Nextoz/vault-companion into feat/ux6",
+  "paths": [
+    "apps/web/src/api.ts",
+    "apps/worker/src/app.test.ts",
+    "apps/worker/src/app.ts",
+    "apps/worker/src/index.ts",
+    "docs/checkpoint.md",
+    "docs/decisions/0051-ai-usage-summary-read.md",
+    "packages/contracts/src/contracts.test.ts",
+    "packages/contracts/src/index.ts",
+    "packages/domain/src/ai-usage-read.test.ts",
+    "packages/domain/src/ai-usage-read.ts",
+    "packages/domain/src/index.ts",
+    "tools/glm-review.ps1",
+    "tools/handoff-check.ps1"
+  ],
+  "expected": {
+    "tier": "full-e2e",
+    "source": "floor"
+  }
+}

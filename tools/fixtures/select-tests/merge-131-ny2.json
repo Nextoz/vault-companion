@@ -1,0 +1,16 @@
+{
+  "name": "merge-131-ny2",
+  "source": "e8ab7c3 Merge pull request #131 from Nextoz/feat/ny2",
+  "paths": [
+    "apps/web/src/ui/App.tsx",
+    "apps/web/src/ui/MorningCard.tsx",
+    "apps/web/src/ui/MorningReviewSheet.tsx",
+    "apps/web/src/ui/morning-review.test.ts",
+    "apps/web/src/ui/morning-review.ts",
+    "docs/checkpoint.md"
+  ],
+  "expected": {
+    "tier": "unit-only",
+    "source": "floor"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "merge-121-ux5-log-health",
+  "source": "2b37254 Merge pull request #121 from Nextoz/feat/ux5-log-health",
+  "paths": [
+    "apps/web/e2e/dashboard.spec.ts",
+    "apps/web/e2e/health-history.spec.ts",
+    "apps/web/src/styles.css",
+    "apps/web/src/ui/App.tsx",
+    "apps/web/src/ui/Dashboard.test.ts",
+    "apps/web/src/ui/Dashboard.tsx",
+    "apps/web/src/ui/LogMood.test.ts",
+    "apps/web/src/ui/LogMood.tsx",
+    "apps/web/src/ui/Progress.tsx",
+    "apps/web/src/ui/ReportSheet.test.ts",
+    "apps/web/src/ui/ReportSheet.tsx",
+    "apps/web/src/ui/TabBar.tsx",
+    "docs/checkpoint.md"
+  ],
+  "expected": {
+    "tier": "unit-only",
+    "source": "floor"
+  }
+}

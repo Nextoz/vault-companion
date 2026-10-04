@@ -98,6 +98,9 @@ question is a typed choice/score/yes-no over **public repo** material. Owner wan
   `pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,flash,pro,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks?" -Json`
 - **Instead of deliberating:** "is this in scope?", "is this handoff claim supported by the test output?", "real
   failure or flaky?", "which backlog item is smallest?" — ask Jev (`-Ask` / `-Choose` / `-Rate`) first.
+- **Test tier (advisory):** `tools/select-tests.ps1 -Paths <paths> [-HighRisk] [-NoJev]` prints `{tier, reason, source}`; the floor decides first.
+  Worker/contracts/vault-markdown/auth/lockfile => full-e2e; docs-only => none; `-HighRisk` => full-e2e; only an open floor asks one Jev `-Choose`, any failure => full-e2e.
+  `handoff-check.ps1` reports that tier and asks Jev one bounded `-Ask` per acceptance bullet (doubts under "Unverified") — advisory only, never changes the exit code.
 Never send private vault text or raw logs to Jev. Receipts land in `.agent/jev-receipts.jsonl`; the Lead notes
 notable misses in the checkpoint. Jev never accepts work, waives a check or authorizes anything.
 

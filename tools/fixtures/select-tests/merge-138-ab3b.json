@@ -1,0 +1,20 @@
+{
+  "name": "merge-138-ab3b",
+  "source": "442f336 Merge pull request #138 from Nextoz/feat/ab3b",
+  "paths": [
+    "apps/web/e2e/ai-usage.spec.ts",
+    "apps/web/e2e/mock-api.ts",
+    "apps/web/src/ui/AiUsagePanel.test.ts",
+    "apps/web/src/ui/AiUsagePanel.tsx",
+    "apps/web/src/ui/App.tsx",
+    "apps/web/src/ui/Dashboard.css",
+    "apps/web/src/ui/Dashboard.tsx",
+    "apps/web/src/ui/ai-usage.test.ts",
+    "apps/web/src/ui/ai-usage.ts",
+    "docs/checkpoint.md"
+  ],
+  "expected": {
+    "tier": "unit-only",
+    "source": "floor"
+  }
+}
