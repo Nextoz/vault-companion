@@ -1,9 +1,10 @@
-// Dashboard (DASH1): read-only overview. One card per watched item (WL2) with a 1W/1M/3M/1Y series, plus honest overview
-// cards for the AI usage sources that are not connected yet. No writes, no provider calls from the browser.
-import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketSeries, MarketTickerResponse, WatchCard, WeatherCard } from '@vault-companion/contracts';
+// Dashboard (DASH1): read-only overview. One card per watched item (WL2) with a 1W/1M/3M/1Y series, honest overview
+// cards, and the AB3b AI usage panel (fed from App). No writes, no provider calls from the browser.
+import type { AiBudgetResponse, AiUsageResponse, DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketSeries, MarketTickerResponse, WatchCard, WeatherCard } from '@vault-companion/contracts';
 import { useCallback, useEffect, useId, useMemo, useState, type PointerEvent } from 'react';
-import { getDashboard, getMarketTicker } from '../api.ts';
+import { getDashboard, getMarketTicker, type Fetched } from '../api.ts';
 import './Dashboard.css';
+import { AiUsagePanel } from './AiUsagePanel.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 import { formatChange, formatWatchPrice, formatWatchValue, legacyMarketCard, seriesChange, watchCards, watchFresh, watchTitle } from './watchlist.ts';
 import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
@@ -256,8 +257,9 @@ export function overviewTiles(cards: readonly DashboardCard[]): DashboardCard[] 
   return cards.filter((card) => card.id !== 'market' && card.id !== 'watchlist' && card.id !== 'weather' && card.id !== 'health' && card.status !== 'not-configured');
 }
 
-export function Dashboard({ refreshKey, accountKey = null, onDrillthrough }: {
+export function Dashboard({ refreshKey, accountKey = null, onDrillthrough, aiUsage = null, aiBudget = null }: {
   refreshKey: number | null; accountKey?: string | null; onDrillthrough?: ((view: string) => void) | undefined;
+  aiUsage?: Fetched<AiUsageResponse> | null; aiBudget?: Fetched<AiBudgetResponse> | null;
 }) {
   const [range, setRange] = useState<DashboardRange>('1W');
   const [retryKey, setRetryKey] = useState(0);
@@ -349,6 +351,7 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough }: {
           {tiles.map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}
         </div>
       )}
+      <AiUsagePanel usage={aiUsage} budget={aiBudget} now={nowMs || Date.now()} />
     </section>
   );
 }
