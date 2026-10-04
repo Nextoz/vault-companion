@@ -3,6 +3,9 @@ import { defineConfig, devices } from '@playwright/test';
 const SW_SPEC = /offline-shell\.spec\.ts$/;
 const REAL_SPEC = /real-stack\.spec\.ts$/;
 const ASSET_POLICY_SPEC = /asset-policy\.spec\.ts$/;
+// PW1: the screenshot tour is manual test tooling, excluded from `pnpm e2e`/CI unless the tour script sets VC_TOUR=1.
+const TOUR_SPEC = /tour\.spec\.ts$/;
+const tourIgnore = process.env['VC_TOUR'] === '1' ? [] : [TOUR_SPEC];
 // Optional: a preinstalled Chromium when Playwright's own download is unavailable (e.g. cloud sandboxes).
 const chromiumPath = process.env['PW_CHROMIUM_EXECUTABLE'];
 // Parallel local clones can select their own preview without reusing another clone's build.
@@ -34,7 +37,7 @@ export default defineConfig({
   projects: [
     {
       name: 'iphone-15-webkit',
-      testIgnore: [SW_SPEC, REAL_SPEC, ASSET_POLICY_SPEC],
+      testIgnore: [SW_SPEC, REAL_SPEC, ASSET_POLICY_SPEC, ...tourIgnore],
       use: { ...devices['iPhone 15'], browserName: 'webkit', serviceWorkers: 'block' },
     },
     {
