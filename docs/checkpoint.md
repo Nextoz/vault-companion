@@ -34,6 +34,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 - **AB-registry**: `ai-budget.json` is excluded from the Scouts list (`NON_SCOUT_FILES` in `packages/domain/src/scouts.ts`), no more grey "unreadable" tile. Deploy pending.
 
+- **AB3a** (ADR-0051): `GET /api/ai-usage` reads fixed `AI/Usage/AI Usage Summary.json` (schema 1, read-only; bad provider/day dropped and counted in `skipped`, unknown providers kept). Backend only; AB3b panel UI next. e2e not run (no UI).
+
 ## Next actions (in order)
 
 0. **Order from the vault Ready Backlog (owner 2026-10-04):** NY3 -> UX6 -> SC1 -> AB3 -> CAL (high-risk) -> LG1 -> SIWH -> SC2 spike -> SP/RR. Items 1-2 below are history.
