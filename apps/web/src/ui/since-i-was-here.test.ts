@@ -15,7 +15,7 @@ import {
 } from './since-i-was-here.ts';
 
 const facts = (over: Partial<SiwhFacts> = {}): SiwhFacts => ({
-  triage: 0,
+  triage: [],
   scouts: [],
   brief: null,
   papers: [],
@@ -25,28 +25,33 @@ const facts = (over: Partial<SiwhFacts> = {}): SiwhFacts => ({
 
 describe('sinceIWasHereLines', () => {
   it('shows nothing on a first install (no snapshot at all)', () => {
-    expect(sinceIWasHereLines(facts({ triage: 3, scouts: [{ id: 'learning', name: 'Learning', findings: 4 }], brief: '2026-09-30', papers: ['a'] }), null)).toEqual([]);
+    expect(sinceIWasHereLines(facts({ triage: ['e1'], scouts: [{ id: 'learning', name: 'Learning', findings: 4 }], brief: '2026-09-30', papers: ['a'] }), null)).toEqual([]);
   });
 
   it('shows no line when a source is unchanged', () => {
-    const snapshot: SiwhSnapshot = { at: 1, triage: 2, scouts: { learning: 4 }, brief: '2026-09-30', papers: ['a', 'b'] };
-    expect(sinceIWasHereLines(facts({ triage: 2, scouts: [{ id: 'learning', name: 'Learning', findings: 4 }], brief: '2026-09-30', papers: ['a', 'b'] }), snapshot)).toEqual([]);
+    const snapshot: SiwhSnapshot = { at: 1, triage: ['e1', 'e2'], scouts: { learning: 4 }, brief: '2026-09-30', papers: ['a', 'b'] };
+    expect(sinceIWasHereLines(facts({ triage: ['e1', 'e2'], scouts: [{ id: 'learning', name: 'Learning', findings: 4 }], brief: '2026-09-30', papers: ['a', 'b'] }), snapshot)).toEqual([]);
   });
 
   it('shows no line and no fake zero when a source is unavailable', () => {
-    const snapshot: SiwhSnapshot = { at: 1, triage: 4, papers: ['a'], health: '2026-09-29' };
+    const snapshot: SiwhSnapshot = { at: 1, triage: ['e1', 'e2', 'e3', 'e4'], papers: ['a'], health: '2026-09-29' };
     const lines = sinceIWasHereLines(facts({ triage: null, papers: null, health: null }), snapshot);
     expect(lines).toEqual([]);
     expect(lines.some((line) => /0\b/.test(line.text))).toBe(false);
   });
 
   it('shows a line when triage cards were added', () => {
-    const lines = sinceIWasHereLines(facts({ triage: 3 }), { at: 1, triage: 0 });
+    const lines = sinceIWasHereLines(facts({ triage: ['a', 'b', 'c'] }), { at: 1, triage: [] });
     expect(lines).toEqual([{ id: 'triage', text: '3 events in triage', target: 'triage' }]);
   });
 
   it('never shows a decrease (fewer triage cards) as new', () => {
-    expect(sinceIWasHereLines(facts({ triage: 1 }), { at: 1, triage: 3 })).toEqual([]);
+    expect(sinceIWasHereLines(facts({ triage: ['a'] }), { at: 1, triage: ['a', 'b', 'c'] })).toEqual([]);
+  });
+
+  it('announces a card whose id is new even when the count is unchanged', () => {
+    expect(sinceIWasHereLines(facts({ triage: ['a', 'd'] }), { at: 1, triage: ['a', 'b'] }))
+      .toEqual([{ id: 'triage', text: '1 event in triage', target: 'triage' }]);
   });
 
   it('shows a scout line only when its newest successful run has more findings', () => {
@@ -80,8 +85,8 @@ describe('sinceIWasHereLines', () => {
     const scouts = Array.from({ length: 8 }, (_, index) => ({ id: `s${index}`, name: `Scout ${index}`, findings: 3 }));
     const seen = Object.fromEntries(scouts.map((scout) => [scout.id, 1]));
     const lines = sinceIWasHereLines(
-      facts({ triage: 2, scouts, brief: '2026-09-30', papers: ['x', 'y'], health: '2026-09-30' }),
-      { at: 1, triage: 0, scouts: seen, brief: '2026-09-29', papers: [], health: '2026-09-28' },
+      facts({ triage: ['t1', 't2'], scouts, brief: '2026-09-30', papers: ['x', 'y'], health: '2026-09-30' }),
+      { at: 1, triage: [], scouts: seen, brief: '2026-09-29', papers: [], health: '2026-09-28' },
     );
     expect(lines).toHaveLength(SIWH_MAX_LINES);
   });
@@ -89,44 +94,45 @@ describe('sinceIWasHereLines', () => {
 
 describe('snapshotOf', () => {
   it('stores every current source and records the time', () => {
-    const snapshot = snapshotOf(facts({ triage: 2, scouts: [{ id: 'learning', name: 'Learning', findings: 4 }], brief: '2026-09-30', papers: ['a'], health: '2026-09-30' }), null, 42);
-    expect(snapshot).toEqual({ at: 42, triage: 2, scouts: { learning: 4 }, brief: '2026-09-30', papers: ['a'], health: '2026-09-30' });
+    const snapshot = snapshotOf(facts({ triage: ['e1', 'e2'], scouts: [{ id: 'learning', name: 'Learning', findings: 4 }], brief: '2026-09-30', papers: ['a'], health: '2026-09-30' }), null, 42);
+    expect(snapshot).toEqual({ at: 42, triage: ['e1', 'e2'], scouts: { learning: 4 }, brief: '2026-09-30', papers: ['a'], health: '2026-09-30' });
   });
 
   it('keeps the last seen value for a source that is unavailable at close', () => {
-    const snapshot = snapshotOf(facts({ triage: null, scouts: null, papers: null, health: null }), { at: 1, triage: 5, papers: ['a'], health: '2026-09-28' }, 42);
-    expect(snapshot).toEqual({ at: 42, triage: 5, papers: ['a'], health: '2026-09-28' });
+    const snapshot = snapshotOf(facts({ triage: null, scouts: null, papers: null, health: null }), { at: 1, triage: ['e1'], papers: ['a'], health: '2026-09-28' }, 42);
+    expect(snapshot).toEqual({ at: 42, triage: ['e1'], papers: ['a'], health: '2026-09-28' });
   });
 });
 
 describe('establishBaseline', () => {
   it('records sources the device has never seen without advancing ones it has', () => {
-    const stored: SiwhSnapshot = { at: 1, triage: 1 };
-    const merged = establishBaseline(stored, facts({ triage: 9, scouts: [{ id: 'learning', name: 'Learning', findings: 4 }], papers: ['a'] }), 42);
-    expect(merged.triage).toBe(1);
+    const stored: SiwhSnapshot = { at: 1, triage: ['seen'] };
+    const merged = establishBaseline(stored, facts({ triage: ['seen', 'new'], scouts: [{ id: 'learning', name: 'Learning', findings: 4 }], papers: ['a'] }), 42);
+    expect(merged.triage).toEqual(['seen']);
     expect(merged.scouts).toEqual({ learning: 4 });
     expect(merged.papers).toEqual(['a']);
     expect(merged.at).toBe(1);
   });
 
   it('establishes the whole baseline on a first install', () => {
-    expect(establishBaseline(null, facts({ triage: 0, papers: [] }), 7)).toEqual({ at: 7, triage: 0, scouts: {}, papers: [] });
+    expect(establishBaseline(null, facts({ triage: [], papers: [] }), 7)).toEqual({ at: 7, triage: [], scouts: {}, papers: [] });
   });
 
   it('is idempotent, so a render never loops', () => {
-    const merged = establishBaseline(null, facts({ triage: 0 }), 7);
-    expect(sameSnapshot(merged, establishBaseline(merged, facts({ triage: 0 }), 99))).toBe(true);
+    const merged = establishBaseline(null, facts({ triage: [] }), 7);
+    expect(sameSnapshot(merged, establishBaseline(merged, facts({ triage: [] }), 99))).toBe(true);
   });
 });
 
 describe('parseSinceIWasHereSnapshot', () => {
   it('round-trips a snapshot and rejects a malformed one', () => {
-    const snapshot: SiwhSnapshot = { at: 5, triage: 3, scouts: { learning: 4 }, brief: '2026-09-30', papers: ['a'], health: '2026-09-30' };
+    const snapshot: SiwhSnapshot = { at: 5, triage: ['e1', 'e2'], scouts: { learning: 4 }, brief: '2026-09-30', papers: ['a'], health: '2026-09-30' };
     expect(parseSinceIWasHereSnapshot(JSON.stringify(snapshot))).toEqual(snapshot);
     expect(parseSinceIWasHereSnapshot(null)).toBeNull();
     expect(parseSinceIWasHereSnapshot('not json')).toBeNull();
     expect(parseSinceIWasHereSnapshot('[]')).toBeNull();
     expect(parseSinceIWasHereSnapshot('{"at":"x"}')).toBeNull();
+    expect(parseSinceIWasHereSnapshot('{"at":1,"triage":2}')).toBeNull();
     expect(parseSinceIWasHereSnapshot('{"at":1,"papers":[1]}')).toBeNull();
   });
 });
@@ -172,8 +178,8 @@ describe('sinceIWasHereFacts', () => {
       { status: 'refused', revision: 'a'.repeat(40), code: 'not-found', message: 'missing' },
     ] });
     const health = HealthResponse.parse({ revision: 'a'.repeat(40), now: '2026-09-30T12:00:00Z', status: 'ok', day: '2026-09-30', staleDays: 0, metrics: [] });
-    expect(sinceIWasHereFacts({ triage: 3, scouts, brief, morning, health, today: '2026-09-30' }))
-      .toEqual({ triage: 3, scouts: [{ id: 'learning', name: 'Learning opportunities', findings: 4 }], brief: '2026-09-30', papers: ['Research/Explained/a.md'], health: '2026-09-30' });
+    expect(sinceIWasHereFacts({ triage: ['e1', 'e2', 'e3'], scouts, brief, morning, health, today: '2026-09-30' }))
+      .toEqual({ triage: ['e1', 'e2', 'e3'], scouts: [{ id: 'learning', name: 'Learning opportunities', findings: 4 }], brief: '2026-09-30', papers: ['Research/Explained/a.md'], health: '2026-09-30' });
     expect(sinceIWasHereFacts({ triage: null, scouts: null, brief, morning, health, today: '2026-10-01' }).brief).toBeNull();
     expect(sinceIWasHereFacts({ triage: null, scouts: null, brief: null, morning: null, health: null, today: '2026-09-30' }))
       .toEqual({ triage: null, scouts: null, brief: null, papers: null, health: null });

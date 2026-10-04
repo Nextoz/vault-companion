@@ -102,7 +102,8 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   // SIWH: the same reads the card already holds, narrowed to counts and keys. No read is added for the pane; the health
   // day comes from the app's in-memory last copy (populated when the Health screen has been visited this session).
   const siwhFacts = sinceIWasHereFacts({
-    triage: triageView ? eventsToTriage : null,
+    // Event ids, not just the count: a card handled elsewhere then replaced by a new one on the same count is new.
+    triage: triageView ? [...triageView.cards.map((card) => card.eventId), ...triageView.checkins.map((checkin) => checkin.eventId)] : null,
     scouts: scoutData,
     brief: brief !== null && brief.kind === 'ok' ? brief.data : null,
     morning: morning !== null && morning.kind === 'ok' ? morning.data : null,

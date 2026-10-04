@@ -46,7 +46,8 @@ test('a first run shows nothing and only stores the baseline', async ({ page }) 
   await expect(page.getByRole('region', { name: 'Since I was here' })).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => window.localStorage.getItem('vc.sinceIWasHere'))).not.toBeNull();
   const stored = JSON.parse((await page.evaluate(() => window.localStorage.getItem('vc.sinceIWasHere')))!);
-  expect(stored).toMatchObject({ triage: 2, brief: TODAY, scouts: { learning: 4 } });
+  expect(stored).toMatchObject({ brief: TODAY, scouts: { learning: 4 } });
+  expect(stored.triage).toHaveLength(2);
 });
 
 test('an older snapshot lists exactly the new items, and it stays closed until something newer arrives', async ({ page }) => {
@@ -57,7 +58,7 @@ test('an older snapshot lists exactly the new items, and it stays closed until s
     card(3, 'Synthetic event three', '2026-10-03T17:00:00+02:00')];
   api.triage = { ...api.triage, feedState: 'ok', generatedAt: '2026-09-28T06:50:00+02:00', cards };
   await api.install(page);
-  await seedOnce(page, { at: 1, triage: 0, scouts: { learning: 1 }, brief: '2026-09-29', papers: [] });
+  await seedOnce(page, { at: 1, triage: [], scouts: { learning: 1 }, brief: '2026-09-29', papers: [] });
   await page.goto('/');
 
   const pane = page.getByRole('region', { name: 'Since I was here' });

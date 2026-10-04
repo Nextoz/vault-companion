@@ -26,7 +26,9 @@ export interface SiwhScout {
 
 /** Counts and keys from the Today card's own reads; `null` means that read is unavailable, so it yields no line. */
 export interface SiwhFacts {
-  readonly triage: number | null;
+  /** Event ids waiting in triage, or null when the read is unavailable. Ids, not a count, so handling a card never
+   *  masks a later arrival that lands on the same count. */
+  readonly triage: readonly string[] | null;
   readonly scouts: readonly SiwhScout[] | null;
   /** The date of a usable (today's) Morning Brief, or null when there is none. */
   readonly brief: string | null;
@@ -39,7 +41,7 @@ export interface SiwhFacts {
 /** Device-held last-seen state. An absent field means that source was never observed on this device. */
 export interface SiwhSnapshot {
   readonly at: number;
-  readonly triage?: number;
+  readonly triage?: readonly string[];
   readonly scouts?: Readonly<Record<string, number>>;
   readonly brief?: string;
   readonly papers?: readonly string[];
@@ -72,7 +74,8 @@ export function scoutFindings(response: ScoutsResponse): SiwhScout[] {
 
 /** The reads the Today card holds, narrowed to the counts/keys the pane compares. Pure. */
 export interface SiwhFactInput {
-  readonly triage: number | null;
+  /** Event ids waiting in triage (cards plus check-ins), or null when the read is unavailable. */
+  readonly triage: readonly string[] | null;
   readonly scouts: ScoutsResponse | null;
   readonly brief: MorningBriefResponse | null;
   readonly morning: MorningResponse | null;
@@ -101,8 +104,10 @@ export function sinceIWasHereLines(facts: SiwhFacts, snapshot: SiwhSnapshot | nu
   if (snapshot === null) return [];
   const lines: SiwhLine[] = [];
 
-  if (facts.triage !== null && snapshot.triage !== undefined && facts.triage > snapshot.triage) {
-    lines.push({ id: 'triage', text: `${pluralise(facts.triage - snapshot.triage, 'event')} in triage`, target: 'triage' });
+  if (facts.triage !== null && snapshot.triage !== undefined) {
+    const seen = new Set(snapshot.triage);
+    const added = facts.triage.filter((eventId) => !seen.has(eventId)).length;
+    if (added > 0) lines.push({ id: 'triage', text: `${pluralise(added, 'event')} in triage`, target: 'triage' });
   }
 
   if (facts.scouts !== null && snapshot.scouts !== undefined) {
@@ -140,8 +145,8 @@ const findingsMap = (scouts: readonly SiwhScout[]): Record<string, number> => {
  *  for a source that is unavailable right now (so a transient failure never resets what was already seen). Pure. */
 export function snapshotOf(facts: SiwhFacts, previous: SiwhSnapshot | null, at: number): SiwhSnapshot {
   const next: MutableSnapshot = { at };
-  if (facts.triage !== null) next.triage = facts.triage;
-  else if (previous?.triage !== undefined) next.triage = previous.triage;
+  if (facts.triage !== null) next.triage = [...facts.triage];
+  else if (previous?.triage !== undefined) next.triage = [...previous.triage];
   if (facts.scouts !== null) next.scouts = findingsMap(facts.scouts);
   else if (previous?.scouts !== undefined) next.scouts = { ...previous.scouts };
   if (facts.brief !== null) next.brief = facts.brief;
@@ -159,8 +164,8 @@ export function snapshotOf(facts: SiwhFacts, previous: SiwhSnapshot | null, at: 
  */
 export function establishBaseline(stored: SiwhSnapshot | null, facts: SiwhFacts, at: number): SiwhSnapshot {
   const next: MutableSnapshot = { at: stored?.at ?? at };
-  if (stored?.triage !== undefined) next.triage = stored.triage;
-  else if (facts.triage !== null) next.triage = facts.triage;
+  if (stored?.triage !== undefined) next.triage = [...stored.triage];
+  else if (facts.triage !== null) next.triage = [...facts.triage];
   if (stored?.scouts !== undefined) next.scouts = { ...stored.scouts };
   else if (facts.scouts !== null) next.scouts = findingsMap(facts.scouts);
   if (stored?.brief !== undefined) next.brief = stored.brief;
@@ -174,7 +179,7 @@ export function establishBaseline(stored: SiwhSnapshot | null, facts: SiwhFacts,
 
 interface MutableSnapshot {
   at: number;
-  triage?: number;
+  triage?: string[];
   scouts?: Record<string, number>;
   brief?: string;
   papers?: string[];
@@ -195,7 +200,7 @@ const sameList = (a: readonly string[] | undefined, b: readonly string[] | undef
 /** Order-independent equality, so a baseline is only written to prefs when it actually changed. */
 export function sameSnapshot(a: SiwhSnapshot | null, b: SiwhSnapshot): boolean {
   if (a === null) return false;
-  return a.at === b.at && a.triage === b.triage && a.brief === b.brief && a.health === b.health
+  return a.at === b.at && sameList(a.triage, b.triage) && a.brief === b.brief && a.health === b.health
     && sameRecord(a.scouts, b.scouts) && sameList(a.papers, b.papers);
 }
 
@@ -218,8 +223,8 @@ export function parseSinceIWasHereSnapshot(raw: string | null): SiwhSnapshot | n
   const snapshot: MutableSnapshot = { at };
   const triage = record['triage'];
   if (triage !== undefined) {
-    if (typeof triage !== 'number' || !Number.isFinite(triage)) return null;
-    snapshot.triage = triage;
+    if (!Array.isArray(triage) || !triage.every((eventId): eventId is string => typeof eventId === 'string')) return null;
+    snapshot.triage = [...triage];
   }
   const scouts = record['scouts'];
   if (scouts !== undefined) {
