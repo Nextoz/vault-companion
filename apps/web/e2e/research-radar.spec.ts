@@ -6,7 +6,7 @@ import { goTo } from './nav.ts';
 // UX7: Research Radar is its own screen, opened from Today's single research entry. Its behaviour (Keep/Remove, reads)
 // is unchanged; only where it is mounted changed.
 const openRadar = async (page: Page) => {
-  await page.getByRole('button', { name: 'Research · 2 highlights', exact: true }).click();
+  await page.getByRole('button', { name: /^Research · \d+ highlights?$/ }).click();
 };
 
 const DECISION_ID = '77777777-7777-4777-8777-777777777777';
