@@ -73,6 +73,19 @@ describe('status sheet helpers', () => {
     expect(rows[1]).toMatchObject({ file: 'Scouts/broken.md', name: 'Scouts/broken.md', state: 'No status yet', run: null });
   });
 
+  it('carries a degraded or failed run\u2019s own error text, never a healthy one\u2019s', () => {
+    const rows = scoutRows(scoutsResponse([
+      { file: 'Scouts/deg.md', state: 'ok', status: scout({ scoutId: 'deg', displayName: 'Degraded', runStatus: 'degraded', lastError: 'one source timed out' }) },
+      { file: 'Scouts/fail.md', state: 'ok', status: scout({ scoutId: 'fail', displayName: 'Failed', runStatus: 'failed', lastError: 'runner could not start' }) },
+      { file: 'Scouts/ok.md', state: 'ok', status: scout({ scoutId: 'ok', displayName: 'Healthy', lastError: 'stale text' }) },
+    ]));
+    expect(rows.map((row) => [row.state, row.error])).toEqual([
+      ['Degraded', 'one source timed out'],
+      ['Failed', 'runner could not start'],
+      ['Healthy', null],
+    ]);
+  });
+
   it('reads each data source time from the copies the app already holds', () => {
     const rows = dataSourceRows({ dashboard: dashboard(), health: health('ok') }, now, 'Europe/Copenhagen');
     expect(rows).toEqual([

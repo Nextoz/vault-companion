@@ -35,6 +35,7 @@ function ScoutLine({ row }: { row: ScoutRow }) {
       <span className={`status-sheet-scout-name ${stateClass(row.state)}`}>{row.name}</span>
       <span className={`chip ${stateClass(row.state)}`}>{stateLabel(row.state)}</span>
       <span className="muted small status-sheet-scout-run">{row.run ? `Last run ${exactTime(row.run)}` : 'No run yet'}</span>
+      {row.error && <p className="muted small status-sheet-scout-error">{row.error}</p>}
     </li>
   );
 }

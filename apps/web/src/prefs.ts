@@ -39,4 +39,22 @@ export const prefs = {
   /** Actions list expanded on this device (collapsed by default: B2). */
   actionsOpen: () => read('vc.actionsOpen') === '1',
   setActionsOpen: (open: boolean) => write('vc.actionsOpen', open ? '1' : '0'),
+  /**
+   * NY3: the Needs you scout rows dismissed on this device, as row id -> the error text shown when dismissed.
+   * A malformed or unrecognised value reads as empty, so a bad entry never crashes the card.
+   */
+  needsYouDismissed: (): Record<string, string> => {
+    const raw = read('vc.needsYouDismissed');
+    if (raw === null) return {};
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+      const dismissed: Record<string, string> = {};
+      for (const [id, why] of Object.entries(parsed)) if (typeof why === 'string') dismissed[id] = why;
+      return dismissed;
+    } catch {
+      return {};
+    }
+  },
+  setNeedsYouDismissed: (dismissed: Record<string, string>) => write('vc.needsYouDismissed', JSON.stringify(dismissed)),
 };

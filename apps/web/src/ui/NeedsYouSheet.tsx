@@ -6,11 +6,13 @@ import type { PendingQueue } from '../queue/queue.ts';
 import { ActiveWorkEditSheet } from './ActiveWorkEditSheet.tsx';
 import type { NeedsYouRow, NeedsYouTarget } from './needs-you.ts';
 
-export function NeedsYouSheet({ rows, queue, accountKey, onNavigate, onClose }: {
+export function NeedsYouSheet({ rows, queue, accountKey, onNavigate, onDismiss, onClose }: {
   rows: readonly NeedsYouRow[];
   queue: PendingQueue;
   accountKey: string | null;
   onNavigate: (target: NeedsYouTarget) => void;
+  /** NY3: a scout row's "Got it" - device-held dismissal, keyed by row id and its error text. */
+  onDismiss: (row: NeedsYouRow) => void;
   onClose: () => void;
 }) {
   const [editing, setEditing] = useState<{ item: ActiveWorkItem; revision: string } | null>(null);
@@ -56,11 +58,14 @@ export function NeedsYouSheet({ rows, queue, accountKey, onNavigate, onClose }: 
           : (
             <ul className="needs-you-list">
               {rows.map((row) => (
-                <li key={row.id}>
+                <li key={row.id} className="needs-you-item">
                   <button type="button" className="needs-you-row" onClick={() => open(row)}>
                     <span className="needs-you-title">{row.title}</span>
                     <span className="muted small">{row.why}</span>
                   </button>
+                  {row.target.kind === 'scouts' && (
+                    <button type="button" className="needs-you-dismiss" onClick={() => onDismiss(row)}>Got it</button>
+                  )}
                 </li>
               ))}
             </ul>
