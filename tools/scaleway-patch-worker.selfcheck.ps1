@@ -42,6 +42,19 @@ Assert-Eq 'no-fence-only-hunk' (Get-PatchText ('--- a/f.txt' + $nl + '+++ b/f.tx
 Assert-Eq 'empty' (Get-PatchText '') ''
 Assert-Eq 'prose-only' (Get-PatchText 'I could not produce a patch.') ''
 
+$ctxDiff = @(
+    'diff --git a/f.md b/f.md',
+    '--- a/f.md',
+    '+++ b/f.md',
+    '@@ -1,3 +1,3 @@',
+    ' keep',
+    (' ' + $fence),
+    '-old',
+    '+new'
+) -join $nl
+Assert-Eq 'ctx-backticks-unfenced' (Get-PatchText $ctxDiff) $ctxDiff
+Assert-Eq 'ctx-backticks-fenced' (Get-PatchText ($fence + 'diff' + $nl + $ctxDiff + $nl + $fence)) $ctxDiff
+
 Write-Host 'Path validation:'
 Assert-Eq 'safe-simple' (Test-SafeRepoPath 'src/app.ts') $true
 Assert-Eq 'safe-backslash' (Test-SafeRepoPath 'packages\domain\src\x.ts') $true

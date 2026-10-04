@@ -39,12 +39,12 @@ function Get-PatchText {
     $text = ($Content -replace "`r`n", "`n") -replace "`r", "`n"
     $lines = $text -split "`n"
     $fences = @()
-    for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match '^\s*```') { $fences += $i } }
+    for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match '^```') { $fences += $i } }
     if ($fences.Count -ge 2 -and ($fences[1] - $fences[0]) -ge 2) {
         $body = ($lines[($fences[0] + 1)..($fences[1] - 1)] -join "`n")
     } else {
         $kept = New-Object System.Collections.Generic.List[string]
-        foreach ($line in $lines) { if ($line -notmatch '^\s*```') { $kept.Add($line) } }
+        foreach ($line in $lines) { if ($line -notmatch '^```') { $kept.Add($line) } }
         $body = ($kept -join "`n")
     }
     $m = [regex]::Match($body, '(?m)^diff --git ')
@@ -92,6 +92,29 @@ function Get-SafeTaskName {
     return ($Name -replace '[^A-Za-z0-9._-]', '_')
 }
 
+function Test-PatchScope {
+    param([string]$ClonePath, [string]$PatchPath, [string[]]$Allowed)
+    $ns = [string](& git -C $ClonePath apply --numstat -z $PatchPath 2>&1)
+    if ($LASTEXITCODE -ne 0) { return @{ Ok = $false; Reason = 'git apply --numstat could not read the patch' } }
+    $allowedSet = @{}
+    foreach ($a in @($Allowed)) { $allowedSet[($a -replace '\\', '/').Trim()] = $true }
+    foreach ($rec in ($ns -split [string][char]0)) {
+        if ([string]::IsNullOrWhiteSpace($rec)) { continue }
+        $parts = $rec -split "`t"
+        $path = ($parts[$parts.Count - 1] -replace '\\', '/').Trim()
+        if (-not $allowedSet.ContainsKey($path)) {
+            return @{ Ok = $false; Reason = "patch touches '$path', which is not one of the listed files" }
+        }
+    }
+    $sum = @(& git -C $ClonePath apply --summary $PatchPath 2>&1)
+    if ($LASTEXITCODE -ne 0) { return @{ Ok = $false; Reason = 'git apply --summary could not read the patch' } }
+    foreach ($line in $sum) {
+        if ([string]$line -match '^\s*(create mode|delete mode|mode change|rename|copy)\b') {
+            return @{ Ok = $false; Reason = "patch performs a '$($Matches[1])' change, which is not allowed" }
+        }
+    }
+    return @{ Ok = $true; Reason = '' }
+}
 function Invoke-ScalewayChat {
     param(
         [object[]]$Messages,
@@ -216,8 +239,19 @@ function Invoke-Main {
         if (-not $patch.EndsWith("`n")) { $patch += "`n" }
         [IO.File]::WriteAllText($patchPath, $patch, (New-Object System.Text.UTF8Encoding($false)))
 
-        $check = & git -C $cloneFull apply --check --whitespace=nowarn $patchPath 2>&1
-        if ($LASTEXITCODE -eq 0) {
+        $reject = ''
+        $scope = Test-PatchScope -ClonePath $cloneFull -PatchPath $patchPath -Allowed $normalized.ToArray()
+        if (-not $scope.Ok) {
+            $reject = "scope check rejected the patch: $($scope.Reason)"
+        } else {
+            $check = & git -C $cloneFull apply --check --whitespace=nowarn $patchPath 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                $reject = (($check | Out-String).Trim())
+                if (-not $reject) { $reject = 'git apply --check failed' }
+            }
+        }
+
+        if (-not $reject) {
             & git -C $cloneFull apply --whitespace=nowarn $patchPath 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 Write-Log $cloneFull $Task $Model $attempts $tokens $false
@@ -227,15 +261,16 @@ function Invoke-Main {
             break
         }
 
-        $gitErr = ($check | Out-String).Trim()
+        $gitErr = $reject
         if ($attempt -eq 1) {
             $messages = @(
                 @{ role = 'system'; content = $script:SystemPrompt },
                 @{ role = 'user'; content = $userContent },
                 @{ role = 'assistant'; content = $patch },
-                @{ role = 'user'; content = "That patch failed: git apply --check reported:`n$gitErr`nReturn a corrected unified diff only, in git format." }
+                @{ role = 'user'; content = "That patch was rejected:`n$gitErr`nReturn a corrected unified diff only, in git format." }
             )
         }
+
     }
 
     Write-Log $cloneFull $Task $Model $attempts $tokens $applied
