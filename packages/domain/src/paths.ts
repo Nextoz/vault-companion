@@ -9,6 +9,8 @@ export const EXPLAINED_DIR = 'Research/Explained';
 export const EXPLAINER_STATUS_PATH = `${SCOUT_STATUS_DIR}/research-explainer.json`;
 /** ADR-0046: the one JSON file the morning-brief cron may create or overwrite. */
 export const MORNING_BRIEF_PATH = 'Daily/Morning Digest/Morning Brief - latest.json';
+/** ADR-0055: the one status record the morning-brief cron writes after every run. */
+export const MORNING_BRIEF_STATUS_PATH = `${SCOUT_STATUS_DIR}/morning-brief.json`;
 /** ADR-0052: the one derived JSON file the calendar-write Worker may create or update. */
 export const CALENDAR_LINKS_PATH = 'Automation/Calendar Links.json';
 export const RADAR_DIR = 'Research/Radar';
@@ -104,6 +106,7 @@ export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
   if (isTriageDecisionPath(path)) return true;
   if (isRadarDecisionPath(path)) return true;
   if (path === EXPLAINER_STATUS_PATH) return true;
+  if (path === MORNING_BRIEF_STATUS_PATH) return true;
   if (path === MORNING_BRIEF_PATH) return true;
   if (path === CALENDAR_LINKS_PATH) return true;
   // Create; update only replaces this job's own pending note (blob-SHA checked by the job, ADR-0029 amendment 2).

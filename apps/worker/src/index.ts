@@ -1,6 +1,6 @@
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
-import { createTrainingService, createLearningService, createActiveWorkService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, slotForCron } from '@vault-companion/domain';
+import { createTrainingService, createLearningService, createActiveWorkService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, slotForCron, type VaultStore } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
 import { WEATHER_TIME_ZONE, type ApiError } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
@@ -17,7 +17,7 @@ import { createGeminiExplainer } from './gemini.ts';
 import { createScalewayChat } from './scaleway-chat.ts';
 import { gatherCandidates } from './morning-brief-gather.ts';
 import { cloudflareMailer, type BriefEmailBinding } from './morning-brief-email.ts';
-import { BRIEF_ROUTE, briefSlotForCron, runBriefJob } from './morning-brief-job.ts';
+import { BRIEF_ROUTE, BRIEF_SUBREQUEST_BUDGET, briefSlotForCron, runBriefJob } from './morning-brief-job.ts';
 import { diagnosticDetail, type LogRecord } from './log.ts';
 import { EXPLAINER_ROUTE, runExplainerJob } from './research-explainer.ts';
 
@@ -56,6 +56,8 @@ export interface Env {
   GOOGLE_CAL_WRITE_CLIENT_ID?: string;
   GOOGLE_CAL_WRITE_CLIENT_SECRET?: string;
   GOOGLE_CAL_WRITE_REFRESH_TOKEN?: string;
+  /** ADR-0055 test hook: when exactly '1', skip only the Morning Brief local-hour guard. Plain var, never a secret. */
+  BRIEF_ANY_HOUR?: string;
 }
 
 /** The two members of Cloudflare's ScheduledController/ExecutionContext the cron handler uses. */
@@ -159,6 +161,17 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
   return createApp({ verify, verifyIngest, appOrigin: env.APP_ORIGIN, services, log });
 }
 
+/** Read-only view over the same store whose `head()` returns the caller-pinned commit without another fetch. */
+function withPinnedHead(store: VaultStore, commitSha: string): VaultStore {
+  return new Proxy(store, {
+    get(target, prop, receiver) {
+      if (prop === 'head') return async () => ({ commitSha });
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as VaultStore;
+}
+
 /**
  * Cron composition: research explainer (ADR-0029) and Morning Brief (ADR-0046). Every GitHub/model request goes
  * through one counting `fetch`, so the explainer run stays inside its subrequest budget. `fetchImpl` is for tests.
@@ -212,35 +225,37 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
   if (briefSlot) {
     const timeZone = MORNING_BRIEF_TIME_ZONE;
     const now = () => new Date();
-    const command = createCommandService({ store, now, timeZone });
-    const training = createTrainingService({ store });
-    const health = createHealthService({ store, now, timeZone });
-    const weather = createWeatherService({ reader: createWeatherProvider({ fetch: counted, now: () => Date.now() }), now, timeZone });
-    const unavailable: ApiError = { code: 'upstream-unavailable', message: 'reader unavailable', retryable: true };
-    const googleReader = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_REFRESH_TOKEN
-      ? createGoogleReader({
-        clientId: env.GOOGLE_CLIENT_ID,
-        clientSecret: env.GOOGLE_CLIENT_SECRET,
-        refreshToken: env.GOOGLE_REFRESH_TOKEN,
-        fetch: counted,
-        now,
-      })
-      : {
-        readCalendar: () => Promise.resolve(unavailable),
-        readMail: () => Promise.resolve(unavailable),
-      };
-    const gather = (day: string) => gatherCandidates({
-      day,
-      timeZone,
-      readTasks: () => command.readTasks([]),
-      readHealthHistory: () => health.readHealthHistory(),
-      readTraining: () => training.readTraining(),
-      readWeather: () => weather.readWeather(),
-      readMood: () => Promise.resolve(unavailable),
-      readCalendar: () => googleReader.readCalendar(),
-      readMail: () => googleReader.readMail(),
-    });
     try {
+      const { commitSha: baseRevision } = await store.head();
+      const readStore = withPinnedHead(store, baseRevision);
+      const command = createCommandService({ store: readStore, now, timeZone });
+      const training = createTrainingService({ store: readStore });
+      const health = createHealthService({ store: readStore, now, timeZone });
+      const weather = createWeatherService({ reader: createWeatherProvider({ fetch: counted, now: () => Date.now() }), now, timeZone });
+      const unavailable: ApiError = { code: 'upstream-unavailable', message: 'reader unavailable', retryable: true };
+      const googleReader = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_REFRESH_TOKEN
+        ? createGoogleReader({
+          clientId: env.GOOGLE_CLIENT_ID,
+          clientSecret: env.GOOGLE_CLIENT_SECRET,
+          refreshToken: env.GOOGLE_REFRESH_TOKEN,
+          fetch: counted,
+          now,
+        })
+        : {
+          readCalendar: () => Promise.resolve(unavailable),
+          readMail: () => Promise.resolve(unavailable),
+        };
+      const gather = (day: string) => gatherCandidates({
+        day,
+        timeZone,
+        readTasks: () => command.readTasks([]),
+        readHealthHistory: () => health.readHealthHistory(),
+        readTraining: () => training.readTraining(),
+        readWeather: () => weather.readWeather(),
+        readMood: () => Promise.resolve(unavailable),
+        readCalendar: () => googleReader.readCalendar(),
+        readMail: () => googleReader.readMail(),
+      });
       await runBriefJob(cron, {
         store,
         gather,
@@ -254,6 +269,10 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
         now,
         timeZone,
         log,
+        baseRevision,
+        anyHour: env.BRIEF_ANY_HOUR === '1',
+        subrequests: () => used,
+        budget: BRIEF_SUBREQUEST_BUDGET,
       });
     } catch (err) {
       const detail = diagnosticDetail(err);

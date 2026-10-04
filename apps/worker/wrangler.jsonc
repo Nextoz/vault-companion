@@ -6,6 +6,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-20",
   "send_metrics": false,
+  "observability": {
+    "enabled": true,
+  },
   // Only hostname: the owner's custom domain behind Cloudflare Access (docs/deploy.md). No *.workers.dev and no
   // per-version preview URLs — either would be an unprotected second origin unless Access also covers it.
   "workers_dev": false,
@@ -25,13 +28,14 @@
   // (`BRIEF_EMAIL_FROM`/`BRIEF_EMAIL_TO`, `wrangler secret put`); the public repo carries no addresses.
   "send_email": [{ "name": "BRIEF_EMAIL" }],
 
-  // ADR-0029 research explainer: daily run + catch-up (UTC). ADR-0046 Morning Brief: `31 4` and `31 5` are the two
-  // UTC slots whose local Copenhagen hour is 06:xx across DST; a separate minute keeps its own invocation (and
-  // subrequest budget). Must equal EXPLAINER_CRONS and BRIEF_CRONS together (config.test.ts).
+  // ADR-0029 research explainer: daily run + catch-up (UTC). ADR-0046/0055 Morning Brief: `31 4` and `31 5` are the
+  // two UTC slots whose local Copenhagen hour is 06:31 across DST; `31 6` and `31 7` are the 07:31/08:31 catch-ups.
+  // A separate minute keeps its own invocation (and subrequest budget). Must equal EXPLAINER_CRONS and BRIEF_CRONS
+  // together (config.test.ts).
   // Optional keys GEMINI_API_KEY and SCALEWAY_API_KEY are Worker secrets only (`wrangler secret put`,
   // docs/deploy.md), not in `secrets.required`.
   "triggers": {
-    "crons": ["30 4 * * *", "30 6 * * *", "31 4 * * *", "31 5 * * *"],
+    "crons": ["30 4 * * *", "30 6 * * *", "31 4 * * *", "31 5 * * *", "31 6 * * *", "31 7 * * *"],
   },
 
   // Non-secret settings (Env in src/index.ts). AUTH_MODE must stay "access": configProblems() refuses anything else.

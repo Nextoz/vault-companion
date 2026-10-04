@@ -2,7 +2,7 @@ import { MorningBriefResponse, MorningResponse, ScoutsResponse, WeatherResponse,
 import { describe, expect, it } from 'vitest';
 import { moodCheckin, undoMoodCheckinDraft } from '../commands.ts';
 import type { QueueItem } from '../queue/queue.ts';
-import { briefLines, checkinDue, morningLines, tasksTodayText, weatherGlance, type MorningCardFacts } from './morning-card.ts';
+import { briefLines, checkinDue, missingBriefText, morningLines, tasksTodayText, weatherGlance, type MorningCardFacts } from './morning-card.ts';
 import type { NeedsYouRow } from './needs-you.ts';
 
 const ACCOUNT = 'a'.repeat(64);
@@ -177,6 +177,11 @@ describe('Morning Brief rows (MB2)', () => {
   it('is null without a brief, and for a stale date so the card keeps its own lines', () => {
     expect(briefLines(null, '2026-10-02')).toBeNull();
     expect(briefLines(sample({ date: '2026-10-01' }), '2026-10-02')).toBeNull();
+  });
+
+  it('words the missing-brief line from the status error code, with no free text invented', () => {
+    expect(missingBriefText(null)).toBe('No brief yet');
+    expect(missingBriefText('not-written:precondition-failed')).toBe('No brief yet - not-written:precondition-failed');
   });
 
   it('marks a fallback brief', () => {

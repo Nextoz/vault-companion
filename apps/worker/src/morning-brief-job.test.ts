@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MORNING_BRIEF_STATUS_PATH,
   MORNING_BRIEF_PATH,
   morningBriefOperationId,
   parseBriefFile,
@@ -7,6 +8,7 @@ import {
   TRAILER_OP,
   type BriefFile,
 } from '@vault-companion/domain';
+import { ScoutStatus } from '@vault-companion/contracts';
 import { InMemoryStore } from '@vault-companion/domain/testing';
 import type { LogRecord } from './log.ts';
 import type { MorningBriefCandidates } from './morning-brief-gather.ts';
@@ -58,7 +60,7 @@ const modelChat: ScalewayChat = {
 
 async function run(
   store: InMemoryStore,
-  opts: { cron?: string; now?: string; chat?: ScalewayChat; mailer?: BriefMailer; gather?: (day: string) => Promise<MorningBriefCandidates> } = {},
+  opts: { cron?: string; now?: string; chat?: ScalewayChat; mailer?: BriefMailer; gather?: (day: string) => Promise<MorningBriefCandidates>; anyHour?: boolean; subrequests?: () => number; budget?: number } = {},
 ) {
   const logs: LogRecord[] = [];
   await runBriefJob(opts.cron ?? BRIEF_CRONS.summer, {
@@ -69,9 +71,17 @@ async function run(
     now: () => new Date(opts.now ?? NOW),
     timeZone: TZ,
     log: (r) => logs.push(r),
+    ...(opts.anyHour !== undefined ? { anyHour: opts.anyHour } : {}),
+    ...(opts.subrequests ? { subrequests: opts.subrequests } : {}),
+    ...(opts.budget !== undefined ? { budget: opts.budget } : {}),
   });
   return logs;
 }
+
+const status = (store: InMemoryStore): ScoutStatus | null => {
+  const text = store.text(MORNING_BRIEF_STATUS_PATH);
+  return text === null ? null : ScoutStatus.parse(JSON.parse(text));
+};
 
 function spyMailer(): { mailer: BriefMailer; sent: BriefEmail[] } {
   const sent: BriefEmail[] = [];
@@ -88,18 +98,50 @@ describe('morning brief job (ADR-0046)', () => {
     expect(logs).toMatchObject([{ route: 'cron:morning-brief', status: 204, errorCode: 'skipped' }]);
   });
 
-  it('writes exactly the one JSON file with the fallback brief when no chat is configured', async () => {
+  it('runs only in the Copenhagen 06..11 catch-up window', async () => {
+    const windowed = [
+      [`${DATE}T03:30:05Z`, false],
+      [`${DATE}T04:30:05Z`, true],
+      [`${DATE}T09:30:05Z`, true],
+      [`${DATE}T10:30:05Z`, false],
+    ] as const;
+    for (const [instant, runs] of windowed) {
+      const store = await InMemoryStore.create({});
+      const logs = await run(store, { now: instant });
+      expect(store.writeCalls).toBe(runs ? 2 : 0);
+      expect(logs).toMatchObject(runs ? [{ status: 200 }] : [{ status: 204, errorCode: 'skipped' }]);
+    }
+  });
+
+  it('BRIEF_ANY_HOUR skips only the hour guard, so an off-window proof run still writes', async () => {
+    const offWindow = `${DATE}T03:30:05Z`;
+    const guarded = await InMemoryStore.create({});
+    await run(guarded, { now: offWindow });
+    expect(guarded.writeCalls).toBe(0);
+
+    const proof = await InMemoryStore.create({});
+    const logs = await run(proof, { now: offWindow, anyHour: true });
+    expect(proof.writeCalls).toBe(2);
+    expect(proof.text(MORNING_BRIEF_PATH)).not.toBeNull();
+    expect(logs).toMatchObject([{ status: 200 }]);
+  });
+
+  it('writes the fallback brief and the status record when no chat is configured', async () => {
     const store = await InMemoryStore.create({});
     const logs = await run(store);
-    expect(store.writeCalls).toBe(1);
+    expect(store.writeCalls).toBe(2);
     const parsed = parseBriefFile(store.text(MORNING_BRIEF_PATH));
     expect(parsed).toMatchObject({ schemaVersion: 1, date: DATE, source: 'fallback', unavailable: [] });
     expect(parsed?.brief.source).toBe('fallback');
-    const commit = await store.readCommit(store.headCommit);
-    expect(commit?.files.map((f) => f.path)).toEqual([MORNING_BRIEF_PATH]);
-    expect(commit?.trailers[TRAILER_OP]).toBe(await morningBriefOperationId(DATE));
+    const op = await morningBriefOperationId(DATE);
+    const commits = store.commitsWithOp(op);
+    expect(commits).toHaveLength(2);
+    expect((await store.readCommit(commits[0]!))?.files.map((f) => f.path)).toEqual([MORNING_BRIEF_PATH]);
+    expect((await store.readCommit(commits[1]!))?.files.map((f) => f.path)).toEqual([MORNING_BRIEF_STATUS_PATH]);
     expect(logs).toMatchObject([{ status: 200, operationId: await morningBriefOperationId(DATE) }]);
     expect(JSON.stringify(logs)).not.toContain(TODO_TEXT);
+    expect(status(store)?.displayName).toBe('Morning Brief');
+    expect(status(store)?.runStatus).toBe('degraded');
   });
 
   it('writes the model brief when the chat returns a valid reply', async () => {
@@ -139,8 +181,9 @@ describe('morning brief job (ADR-0046)', () => {
     let gathers = 0;
     const logs = await run(store, { gather: async () => { gathers++; return candidates(); } });
     expect(gathers).toBe(0);
-    expect(store.writeCalls).toBe(0);
+    expect(store.writeCalls).toBe(1);
     expect(logs).toMatchObject([{ status: 204, errorCode: 'already-written' }]);
+    expect(status(store)?.runStatus).toBe('success');
   });
 
   it('refuses an existing unreadable file and does not call the model', async () => {
@@ -148,8 +191,22 @@ describe('morning brief job (ADR-0046)', () => {
     let gathers = 0;
     const logs = await run(store, { gather: async () => { gathers++; return candidates(); } });
     expect(gathers).toBe(0);
-    expect(store.writeCalls).toBe(0);
+    expect(store.writeCalls).toBe(1);
     expect(logs).toMatchObject([{ status: 503, errorCode: 'not-written:unreadable' }]);
+    expect(status(store)?.runStatus).toBe('failed');
+    expect(status(store)?.lastError).toBe('not-written:unreadable');
+  });
+
+  it('a thrown gatherer still writes the failure status record and never puts brief text in it', async () => {
+    const store = await InMemoryStore.create({});
+    const logs = await run(store, { gather: async () => { throw new Error('SENTINEL-GATHER-TEXT'); } });
+    expect(store.writeCalls).toBe(1);
+    expect(store.text(MORNING_BRIEF_PATH)).toBeNull();
+    expect(status(store)?.runStatus).toBe('failed');
+    expect(status(store)?.lastError).toBe('internal');
+    expect(JSON.stringify(status(store))).not.toContain(TODO_TEXT);
+    expect(JSON.stringify(status(store))).not.toContain('SENTINEL-GATHER-TEXT');
+    expect(logs).toMatchObject([{ status: 500, errorCode: 'internal' }]);
   });
 
   it('a CAS conflict is a typed outcome and never overwrites', async () => {
@@ -207,7 +264,7 @@ describe('morning brief job (ADR-0046)', () => {
     const boom = 'BOOM-BODY-TEXT';
     const mailer: BriefMailer = { send: async () => { throw new Error(boom); } };
     const logs = await run(store, { mailer });
-    expect(store.writeCalls).toBe(1);
+    expect(store.writeCalls).toBe(2);
     expect(store.text(MORNING_BRIEF_PATH)).not.toBeNull();
     expect(logs).toMatchObject([
       { status: 200, operationId: await morningBriefOperationId(DATE) },

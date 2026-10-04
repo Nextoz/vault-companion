@@ -6,12 +6,15 @@ import {
   fallbackBrief,
   freeBlocks,
   MORNING_BRIEF_PATH,
+  MORNING_BRIEF_STATUS_COMMIT_COST,
   morningBriefOperationId,
   parseBriefFile,
   parseVaultPath,
   stateLine,
   userDate,
+  writeMorningBriefStatus,
   type BriefFile,
+  type MorningBriefOutcome,
   type VaultStore,
 } from '@vault-companion/domain';
 import { diagnosticDetail, sanitize, type LogSink } from './log.ts';
@@ -20,13 +23,21 @@ import type { MorningBriefCandidates } from './morning-brief-gather.ts';
 import { writeBrief, type ScalewayChat } from './scaleway-chat.ts';
 
 export const BRIEF_ROUTE = 'cron:morning-brief';
-/** Two UTC slots cover Copenhagen 06:31 (own minute, so the brief never shares an invocation or subrequest budget with the explainer) across DST: 04:30 UTC (summer) and 05:30 UTC (winter). */
-export const BRIEF_CRONS = { summer: '31 4 * * *', winter: '31 5 * * *' } as const;
+/** ADR-0046/0055: 04:30/05:30 UTC cover Copenhagen 06:31 across DST; 06:30/07:30 UTC are the 07:31/08:31 catch-ups. */
+export const BRIEF_CRONS = {
+  summer: '31 4 * * *',
+  winter: '31 5 * * *',
+  summerCatchup: '31 6 * * *',
+  winterCatchup: '31 7 * * *',
+} as const;
 export type BriefSlot = keyof typeof BRIEF_CRONS;
-const BRIEF_LOCAL_HOUR = 6;
+/** ADR-0055: a failed/late run retries on the catch-up crons; any Copenhagen hour 6..11 is a run window. */
+const BRIEF_LOCAL_HOUR_START = 6;
+const BRIEF_LOCAL_HOUR_END = 11;
+export const BRIEF_SUBREQUEST_BUDGET = 45;
 
 export function briefSlotForCron(cron: string): BriefSlot | null {
-  return cron === BRIEF_CRONS.summer ? 'summer' : cron === BRIEF_CRONS.winter ? 'winter' : null;
+  return (Object.entries(BRIEF_CRONS).find(([, value]) => value === cron)?.[0] as BriefSlot | undefined) ?? null;
 }
 
 function localHour(instant: Date, timeZone: string): number {
@@ -46,6 +57,12 @@ export interface BriefJobDeps {
   readonly now: () => Date;
   readonly timeZone: string;
   readonly log: LogSink;
+  /** Head already fetched by the caller; avoids one duplicate head read in the cron composition. */
+  readonly baseRevision?: string;
+  /** ADR-0055 test hook: skips only the local-hour guard. A plain var, never a secret. */
+  readonly anyHour?: boolean;
+  readonly subrequests?: () => number;
+  readonly budget?: number;
 }
 
 export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<void> {
@@ -55,83 +72,102 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
     deps.log(sanitize({ ...base, status: 400, durationMs: 0, errorCode: 'unknown-cron' }));
     return;
   }
-  try {
-    const now = deps.now();
-    if (localHour(now, deps.timeZone) !== BRIEF_LOCAL_HOUR) {
-      deps.log(sanitize({ ...base, status: 204, durationMs: 0, errorCode: 'skipped' }));
-      return;
-    }
+  const now = deps.now();
+  const hour = localHour(now, deps.timeZone);
+  if (!deps.anyHour && (hour < BRIEF_LOCAL_HOUR_START || hour > BRIEF_LOCAL_HOUR_END)) {
+    deps.log(sanitize({ ...base, status: 204, durationMs: 0, errorCode: 'skipped' }));
+    return;
+  }
 
-    const date = userDate(now, deps.timeZone);
+  const date = userDate(now, deps.timeZone);
+  const operationId = await morningBriefOperationId(date);
+  let outcome: MorningBriefOutcome = 'internal';
+  let unavailable: string[] = [];
+  let source: 'model' | 'fallback' = 'fallback';
+  let errorCode: string | null = 'internal';
+
+  try {
     const path = parseVaultPath(MORNING_BRIEF_PATH);
     if (path) {
-      const { commitSha } = await deps.store.head();
-      const existing = await deps.store.readFile(path, commitSha);
+      const baseRevision = deps.baseRevision ?? (await deps.store.head()).commitSha;
+      const existing = await deps.store.readFile(path, baseRevision);
       if (existing) {
         const current = parseBriefFile(existing.bytes);
         if (!current) {
+          outcome = 'not-written';
+          errorCode = 'not-written:unreadable';
           deps.log(sanitize({ ...base, status: 503, durationMs: 0, errorCode: 'not-written:unreadable' }));
-          return;
-        }
-        if (current.date === date) {
+        } else if (current.date === date) {
+          outcome = 'already-written';
+          errorCode = null;
           deps.log(sanitize({ ...base, status: 204, durationMs: 0, errorCode: 'already-written' }));
-          return;
         }
       }
     }
 
-    const candidates = await deps.gather(date);
-    const unavailable = [...candidates.unavailable];
-    const input = buildWriterInput({
-      day: date,
-      blocks: freeBlocks(candidates.events, date, deps.timeZone),
-      todos: candidates.todos,
-      state: stateLine(candidates.metrics, candidates.mood),
-      weatherWindows: candidates.weatherWindows,
-      trainingRecent: candidates.trainingRecent,
-      unavailable,
-    });
-    const brief = deps.chat ? await writeBrief(input, deps.chat) : fallbackBrief(input);
-    const file: BriefFile = {
-      schemaVersion: 1,
-      date,
-      generatedAt: now.toISOString(),
-      source: brief.source,
-      unavailable: [...input.unavailable],
-      brief: {
+    if (outcome === 'internal') {
+      const candidates = await deps.gather(date);
+      unavailable = [...candidates.unavailable];
+      const input = buildWriterInput({
+        day: date,
+        blocks: freeBlocks(candidates.events, date, deps.timeZone),
+        todos: candidates.todos,
+        state: stateLine(candidates.metrics, candidates.mood),
+        weatherWindows: candidates.weatherWindows,
+        trainingRecent: candidates.trainingRecent,
+        unavailable,
+      });
+      const brief = deps.chat ? await writeBrief(input, deps.chat) : fallbackBrief(input);
+      source = brief.source;
+      const file: BriefFile = {
+        schemaVersion: 1,
+        date,
+        generatedAt: now.toISOString(),
         source: brief.source,
-        dayLine: brief.dayLine,
-        ...(brief.stateLine !== undefined ? { stateLine: brief.stateLine } : {}),
-        gaps: [...brief.gaps],
-        todos: [...brief.todos],
-        ...(brief.encouragement !== undefined ? { encouragement: brief.encouragement } : {}),
-      },
-    };
-    const result = await commitMorningBrief({ store: deps.store, operationId: await morningBriefOperationId(date), file });
-    const durationMs = Date.now() - started;
-    if (result.kind === 'committed') {
-      deps.log(sanitize({ ...base, status: 200, durationMs, operationId: result.operationId, commitSha: result.commitSha }));
-      if (deps.mailer) {
-        // Delivery is best-effort: a send failure is logged but never fails or rolls back the committed brief.
-        try {
-          await deps.mailer.send(renderBriefEmail(file));
-        } catch {
-          deps.log(sanitize({
-            ...base,
-            status: 200,
-            durationMs: Date.now() - started,
-            operationId: result.operationId,
-            commitSha: result.commitSha,
-            errorCode: 'email-failed',
-          }));
+        unavailable: [...input.unavailable],
+        brief: {
+          source: brief.source,
+          dayLine: brief.dayLine,
+          ...(brief.stateLine !== undefined ? { stateLine: brief.stateLine } : {}),
+          gaps: [...brief.gaps],
+          todos: [...brief.todos],
+          ...(brief.encouragement !== undefined ? { encouragement: brief.encouragement } : {}),
+        },
+      };
+      const result = await commitMorningBrief({ store: deps.store, operationId, file });
+      const durationMs = Date.now() - started;
+      if (result.kind === 'committed') {
+        outcome = 'committed';
+        errorCode = null;
+        deps.log(sanitize({ ...base, status: 200, durationMs, operationId: result.operationId, commitSha: result.commitSha }));
+        if (deps.mailer) {
+          // Delivery is best-effort: a send failure is logged but never fails or rolls back the committed brief.
+          try {
+            await deps.mailer.send(renderBriefEmail(file));
+          } catch {
+            deps.log(sanitize({
+              ...base,
+              status: 200,
+              durationMs: Date.now() - started,
+              operationId: result.operationId,
+              commitSha: result.commitSha,
+              errorCode: 'email-failed',
+            }));
+          }
         }
+      } else if (result.kind === 'already-written') {
+        outcome = 'already-written';
+        errorCode = null;
+        deps.log(sanitize({ ...base, status: 204, durationMs, operationId: result.operationId, errorCode: 'already-written' }));
+      } else {
+        outcome = 'not-written';
+        errorCode = `not-written:${result.reason}`;
+        deps.log(sanitize({ ...base, status: 503, durationMs, errorCode: `not-written:${result.reason}` }));
       }
-    } else if (result.kind === 'already-written') {
-      deps.log(sanitize({ ...base, status: 204, durationMs, operationId: result.operationId, errorCode: 'already-written' }));
-    } else {
-      deps.log(sanitize({ ...base, status: 503, durationMs, errorCode: `not-written:${result.reason}` }));
     }
   } catch (err) {
+    outcome = 'internal';
+    errorCode = 'internal';
     const detail = diagnosticDetail(err);
     deps.log(sanitize({
       ...base,
@@ -141,5 +177,30 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
       errorClass: err instanceof Error ? err.name : 'unknown',
       ...(detail ? { errorDetail: detail } : {}),
     }));
+  } finally {
+    const budget = deps.budget ?? BRIEF_SUBREQUEST_BUDGET;
+    if (deps.subrequests && deps.subrequests() + MORNING_BRIEF_STATUS_COMMIT_COST > budget) {
+      deps.log(sanitize({ ...base, status: 503, durationMs: Date.now() - started, errorCode: 'status-not-written:budget' }));
+    } else {
+      try {
+        const statusResult = await writeMorningBriefStatus({
+          store: deps.store,
+          facts: { nowIso: now.toISOString(), operationId, outcome, unavailable, source, errorCode },
+        });
+        if (statusResult.kind !== 'committed') {
+          deps.log(sanitize({ ...base, status: 503, durationMs: Date.now() - started, errorCode: `status-not-written:${statusResult.reason}` }));
+        }
+      } catch (statusErr) {
+        const detail = diagnosticDetail(statusErr);
+        deps.log(sanitize({
+          ...base,
+          status: 503,
+          durationMs: Date.now() - started,
+          errorCode: 'status-not-written:internal',
+          errorClass: statusErr instanceof Error ? statusErr.name : 'unknown',
+          ...(detail ? { errorDetail: detail } : {}),
+        }));
+      }
+    }
   }
 }

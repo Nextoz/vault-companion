@@ -11,6 +11,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
   Root causes: Access session lifetime > 24 h (401), a trailing space in the Shortcut's `steps` key (422). Ingest
   now trims key names (null-prototype map, 400 on collision); 400/422 answers append the body shape (no values).
 - **MB2**: `GET /api/morning-brief` (domain `createMorningBriefReadService`, fixed path, re-validated) + MorningCard rows above the existing lines (`briefLines`: Fallback marker, day, state, gaps with suggestion, to-dos open Tasks, encouragement); stale date or failed read = card unchanged. e2e MockApi serves a stale brief by default.
+- **MB reliability** (ADR-0055): live failure reproduced at **45 subrequests**; pinned head shared by gatherers, failure-safe `Automation/Scout Status/morning-brief.json` (`ScoutStatusRecord`, fixed codes only), `observability.enabled`, Copenhagen 6..11 catch-up over crons `31 4/5/6/7`, `BRIEF_ANY_HOUR=1` proof hook, and card shows "No brief yet - <code>". Touched worker/domain/web tests green.
 - **AB Part 2** (ADR-0049): `GET /api/ai-budget` reads fixed `Automation/Scout Status/ai-budget.json` (per-provider degradation) -> "AI budget" section in the Status sheet (`budgetRows`, thresholds, stale > 2 h). **No real data until the vault-side Part 1 writer exists** (must emit schema 1); card shows "No budget data yet". Parallel NY was blocked by RAM (3.0 GB free).
 - **UX4**: copy/polish only: morning-card weather glance (`weatherGlance`), scout/event pluralisation, wrapped labels, FAB clearance, hidden "Not configured" dashboard tiles, Failed/Stale scouts shown once (board row, not Insights cards). Mood/Energy/Sleep labels were already done.
 - **UX3**: status dot → Status sheet (`StatusSheet.tsx`, pure `status-sheet.ts`): Vault freshness, Scouts (keyed to account), Data sources (in-memory last copies), Speed, Actions. Presentation only.
@@ -61,7 +62,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-0. **Order from the vault Ready Backlog (owner 2026-10-04):** SP phone measurement -> RR (SC2, JV1 done). Items 1-2 below are history.
+0. **Order from the vault Ready Backlog (owner 2026-10-04):** SP phone measurement -> RR (SC2, JV1 done). Before that: one MB live proof run with `BRIEF_ANY_HOUR=1`, then day-8 re-run gate. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the

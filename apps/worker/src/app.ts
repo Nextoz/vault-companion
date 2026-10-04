@@ -16,6 +16,7 @@ import {
   type AiBudgetResponse,
   type AiUsageResponse,
   type MarketTickerResponse,
+  type MorningBriefReadResponse,
   type MorningBriefResponse,
   type MorningResponse,
   type ScoutsResponse,
@@ -69,7 +70,7 @@ export interface Services {
   readTriage?(): Promise<TriageResponse | ApiError>;
   readScouts?(): Promise<ScoutsResponse | ApiError>;
   /** Weekday Morning Brief card (MB2). Optional: without it the route answers 404. */
-  readMorningBrief?(): Promise<MorningBriefResponse | ApiError>;
+  readMorningBrief?(): Promise<MorningBriefReadResponse | ApiError>;
   /** AI budget card (AB2). Optional: without it the route answers 404. */
   readAiBudget?(): Promise<AiBudgetResponse | ApiError>;
   /** AI usage summary (AB3a). Optional: without it the route answers 404. */
@@ -142,7 +143,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | MorningBriefResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 

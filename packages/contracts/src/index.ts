@@ -679,6 +679,18 @@ export const MorningBriefResponse = z.strictObject({
 });
 export type MorningBriefResponse = z.infer<typeof MorningBriefResponse>;
 
+/** ADR-0055: no brief file today. The card shows "No brief yet" plus the job's fixed status error code. */
+export const MorningBriefMissingResponse = z.strictObject({
+  kind: z.literal('missing'),
+  revision: commitSha,
+  statusError: z.string().max(200).nullable(),
+});
+export type MorningBriefMissingResponse = z.infer<typeof MorningBriefMissingResponse>;
+
+/** MB2 read result: today's brief file, or a missing file with the reason from `morning-brief.json`. */
+export const MorningBriefReadResponse = z.union([MorningBriefResponse, MorningBriefMissingResponse]);
+export type MorningBriefReadResponse = z.infer<typeof MorningBriefReadResponse>;
+
 // ---- AI budget card (AB2): the vault-side AI budget JSON under Automation/Scout Status (ADR-0049), read-only ----
 
 /** One provider line. The domain reader parses providers one-by-one, so an unknown `id`/`kind` drops only itself. */
