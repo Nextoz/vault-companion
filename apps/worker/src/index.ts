@@ -1,6 +1,6 @@
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
-import { createTrainingService, createActiveWorkService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, slotForCron } from '@vault-companion/domain';
+import { createTrainingService, createLearningService, createActiveWorkService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, slotForCron } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
 import { WEATHER_TIME_ZONE, type ApiError } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
@@ -126,6 +126,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...createLinkedNoteService({ store }),
     ...createActiveWorkService({ store }),
     ...createTrainingService({ store }),
+    ...createLearningService({ store }),
     ...createTriageService({ store }),
     ...createResearchRadarService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createScoutService({ store }),

@@ -231,6 +231,30 @@ export type TrainingRow = z.infer<typeof TrainingRow>;
 export const EditTrainingCommand = envelope('EditTraining', z.strictObject({ row: TrainingRow, session: TrainingSession }));
 export type EditTrainingCommand = z.infer<typeof EditTrainingCommand>;
 
+/** ADR-0053: the single Learning Gym Log target; read-only except an update to this exact path. */
+export const LEARNING_PATH = 'Personal/Learning Gym Log.md';
+const learningText = z.string().max(280).refine((s) => !/[\r\n\u2028\u2029]/.test(s), 'must be a single line');
+const learningScore = z.union([
+  z.number().int().min(0).max(999),
+  z.string().min(1).max(8).refine((s) => !/[\r\n|]/.test(s), 'must be one cell without a pipe'),
+]);
+export const LearningSession = z.strictObject({
+  kind: z.string().trim().min(1).max(80).refine((s) => !/[\r\n|]/.test(s), 'must be one cell without a pipe'),
+  date: z.iso.date(),
+  minutes: z.number().int().min(0).max(600).optional(),
+  score: learningScore.optional(),
+  detail: learningText.optional(),
+  topic: learningText.optional(),
+  note: learningText.optional(),
+});
+export type LearningSession = z.infer<typeof LearningSession>;
+export const LogLearningCommand = envelope('LogLearning', z.strictObject({ session: LearningSession }));
+export type LogLearningCommand = z.infer<typeof LogLearningCommand>;
+export const LearningKind = z.strictObject({ id: z.string(), name: z.string(), scoreMeans: z.string(), status: z.string() });
+export type LearningKind = z.infer<typeof LearningKind>;
+export const LearningRow = z.strictObject({ date: z.string(), kind: z.string(), minutes: z.string(), score: z.string(), detail: z.string(), topic: z.string(), note: z.string() });
+export type LearningRow = z.infer<typeof LearningRow>;
+
 /** ADR-0036: a real calendar date, accepted only as strict `YYYY-MM-DD`. */
 const calendarDate = z
   .string()
@@ -281,6 +305,8 @@ export const Command = z.discriminatedUnion('type', [
   envelope('UndoLogTraining', z.strictObject({ target: LogTrainingCommand, targetCommit: commitSha })),
   EditTrainingCommand,
   envelope('UndoEditTraining', z.strictObject({ target: EditTrainingCommand, targetCommit: commitSha })),
+  LogLearningCommand,
+  envelope('UndoLogLearning', z.strictObject({ target: LogLearningCommand, targetCommit: commitSha })),
   MoodCheckinCommand,
   envelope('UndoMoodCheckin', z.strictObject({ target: MoodCheckinCommand, targetCommit: commitSha })),
   ReportFeedbackCommand,
@@ -324,7 +350,9 @@ export const MoodEffect = z.strictObject({ kind: z.literal('mood'), op: z.enum([
 export type MoodEffect = z.infer<typeof MoodEffect>;
 export const ReportEffect = z.strictObject({ kind: z.literal('report'), op: z.enum(['reported', 'undone']) });
 export type ReportEffect = z.infer<typeof ReportEffect>;
-export const Effect = z.discriminatedUnion('kind', [ReportEffect, MoodEffect, TrainingEffect, CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect, ResearchRadarDecidedEffect]);
+export const LearningEffect = z.strictObject({ kind: z.literal('learning'), op: z.enum(['logged', 'undone']), lineText: singleLine });
+export type LearningEffect = z.infer<typeof LearningEffect>;
+export const Effect = z.discriminatedUnion('kind', [ReportEffect, MoodEffect, TrainingEffect, LearningEffect, CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect, ResearchRadarDecidedEffect]);
 export type Effect = z.infer<typeof Effect>;
 
 export const Receipt = z.strictObject({
@@ -340,6 +368,9 @@ export type Receipt = z.infer<typeof Receipt>;
 
 export const ErrorCode = z.enum([
   'refused:training-table-missing',
+  'refused:learning-table-missing',
+  'refused:learning-kind-unknown',
+  'refused:learning-paste-invalid',
   'refused:recurring',
   'refused:on-completion',
   'refused:structure',
@@ -356,6 +387,7 @@ export const ErrorCode = z.enum([
   'conflict:task-changed',
   'conflict:mood-changed',
   'conflict:training-changed',
+  'conflict:learning-changed',
   'conflict:report-changed',
   'conflict:ambiguous',
   'conflict:stale',
@@ -1012,6 +1044,21 @@ export const TrainingResponse = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('refused'), revision: commitSha, code: ErrorCode, message: z.string() }),
 ]);
 export type TrainingResponse = z.infer<typeof TrainingResponse>;
+
+/** ADR-0053: only Kinds, recognised Log rows and unknown Log lines, never the rest of the note. */
+export const LearningResponse = z.discriminatedUnion('status', [
+  z.strictObject({
+    status: z.literal('ok'),
+    revision: commitSha,
+    blobSha,
+    kinds: z.array(LearningKind),
+    rows: z.array(LearningRow),
+    unknownLines: z.array(z.string()),
+  }),
+  z.strictObject({ status: z.literal('absent'), revision: commitSha }),
+  z.strictObject({ status: z.literal('refused'), revision: commitSha, code: ErrorCode, message: z.string() }),
+]);
+export type LearningResponse = z.infer<typeof LearningResponse>;
 
 // ---- Health daily card (HC1): read-only projection of ONE fixed Apple Health export ----
 

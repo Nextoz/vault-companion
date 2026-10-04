@@ -14,3 +14,5 @@ export type { ActiveWorkItem, ActiveWorkDoneItem, ActiveWorkChanges, ActiveWorkC
 
 export { parseTraining, insertTrainingRow, editTrainingRow, formatTrainingRow, undoTraining } from './training.ts';
 export type { TrainingRow, TrainingSession, TrainingEffect } from './training.ts';
+export { parseLearning, insertLearningRow, formatLearningRow, undoLearning, parseLearningPasteLine, LEARNING_KINDS_HEADER, LEARNING_LOG_HEADER } from './learning.ts';
+export type { LearningKind, LearningRow, LearningSession, LearningEffect, LearningPaste } from './learning.ts';
