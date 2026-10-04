@@ -9,6 +9,9 @@ export type Priority = 'highest' | 'high' | 'medium' | 'low' | 'lowest';
 /** vault-contract.md §5 (the subset the pure kernel can produce). */
 export type RefusalCode =
   | 'refused:training-table-missing'
+  | 'refused:learning-table-missing'
+  | 'refused:learning-kind-unknown'
+  | 'refused:learning-paste-invalid'
   | 'refused:recurring'
   | 'refused:on-completion'
   | 'refused:structure'
@@ -23,6 +26,7 @@ export type RefusalCode =
   | 'conflict:task-changed'
   | 'conflict:mood-changed'
   | 'conflict:training-changed'
+  | 'conflict:learning-changed'
   | 'conflict:report-changed'
   | 'conflict:ambiguous'
   | 'no-frontmatter'
