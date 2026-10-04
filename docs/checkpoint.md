@@ -40,9 +40,11 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 - **SC1** (tooling): `glm-review.ps1`/`handoff-check.ps1` can use a larger Scaleway reviewer model (e.g. `qwen3.5-397b-a17b`); `reasoning_effort` is sent only to GLM models. Tooling only, no deploy.
 
+- **UX6**: Today's check-in prompt/card disappears once checked in today (Undo via the Status sheet Actions; returns next morning); Log → Progress lists the last 14 check-ins with Edit only on today's effective entry. Open: phone check.
+
 ## Next actions (in order)
 
-0. **Order from the vault Ready Backlog (owner 2026-10-04):** UX6 (in flight) -> SC1 (fix round in flight) -> AB3b panel UI -> CAL (high-risk) -> LG1 -> SIWH -> SC2 spike -> SP/RR. Items 1-2 below are history.
+0. **Order from the vault Ready Backlog (owner 2026-10-04):** AB3b panel UI (in flight) -> CAL (high-risk) -> LG1 -> SIWH -> SC2 spike -> SP/RR. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the
