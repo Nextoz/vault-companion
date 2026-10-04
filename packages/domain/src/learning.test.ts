@@ -5,7 +5,7 @@ import { createCommandService } from './commands.ts';
 import { createLearningService } from './learning.ts';
 import * as paths from './paths.ts';
 import { payloadHash } from './payload-hash.ts';
-import { TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type VaultPath } from './store.ts';
+import { TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 vi.mock('./paths.ts', async (importOriginal) => {
