@@ -55,6 +55,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 - **JV1** (tooling only): `tools/select-tests.ps1` picks a test tier from changed paths (deterministic floor first: worker/contracts/auth/vault-markdown/deps => full-e2e, docs-only => none; one 25 s Jev choice only when open; any failure => full-e2e). `handoff-check.ps1` prints the tier (advisory, does not yet change which tests run) and an advisory Jev "Unverified" list per brief bullet (never blocks). Self-check replays 10+ real merged diffs from `tools/fixtures/select-tests`. Open: use it on the next few slices and note Jev misses.
 - **SC2** (tooling spike, PASSED): `tools/scaleway-patch-worker.ps1 -Clone <abs> -Brief <abs> -Files a,b [-Model qwen3.5-397b-a17b]` sends brief + named files over chat completions, applies the returned unified diff (scope-guarded to the named files, no create/delete/rename/mode change, one retry on apply failure; exit 0/2/3/4). Live: qwen3.5-397b added a real scouts test, tests green (5.6k-22k tokens, 1-2 min). Model never executes anything. Use for small single-file slices; still run `handoff-check`. Not yet tried: multi-file slices, `glm-5.2`, Aider/OpenCode (not needed).
 
+- **SP3**: Status sheet Speed group shows per route last total, median total (last 10 reads), median Worker time and read count (`speedRows` in `timings.ts`); in memory, measurement only. GitHub-time split not done (would need Worker timing). Open: phone check, then SP step 2 decision.
+
 ## Next actions (in order)
 
 0. **Order from the vault Ready Backlog (owner 2026-10-04):** SP phone measurement -> RR (SC2, JV1 done). Items 1-2 below are history.

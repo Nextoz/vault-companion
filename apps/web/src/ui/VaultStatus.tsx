@@ -1,7 +1,7 @@
 import type { TasksResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
 import { FRESH_FOR_MS, vaultFreshness } from '../freshness.ts';
-import { readTimings } from '../timings.ts';
+import { readTimings, speedRows } from '../timings.ts';
 
 export function VaultStatus({ read, checkedAt, failed, busy, onRefresh }: {
   read: TasksResponse | null; checkedAt: number | null; failed: boolean; busy: boolean; onRefresh: () => Promise<void>;
@@ -18,6 +18,7 @@ export function VaultStatus({ read, checkedAt, failed, busy, onRefresh }: {
   const status = read ? vaultFreshness(read, checkedAt, failed, now) : null;
   const build = typeof __APP_BUILD__ === 'undefined' ? { commit: 'dev', builtAt: null } : __APP_BUILD__;
   const builtAt = build.builtAt ? new Intl.DateTimeFormat('en-GB', { timeZone: read?.timeZone ?? 'Europe/Copenhagen', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(build.builtAt)) : 'unknown';
+  const speed = speedRows(timings);
   return (
     <section className="vault-status" aria-label="Vault status">
       <details onToggle={() => setTimings(readTimings())}>
@@ -26,10 +27,10 @@ export function VaultStatus({ read, checkedAt, failed, busy, onRefresh }: {
           <span className={status?.warning || failed ? 'chip chip-attention' : 'muted'}>{status?.checked ?? 'Not refreshed yet'}</span>
         </summary>
         <div className="muted">{read && <div>Vault {read.revision.slice(0, 12)}</div>}<div>App {build.commit} · built {builtAt}</div>
-          {timings.length > 0 && (
+          {speed.length > 0 && (
             <ul className="read-speed" aria-label="Read speed">
-              {timings.map((t) => (
-                <li key={t.route}>{t.route.replace(/^\/api\//, '')} {t.totalMs} ms{t.serverMs !== null && ` · server ${t.serverMs} ms`}</li>
+              {speed.map((t) => (
+                <li key={t.route}>{t.route} total {t.lastTotalMs} ms (median {t.medianTotalMs}, n={t.count}){t.medianServerMs !== null && ` · Worker ${t.medianServerMs} ms`}</li>
               ))}
             </ul>
           )}

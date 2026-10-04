@@ -8,7 +8,7 @@ import { FRESH_FOR_MS, vaultFreshness } from '../freshness.ts';
 import { lastCopies } from '../lastCopy.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { exactTime } from '../scouts.ts';
-import { readTimings } from '../timings.ts';
+import { readTimings, speedRows } from '../timings.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
 import { budgetFreshness, budgetRows, buildLine, dataSourceRows, scoutRows, shortRevision, stateLabel, type BudgetRow, type ScoutRow } from './status-sheet.ts';
 
@@ -106,6 +106,7 @@ export function StatusSheet({
   const budgetData = budget && budget.account === accountKey && budget.value.kind === 'ok' ? budget.value.data : null;
   const budgetRowList = budgetRows(budgetData, now, timeZone);
   const budgetLine = budgetFreshness(budgetData, now, timeZone);
+  const speed = speedRows(timings);
 
   return (
     <section className="status-sheet" aria-label="Vault status">
@@ -170,12 +171,12 @@ export function StatusSheet({
 
       <section className="group" aria-label="Speed">
         <h2>Speed</h2>
-        {timings.length === 0
+        {speed.length === 0
           ? <p className="muted">No reads measured yet.</p>
           : (
             <ul className="read-speed" aria-label="Read speed">
-              {timings.map((t) => (
-                <li key={t.route}>{t.route.replace(/^\/api\//, '')} {t.totalMs} ms{t.serverMs !== null && ` · server ${t.serverMs} ms`}</li>
+              {speed.map((t) => (
+                <li key={t.route}>{t.route} total {t.lastTotalMs} ms (median {t.medianTotalMs}, n={t.count}){t.medianServerMs !== null && ` · Worker ${t.medianServerMs} ms`}</li>
               ))}
             </ul>
           )}
