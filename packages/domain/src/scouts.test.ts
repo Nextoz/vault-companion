@@ -86,6 +86,13 @@ describe('scout status reads', () => {
     expect(read).not.toHaveBeenCalled();
   });
 
+  it('does not list the ai-budget registry file as a scout', async () => {
+    const store = await seed({}, { [`${SCOUT_STATUS_DIR}/ai-budget.json`]: '{"schema":1}' });
+    const scouts = ScoutsResponse.parse(await service(store).readScouts()).scouts;
+    expect(scouts).toHaveLength(1);
+    expect(scouts.some((s) => s.state === 'unreadable')).toBe(false);
+  });
+
   it('reads at most 50 direct JSON files in stable order', async () => {
     const files = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`${SCOUT_STATUS_DIR}/${String(50 - i).padStart(2, '0')}.json`, JSON.stringify({ ...healthy, scoutId: `scout-${50 - i}` })]));
     const store = await InMemoryStore.create(files);
