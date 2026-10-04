@@ -23,12 +23,11 @@ import type { MorningBriefCandidates } from './morning-brief-gather.ts';
 import { writeBrief, type ScalewayChat } from './scaleway-chat.ts';
 
 export const BRIEF_ROUTE = 'cron:morning-brief';
-/** ADR-0046/0055: 04:30/05:30 UTC cover Copenhagen 06:31 across DST; 06:30/07:30 UTC are the 07:31/08:31 catch-ups. */
+/** ADR-0046/0055: 04:30/05:30 UTC cover Copenhagen 06:31 across DST; 31 6 UTC is the catch-up (07:31 summer / 07:31 winter, Workers Free allows 5 crons per account). */
 export const BRIEF_CRONS = {
   summer: '31 4 * * *',
   winter: '31 5 * * *',
   summerCatchup: '31 6 * * *',
-  winterCatchup: '31 7 * * *',
 } as const;
 export type BriefSlot = keyof typeof BRIEF_CRONS;
 /** ADR-0055: a failed/late run retries on the catch-up crons; any Copenhagen hour 6..11 is a run window. */

@@ -29,13 +29,13 @@
   "send_email": [{ "name": "BRIEF_EMAIL" }],
 
   // ADR-0029 research explainer: daily run + catch-up (UTC). ADR-0046/0055 Morning Brief: `31 4` and `31 5` are the
-  // two UTC slots whose local Copenhagen hour is 06:31 across DST; `31 6` and `31 7` are the 07:31/08:31 catch-ups.
+  // two UTC slots whose local Copenhagen hour is 06:31 across DST; `31 6` is the catch-up (Workers Free: 5 cron triggers per account, so no more).
   // A separate minute keeps its own invocation (and subrequest budget). Must equal EXPLAINER_CRONS and BRIEF_CRONS
   // together (config.test.ts).
   // Optional keys GEMINI_API_KEY and SCALEWAY_API_KEY are Worker secrets only (`wrangler secret put`,
   // docs/deploy.md), not in `secrets.required`.
   "triggers": {
-    "crons": ["30 4 * * *", "30 6 * * *", "31 4 * * *", "31 5 * * *", "31 6 * * *", "31 7 * * *"],
+    "crons": ["30 4 * * *", "30 6 * * *", "31 4 * * *", "31 5 * * *", "31 6 * * *"],
   },
 
   // Non-secret settings (Env in src/index.ts). AUTH_MODE must stay "access": configProblems() refuses anything else.
