@@ -11,7 +11,7 @@ failure left no trace after Workers Free dropped unobserved invocation logs.
   `lastError` carries only a fixed code (`internal`, `not-written:<reason>`, `unavailable:<source>,...`), never brief,
   task, note or mail text.
 - **Catch-up window.** The Copenhagen run window is hours 6..11, not only 06:xx. The primary crons stay `31 4` and
-  `31 5`; UTC crons `31 6` and `31 7` are catch-up slots. The existing date dedupe remains unchanged, so a late retry
+  `31 5`; UTC crons `31 6` is the catch-up slot (Workers Free caps an account at 5 cron triggers; `wrangler versions deploy` does not apply crons, `wrangler triggers deploy` does: this is why no brief was ever written before 2026-10-05). The existing date dedupe remains unchanged, so a late retry
   never double-commits.
 - **Observability.** `apps/worker/wrangler.jsonc` enables Workers log persistence (`observability.enabled: true`).
 - **Proof-run hook.** The plain var `BRIEF_ANY_HOUR === '1'` skips only the local-hour guard. It is a non-secret

@@ -60,6 +60,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 - **PW1** (test tooling): `pnpm tour` (root script -> `tools/tour.mjs` sets `VC_TOUR=1`) runs `apps/web/e2e/tour.spec.ts` on the mock app, 390x844 WebKit, writes 16 named PNGs + `index.md` to `apps/web/test-results/tour/`; excluded from `pnpm e2e`/CI unless `VC_TOUR=1`. No live API.
 
+- **MBL** (ADR-0055): the brief was never written because `wrangler versions deploy` does not apply cron triggers: live schedules were only the two explainer crons. Fixed by `wrangler triggers deploy` (**every deploy that changes crons must run it**). Workers Free allows 5 crons per account: explainer 30 4/30 6 + brief 31 4/31 5/31 6 (catch-up). Also: gatherers share one pinned head (45/50 subrequests measured), `Automation/Scout Status/morning-brief.json` written every run, observability on, Today shows "No brief yet - <code>". First real run: 06:31 Copenhagen 2026-10-05; check the file and the status record. `BRIEF_ANY_HOUR=1` bypasses the hour guard (never set in config).
+
 ## Next actions (in order)
 
 0. **Order from the vault Ready Backlog (owner 2026-10-04):** SP phone measurement -> RR (SC2, JV1 done). Before that: one MB live proof run with `BRIEF_ANY_HOUR=1`, then day-8 re-run gate. Items 1-2 below are history.

@@ -6,7 +6,7 @@ import { commitCost, TRAILER_JOB } from './research-explainer.ts';
 import { StoreUnknownOutcome, TRAILER_OP, type VaultStore } from './store.ts';
 
 export const MORNING_BRIEF_SCOUT_ID = 'morning-brief';
-export const MORNING_BRIEF_SCHEDULE = 'daily 06:31-08:31 Europe/Copenhagen';
+export const MORNING_BRIEF_SCHEDULE = 'daily 06:31-07:31 Europe/Copenhagen';
 export const MORNING_BRIEF_SOURCES = 7;
 export const MORNING_BRIEF_STATUS_WRITE_ATTEMPTS = 2;
 /** GitHub requests of one status-only commit, mirroring the explainer's commit-cost model. */

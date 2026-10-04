@@ -26,7 +26,7 @@ const failedStatus = (lastError = 'internal'): ScoutStatus => ScoutStatus.parse(
   schemaVersion: 1,
   scoutId: 'morning-brief',
   displayName: 'Morning Brief',
-  schedule: 'daily 06:31-08:31 Europe/Copenhagen',
+  schedule: 'daily 06:31-07:31 Europe/Copenhagen',
   expectedEveryHours: 24,
   lastAttemptAt: '2026-10-04T04:31:00+02:00',
   lastSuccessAt: null,

@@ -109,7 +109,7 @@ describe('wrangler.jsonc', () => {
     const expected = [...new Set([...Object.values(EXPLAINER_CRONS), ...Object.values(BRIEF_CRONS)])].sort();
     expect([...(config.triggers?.crons ?? [])].sort()).toEqual(expected);
     expect(Object.values(EXPLAINER_CRONS).map(slotForCron)).toEqual(['primary', 'catchup']);
-    expect(Object.values(BRIEF_CRONS).map(briefSlotForCron)).toEqual(['summer', 'winter', 'summerCatchup', 'winterCatchup']);
+    expect(Object.values(BRIEF_CRONS).map(briefSlotForCron)).toEqual(['summer', 'winter', 'summerCatchup']);
     expect('GEMINI_API_KEY' in vars).toBe(false);
     expect(secrets).not.toContain('GEMINI_API_KEY');
     expect(required).not.toContain('GEMINI_API_KEY');
