@@ -123,6 +123,16 @@ describe('editing today\'s check-in from the Log (UX6)', () => {
     expect(rows[1]!.querySelector('button')).toBeNull();
   });
 
+  it('offers Edit only on the effective (newest sequence) check-in when today holds more than one', async () => {
+    const today = localDate();
+    const stale = queued(checkin(today, `${today}T18:00:00.000Z`, 3, 0, 8), 1);
+    const active = queued(checkin(today, `${today}T06:00:00.000Z`, -1, 0, 8), 2);
+    await mount([stale, active]);
+    const rows = [...document.querySelectorAll('.log-mood-row')] as HTMLElement[];
+    expect(rows.find((r) => r.textContent?.includes('Mood +3'))!.querySelector('button')).toBeNull();
+    expect(rows.find((r) => r.textContent?.includes('Mood \u22121'))!.querySelector('button')?.textContent).toBe('Edit');
+  });
+
   it('opens the form prefilled and enqueues a MoodCheckin for that day on save, then closes', async () => {
     const today = localDate();
     const { enqueue } = await mount([queued(checkin(today, `${today}T06:14:00.000Z`, 2, 1, 8), 1)]);

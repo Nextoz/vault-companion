@@ -12,6 +12,7 @@ export const MOOD_HISTORY_LIMIT = 14;
 
 export interface MoodEntry {
   operationId: string;
+  seq: number;
   payload: MoodCheckinPayload;
 }
 
@@ -27,7 +28,7 @@ export function recentCheckins(items: readonly QueueItem[], limit: number = MOOD
   const entries: MoodEntry[] = [];
   for (const item of items) {
     if (item.envelope.type !== 'MoodCheckin' || undone.has(item.operationId)) continue;
-    entries.push({ operationId: item.operationId, payload: item.envelope.payload });
+    entries.push({ operationId: item.operationId, seq: item.seq, payload: item.envelope.payload });
   }
   entries.sort((a, b) => b.payload.checkinAt.localeCompare(a.payload.checkinAt));
   return entries.slice(0, limit);
@@ -48,6 +49,11 @@ export interface MoodHistoryProps {
 export function MoodHistory({ items, queue, accountKey, baseRevision, blocked }: MoodHistoryProps) {
   const entries = recentCheckins(items);
   const today = localDate();
+  // Only today's effective check-in is editable: the newest queue sequence for the day, the same rule latestCheckin
+  // uses, so a later edit of the day does not leave the superseded row with its own Edit control.
+  const activeToday = entries
+    .filter((e) => e.payload.date === today)
+    .reduce<MoodEntry | null>((best, e) => (!best || e.seq > best.seq ? e : best), null);
   const [editing, setEditing] = useState<string | null>(null);
   const editingEntry = entries.find((e) => e.operationId === editing) ?? null;
   return <section aria-label="Mood" className="progress-card log-mood">
@@ -62,7 +68,7 @@ export function MoodHistory({ items, queue, accountKey, baseRevision, blocked }:
             <span className="log-mood-values">
               {chipLabel('Mood', entry.payload.mood)} · {chipLabel('Energy', entry.payload.energy)} · Sleep {entry.payload.sleep} h
             </span>
-            {entry.payload.date === today && <button type="button" className="link" onClick={() => setEditing(entry.operationId)}>Edit</button>}
+            {activeToday?.operationId === entry.operationId && <button type="button" className="link" onClick={() => setEditing(entry.operationId)}>Edit</button>}
           </li>)}
         </ul>
       </>}
