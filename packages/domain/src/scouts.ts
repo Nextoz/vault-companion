@@ -10,12 +10,14 @@ export interface ScoutServiceDeps {
 
 const MAX_STATUS_BYTES = 64 * 1024;
 const MAX_SCOUTS = 50;
+// Registry files that share the status directory but are not scouts (ADR-0049 AI budget).
+const NON_SCOUT_FILES: ReadonlySet<string> = new Set(['ai-budget.json']);
 type ScoutEntry = ScoutsResponse['scouts'][number];
 
 async function statusFiles(store: VaultStore, x: string): Promise<readonly ListedFile[]> {
   const prefix = `${SCOUT_STATUS_DIR}/`;
   return (await store.listFiles(SCOUT_STATUS_DIR, x))
-    .filter((f) => f.path.startsWith(prefix) && !f.path.slice(prefix.length).includes('/') && f.path.endsWith('.json'))
+    .filter((f) => f.path.startsWith(prefix) && !f.path.slice(prefix.length).includes('/') && f.path.endsWith('.json') && !NON_SCOUT_FILES.has(f.path.slice(prefix.length)))
     .sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
     .slice(0, MAX_SCOUTS);
 }
