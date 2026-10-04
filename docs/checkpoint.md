@@ -38,6 +38,8 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 - **AB3a** (ADR-0051): `GET /api/ai-usage` reads fixed `AI/Usage/AI Usage Summary.json` (schema 1, read-only; bad provider/day dropped and counted in `skipped`, unknown providers kept). Backend only; AB3b panel UI next. e2e not run (no UI).
 
+- **SC1** (tooling): `glm-review.ps1`/`handoff-check.ps1` can use a larger Scaleway reviewer model (e.g. `qwen3.5-397b-a17b`); `reasoning_effort` is sent only to GLM models. Tooling only, no deploy.
+
 ## Next actions (in order)
 
 0. **Order from the vault Ready Backlog (owner 2026-10-04):** UX6 (in flight) -> SC1 (fix round in flight) -> AB3b panel UI -> CAL (high-risk) -> LG1 -> SIWH -> SC2 spike -> SP/RR. Items 1-2 below are history.
