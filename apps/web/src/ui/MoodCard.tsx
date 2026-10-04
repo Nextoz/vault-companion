@@ -29,12 +29,6 @@ export function chipLabel(kind: 'Mood' | 'Energy', value: number): string {
   return `${kind} ${sign}${Math.abs(value)}`;
 }
 
-/** Local HH:MM of an instant, for the collapsed "Checked in HH:MM". */
-export function localTime(iso: string): string {
-  const d = new Date(iso);
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 /**
  * The newest check-in this device still holds for `date`, unless an UndoMoodCheckin already targets it (the Undo
  * removes it from the count, so the form returns).
@@ -68,31 +62,30 @@ function ScaleRow({ kind, value, onPick }: { kind: 'Mood' | 'Energy'; value: num
   </div>;
 }
 
-/** One-minute mood/energy/sleep check-in on Today (ADR-0036). Collapses to the last check-in's time. */
-export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
+export interface MoodCheckinFormProps {
   queue: PendingQueue;
-  items: readonly QueueItem[];
   accountKey: string | null;
   baseRevision: string | null;
   blocked: boolean;
-}) {
-  const date = localDate();
-  const saved = latestCheckin(items, date);
-  const [reopened, setReopened] = useState(false);
-  const [mood, setMood] = useState<number | null>(saved?.mood ?? null);
-  const [energy, setEnergy] = useState<number | null>(saved?.energy ?? null);
-  const [sleepText, setSleepText] = useState(saved ? String(saved.sleep) : '');
+  /** The day the check-in belongs to; the device's local date at save time when omitted (today's check-in). */
+  date?: string;
+  /** Seed values when editing a check-in the device already holds. */
+  initial?: Pick<MoodCheckinPayload, 'mood' | 'energy' | 'sleep'> | null;
+  onSaved?: () => void;
+  onCancel?: () => void;
+}
+
+/**
+ * The one-minute mood/energy/sleep form (ADR-0036), shared by Today's MoodCard and the Log's edit of today's entry.
+ * It owns only the draft; the caller decides the day and what happens after a save (UX6).
+ */
+export function MoodCheckinForm({ queue, accountKey, baseRevision, blocked, date, initial, onSaved, onCancel }: MoodCheckinFormProps) {
+  const [mood, setMood] = useState<number | null>(initial?.mood ?? null);
+  const [energy, setEnergy] = useState<number | null>(initial?.energy ?? null);
+  const [sleepText, setSleepText] = useState(initial ? String(initial.sleep) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const guard = useRef(false);
-
-  if (saved && !reopened) {
-    return <div className="group mood" role="region" aria-label="Mood check-in">
-      <button type="button" onClick={() => {
-        setMood(saved.mood); setEnergy(saved.energy); setSleepText(String(saved.sleep)); setReopened(true);
-      }}>Checked in {localTime(saved.checkinAt)}</button>
-    </div>;
-  }
 
   const sleep = parseSleep(sleepText);
   const ready = mood !== null && energy !== null && Number.isFinite(sleep) && accountKey !== null && baseRevision !== null && !blocked;
@@ -100,13 +93,13 @@ export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
     if (!ready || guard.current || mood === null || energy === null || !baseRevision || !accountKey) return;
     guard.current = true; setSaving(true); setError(null);
     // The day of the tap, not of the last render: the app may have stayed open past midnight.
-    const day = localDate();
+    const day = date ?? localDate();
     try {
       await queue.enqueue(
         moodCheckin({ baseRevision }, { date: day, mood, energy, sleep, checkinAt: new Date().toISOString() }),
         { accountKey, label: `Mood \u00b7 ${day}`, taskKey: 'mood' },
       );
-      setReopened(false);
+      onSaved?.();
     } catch { setError('Could not keep this check-in on the device.'); }
     finally { guard.current = false; setSaving(false); }
   };
@@ -121,6 +114,23 @@ export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
       {blocked && <p className="muted small">The vault is locked until the conflict is resolved in Obsidian.</p>}
       {error && <p className="error" role="alert">{error}</p>}
       <button type="submit" className="primary" disabled={saving || !ready}>Check in</button>
+      {onCancel && <button type="button" className="link" onClick={onCancel}>Cancel</button>}
     </form>
   </div>;
+}
+
+/**
+ * UX6: today's check-in line is gone for the rest of the day. Once a check-in is saved (and not undone) the card
+ * renders nothing at all - no collapsed row, no empty wrapper. Undoing drops it from `latestCheckin`, so the form
+ * returns; a check-in from another day never hides it (the row is back next morning).
+ */
+export function MoodCard({ queue, items, accountKey, baseRevision, blocked }: {
+  queue: PendingQueue;
+  items: readonly QueueItem[];
+  accountKey: string | null;
+  baseRevision: string | null;
+  blocked: boolean;
+}) {
+  if (latestCheckin(items, localDate()) !== null) return null;
+  return <MoodCheckinForm queue={queue} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked} />;
 }

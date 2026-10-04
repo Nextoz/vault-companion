@@ -1,8 +1,11 @@
 import type { Command } from '@vault-companion/contracts';
-import { describe, expect, it } from 'vitest';
+import { JSDOM } from 'jsdom';
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { moodCheckin, undoMoodCheckinDraft } from '../commands.ts';
-import type { QueueItem } from '../queue/queue.ts';
-import { chipLabel, latestCheckin, localDate, parseSleep } from './MoodCard.tsx';
+import type { PendingQueue, QueueItem } from '../queue/queue.ts';
+import { chipLabel, latestCheckin, localDate, MoodCard, parseSleep } from './MoodCard.tsx';
 
 const ACCOUNT = 'a'.repeat(64);
 const ctx = { baseRevision: '1'.repeat(40) };
@@ -71,4 +74,54 @@ describe('collapsed-state derivation', () => {
 
 it('derives the local calendar date', () => {
   expect(localDate(new Date(2026, 9, 2, 23, 30))).toBe('2026-10-02');
+});
+
+let dom: JSDOM;
+let root: Root | null = null;
+
+beforeEach(() => {
+  dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'https://example.test/' });
+  Object.defineProperty(globalThis, 'window', { value: dom.window, configurable: true });
+  Object.defineProperty(globalThis, 'document', { value: dom.window.document, configurable: true });
+  Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
+  Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { value: true, configurable: true });
+});
+
+afterEach(async () => {
+  if (root) await act(async () => root!.unmount());
+  root = null;
+  dom.window.close();
+});
+
+const renderCard = async (items: readonly QueueItem[]) => {
+  root = createRoot(document.getElementById('root')!);
+  await act(async () => {
+    root!.render(createElement(MoodCard, { queue: {} as PendingQueue, items, accountKey: ACCOUNT, baseRevision: ctx.baseRevision, blocked: false }));
+  });
+};
+
+const card = () => document.querySelector('[aria-label="Mood check-in"]');
+
+describe('MoodCard hides once today is checked in (UX6)', () => {
+  it('renders nothing at all for a check-in already saved today', async () => {
+    const saved = moodCheckin(ctx, { date: localDate(), mood: 2, energy: -1, sleep: 7.5, checkinAt: new Date().toISOString() });
+    await renderCard([queued(saved, 1)]);
+    expect(card()).toBeNull();
+    expect(document.querySelector('form')).toBeNull();
+    expect(document.body.textContent).not.toContain('Checked in');
+  });
+
+  it('keeps the form for a check-in from another day, so the row returns next morning', async () => {
+    const yesterday = moodCheckin(ctx, { date: '2020-01-01', mood: 0, energy: 0, sleep: 8, checkinAt: '2020-01-01T06:00:00.000Z' });
+    await renderCard([queued(yesterday, 1)]);
+    expect(card()).not.toBeNull();
+    expect(document.querySelector('input')).not.toBeNull();
+  });
+
+  it('brings the form back once an Undo targets today\'s check-in', async () => {
+    const target = moodCheckin(ctx, { date: localDate(), mood: 2, energy: -1, sleep: 7.5, checkinAt: new Date().toISOString() });
+    await renderCard([queued(target, 1), queued(undoMoodCheckinDraft(ctx, target), 2)]);
+    expect(card()).not.toBeNull();
+    expect(document.querySelector('input')).not.toBeNull();
+  });
 });
