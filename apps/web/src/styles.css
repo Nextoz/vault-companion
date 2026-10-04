@@ -1028,6 +1028,46 @@ textarea:focus-visible {
 .training-sheet input, .training-sheet select, .training-sheet textarea { min-width: 0; max-width: 100%; }
 .training-session { display: block; width: 100%; text-align: left; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .training-session-line { display: block; margin: 4px 0; }
+
+/* LG1b: the Learning view mirrors Training — inset card, kind chips, effort/quality split and score sparks. */
+.app[data-tab='learning'] { --chart: var(--ios-cyan); }
+.app[data-tab='learning'] .learning > h2 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  text-transform: none;
+  color: var(--text);
+  margin: 8px 0 12px;
+}
+.app[data-tab='learning'] .learning-list {
+  background: var(--surface);
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.app[data-tab='learning'] .learning-list li {
+  min-height: var(--tap);
+  padding: 10px 16px;
+  border-bottom: 0.5px solid var(--line);
+}
+.app[data-tab='learning'] .learning-list li:last-child { border-bottom: none; }
+.learning-list { list-style: none; padding: 0; margin: 0; }
+.learning-list li { border-bottom: 1px solid var(--line); padding: 10px 0; overflow-wrap: anywhere; }
+.learning-list p { margin: 4px 0; }
+.learning-list summary { cursor: pointer; width: fit-content; padding: 6px; }
+.learning-sheet input, .learning-sheet textarea { min-width: 0; max-width: 100%; }
+.learning-session-line { display: block; margin: 4px 0; }
+.learning-effort, .learning-quality { color: var(--muted); }
+.learning-detail { margin: 4px 0 0; }
+.learning-detail dt { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.learning-detail dd { margin: 0 0 6px; overflow-wrap: anywhere; }
+.learning-trends { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.learning-trends li { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+.learning-spark { width: 40px; height: 16px; fill: none; stroke: var(--chart, var(--accent)); stroke-width: 2; }
+.chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+.chip-group button { min-height: var(--tap); padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.chip-group button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Progress Wall (ADR-0027) */
 .progress h2 { font-size: 1rem; margin: 20px 0 6px; }
 .progress-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px 12px 8px; overflow-wrap: anywhere; }

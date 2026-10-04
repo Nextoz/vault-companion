@@ -7,6 +7,7 @@ export type Tab =
   | 'all'
   | 'notes'
   | 'training'
+  | 'learning'
   | 'scouts'
   | 'history'
   | 'health'
@@ -24,6 +25,7 @@ export function barKey(tab: Tab): BarKey | null {
     case 'all':
       return 'tasks';
     case 'training':
+    case 'learning':
     case 'history':
     case 'health':
       return 'log';
