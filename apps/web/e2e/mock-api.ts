@@ -39,6 +39,7 @@ import {
   type TaskView,
 } from '@vault-companion/contracts';
 import type { BrowserContext, Page, Route } from '@playwright/test';
+import { z } from 'zod';
 import { copenhagenDay } from '../src/triage.ts';
 
 export const ACCOUNT = 'a'.repeat(64);
@@ -58,6 +59,18 @@ const usageRow = (index: number, over: Record<string, number> = {}) => ({
 const sameTrainingRow = (a: TrainingRow, b: TrainingRow): boolean =>
   a.date === b.date && a.time === b.time && a.type === b.type && a.distance === b.distance &&
   a.duration === b.duration && a.weight === b.weight && a.split === b.split && a.note === b.note;
+
+/** CAL-b: the create body the Worker accepts, mirrored so a drifting client fails loudly. */
+const CalendarCreateBody = z.strictObject({
+  operationId: z.string().uuid(),
+  itemKey: z.string().min(1).max(512),
+  title: z.string().min(1).max(500),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  start: z.string().optional(),
+  end: z.string().optional(),
+  type: z.string(),
+  notes: z.string().max(2000).optional(),
+});
 
 export function taskView(lineIndex: number, description: string, extra: Partial<TaskView> = {}): TaskView {
   return {
@@ -210,6 +223,15 @@ export class MockApi {
   /** Blob of the task file in every read; change it to model a desktop edit. */
   blobSha = '2'.repeat(40);
   commandMode: CommandMode = 'ok';
+  /** CAL-b: itemKey -> Google event id; a reload reads this back as "In Calendar". */
+  calendarLinks: Record<string, string> = {};
+  /** CAL-b: accepted events by event id -> item key (one entry per distinct event, for double-tap assertions). */
+  calendarEvents: Record<string, string> = {};
+  /** CAL-b: `offline` aborts, `unavailable` answers 503 `calendar-write-unavailable`. */
+  calendarMode: 'ok' | 'offline' | 'unavailable' = 'ok';
+  readonly calendarCreateBodies: string[] = [];
+  readonly calendarRemoveBodies: string[] = [];
+  readonly #calendarOperations = new Map<string, string>();
   open: TaskView[] = [];
   doneToday: TaskView[] = [];
   /** Every POST body exactly as received, including failed attempts. */
@@ -372,6 +394,9 @@ export class MockApi {
       : this.#json(route, 200, MorningResponse.parse(this.morning ?? { revision: 'a'.repeat(40), date: '2026-09-30', brief: null, explained: [] })));
     await on('**/api/morning-brief', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, MorningBriefResponse.parse(this.morningBrief)));
+    await on('**/api/calendar/links', (route) => this.#calendarReadLinks(route));
+    await on('**/api/calendar/events', (route) => this.#calendarCreate(route));
+    await on('**/api/calendar/events/remove', (route) => this.#calendarRemove(route));
     await on('**/api/ai-budget', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, AiBudgetResponse.parse(this.aiBudget)));
     await on('**/api/ai-usage', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
@@ -436,6 +461,60 @@ export class MockApi {
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     this.healthHistoryReads++;
     return this.#json(route, 200, HealthHistoryResponse.parse(this.healthHistory));
+  }
+
+  /** CAL-b: per-item event ids only, like the real `GET /api/calendar/links`. */
+  #calendarReadLinks(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    return this.#json(route, 200, { revision: 'c'.repeat(40), links: { ...this.calendarLinks } });
+  }
+
+  #calendarCreate(route: Route) {
+    const request = route.request();
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    if (this.calendarMode === 'offline') return route.abort('internetdisconnected');
+    if (this.calendarMode === 'unavailable') {
+      return this.#json(route, 503, ApiError.parse({ code: 'calendar-write-unavailable', message: 'not configured', retryable: true }));
+    }
+    if (request.headers()['x-vc-request'] !== '1') return this.#json(route, 403, ApiError.parse({ code: 'forbidden', message: 'request origin not allowed', retryable: false }));
+    if (request.headers()['x-vc-account'] !== this.account) {
+      return this.#json(route, 409, ApiError.parse({ code: 'account-mismatch', message: 'Other account.', retryable: false }));
+    }
+    const raw = request.postData() ?? '';
+    this.calendarCreateBodies.push(raw);
+    const parsed = CalendarCreateBody.safeParse(JSON.parse(raw));
+    if (!parsed.success) return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'invalid calendar event', retryable: false }));
+    const body = parsed.data;
+    const existing = this.#calendarOperations.get(body.operationId);
+    if (existing) {
+      return this.#json(route, 200, { eventId: existing, link: { eventId: existing, operationId: body.operationId, createdAt: '2026-09-24T12:00:00+02:00' } });
+    }
+    if (this.calendarLinks[body.itemKey]) {
+      return this.#json(route, 409, ApiError.parse({ code: 'conflict:stale', message: 'calendar link already exists for this item', retryable: true }));
+    }
+    const eventId = `event-${Object.keys(this.calendarEvents).length + 1}`;
+    this.#calendarOperations.set(body.operationId, eventId);
+    this.calendarEvents[eventId] = body.itemKey;
+    this.calendarLinks[body.itemKey] = eventId;
+    return this.#json(route, 200, { eventId, link: { eventId, operationId: body.operationId, createdAt: '2026-09-24T12:00:00+02:00' } });
+  }
+
+  #calendarRemove(route: Route) {
+    const request = route.request();
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    if (this.calendarMode === 'offline') return route.abort('internetdisconnected');
+    if (this.calendarMode === 'unavailable') {
+      return this.#json(route, 503, ApiError.parse({ code: 'calendar-write-unavailable', message: 'not configured', retryable: true }));
+    }
+    if (request.headers()['x-vc-request'] !== '1') return this.#json(route, 403, ApiError.parse({ code: 'forbidden', message: 'request origin not allowed', retryable: false }));
+    if (request.headers()['x-vc-account'] !== this.account) {
+      return this.#json(route, 409, ApiError.parse({ code: 'account-mismatch', message: 'Other account.', retryable: false }));
+    }
+    const raw = request.postData() ?? '';
+    this.calendarRemoveBodies.push(raw);
+    const body = JSON.parse(raw) as { itemKey?: string };
+    if (body.itemKey) delete this.calendarLinks[body.itemKey];
+    return this.#json(route, 200, { removed: true });
   }
 
   #dashboard(route: Route) {

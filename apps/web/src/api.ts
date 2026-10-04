@@ -191,3 +191,76 @@ export async function postWeatherLocation(location: WeatherLocationRequest, acco
     clearTimeout(timer);
   }
 }
+
+// ---- Calendar writes (CAL-b, ADR-0048/0052) ----
+
+/**
+ * `GET /api/calendar/links`: the item keys already linked to a Google event. The schema is repeated here rather than
+ * imported from @vault-companion/domain, which apps/web does not depend on; the Worker re-validates its own reads.
+ */
+const CalendarLinksRead = z.strictObject({
+  revision: z.string().regex(/^[0-9a-f]{40}$/),
+  links: z.record(z.string(), z.string()),
+});
+export type CalendarLinks = z.infer<typeof CalendarLinksRead>;
+
+export const getCalendarLinks = () => getJson('/api/calendar/links', CalendarLinksRead);
+
+/** The create body validated by the Worker's `CalendarEventCreateRequest` (date xor start/end). */
+export interface CalendarEventInput {
+  operationId: string;
+  itemKey: string;
+  title: string;
+  date?: string;
+  start?: string;
+  end?: string;
+  type: string;
+  notes?: string;
+}
+
+export interface CalendarEventRemoval {
+  operationId: string;
+  itemKey: string;
+}
+
+export type CalendarWriteResult =
+  | { kind: 'ok' }
+  | { kind: 'offline' }
+  | { kind: 'signed-out' }
+  | { kind: 'error'; code: string | null };
+
+/**
+ * Both calendar writes are direct (no offline queue): a failed write is surfaced inline, never replayed later. The
+ * caller keeps one `operationId` per sheet open, so the Worker's Google dedupe makes a repeated send one event.
+ */
+async function postCalendar(url: string, body: unknown, accountKey: string): Promise<CalendarWriteResult> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...base,
+      method: 'POST',
+      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-VC-Request': '1',
+        'X-VC-Account': accountKey,
+        Accept: 'application/json',
+      },
+    });
+  } catch {
+    return { kind: 'offline' };
+  }
+  if (res.type === 'opaqueredirect' || res.status === 401) return { kind: 'signed-out' };
+  if (!res.ok) {
+    const parsed = z.strictObject({ code: z.string() }).safeParse(await res.json().catch(() => undefined));
+    return { kind: 'error', code: parsed.success ? parsed.data.code : null };
+  }
+  return { kind: 'ok' };
+}
+
+export const createCalendarEvent = (event: CalendarEventInput, accountKey: string) =>
+  postCalendar('/api/calendar/events', event, accountKey);
+
+export const removeCalendarEvent = (removal: CalendarEventRemoval, accountKey: string) =>
+  postCalendar('/api/calendar/events/remove', removal, accountKey);
