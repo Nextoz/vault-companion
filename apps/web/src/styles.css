@@ -1358,3 +1358,19 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 .calendar-remove { border-color: var(--danger); color: var(--danger); }
+
+/* Ask Jev (ADR-0057): question rows and probability bars inside the note sheet. */
+.ask-jev-sheet .jev-questions { display: flex; flex-direction: column; gap: 12px; }
+.ask-jev-sheet .jev-question { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; }
+.ask-jev-sheet .jev-question-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.ask-jev-sheet .jev-question-head label { flex: 1; }
+.ask-jev-sheet .jev-question-head select { min-height: var(--tap); padding: 8px; background: var(--surface); border-color: transparent; border-radius: 10px; color: var(--text); }
+.ask-jev-sheet .jev-question label { display: block; margin: 0; }
+.ask-jev-sheet .jev-question label span { display: block; margin: 4px 0; color: var(--muted); font-size: 0.8rem; }
+.ask-jev-sheet .jev-question input { width: 100%; min-height: 44px; box-sizing: border-box; background: var(--surface); border-color: transparent; border-radius: 10px; color: var(--text); padding: 8px; }
+.ask-jev-sheet .jev-answer h3 { margin: 8px 0 4px; font-size: 0.95rem; }
+.ask-jev-sheet .jev-bars { display: flex; flex-direction: column; gap: 6px; }
+.ask-jev-sheet .jev-bar-row { display: grid; grid-template-columns: minmax(64px, auto) 1fr 40px; align-items: center; gap: 8px; }
+.ask-jev-sheet .jev-bar-label, .ask-jev-sheet .jev-bar-percent { font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.ask-jev-sheet .jev-bar-track { height: 8px; border-radius: 999px; background: var(--surface); overflow: hidden; }
+.ask-jev-sheet .jev-bar-fill { display: block; height: 100%; border-radius: 999px; background: var(--accent); opacity: 0.55; }

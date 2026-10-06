@@ -4,6 +4,7 @@ import {
   ActiveWorkResponse,
   AiBudgetResponse,
   AiUsageResponse,
+  AskJevResponse,
   DashboardResponse,
   MarketTickerResponse,
   TrainingResponse,
@@ -28,6 +29,7 @@ import {
   TasksResponse,
   TriageResponse,
   WeatherResponse,
+  type AskJevQuestion,
   type DashboardRange,
   type LinkedNoteRequest,
   type WeatherLocationRequest,
@@ -111,6 +113,66 @@ export const getHistory = () => getJson('/api/history', HistoryResponse.strip())
 export const getNotes = () => getJson('/api/notes', NotesResponse.strip());
 export const getNote = (path: string) =>
   getJson('/api/notes/read', z.union(NoteReadResponse.options.map((option) => option.strip())), { [NOTE_HEADER]: encodeNoteHeader(path) });
+
+/** Ask Jev (ADR-0057). The note path stays in `X-VC-Note`; the body carries only the typed questions. */
+export const ASK_JEV_TIMEOUT_MS = 25_000;
+
+const askJevError = (code: string | null, message: string | null, status: number): string => {
+  switch (code) {
+    case 'jev-excluded-path': return 'Jev cannot read Health or Journal notes.';
+    case 'note-too-long': return 'This note is too long for Jev right now.';
+    case 'jev-rate-limited': return message ?? 'Jev has answered enough questions for today. Try again tomorrow.';
+    case 'jev-unavailable': return message ?? 'Jev is not available right now. Try again later.';
+    default: return message ?? `The server answered ${status}.`;
+  }
+};
+
+export async function askJev(path: string, questions: readonly AskJevQuestion[], accountKey: string): Promise<Fetched<AskJevResponse>> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), ASK_JEV_TIMEOUT_MS);
+  const started = performance.now();
+  try {
+    let res: Response;
+    try {
+      res = await fetch('/api/notes/ask-jev', {
+        ...base,
+        method: 'POST',
+        signal: abort.signal,
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-VC-Request': '1',
+          'X-VC-Account': accountKey,
+          [NOTE_HEADER]: encodeNoteHeader(path),
+        },
+        body: JSON.stringify({ questions }),
+      });
+    } catch {
+      return abort.signal.aborted
+        ? { kind: 'error', message: 'Jev did not answer in time. Try again.' }
+        : { kind: 'offline' };
+    }
+    if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403) return { kind: 'signed-out' };
+    const aborted = new Promise<undefined>((resolve) => abort.signal.addEventListener('abort', () => resolve(undefined)));
+    if (!res.ok) {
+      const body: unknown = await Promise.race([res.json().catch(() => undefined), aborted]);
+      if (abort.signal.aborted) return { kind: 'error', message: 'Jev did not answer in time. Try again.' };
+      const error = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+      return {
+        kind: 'error',
+        message: askJevError(typeof error?.code === 'string' ? error.code : null,
+          typeof error?.message === 'string' ? error.message : null, res.status),
+      };
+    }
+    const body: unknown = await Promise.race([res.json().catch(() => undefined), aborted]);
+    if (abort.signal.aborted) return { kind: 'error', message: 'Jev did not answer in time. Try again.' };
+    recordRead('/api/notes/ask-jev', performance.now() - started, res.headers.get('Server-Timing'));
+    const parsed = AskJevResponse.safeParse(body);
+    return parsed.success ? { kind: 'ok', data: parsed.data } : { kind: 'error', message: 'Unexpected reply from the server.' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /** `accountKey` is the queued item's binding, checked by the Worker against the session (A7), outside the body. */
 export const postCommand = (body: string, accountKey: string) =>

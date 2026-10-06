@@ -15,6 +15,7 @@ import { createCalendarService } from './calendar-service.ts';
 import { createAccessVerifier, createServiceTokenVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
 import { createScalewayChat } from './scaleway-chat.ts';
+import { createJevService } from './jev.ts';
 import { gatherCandidates } from './morning-brief-gather.ts';
 import { cloudflareMailer, type BriefEmailBinding } from './morning-brief-email.ts';
 import { BRIEF_ROUTE, BRIEF_SUBREQUEST_BUDGET, briefSlotForCron, runBriefJob } from './morning-brief-job.ts';
@@ -56,6 +57,8 @@ export interface Env {
   GOOGLE_CAL_WRITE_CLIENT_ID?: string;
   GOOGLE_CAL_WRITE_CLIENT_SECRET?: string;
   GOOGLE_CAL_WRITE_REFRESH_TOKEN?: string;
+  /** ADR-0057: TypeSafe direct API key for Ask Jev. Optional; unset makes the route answer `jev-unavailable`. Never logged. */
+  TYPESAFE_API_KEY?: string;
   /** ADR-0055 test hook: when exactly '1', skip only the Morning Brief local-hour guard. Plain var, never a secret. */
   BRIEF_ANY_HOUR?: string;
 }
@@ -123,6 +126,12 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     now: () => new Date(),
     timeZone: WEATHER_TIME_ZONE,
   });
+  const notesService = createNotesService({ store });
+  const jevService = createJevService({
+    readNote: notesService.readNote,
+    apiKey: env.TYPESAFE_API_KEY,
+    fetch: fetchImpl,
+  });
   const services = {
     ...createCommandService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createLinkedNoteService({ store }),
@@ -139,7 +148,8 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...createAiBudgetReadService({ store }),
     ...createAiUsageReadService({ store }),
     ...createHistoryService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
-    ...createNotesService({ store }),
+    ...notesService,
+    ...jevService,
     ...createDashboardService({
       market: createMarketSource({ fetch: fetchImpl, now: () => Date.now() }),
       watchlist: createWatchlistSource({ fetch: fetchImpl, now: () => Date.now() }),

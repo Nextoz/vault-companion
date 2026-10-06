@@ -6,6 +6,7 @@ import {
   AiBudgetResponse,
   AiUsageResponse,
   ApiError,
+  AskJevResponse,
   Command,
   DASHBOARD_RANGE_PLAN,
   DashboardRange,
@@ -349,6 +350,9 @@ export class MockApi {
   ]);
   /** Every EditNote the mock applied (path, blob it was based on, body). */
   readonly noteEdits: { path: string; blobSha: string; body: string }[] = [];
+  /** JN1 (ADR-0057): every Ask Jev request body, and the mode the mock answers with. */
+  readonly askJevBodies: string[] = [];
+  askJevMode: 'ok' | 'unavailable' = 'ok';
 
   /** "This morning" (ADR-0029 Part 2): empty by default (the panel then stays hidden); morning.spec sets SAMPLE_MORNING. */
   morning: MorningResponse | null = null;
@@ -453,6 +457,7 @@ export class MockApi {
     await on('**/api/history', (route) => this.#history(route));
     await on('**/api/notes', (route) => this.#notes(route));
     await on('**/api/notes/read', (route) => this.#noteRead(route));
+    await on('**/api/notes/ask-jev', (route) => this.#askJev(route));
   }
 
   #weather(route: Route) {
@@ -643,6 +648,29 @@ export class MockApi {
     return this.#json(route, 200, NoteReadResponse.parse(n
       ? { status: 'ok', revision: this.#revision, path, blobSha: n.blobSha, markdown: n.frontmatter + n.body, frontmatter: n.frontmatter, body: n.body }
       : { status: 'refused', revision: this.#revision, code: 'not-found', message: 'the note does not exist any more; reload the list' }));
+  }
+
+  #askJev(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    const request = route.request();
+    if (new URL(request.url()).search !== '') throw new Error('mock: ask-jev carried a query');
+    if (request.headers()['x-vc-request'] !== '1') return this.#json(route, 403, ApiError.parse({ code: 'forbidden', message: 'request origin not allowed', retryable: false }));
+    if (request.headers()['x-vc-account'] !== this.account) {
+      return this.#json(route, 409, ApiError.parse({ code: 'account-mismatch', message: 'Other account.', retryable: false }));
+    }
+    const path = decodeNoteHeader(request.headers()[NOTE_HEADER.toLowerCase()]);
+    if (path === null) return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'invalid note path', retryable: false }));
+    this.askJevBodies.push(request.postData() ?? '');
+    if (this.askJevMode === 'unavailable') {
+      return this.#json(route, 503, ApiError.parse({ code: 'jev-unavailable', message: 'Jev is not configured for this vault yet.', retryable: false }));
+    }
+    return this.#json(route, 200, AskJevResponse.parse({
+      answers: [
+        { kind: 'yes-no', question: 'Is this plan clear?', probability: 0.7 },
+        { kind: 'choose', question: 'Which order should I use?', choice: 'A', probabilities: { A: 0.6, B: 0.4 } },
+        { kind: 'rate', question: 'How ready is this?', score: 'High', probabilities: { Low: 0.2, High: 0.8 } },
+      ],
+    }));
   }
 
   #json(route: Route, status: number, body: unknown) {
