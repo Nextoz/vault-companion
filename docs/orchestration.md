@@ -119,7 +119,7 @@ notable misses in the checkpoint. Jev never accepts work, waives a check or auth
 - **Checkpoint inside the slice's PR:** update `docs/checkpoint.md` in the same PR before merging it. No
   checkpoint-only PRs (14 of 31 merged PRs on 2026-10-01/02 were just checkpoints, each a full PR/CI/merge cycle). A
   separate docs commit only for a pause or end of session with no open slice.
-- **Fresh context after each merge:** end the turn with a line containing only `LEAD-RESTART-NOW`;
+- **Fresh context after each merge:** create `.agent/restart-now`, then end the turn with a line containing only `LEAD-RESTART-NOW`;
   `tools/lead-watch.ps1` (second pane) sends `/clear` and the start prompt. Do the same before any wait longer than
   ~30 minutes. Usage limits need nothing: Claude Code continues by itself when the limit resets.
 - Do not build orchestration tooling unless the owner asks for it. The tools here are enough.
