@@ -7,7 +7,7 @@ type Section = 'Now' | 'Parked' | 'Dropped or done';
 type Values = { name: string; outcome: string | null; next: string | null; review: string | null; link: string | null };
 type Span = { start: number; end: number; valueStart: number; valueEnd: number };
 export type ActiveWorkItem = Values & {
-  lineIndex: number; lineText: string; section: Section; occurrences: number; needsReview: boolean;
+  lineIndex: number; lineText: string; section: Section; occurrences: number; occurrenceIndex: number; needsReview: boolean;
 };
 /** ADR-0021: a `- [x] … ✅ YYYY-MM-DD` line in `## Dropped or done` (written by review `done`). */
 export type ActiveWorkDoneItem = Values & { lineIndex: number; lineText: string; done: string; occurrences: number };
@@ -93,7 +93,7 @@ export function parseActiveWork(text: string, today: string) {
       const line = doc.lines[i]!;
       const parsed = scan.visible[i] ? itemLine(line) : null;
       if (parsed) items.push({ ...parsed.values, lineIndex: i, lineText: line, section: section.name as Section,
-        occurrences: 0, needsReview: parsed.values.review !== null && parsed.values.review < today });
+        occurrences: 0, occurrenceIndex: 0, needsReview: parsed.values.review !== null && parsed.values.review < today });
       else if (section.name === 'Now') unknownNowLines.push(line);
       else if (section.name === 'Dropped or done' && scan.visible[i]) {
         const done = doneLine(line);
@@ -104,6 +104,12 @@ export function parseActiveWork(text: string, today: string) {
   const counts = new Map<string, number>();
   for (const item of items) counts.set(item.lineText, (counts.get(item.lineText) ?? 0) + 1);
   for (const item of items) item.occurrences = counts.get(item.lineText)!;
+  const nextOrdinal = new Map<string, number>();
+  for (const item of items) {
+    const occurrenceIndex = (nextOrdinal.get(item.lineText) ?? 0) + 1;
+    nextOrdinal.set(item.lineText, occurrenceIndex);
+    item.occurrenceIndex = occurrenceIndex;
+  }
   const doneCounts = new Map<string, number>();
   for (const item of doneItems) doneCounts.set(item.lineText, (doneCounts.get(item.lineText) ?? 0) + 1);
   for (const item of doneItems) item.occurrences = doneCounts.get(item.lineText)!;

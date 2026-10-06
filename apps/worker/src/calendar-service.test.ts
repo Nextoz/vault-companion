@@ -6,8 +6,9 @@ import {
   createCalendarLinksService,
   serializeCalendarLinksFile,
 } from '@vault-companion/domain';
+import { calendarItemKey } from '@vault-companion/contracts';
 import { InMemoryStore } from '@vault-companion/domain/testing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createCalendarService } from './calendar-service.ts';
 import type { CalendarWriter } from './calendar-writer.ts';
 
@@ -49,5 +50,80 @@ describe('createCalendarService remove policy', () => {
     const created = await service.createCalendarEvent(createRequest, createRequest);
     expect(created).toMatchObject({ eventId: 'event-new', link: { operationId: CREATE_OP } });
     await expect(links.readCalendarLinks()).resolves.toEqual({ revision: store.headCommit, links: { [ITEM_KEY]: 'event-new' } });
+  });
+});
+
+describe('createCalendarService ADR-0056 identity reconciliation', () => {
+  const TEXT = '- [ ] Call the bank';
+  const NEW_KEY = calendarItemKey('task', TEXT, 1);
+  const LEGACY_KEY = `task:${'a'.repeat(40)}:4:${TEXT}`;
+
+  it('migrates a legacy link to the new key on the next create without inserting a Google event', async () => {
+    const store = await InMemoryStore.create({
+      [CALENDAR_LINKS_PATH]: serializeCalendarLinksFile({
+        schema: 1,
+        links: { [LEGACY_KEY]: { eventId: 'event-legacy', operationId: LINK_OP, createdAt: CREATED_AT } },
+      }),
+    });
+    const links = createCalendarLinksService({ store, now: () => new Date(CREATED_AT) });
+    const insert = vi.fn(async () => ({ eventId: 'must-not-run' }));
+    const service = createCalendarService({ links, writer: { insert, remove: async () => ({ removed: true }) } });
+
+    const createRequest = CalendarEventCreateRequest.parse({
+      operationId: CREATE_OP,
+      itemKey: NEW_KEY,
+      title: 'Call the bank',
+      date: '2026-10-05',
+      type: 'none',
+    });
+    const created = await service.createCalendarEvent(createRequest, createRequest);
+    expect(created).toMatchObject({ eventId: 'event-legacy', link: { operationId: LINK_OP } });
+    expect(insert).not.toHaveBeenCalled();
+    await expect(links.readCalendarLinks()).resolves.toEqual({ revision: store.headCommit, links: { [NEW_KEY]: 'event-legacy' } });
+  });
+
+  it('keeps a legacy link recoverable when two legacy keys match, never creating a duplicate event', async () => {
+    const store = await InMemoryStore.create({
+      [CALENDAR_LINKS_PATH]: serializeCalendarLinksFile({
+        schema: 1,
+        links: {
+          [`task:${'a'.repeat(40)}:4:${TEXT}`]: { eventId: 'event-a', operationId: LINK_OP, createdAt: CREATED_AT },
+          [`task:${'b'.repeat(40)}:9:${TEXT}`]: { eventId: 'event-b', operationId: '00000000-0000-4000-8000-000000000099', createdAt: CREATED_AT },
+        },
+      }),
+    });
+    const links = createCalendarLinksService({ store, now: () => new Date(CREATED_AT) });
+    const insert = vi.fn(async () => ({ eventId: 'must-not-run' }));
+    const service = createCalendarService({ links, writer: { insert, remove: async () => ({ removed: true }) } });
+
+    const createRequest = CalendarEventCreateRequest.parse({
+      operationId: CREATE_OP,
+      itemKey: NEW_KEY,
+      title: 'Call the bank',
+      date: '2026-10-05',
+      type: 'none',
+    });
+    await expect(service.createCalendarEvent(createRequest, createRequest)).resolves.toMatchObject({
+      code: 'calendar-link-needs-recheck', retryable: false,
+    });
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('retries a create with the same operation id without a second Google insert', async () => {
+    const store = await InMemoryStore.create({ [CALENDAR_LINKS_PATH]: serializeCalendarLinksFile({ schema: 1, links: {} }) });
+    const links = createCalendarLinksService({ store, now: () => new Date(CREATED_AT) });
+    const insert = vi.fn(async () => ({ eventId: 'event-new' }));
+    const service = createCalendarService({ links, writer: { insert, remove: async () => ({ removed: true }) } });
+    const createRequest = CalendarEventCreateRequest.parse({
+      operationId: CREATE_OP,
+      itemKey: NEW_KEY,
+      title: 'Call the bank',
+      date: '2026-10-05',
+      type: 'none',
+    });
+
+    await service.createCalendarEvent(createRequest, createRequest);
+    await service.createCalendarEvent(createRequest, createRequest);
+    expect(insert).toHaveBeenCalledTimes(1);
   });
 });

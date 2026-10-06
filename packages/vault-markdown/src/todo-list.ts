@@ -107,8 +107,11 @@ export function analyseDoc(doc: Doc): Analysis {
     occurrences.set(text, (occurrences.get(text) ?? 0) + 1);
   }
 
+  const nextOrdinal = new Map<string, number>();
   const tasks = found.map(({ lineIndex, match, section, fields }): IndexedTask => {
     const lineText = lines[lineIndex]!;
+    const occurrenceIndex = (nextOrdinal.get(lineText) ?? 0) + 1;
+    nextOrdinal.set(lineText, occurrenceIndex);
     const blockEnd = taskBlockEnd(lines, lineIndex);
     const blockSafe = scan.cleanAfter[blockEnd - 1] === true;
     const v = fields.values;
@@ -119,6 +122,7 @@ export function analyseDoc(doc: Doc): Analysis {
       lineIndex,
       lineText,
       occurrences: occurrences.get(lineText)!,
+      occurrenceIndex,
       section,
       statusChar,
       status,

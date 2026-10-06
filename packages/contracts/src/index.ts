@@ -15,6 +15,69 @@ const blobSha = z.string().regex(/^[0-9a-f]{40}$/, 'expected a 40-hex blob SHA')
 export const MAX_TASK_LINE = 16_000;
 const singleLine = z.string().min(1).max(MAX_TASK_LINE).refine((s) => !/[\r\n]/.test(s), 'must be a single line');
 
+/** ADR-0056: a calendar item key may be the full task line plus `task:`/`active:` and the ordinal separator. */
+export const CALENDAR_ITEM_KEY_MAX = MAX_TASK_LINE + 32;
+
+export type CalendarItemKind = 'task' | 'active';
+
+/** Calendar-link text identity: NFC plus control/separator removal (the shape `CalendarItemKey` accepts). */
+export function normalizeCalendarItemText(text: string): string {
+  return text.normalize('NFC').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ');
+}
+
+/** ADR-0056 stable item key: kind, ordinal among identical lines, and the normalised line text. */
+export function calendarItemKey(kind: CalendarItemKind, text: string, ordinal: number): string {
+  return `${kind}:${ordinal}:${normalizeCalendarItemText(text)}`;
+}
+
+export interface CalendarItemKeyInfo {
+  readonly kind: CalendarItemKind;
+  readonly ordinal: number;
+  readonly text: string;
+}
+
+/** Parse the stable ADR-0056 key shape. `text` is already normalised. Never throws. */
+export function parseCalendarItemKey(key: string): CalendarItemKeyInfo | null {
+  const kindEnd = key.indexOf(':');
+  if (kindEnd <= 0) return null;
+  const kind = key.slice(0, kindEnd);
+  if (kind !== 'task' && kind !== 'active') return null;
+  const ordinalEnd = key.indexOf(':', kindEnd + 1);
+  if (ordinalEnd <= kindEnd + 1) return null;
+  const ordinal = Number(key.slice(kindEnd + 1, ordinalEnd));
+  if (!Number.isInteger(ordinal) || ordinal < 1) return null;
+  const text = key.slice(ordinalEnd + 1);
+  if (text.length === 0) return null;
+  return { kind, ordinal, text: normalizeCalendarItemText(text) };
+}
+
+export interface LegacyCalendarItemKeyInfo {
+  readonly kind: CalendarItemKind;
+  readonly text: string;
+  readonly blobSha: string;
+  readonly lineIndex: number;
+  /** True when the pre-ADR-0056 key was truncated by the old 512-character cap. */
+  readonly truncated: boolean;
+}
+
+/** Parse the pre-ADR-0056 key `task:<blobSha>:<lineIndex>:<text>` (or `active:`). Never throws. */
+export function parseLegacyCalendarItemKey(key: string): LegacyCalendarItemKeyInfo | null {
+  const kindEnd = key.indexOf(':');
+  if (kindEnd <= 0) return null;
+  const kind = key.slice(0, kindEnd);
+  if (kind !== 'task' && kind !== 'active') return null;
+  const shaEnd = key.indexOf(':', kindEnd + 1);
+  if (shaEnd <= kindEnd + 1) return null;
+  const indexEnd = key.indexOf(':', shaEnd + 1);
+  if (indexEnd <= shaEnd + 1) return null;
+  const blobSha = key.slice(kindEnd + 1, shaEnd);
+  const lineIndexText = key.slice(shaEnd + 1, indexEnd);
+  if (!/^[0-9a-f]{40}$/.test(blobSha) || !/^\d+$/.test(lineIndexText)) return null;
+  const text = key.slice(indexEnd + 1);
+  if (text.length === 0) return null;
+  return { kind, text: normalizeCalendarItemText(text), blobSha, lineIndex: Number(lineIndexText), truncated: key.length === 512 };
+}
+
 /**
  * Most `known=` commits a task read asks about and the Worker answers (review O1): the watermark plus the oldest
  * unacknowledged receipts. The server answers them all with at most two single-page listings.
@@ -28,6 +91,8 @@ export const TaskLocator = z.strictObject({
   lineText: singleLine,
   /** Identical indexed lines in the blob that was read (vault-contract §3, review F2). */
   occurrencesAtRead: z.number().int().positive(),
+  /** ADR-0056: 1-based ordinal among identical `lineText` values in the blob that was read. */
+  occurrenceIndex: z.number().int().positive().optional(),
 });
 export type TaskLocator = z.infer<typeof TaskLocator>;
 
@@ -70,6 +135,8 @@ export const ActiveWorkLocator = z.strictObject({
   lineIndex: z.number().int().nonnegative(),
   lineText: singleLine,
   occurrencesAtRead: z.number().int().positive(),
+  /** ADR-0056: 1-based ordinal among identical `lineText` values in the blob that was read. */
+  occurrenceIndex: z.number().int().positive().optional(),
 });
 export type ActiveWorkLocator = z.infer<typeof ActiveWorkLocator>;
 const awText = singleLine.pipe(z.string().max(500));
@@ -417,6 +484,8 @@ export const ErrorCode = z.enum([
   'google-reauth-needed',
   /** ADR-0052: the calendar-write credential is not configured, so event writes are unavailable. */
   'calendar-write-unavailable',
+  /** ADR-0056: a legacy calendar link can not be re-bound to one current item without the owner's check. */
+  'calendar-link-needs-recheck',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 

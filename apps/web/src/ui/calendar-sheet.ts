@@ -1,10 +1,9 @@
 // CAL-b: pure helpers for the "Add to Calendar" sheet. No React, no DOM, no fetches: date/time arithmetic, the
 // event-type keyword guess and the item keys are all testable on their own. All wall-clock decisions are made in
 // Europe/Copenhagen, the vault's own zone.
-import type { ActiveWorkLocator, MorningBriefResponse, TaskLocator } from '@vault-companion/contracts';
+import { CALENDAR_ITEM_KEY_MAX, calendarItemKey, type ActiveWorkLocator, type MorningBriefResponse, type TaskLocator } from '@vault-companion/contracts';
 import { plainWikilinks } from '../text.ts';
 import { dateIn, isoWithOffset } from '../time.ts';
-import { occurrenceKey } from '../view.ts';
 
 /** The zone every pre-fill date/time is read and written in. */
 export const CALENDAR_ZONE = 'Europe/Copenhagen';
@@ -22,7 +21,7 @@ export const CALENDAR_TYPE_LABELS: Readonly<Record<CalendarEventType, string>> =
 };
 export const CALENDAR_TYPE_FALLBACK: CalendarEventType = 'none';
 /** The Worker's `CalendarItemKey` cap; the key must fit it whole. */
-export const ITEM_KEY_MAX = 512;
+export const ITEM_KEY_MAX = CALENDAR_ITEM_KEY_MAX;
 export const TITLE_MAX = 500;
 export const NOTES_MAX = 2000;
 export const MAX_CHIPS = 4;
@@ -30,27 +29,24 @@ const NOTE_HEADER = 'From Vault Companion';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-/** One line, no control characters: the shape `CalendarItemKey` accepts. */
-export function sanitizeKeyPart(value: string): string {
-  return value.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ');
+/** The ordinal that makes duplicate text unambiguous; pre-ADR-0056 locators without one are not linkable. */
+function calendarOrdinal(locator: { occurrencesAtRead: number; occurrenceIndex?: number | undefined }): number {
+  if (typeof locator.occurrenceIndex === 'number' && locator.occurrenceIndex >= 1) return locator.occurrenceIndex;
+  return locator.occurrencesAtRead === 1 ? 1 : -1;
 }
 
 /**
- * The stable link key for a To-Do task. Built from the same locator fields as `occurrenceKey` (view.ts), capped so the
- * Worker's 512-char `CalendarItemKey` accepts it. Editing the item changes its blob/line, so a renamed or moved item
- * orphans its link: accepted in v1 (removing it from the calendar then needs the Obsidian-side links file).
+ * ADR-0056 stable link key: `task:`/`active:` plus the item's ordinal among identical lines plus the normalised line
+ * text. Unrelated edits elsewhere in the file change blob/line index but not this key. Editing the item itself still
+ * detaches its link (accepted caveat).
  */
 export function taskCalendarKey(locator: TaskLocator): string {
-  return truncateKey(`task:${sanitizeKeyPart(occurrenceKey(locator))}`);
+  return calendarItemKey('task', locator.lineText, calendarOrdinal(locator));
 }
 
-/** The stable link key for an Active Work item: `active:` plus the same locator identity as a task. */
+/** The stable ADR-0056 link key for an Active Work item. */
 export function activeWorkCalendarKey(locator: ActiveWorkLocator): string {
-  return truncateKey(`active:${sanitizeKeyPart(locator.blobSha)}:${locator.lineIndex}:${sanitizeKeyPart(locator.lineText)}`);
-}
-
-function truncateKey(key: string): string {
-  return key.length <= ITEM_KEY_MAX ? key : key.slice(0, ITEM_KEY_MAX);
+  return calendarItemKey('active', locator.lineText, calendarOrdinal(locator));
 }
 
 /** The event title: wikilinks flattened, then emoji tokens and `#tags` dropped and spacing collapsed. */
@@ -210,5 +206,6 @@ export function calendarErrorMessage(kind: 'offline' | 'error', code: string | n
   if (code === 'calendar-write-unavailable') return 'Calendar writing is not set up';
   if (code === 'google-reauth-needed') return 'Google Calendar needs to be reconnected';
   if (code === 'conflict:stale') return 'This item is already in your calendar.';
+  if (code === 'calendar-link-needs-recheck') return 'Reload tasks to re-check this item before changing its calendar link.';
   return 'Could not reach Google Calendar. Try again.';
 }
