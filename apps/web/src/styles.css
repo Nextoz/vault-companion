@@ -1119,17 +1119,7 @@ textarea:focus-visible {
   border-bottom-color: var(--line);
 }
 
-/* The large title is drawn by CSS so no new heading or text node changes what screen readers and tests find. */
-.app[data-tab='today'] .content::before {
-  content: 'Today';
-  display: block;
-  font-size: 34px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
-  margin: 8px 0 4px;
-}
-
+/* UX8: Today's large title is the real h1 in .today-head (one accessible heading); Tasks/All keep the CSS title. */
 .app[data-tab='tasks'] .content::before {
   content: 'Tasks';
   display: block;
