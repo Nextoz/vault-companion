@@ -1,5 +1,6 @@
 // Allowlisted structured logging (docs/security.md#logging). The record type is the allowlist:
 // there is no field that can carry task text, note text, bodies, tokens or clear-text paths.
+import { ErrorCode } from '@vault-companion/contracts';
 
 export interface LogRecord {
   readonly requestId: string;
@@ -28,9 +29,36 @@ const ALLOWED: ReadonlySet<string> = new Set([
   'errorClass', 'errorDetail', 'unavailableCodes',
 ]);
 
+/** The Morning Brief reader names whose failure code may be logged (see morning-brief-gather.ts). */
+const UNAVAILABLE_READER_NAMES: ReadonlySet<string> = new Set([
+  'tasks', 'health', 'training', 'weather', 'mood', 'calendar', 'mail',
+]);
+/** Fixed failure reasons only: any `ApiError.code`, plus `threw` for an exception. */
+const UNAVAILABLE_CODES: ReadonlySet<string> = new Set([...ErrorCode.options, 'threw']);
+
+/** Keeps only known reader names mapped to a fixed code; an unknown name or value is dropped, never logged. */
+function sanitizeUnavailableCodes(value: unknown): Record<string, string> | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const clean: Record<string, string> = {};
+  for (const [name, code] of Object.entries(value)) {
+    if (UNAVAILABLE_READER_NAMES.has(name) && typeof code === 'string' && UNAVAILABLE_CODES.has(code)) clean[name] = code;
+  }
+  return Object.keys(clean).length > 0 ? clean : undefined;
+}
+
 /** Drops any key not in the allowlist even if a caller casts around the type. */
 export function sanitize(record: LogRecord): LogRecord {
-  return Object.fromEntries(Object.entries(record).filter(([k, v]) => ALLOWED.has(k) && v !== undefined)) as unknown as LogRecord;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(record)) {
+    if (!ALLOWED.has(k) || v === undefined) continue;
+    if (k === 'unavailableCodes') {
+      const codes = sanitizeUnavailableCodes(v);
+      if (codes !== undefined) out[k] = codes;
+      continue;
+    }
+    out[k] = v;
+  }
+  return out as unknown as LogRecord;
 }
 
 export async function hashPath(path: string): Promise<string> {
