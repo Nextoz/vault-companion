@@ -133,15 +133,16 @@ jobs:
           echo "previous_version=${PREVIOUS_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy
+        working-directory: apps/worker
         run: |
-          pnpm --filter @vault-companion/worker exec wrangler deploy \
+          pnpm exec wrangler deploy \
             --domain "$PRODUCTION_HOST" \
             --tag "$GITHUB_SHA" 2>&1 | tee deploy.log
 
       - name: Extract new version
         id: new
         run: |
-          NEW_VERSION="$(node tools/smoke-test.mjs deploy-version --file deploy.log)"
+          NEW_VERSION="$(node tools/smoke-test.mjs deploy-version --file apps/worker/deploy.log)"
           echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Smoke test and roll back on failure

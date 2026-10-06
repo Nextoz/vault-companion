@@ -23,8 +23,8 @@ or per-version preview hostname exists to bypass Access.
    before any merge deploy. The job concurrency group `deploy-production` has `cancel-in-progress: false`, so two
    merges in a row queue instead of overlapping.
 3. The job installs with `pnpm install --frozen-lockfile`, builds the web app, tags the Worker version with the commit
-   SHA, and runs `pnpm --filter @vault-companion/worker exec wrangler deploy --domain "$PRODUCTION_HOST" --tag
-   "$GITHUB_SHA"`. `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` exist only as `production` environment secrets.
+   SHA, and from `apps/worker` runs `pnpm exec wrangler deploy --domain "$PRODUCTION_HOST" --tag "$GITHUB_SHA"`.
+   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` exist only as `production` environment secrets.
 4. `tools/smoke-test.mjs` requests `/` and `/api/session` anonymously. Both must be stopped by Access (302/403,
    never 200) and the new version must carry 100% traffic. Each fetch is retried up to three times before the smoke
    test is declared failed.

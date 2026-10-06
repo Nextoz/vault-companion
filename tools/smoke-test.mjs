@@ -7,6 +7,8 @@ const WORKER_PACKAGE = '@vault-companion/worker';
 const DEFAULT_REASON = 'CI smoke test failed';
 const ALLOWED_STATUSES = new Set([302, 403]);
 
+class NoCurrentDeploymentError extends Error {}
+
 export function isAllowedSmokeStatus(status) {
   return ALLOWED_STATUSES.has(status);
 }
@@ -33,16 +35,22 @@ export function rollbackArgs(previousVersionId, reason = DEFAULT_REASON) {
 }
 
 export function executeRollback({ previousVersionId, reason = DEFAULT_REASON, spawn = spawnSync } = {}) {
-  const result = spawn('pnpm', rollbackArgs(previousVersionId, reason), {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  let result;
+  try {
+    result = spawn('pnpm', rollbackArgs(previousVersionId, reason), {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    return { ok: false, status: null, stdout: '', stderr: '', error: String(error.message ?? error) };
+  }
   const status = result.status ?? 1;
   return {
     ok: status === 0,
     status,
     stdout: result.stdout ?? '',
     stderr: result.stderr ?? '',
+    error: null,
   };
 }
 
@@ -152,7 +160,12 @@ export function rollbackIfSmokeFailed({
   if (!previousVersionId || previousVersionId === 'none') {
     return { rolledBack: false, skippedReason: 'no previous production version was recorded', rollbackResult: null };
   }
-  const rollbackResult = rollback({ previousVersionId, reason });
+  let rollbackResult;
+  try {
+    rollbackResult = rollback({ previousVersionId, reason });
+  } catch (error) {
+    rollbackResult = { ok: false, status: null, stdout: '', stderr: '', error: String(error.message ?? error) };
+  }
   return { rolledBack: true, skippedReason: null, rollbackResult };
 }
 
@@ -203,7 +216,7 @@ function readDeploymentStatus() {
   if (result.status !== 0) {
     const combined = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
     if (/no deployments/i.test(combined)) {
-      throw new Error('no current deployment found');
+      throw new NoCurrentDeploymentError('no current deployment found');
     }
     throw new Error('could not read Cloudflare deployment status');
   }
@@ -214,7 +227,7 @@ function readCurrentVersionId() {
   try {
     return findVersionAt100(readDeploymentStatus()) ?? 'none';
   } catch (error) {
-    if (/no current deployment found/i.test(error.message)) {
+    if (error instanceof NoCurrentDeploymentError) {
       return 'none';
     }
     throw error;
@@ -259,7 +272,12 @@ async function smokeMain(options) {
   const summary = formatSummary({ newVersionId, previousVersionId, rollbackCommand, smoke, decision });
 
   writeSummary(summaryFile, summary);
-  if (!smoke.ok) process.exit(1);
+  if (!smoke.ok) {
+    if (decision.rolledBack && !decision.rollbackResult?.ok) {
+      process.stderr.write(`ROLLBACK FAILED (exit ${decision.rollbackResult?.status ?? 'unknown'}). ${rollbackCommand}\n`);
+    }
+    process.exit(1);
+  }
 }
 
 const isMain = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;

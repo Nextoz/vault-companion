@@ -91,6 +91,26 @@ describe('smoke-test.mjs', () => {
     expect(result.versionOk).toBe(true);
   });
 
+  it('fails the smoke when the deployed version is not at 100% traffic', async () => {
+    const result = await runSmokeTest({
+      baseUrl: 'https://vc.example.com',
+      newVersionId: 'new-version',
+      deploymentStatus: {
+        versions: [
+          { version_id: 'old-version', percentage: 70 },
+          { version_id: 'new-version', percentage: 30 },
+        ],
+      },
+      fetchImpl: async () => ({ status: 302 }),
+      sleep: noSleep,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusOk).toBe(true);
+    expect(result.versionOk).toBe(false);
+    expect(result.currentVersionId).toBeNull();
+  });
+
   it('runs rollback for a failing smoke result but not a passing one', () => {
     const rollback = vi.fn(() => ({ ok: true, status: 0, stdout: '', stderr: '' }));
     const failing = { ok: false, statusOk: false, versionOk: true, currentVersionId: 'new', versionError: null };
