@@ -6,6 +6,12 @@ export default defineConfig({
     // the 5 s default made CI flaky without catching anything.
     testTimeout: 30_000,
     hookTimeout: 30_000,
-    include: ['packages/*/src/**/*.test.ts', 'apps/*/src/**/*.test.ts', 'packages/*/test/**/*.test.ts', 'apps/*/test/**/*.test.ts'],
+    include: [
+      'packages/*/src/**/*.test.ts',
+      'apps/*/src/**/*.test.ts',
+      'packages/*/test/**/*.test.ts',
+      'apps/*/test/**/*.test.ts',
+      'tools/**/*.test.mjs',
+    ],
   },
 });
