@@ -151,6 +151,11 @@ while ($true) {
         }
         if ((++$polls % 30) -eq 0) { Log "still watching (Lead status: $status)" }   # a silent pane is clearly alive
         Set-Content -LiteralPath $aliveFile -Value (Get-Date -Format 'o') -Encoding utf8
+        # Owner log: every ~5 polls rewrite the vault note of everything the Lead asked for (tools/action-log.ps1). A failure
+        # here must never stop the watcher.
+        if ((($polls % 5) -eq 1) -and -not $TestText) {
+            try { & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'action-log.ps1') | Out-Null } catch { Log "action-log failed: $($_.Exception.Message)" }
+        }
         $errors = 0
     } catch {
         $errors++
