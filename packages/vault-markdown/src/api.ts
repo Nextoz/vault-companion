@@ -51,6 +51,8 @@ export interface ParsedTask {
   readonly lineText: string;
   /** Number of indexed task lines in the file with identical `lineText` (locator F2 rule). */
   readonly occurrences: number;
+  /** ADR-0056: 1-based ordinal among indexed task lines with identical `lineText`, in file order. */
+  readonly occurrenceIndex: number;
   readonly section: 'open' | 'done';
   /** Raw status character between the brackets. */
   readonly statusChar: string;

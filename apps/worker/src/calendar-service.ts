@@ -35,11 +35,24 @@ export function createCalendarService(deps: CalendarServiceDeps): CalendarServic
     },
 
     async createCalendarEvent(request, raw) {
-      const existing = await deps.links.findCalendarLink(request.itemKey);
-      if (isApiError(existing)) return existing;
-      if (existing) {
-        if (existing.operationId === request.operationId) return { eventId: existing.eventId, link: existing };
+      const match = await deps.links.findCalendarItemLink(request.itemKey);
+      if (isApiError(match)) return match;
+      if (match.status === 'ambiguous') {
+        return apiError('calendar-link-needs-recheck', 'more than one calendar link matches this item; reload and check it', false);
+      }
+      if (match.status === 'new') {
+        if (match.link.operationId === request.operationId) return { eventId: match.link.eventId, link: match.link };
         return apiError('conflict:stale', 'calendar link already exists for this item', true);
+      }
+      if (match.status === 'legacy') {
+        const migrated = await deps.links.migrateCalendarLink({
+          operationId: request.operationId,
+          itemKey: request.itemKey,
+          legacyKey: match.key,
+          raw,
+        });
+        if (isApiError(migrated)) return migrated;
+        return { eventId: migrated.link.eventId, link: migrated.link };
       }
 
       const created = await deps.writer.insert(request);
@@ -56,16 +69,21 @@ export function createCalendarService(deps: CalendarServiceDeps): CalendarServic
     },
 
     async removeCalendarEvent(request, raw) {
-      const existing = await deps.links.findCalendarLink(request.itemKey);
-      if (isApiError(existing)) return existing;
-      if (!existing) return { removed: true };
+      const match = await deps.links.findCalendarItemLink(request.itemKey);
+      if (isApiError(match)) return match;
+      if (match.status === 'ambiguous') {
+        return apiError('calendar-link-needs-recheck', 'more than one calendar link matches this item; reload and check it', false);
+      }
+      if (match.status === 'none') return { removed: true };
+      const existing = match.link;
+      const existingKey = match.key;
 
       const removed = await deps.writer.remove(existing.eventId);
       if (isApiError(removed)) {
         if (removed.code !== 'invalid') return removed;
         const unlinked = await deps.links.removeCalendarLink({
           operationId: request.operationId,
-          itemKey: request.itemKey,
+          itemKey: existingKey,
           raw,
         });
         if (isApiError(unlinked)) return unlinked;
@@ -74,7 +92,7 @@ export function createCalendarService(deps: CalendarServiceDeps): CalendarServic
 
       const unlinked = await deps.links.removeCalendarLink({
         operationId: request.operationId,
-        itemKey: request.itemKey,
+        itemKey: existingKey,
         raw,
       });
       if (isApiError(unlinked)) return unlinked;

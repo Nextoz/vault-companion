@@ -1,8 +1,9 @@
 // ADR-0052: the one derived JSON file the calendar-write Worker may create or update. Pure domain code; no HTTP,
 // no Worker imports, and no task/note text in commit messages or errors.
-import type { ApiError } from '@vault-companion/contracts';
+import { ACTIVE_WORK_PATH, CALENDAR_ITEM_KEY_MAX, calendarItemKey, normalizeCalendarItemText, parseCalendarItemKey, parseLegacyCalendarItemKey, type ApiError } from '@vault-companion/contracts';
+import { parseActiveWork, parseTodoList } from '@vault-companion/vault-markdown';
 import { z } from 'zod';
-import { CALENDAR_LINKS_PATH, canWrite, parseVaultPath } from './paths.ts';
+import { CALENDAR_LINKS_PATH, TODO_LIST_PATH, canWrite, parseVaultPath } from './paths.ts';
 import { payloadHash } from './payload-hash.ts';
 import { FileTooLarge, StoreUnavailable, StoreUnknownOutcome, TRAILER_OP, TRAILER_PAYLOAD, type VaultPath, type VaultStore } from './store.ts';
 
@@ -23,7 +24,7 @@ const calendarDateTime = z.iso.datetime({ offset: true });
 const singleLine = (max: number) => z.string().trim().min(1).max(max)
   .refine((s) => !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(s), 'must not contain control or separator characters');
 
-export const CalendarItemKey = z.string().min(1).max(512)
+export const CalendarItemKey = z.string().min(1).max(CALENDAR_ITEM_KEY_MAX)
   .refine((s) => !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(s), 'must not contain control or separator characters');
 export type CalendarItemKey = z.infer<typeof CalendarItemKey>;
 
@@ -132,6 +133,26 @@ export interface CalendarLinkRemoveOutcome {
   readonly revision: string;
 }
 
+export type CalendarLinkMatch =
+  | { readonly status: 'new'; readonly key: string; readonly link: CalendarLink }
+  | { readonly status: 'legacy'; readonly key: string; readonly link: CalendarLink }
+  | { readonly status: 'ambiguous' }
+  | { readonly status: 'none' };
+
+export interface CalendarLinkMigrationInput {
+  readonly operationId: string;
+  readonly itemKey: string;
+  readonly legacyKey: string;
+  readonly raw: unknown;
+}
+
+export interface CalendarLinkMigrationOutcome {
+  readonly status: 'applied' | 'already-migrated';
+  readonly commitSha: string;
+  readonly blobSha: string;
+  readonly link: CalendarLink;
+}
+
 const apiError = (code: ApiError['code'], message: string, retryable = false): ApiError => ({ code, message, retryable });
 
 const isApiError = (value: unknown): value is ApiError =>
@@ -166,6 +187,59 @@ function createdAt(now: Date | number): string {
   return new Date(now).toISOString();
 }
 
+const TODO_FILE = TODO_LIST_PATH as VaultPath;
+const ACTIVE_FILE = ACTIVE_WORK_PATH as VaultPath;
+
+type CalendarItemLine = { readonly text: string; readonly ordinal: number };
+
+function parsedItemLines(markdown: string, kind: 'task' | 'active'): CalendarItemLine[] {
+  if (kind === 'task') {
+    const parsed = parseTodoList(markdown);
+    return parsed.ok ? parsed.tasks.map((t) => ({ text: t.lineText, ordinal: t.occurrenceIndex })) : [];
+  }
+  const parsed = parseActiveWork(markdown, '1970-01-01');
+  return parsed.ok ? parsed.items.map((t) => ({ text: t.lineText, ordinal: t.occurrenceIndex })) : [];
+}
+
+/** Current file lines for resolving a legacy link, or null when the file cannot be read. */
+async function readItemLines(store: VaultStore, revision: string, kind: 'task' | 'active'): Promise<CalendarItemLine[] | null> {
+  try {
+    const file = await store.readFile(kind === 'task' ? TODO_FILE : ACTIVE_FILE, revision);
+    if (!file) return null;
+    let markdown: string;
+    try {
+      markdown = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(file.bytes);
+    } catch {
+      return null;
+    }
+    return parsedItemLines(markdown, kind);
+  } catch {
+    // Legacy resolution is best-effort; the links file itself is still the answer.
+    return null;
+  }
+}
+
+function resolvedLegacyLinks(legacy: readonly { key: string; eventId: string }[], lines: readonly CalendarItemLine[] | null, kind: 'task' | 'active'): Record<string, string> {
+  if (!lines || legacy.length === 0) return {};
+  const byText = new Map<string, CalendarItemLine[]>();
+  for (const line of lines) {
+    const text = normalizeCalendarItemText(line.text);
+    const group = byText.get(text) ?? [];
+    group.push(line);
+    byText.set(text, group);
+  }
+  const resolved: Record<string, string> = {};
+  for (const entry of legacy) {
+    const parsed = parseLegacyCalendarItemKey(entry.key);
+    if (!parsed || parsed.kind !== kind) continue;
+    const matches = byText.get(parsed.text) ?? [];
+    if (matches.length !== 1) continue;
+    const [only] = matches;
+    resolved[calendarItemKey(kind, only!.text, only!.ordinal)] = entry.eventId;
+  }
+  return resolved;
+}
+
 export interface CalendarLinksDeps {
   readonly store: VaultStore;
   readonly now: () => Date | number;
@@ -182,9 +256,26 @@ export function createCalendarLinksService(deps: CalendarLinksDeps) {
         if (!file || file.blobSha !== listed.blobSha) return apiError('invalid', 'the calendar links file could not be read safely');
         const parsed = parseCalendarLinksFile(file.bytes);
         if (!parsed) return apiError('invalid', 'the calendar links file is not valid JSON');
+        const links: Record<string, string> = {};
+        const legacy: { key: string; eventId: string }[] = [];
+        for (const [key, link] of Object.entries(parsed.links)) {
+          if (parseLegacyCalendarItemKey(key)) legacy.push({ key, eventId: link.eventId });
+          else links[key] = link.eventId;
+        }
+        if (legacy.length > 0) {
+          const [taskLines, activeLines] = await Promise.all([
+            legacy.some((l) => parseLegacyCalendarItemKey(l.key)?.kind === 'task') ? readItemLines(deps.store, revision, 'task') : Promise.resolve(null),
+            legacy.some((l) => parseLegacyCalendarItemKey(l.key)?.kind === 'active') ? readItemLines(deps.store, revision, 'active') : Promise.resolve(null),
+          ]);
+          const taskLinks = resolvedLegacyLinks(legacy, taskLines, 'task');
+          const activeLinks = resolvedLegacyLinks(legacy, activeLines, 'active');
+          for (const [key, eventId] of Object.entries({ ...taskLinks, ...activeLinks })) {
+            if (!(key in links)) links[key] = eventId;
+          }
+        }
         return {
           revision,
-          links: Object.fromEntries(Object.entries(parsed.links).map(([key, link]) => [key, link.eventId])),
+          links,
         };
       } catch (e) {
         const failed = storeFailure(e);
@@ -204,6 +295,89 @@ export function createCalendarLinksService(deps: CalendarLinksDeps) {
         if (failed) return failed;
         throw e;
       }
+    },
+
+    async findCalendarItemLink(itemKey: string): Promise<CalendarLinkMatch | ApiError> {
+      try {
+        const { commitSha: revision } = await deps.store.head();
+        const existing = await readLinksFile(deps.store, revision);
+        if (isApiError(existing)) return existing;
+        if (existing.kind === 'absent') return { status: 'none' };
+        const direct = existing.file.links[itemKey];
+        if (direct) return { status: 'new', key: itemKey, link: direct };
+
+        const current = parseCalendarItemKey(itemKey);
+        if (!current) return { status: 'none' };
+        const exact: [string, CalendarLink][] = [];
+        const truncated: [string, CalendarLink][] = [];
+        for (const [key, link] of Object.entries(existing.file.links)) {
+          const legacy = parseLegacyCalendarItemKey(key);
+          if (!legacy || legacy.kind !== current.kind) continue;
+          if (legacy.text === current.text) exact.push([key, link]);
+          else if (legacy.truncated && current.text.startsWith(legacy.text)) truncated.push([key, link]);
+        }
+        if (exact.length === 1 && truncated.length === 0) {
+          const lines = await readItemLines(deps.store, revision, current.kind);
+          const currentMatches = lines?.filter((line) => normalizeCalendarItemText(line.text) === current.text).length ?? 0;
+          if (currentMatches > 1) return { status: 'ambiguous' };
+          return { status: 'legacy', key: exact[0]![0], link: exact[0]![1] };
+        }
+        if (exact.length === 0 && truncated.length === 0) return { status: 'none' };
+        return { status: 'ambiguous' };
+      } catch (e) {
+        const failed = storeFailure(e);
+        if (failed) return failed;
+        throw e;
+      }
+    },
+
+    async migrateCalendarLink(input: CalendarLinkMigrationInput): Promise<CalendarLinkMigrationOutcome | ApiError> {
+      let unknown = false;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        const { commitSha: base } = await deps.store.head();
+        const existing = await readLinksFile(deps.store, base);
+        if (isApiError(existing)) return existing;
+        if (existing.kind === 'absent' || !existing.file.links[input.legacyKey]) {
+          return apiError('conflict:stale', 'the calendar link moved; reload the item', true);
+        }
+        if (!canWrite(PATH, 'update')) return apiError('refused:path', 'calendar links path is not allowed');
+        const legacyLink = existing.file.links[input.legacyKey]!;
+        const prior = existing.file.links[input.itemKey];
+        if (prior) {
+          if (prior.operationId === legacyLink.operationId) {
+            return { status: 'already-migrated', commitSha: base, blobSha: existing.blobSha, link: prior };
+          }
+          return apiError('conflict:stale', 'calendar link already exists for this item', true);
+        }
+
+        const link = legacyLink;
+        const links = { ...existing.file.links, [input.itemKey]: link };
+        delete links[input.legacyKey];
+        const bytes = serializeCalendarLinksFile({ schema: 1, links });
+        try {
+          const res = await deps.store.writeFile({
+            path: PATH,
+            baseCommit: base,
+            expect: 'regular-file',
+            bytes,
+            message: 'Vault Companion: migrate calendar link',
+            trailers: { [TRAILER_OP]: input.operationId, [TRAILER_PAYLOAD]: await payloadHash(input.raw) },
+          });
+          if (res.ok) return { status: 'applied', commitSha: res.commitSha, blobSha: res.blobSha, link };
+          if (res.reason === 'precondition-failed') return apiError('refused:structure', 'the calendar links file is not what this change expects; nothing was written');
+        } catch (e) {
+          if (e instanceof StoreUnknownOutcome) {
+            unknown = true;
+            continue;
+          }
+          const failed = storeFailure(e);
+          if (failed) return failed;
+          throw e;
+        }
+      }
+      return unknown
+        ? apiError('upstream-unavailable', 'GitHub did not confirm the calendar links write; it will be retried safely', true)
+        : apiError('conflict:stale', 'the vault kept changing; try again', true);
     },
 
     async putCalendarLink(input: CalendarLinkWriteInput): Promise<CalendarLinkWriteOutcome | ApiError> {
