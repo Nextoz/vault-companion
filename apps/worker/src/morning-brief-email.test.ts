@@ -29,7 +29,7 @@ describe('renderBriefEmail', () => {
   it('uses the brief date in the subject and renders every section', () => {
     const { subject, text, html } = renderBriefEmail(file());
     expect(subject).toBe(`Morning Brief - ${DATE}`);
-    for (const value of ['A short day with room to breathe.', 'steps above its 30-day median', 'Take a walk.', 'Pay the rent', DATE, 'Open the letter.', 'One step is enough.', 'mail']) {
+    for (const value of ['A short day with room to breathe.', 'steps above its 30-day median', 'Take a walk.', 'Pay the rent', DATE, 'Open the letter.', 'One step is enough.', 'Mail unavailable: reason not provided']) {
       expect(text).toContain(value);
       expect(html).toContain(value);
     }
@@ -91,7 +91,7 @@ describe('renderBriefEmail', () => {
       expect(output).not.toContain('First step');
       expect(output).not.toContain('State:');
       expect(output).not.toContain('undefined');
-      expect(output).toContain('Unavailable: mail');
+      expect(output).toContain('Mail unavailable: reason not provided');
     }
   });
 });

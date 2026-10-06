@@ -14,8 +14,14 @@ const CALENDAR_TASK = 'Draft quarterly notes at 14:00';
 const TOUR_DIR = fileURLToPath(new URL('../test-results/tour/', import.meta.url));
 
 const brief = (date: string) => MorningBriefResponse.parse({
-  revision: 'b'.repeat(40), date, generatedAt: `${date}T04:31:00+02:00`, source: 'fallback', unavailable: [],
-  brief: { source: 'fallback', dayLine: 'Synthetic day', gaps: [], todos: [] },
+  revision: 'b'.repeat(40), date, generatedAt: `${date}T04:31:00+02:00`, source: 'fallback',
+  unavailable: ['mail'], unavailableReasons: { mail: 'google-reauth-needed' },
+  brief: { source: 'fallback', dayLine: 'Synthetic day', gaps: [],
+    meetings: [
+      { title: 'Planning day', start: `${date}T00:00:00+02:00`, end: `${date}T23:59:00+02:00`, allDay: true, clash: false },
+      { title: 'Design review with a deliberately long synthetic meeting title that wraps on a phone', start: `${date}T09:00:00+02:00`, end: `${date}T10:00:00+02:00`, allDay: false, clash: true, clashWith: 'Team catch-up', link: 'https://calendar.google.com/calendar/event?eid=synthetic-design' },
+      { title: 'Team catch-up', start: `${date}T09:30:00+02:00`, end: `${date}T10:30:00+02:00`, allDay: false, clash: true, clashWith: 'Design review', link: 'https://calendar.google.com/calendar/event?eid=synthetic-team' },
+    ], todos: [{ id: 0, text: 'Send synthetic notes', due: '2026-09-27', bill: false, overdueDays: 3 }] },
 });
 
 const card = (rank: number, title: string, start: string) => ({

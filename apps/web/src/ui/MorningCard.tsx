@@ -242,7 +242,7 @@ function MorningBriefSheet({ state, onOpenTasks, onClose }: {
         onKeyDown={(e) => {
           if (e.key === 'Escape') onClose();
           if (e.key !== 'Tab') return;
-          const controls = dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled)');
+          const controls = dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]');
           const first = controls?.[0];
           const last = controls?.[controls.length - 1];
           if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
@@ -254,7 +254,14 @@ function MorningBriefSheet({ state, onOpenTasks, onClose }: {
           : state.lines.map((row) => (row.todo
             ? <button key={row.id} type="button" className="morning-line morning-brief-line"
                 onClick={() => { onOpenTasks(); onClose(); }}>{row.text}</button>
-            : <p key={row.id} className={`morning-line morning-brief-line${row.marker ? ' morning-brief-marker' : ''}`}>{row.text}</p>))}
+            : row.heading ? <h3 key={row.id}>{row.text}</h3>
+            : <div key={row.id} className={`morning-line morning-brief-line${row.marker ? ' morning-brief-marker' : ''}`}
+                style={{ overflowWrap: 'anywhere', minWidth: 0 }}>
+                {row.text}
+                {row.clash && <div><strong>{row.clash}</strong></div>}
+                {row.link && <a href={row.link} target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', minHeight: 44 }}>Open in Calendar</a>}
+              </div>))}
 
       </div>
     </div>

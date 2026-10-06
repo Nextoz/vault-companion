@@ -3,6 +3,7 @@
 // interpolated string; a fallback brief renders exactly what it contains and invents nothing.
 
 import type { BriefFile } from '@vault-companion/domain';
+import { briefMeetingRows, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
 
 /** One rendered message: a plain-text and an HTML body for the same subject. */
 export interface BriefEmail {
@@ -80,15 +81,23 @@ export function escapeHtml(value: string): string {
 export function renderBriefEmail(file: BriefFile): BriefEmail {
   const { brief } = file;
   const subject = `Morning Brief - ${file.date}`;
-  const unavailable = file.unavailable.length > 0 ? file.unavailable.join(', ') : 'none';
+  const unavailable = briefUnavailableLines(file);
+  const meetings = briefMeetingRows(file);
+  const gaps = file.unavailable.includes('calendar') ? [] : brief.gaps;
 
   const text: string[] = [brief.dayLine];
   if (brief.stateLine !== undefined) text.push(`State: ${brief.stateLine}`);
+  text.push('', 'Today');
+  for (const meeting of meetings) {
+    text.push(meeting.text);
+    if (meeting.clash) text.push(meeting.clash);
+    if (meeting.link) text.push(`Open in Calendar: ${meeting.link}`);
+  }
   text.push('', 'Free blocks:');
-  if (brief.gaps.length === 0) {
+  if (gaps.length === 0) {
     text.push('- none');
   } else {
-    for (const gap of brief.gaps) {
+    for (const gap of gaps) {
       const suggestion = gap.suggestion !== undefined ? `: ${gap.suggestion}` : '';
       text.push(`- ${gap.start} - ${gap.end}${suggestion}`);
     }
@@ -97,23 +106,27 @@ export function renderBriefEmail(file: BriefFile): BriefEmail {
   if (brief.todos.length === 0) {
     text.push('- none');
   } else {
-    for (const todo of brief.todos) {
+    for (const todo of brief.todos.slice(0, 5)) {
       const due = todo.due !== null ? ` (due ${todo.due})` : '';
-      text.push(`- ${todo.text}${due}`);
+      text.push(`- ${todo.text}${briefTodoAge(todo)}${due}`);
       if (todo.firstStep !== undefined) text.push(`  First step: ${todo.firstStep}`);
     }
   }
   if (brief.encouragement !== undefined) text.push('', brief.encouragement);
-  text.push('', `Unavailable: ${unavailable}`);
+  text.push('', ...unavailable);
 
   const html: string[] = [`<h1>Morning Brief - ${escapeHtml(file.date)}</h1>`, `<p>${escapeHtml(brief.dayLine)}</p>`];
   if (brief.stateLine !== undefined) html.push(`<p>State: ${escapeHtml(brief.stateLine)}</p>`);
+  html.push('<h2>Today</h2>');
+  for (const meeting of meetings) {
+    html.push(`<p>${escapeHtml(meeting.text)}${meeting.clash ? `<br>${escapeHtml(meeting.clash)}` : ''}${meeting.link ? `<br><a href="${escapeHtml(meeting.link)}" target="_blank" rel="noopener noreferrer">Open in Calendar</a>` : ''}</p>`);
+  }
   html.push('<h2>Free blocks</h2>');
-  if (brief.gaps.length === 0) {
+  if (gaps.length === 0) {
     html.push('<p>none</p>');
   } else {
     html.push('<ul>');
-    for (const gap of brief.gaps) {
+    for (const gap of gaps) {
       const suggestion = gap.suggestion !== undefined ? `: ${escapeHtml(gap.suggestion)}` : '';
       html.push(`<li>${escapeHtml(gap.start)} - ${escapeHtml(gap.end)}${suggestion}</li>`);
     }
@@ -124,15 +137,15 @@ export function renderBriefEmail(file: BriefFile): BriefEmail {
     html.push('<p>none</p>');
   } else {
     html.push('<ul>');
-    for (const todo of brief.todos) {
+    for (const todo of brief.todos.slice(0, 5)) {
       const due = todo.due !== null ? ` (due ${escapeHtml(todo.due)})` : '';
       const firstStep = todo.firstStep !== undefined ? `<br>First step: ${escapeHtml(todo.firstStep)}` : '';
-      html.push(`<li>${escapeHtml(todo.text)}${due}${firstStep}</li>`);
+      html.push(`<li>${escapeHtml(todo.text)}${briefTodoAge(todo)}${due}${firstStep}</li>`);
     }
     html.push('</ul>');
   }
   if (brief.encouragement !== undefined) html.push(`<p>${escapeHtml(brief.encouragement)}</p>`);
-  html.push(`<p>Unavailable: ${escapeHtml(unavailable)}</p>`);
+  html.push(...unavailable.map((line) => `<p>${escapeHtml(line)}</p>`));
 
   return { subject, text: text.join('\n'), html: html.join('\n') };
 }
