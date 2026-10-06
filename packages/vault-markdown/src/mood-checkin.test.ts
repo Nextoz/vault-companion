@@ -1,6 +1,6 @@
 // Daily-note mood check-in: exact golden bytes. Synthetic notes only.
 import { describe, expect, it } from 'vitest';
-import { applyMoodCheckin, renderDailyNote, revertMoodCheckin } from './mood-checkin.ts';
+import { applyMoodCheckin, parseMoodCheckin, renderDailyNote, revertMoodCheckin } from './mood-checkin.ts';
 import type { MoodCheckinInput } from './mood-checkin.ts';
 
 const BOM = '\uFEFF';
@@ -126,6 +126,33 @@ describe('revertMoodCheckin golden bytes', () => {
     const changed = checkin.text.replace('mood: -1', 'mood: 3');
     const result = revertMoodCheckin(changed, checkin.text, previous);
     expect(result).toMatchObject({ ok: false, code: 'conflict:mood-changed' });
+  });
+});
+
+describe('parseMoodCheckin (read-only inverse)', () => {
+  it('reads exactly the four spans an apply wrote, ignoring body text', () => {
+    const source = ['---', 'date: 2026-10-01', 'mood:', 'energy:', 'sleep:', 'checkin_at:', '---', '', 'Body text', ''].join('\n');
+    const note = applied(source, valid);
+    expect(parseMoodCheckin(note, '2026-10-01')).toEqual({ mood: -1, energy: 2, sleep: 7.5, checkinAt: ISO });
+  });
+
+  it('keeps CRLF, BOM and unrelated frontmatter readable', () => {
+    const note = `${BOM}---\r\nmood: -1\r\nenergy: 2\r\nsleep: 7.5\r\ncheckin_at: ${ISO}\r\nirritability: high\r\n---\r\nBody\r\n`;
+    expect(parseMoodCheckin(note, '2026-10-01')).toEqual({ mood: -1, energy: 2, sleep: 7.5, checkinAt: ISO });
+  });
+
+  it('returns null for a blank, unclosed, ambiguous or time-only check-in', () => {
+    expect(parseMoodCheckin('---\nmood:\nenergy:\nsleep:\ncheckin_at:\n---\n', '2026-10-01')).toBeNull();
+    expect(parseMoodCheckin('---\nmood: -1\nenergy: 2\nsleep: 7\ncheckin_at: 06:14\n', '2026-10-01')).toBeNull();
+    expect(parseMoodCheckin('---\nmood: -1\nmood: 2\nenergy: 2\nsleep: 7\ncheckin_at: 06:14\n---\n', '2026-10-01')).toBeNull();
+    expect(parseMoodCheckin('---\nmood: -1\nenergy: 2\nsleep: 7\ncheckin_at: 06:14\n---\n', '2026-10-01')).toBeNull();
+  });
+
+  it('returns null for out-of-range or malformed values', () => {
+    expect(parseMoodCheckin(`---\nmood: 4\nenergy: 2\nsleep: 7\ncheckin_at: ${ISO}\n---\n`, '2026-10-01')).toBeNull();
+    expect(parseMoodCheckin(`---\nmood: 1.5\nenergy: 2\nsleep: 7\ncheckin_at: ${ISO}\n---\n`, '2026-10-01')).toBeNull();
+    expect(parseMoodCheckin(`---\nmood: -1\nenergy: 2\nsleep: 7.2\ncheckin_at: ${ISO}\n---\n`, '2026-10-01')).toBeNull();
+    expect(parseMoodCheckin(`---\nmood: -1\nenergy: 2\nsleep: 7\ncheckin_at: not-a-date\n---\n`, '2026-10-01')).toBeNull();
   });
 });
 

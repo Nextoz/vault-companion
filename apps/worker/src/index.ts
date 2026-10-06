@@ -17,6 +17,7 @@ import { createGeminiExplainer } from './gemini.ts';
 import { createScalewayChat } from './scaleway-chat.ts';
 import { createJevService } from './jev.ts';
 import { gatherCandidates } from './morning-brief-gather.ts';
+import { createMoodReader } from './mood-reader.ts';
 import { cloudflareMailer, type BriefEmailBinding } from './morning-brief-email.ts';
 import { BRIEF_ROUTE, BRIEF_SUBREQUEST_BUDGET, briefSlotForCron, runBriefJob } from './morning-brief-job.ts';
 import { diagnosticDetail, type LogRecord } from './log.ts';
@@ -242,6 +243,7 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
       const training = createTrainingService({ store: readStore });
       const health = createHealthService({ store: readStore, now, timeZone });
       const weather = createWeatherService({ reader: createWeatherProvider({ fetch: counted, now: () => Date.now() }), now, timeZone });
+      const mood = createMoodReader({ store: readStore });
       const unavailable: ApiError = { code: 'upstream-unavailable', message: 'reader unavailable', retryable: true };
       const googleReader = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_REFRESH_TOKEN
         ? createGoogleReader({
@@ -262,7 +264,7 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
         readHealthHistory: () => health.readHealthHistory(),
         readTraining: () => training.readTraining(),
         readWeather: () => weather.readWeather(),
-        readMood: () => Promise.resolve(unavailable),
+        readMood: () => mood.readMood(day),
         readCalendar: () => googleReader.readCalendar(),
         readMail: () => googleReader.readMail(),
       });
