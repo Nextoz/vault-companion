@@ -150,7 +150,7 @@ export function rollbackIfSmokeFailed({
   if (smoke.ok) {
     return { rolledBack: false, skippedReason: null, rollbackResult: null };
   }
-  if (smoke.versionError) {
+  if (smoke.versionError && smoke.statusOk) {
     return {
       rolledBack: false,
       skippedReason: `Cloudflare deployment status could not be read: ${smoke.versionError}`,

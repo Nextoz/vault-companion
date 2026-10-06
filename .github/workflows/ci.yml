@@ -135,6 +135,7 @@ jobs:
       - name: Deploy
         working-directory: apps/worker
         run: |
+          set -o pipefail
           pnpm exec wrangler deploy \
             --domain "$PRODUCTION_HOST" \
             --tag "$GITHUB_SHA" 2>&1 | tee deploy.log

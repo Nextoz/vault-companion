@@ -133,6 +133,15 @@ describe('smoke-test.mjs', () => {
     expect(rollback).not.toHaveBeenCalled();
   });
 
+  it('still rolls back when HTTP checks fail even though the Cloudflare status API cannot be read', () => {
+    const rollback = vi.fn(() => ({ ok: true, status: 0, stdout: '', stderr: '' }));
+    const smoke = { ok: false, statusOk: false, versionOk: false, currentVersionId: null, versionError: 'API down' };
+    const decision = rollbackIfSmokeFailed({ smoke, previousVersionId: 'old', rollback });
+
+    expect(decision.rolledBack).toBe(true);
+    expect(rollback).toHaveBeenCalledTimes(1);
+  });
+
   it('builds an exact, secret-free rollback command and summary', () => {
     const command = buildRollbackCommand('old-version', 'CI smoke test failed');
     expect(command).toBe(

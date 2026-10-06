@@ -39,6 +39,9 @@ or per-version preview hostname exists to bypass Access.
 1. Create a Cloudflare API token: My Profile → API Tokens → Create Token → **Create Custom Token**.
 2. Permissions: `Account` → `Workers Scripts` → `Edit`. Account Resources: include **only this account**; Zone
    Resources: leave as-is (no zone permission is granted). Continue to summary → Create Token, and copy the value.
+   If the first approved deploy fails on the custom domain with an authentication or zone error (unverified: depends
+   on how wrangler attaches `--domain`), edit the token and add `Zone` → `Workers Routes` → `Edit` and `Zone` → `Zone`
+   → `Read`, restricted to the one zone of the custom domain, then re-run the failed job.
 3. In GitHub, open the repository → Settings → Environments → **New environment**, name it `production`.
 4. Add three environment secrets: `CLOUDFLARE_API_TOKEN` (the token from step 2), `CLOUDFLARE_ACCOUNT_ID` (Cloudflare
    dashboard → Workers & Pages → Account ID), and `PRODUCTION_HOST` (the custom domain hostname only, e.g.
