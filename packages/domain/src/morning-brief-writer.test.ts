@@ -58,8 +58,8 @@ describe('buildWriterInput', () => {
       todo('SENTINEL-CANDIDATE-A', { due: DAY }),
       todo('SENTINEL-CANDIDATE-0', { bill: true }),
     ]);
-    expect(input.todos.map((t) => t.text)).toEqual(['SENTINEL-CANDIDATE-B', 'SENTINEL-CANDIDATE-A', 'SENTINEL-CANDIDATE-0']);
-    expect(input.todos.map((t) => t.id)).toEqual([0, 1, 2]);
+    expect(input.todos.map((t) => t.text)).toEqual(['SENTINEL-CANDIDATE-B', 'SENTINEL-CANDIDATE-A', 'SENTINEL-CANDIDATE-0', 'SENTINEL-NON-CANDIDATE-D', 'SENTINEL-NON-CANDIDATE-C']);
+    expect(input.todos.map((t) => t.id)).toEqual([0, 1, 2, 3, 4]);
   });
 });
 
@@ -115,10 +115,10 @@ describe('parseWriterOutput', () => {
     expect(parsed?.gaps).toHaveLength(1);
   });
 
-  it('keeps at most 3 todos', () => {
-    const wide: WriterInput = { ...makeInput(), todos: [0, 1, 2, 3].map((id) => ({ id, text: `T${id}`, due: null, bill: false })) };
-    const parsed = parseWriterOutput(JSON.stringify(draft({ todos: [0, 1, 2, 3].map((id) => ({ id, firstStep: `S${id}` })) })), wide);
-    expect(parsed?.todos.map((t) => t.id)).toEqual([0, 1, 2]);
+  it('keeps at most 5 todos', () => {
+    const wide: WriterInput = { ...makeInput(), todos: [0, 1, 2, 3, 4, 5].map((id) => ({ id, text: `T${id}`, due: null, bill: false })) };
+    const parsed = parseWriterOutput(JSON.stringify(draft({ todos: [0, 1, 2, 3, 4, 5].map((id) => ({ id, firstStep: `S${id}` })) })), wide);
+    expect(parsed?.todos.map((t) => t.id)).toEqual([0, 1, 2, 3, 4]);
   });
 
   it('returns null for garbage, empty and out-of-contract replies', () => {
@@ -150,8 +150,18 @@ describe('fallbackBrief', () => {
     expect(first.source).toBe('fallback');
     expect(first.encouragement).toBeUndefined();
     expect(first.todos.every((t) => t.firstStep === undefined)).toBe(true);
-    expect(first.todos.map((t) => t.text)).toEqual(input.todos.slice(0, 3).map((t) => t.text));
+    expect(first.todos.map((t) => t.text)).toEqual(input.todos.slice(0, 5).map((t) => t.text));
     expect(first.gaps.map((g) => g.blockIndex)).toEqual([0, 1]);
     expect(first.stateLine).toContain('steps below its 30-day median');
   });
+});
+
+it('computes whole overdue days only for past due dates, in model and fallback briefs', () => {
+  const input = makeInput([todo('Past', { due: '2026-06-12' }), todo('Today', { due: DAY }),
+    todo('Future', { due: '2026-06-16' }), todo('Undated')]);
+  const parsed = parseWriterOutput(JSON.stringify(draft({ todos: input.todos.map((t) => ({ id: t.id, firstStep: 'Start.' })) })), input)!;
+  for (const brief of [fallbackBrief(input), toBrief(parsed, input)]) {
+    expect(brief.todos.find((t) => t.text === 'Past')?.overdueDays).toBe(3);
+    expect(brief.todos.filter((t) => t.text !== 'Past').every((t) => t.overdueDays === undefined)).toBe(true);
+  }
 });

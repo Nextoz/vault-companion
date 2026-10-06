@@ -93,7 +93,7 @@ function parseCalendar(body: unknown): BriefEvent[] {
     const start = calendarInstant(startRaw, allDay);
     const end = calendarInstant(endRaw, allDay);
     if (!start || !end) continue;
-    events.push({ title: typeof raw.summary === 'string' ? raw.summary : '', start, end, allDay });
+    events.push({ title: typeof raw.summary === 'string' ? raw.summary : '', start, end, allDay, ...(typeof raw.htmlLink === 'string' ? { link: raw.htmlLink } : {}) });
   }
   return events;
 }
@@ -178,7 +178,7 @@ export function createGoogleReader(deps: GoogleReaderDeps): GoogleReader {
         singleEvents: 'true',
         timeMin,
         timeMax,
-        fields: 'items(summary,start,end)',
+        fields: 'items(summary,start,end,htmlLink)',
       });
       const res = await deps.fetch(`${CALENDAR_URL}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },

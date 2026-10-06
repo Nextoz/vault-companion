@@ -44,6 +44,7 @@ export function createMorningBriefReadService(deps: MorningBriefReadDeps) {
           generatedAt: parsed.generatedAt,
           source: parsed.source,
           unavailable: parsed.unavailable,
+          unavailableReasons: parsed.unavailableReasons,
           brief: parsed.brief,
         };
       } catch (e) {

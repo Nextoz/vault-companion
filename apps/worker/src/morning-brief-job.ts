@@ -5,6 +5,7 @@ import {
   commitMorningBrief,
   fallbackBrief,
   freeBlocks,
+  findClashes,
   MORNING_BRIEF_PATH,
   MORNING_BRIEF_STATUS_COMMIT_COST,
   morningBriefOperationId,
@@ -82,7 +83,7 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
   const operationId = await morningBriefOperationId(date);
   let outcome: MorningBriefOutcome = 'internal';
   let unavailable: string[] = [];
-  let unavailableCodes: Readonly<Record<string, string>> = {};
+  let unavailableCodes: MorningBriefCandidates['unavailableCodes'] = {};
   let source: 'model' | 'fallback' = 'fallback';
   let errorCode: string | null = 'internal';
 
@@ -113,9 +114,12 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
       const candidates = await deps.gather(date);
       unavailable = [...candidates.unavailable];
       unavailableCodes = { ...candidates.unavailableCodes };
+      const meetings = findClashes(candidates.events);
       const input = buildWriterInput({
         day: date,
-        blocks: freeBlocks(candidates.events, date, deps.timeZone),
+        blocks: unavailable.includes('calendar') ? [] : freeBlocks(candidates.events, date, deps.timeZone),
+        calendar: { count: meetings.length, firstStart: meetings[0]?.start ?? null, clashCount: meetings.filter((meeting) => meeting.clash).length },
+        unavailableReasons: unavailableCodes,
         todos: candidates.todos,
         state: stateLine(candidates.metrics, candidates.mood),
         weatherWindows: candidates.weatherWindows,
@@ -125,12 +129,14 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
       const brief = deps.chat ? await writeBrief(input, deps.chat) : fallbackBrief(input);
       source = brief.source;
       const file: BriefFile = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         date,
         generatedAt: now.toISOString(),
         source: brief.source,
         unavailable: [...input.unavailable],
+        unavailableReasons: { ...unavailableCodes },
         brief: {
+          meetings,
           source: brief.source,
           dayLine: brief.dayLine,
           ...(brief.stateLine !== undefined ? { stateLine: brief.stateLine } : {}),

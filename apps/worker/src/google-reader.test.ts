@@ -54,7 +54,7 @@ describe('createGoogleReader', () => {
         calendarUrl = url;
         return json({
           items: [
-            { summary: 'Timed', start: { dateTime: '2026-06-15T07:00:00+02:00' }, end: { dateTime: '2026-06-15T07:30:00+02:00' } },
+            { summary: 'Timed', htmlLink: 'https://calendar.google.com/calendar/event?eid=synthetic', start: { dateTime: '2026-06-15T07:00:00+02:00' }, end: { dateTime: '2026-06-15T07:30:00+02:00' } },
             { summary: 'All day', start: { date: '2026-06-15' }, end: { date: '2026-06-16' } },
           ],
         });
@@ -64,13 +64,13 @@ describe('createGoogleReader', () => {
 
     const result = await makeReader(fetchImpl).readCalendar();
     expect(result).toEqual([
-      { title: 'Timed', start: '2026-06-15T05:00:00.000Z', end: '2026-06-15T05:30:00.000Z', allDay: false },
+      { title: 'Timed', link: 'https://calendar.google.com/calendar/event?eid=synthetic', start: '2026-06-15T05:00:00.000Z', end: '2026-06-15T05:30:00.000Z', allDay: false },
       { title: 'All day', start: '2026-06-15T00:00:00.000Z', end: '2026-06-16T00:00:00.000Z', allDay: true },
     ]);
     expect(calendarUrl?.searchParams.get('singleEvents')).toBe('true');
     expect(calendarUrl?.searchParams.get('timeMin')).toBe('2026-06-14T22:00:00.000Z');
     expect(calendarUrl?.searchParams.get('timeMax')).toBe('2026-06-15T22:00:00.000Z');
-    expect(calendarUrl?.searchParams.get('fields')).toBe('items(summary,start,end)');
+    expect(calendarUrl?.searchParams.get('fields')).toBe('items(summary,start,end,htmlLink)');
   });
 
   it('refuses a wrong OAuth scope with google-scope-mismatch and a 400 invalid_grant with google-reauth-needed', async () => {

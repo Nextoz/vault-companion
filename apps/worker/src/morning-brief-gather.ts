@@ -42,7 +42,7 @@ export interface MorningBriefCandidates {
   /** Names of the readers that failed (ApiError or throw); the other slots still hold their values. */
   readonly unavailable: string[];
   /** Per-reader reason for `unavailable`: the `ApiError.code` enum string, or `threw` for an exception. Names match `unavailable`. */
-  readonly unavailableCodes: Record<string, string>;
+  readonly unavailableCodes: Record<string, ApiError['code'] | 'threw'>;
 }
 
 export interface MorningBriefGatherDeps {
@@ -191,7 +191,7 @@ export function toWeatherWindows(models: readonly WeatherModelSeries[], briefDay
 
 // ---- Gatherer ----
 
-type Settled<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly code: string };
+type Settled<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly code: ApiError['code'] | 'threw' };
 
 /** Invoke a reader exactly once; an ApiError or a throw is a failure, never a rethrow. The failure keeps only a fixed code. */
 async function settle<T>(read: () => Promise<T | ApiError>): Promise<Settled<T>> {
@@ -220,7 +220,7 @@ export async function gatherCandidates(deps: MorningBriefGatherDeps): Promise<Mo
   ]);
 
   const unavailable: string[] = [];
-  const unavailableCodes: Record<string, string> = {};
+  const unavailableCodes: Record<string, ApiError['code'] | 'threw'> = {};
   const todos = [...(tasks.ok ? toBriefTodos(tasks.value.allOpen) : []), ...(mail.ok ? toMailTodos(mail.value) : [])];
   if (!tasks.ok) { unavailable.push('tasks'); unavailableCodes.tasks = tasks.code; }
   const events = calendar.ok ? [...calendar.value] : [];
