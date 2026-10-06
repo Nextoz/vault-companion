@@ -57,19 +57,21 @@ JSON array (max 8 items), each item:
 Return [] if there is nothing real.
 '@
 $key = [Environment]::GetEnvironmentVariable('SCW_SECRET_KEY', 'User')
-$tokens = 0; $items = $null; $r = $null
+$tokens = 0; $items = $null; $r = $null; $lastError = $null
 New-Item -ItemType Directory -Force (Split-Path $ledger) | Out-Null
 # GLM at "low" can still spend its whole budget reasoning on a large diff (seen 2026-10-02, finish=length): then one
 # retry at "none" (seconds, few tokens; it also found the benchmark's major issue).
 foreach ($e in @($Effort) + @(if ($Effort -ne 'none' -and $Model -like 'glm*') { 'none' })) {
     try {
-        $body = @{ model = $Model; max_tokens = 12000; temperature = 0.2
-            messages = @(@{ role = 'system'; content = $system }, @{ role = 'user'; content = "Diff:`n$diff" }) } | ConvertTo-Json -Depth 6
+        $payload = @{ model = $Model; max_tokens = 12000; temperature = 0.2
+            messages = @(@{ role = 'system'; content = $system }, @{ role = 'user'; content = "Diff:`n$diff" }) }
         # reasoning_effort is a GLM-family knob; other Scaleway models may reject the unknown parameter.
-        if ($Model -like 'glm*') { $body.reasoning_effort = $e }
+        # Set on the hashtable BEFORE ConvertTo-Json: setting it on the JSON string threw for every GLM model (2026-10-06).
+        if ($Model -like 'glm*') { $payload.reasoning_effort = $e }
+        $body = $payload | ConvertTo-Json -Depth 6
         $r = Invoke-RestMethod -Uri 'https://api.scaleway.ai/v1/chat/completions' -Method Post -Headers @{ Authorization = "Bearer $key" } `
             -ContentType 'application/json' -Body $body -TimeoutSec 240
-    } catch { $r = $null; continue }
+    } catch { $r = $null; $lastError = $_.Exception.Message; continue }
     $used = [int]$r.usage.prompt_tokens + [int]$r.usage.completion_tokens; $tokens += $used
     Add-Content -LiteralPath $ledger -Encoding utf8 -Value (@{ tokens = $used; use = "review-$e"; at = (Get-Date -Format s) } | ConvertTo-Json -Compress)
     $json = [regex]::Match([string]$r.choices[0].message.content, '\[[\s\S]*\]').Value
@@ -77,7 +79,7 @@ foreach ($e in @($Effort) + @(if ($Effort -ne 'none' -and $Model -like 'glm*') {
 }
 Remove-Variable key -ErrorAction SilentlyContinue
 if ($null -eq $items) {
-    Write-Events (@($pre) + @(@{ type = 'error'; message = "$Model gave no parseable review (last finish: $($r.choices[0].finish_reason ?? 'request failed'))" })); exit 1
+    Write-Events (@($pre) + @(@{ type = 'error'; message = "$Model gave no parseable review (last finish: $(if ($null -ne $r) { $r.choices[0].finish_reason } else { "request failed: $lastError" }))" })); exit 1
 }
 $events = foreach ($i in $items) {
     $sev = if ($i.severity -in 'critical', 'major', 'minor', 'trivial') { $i.severity } else { 'minor' }

@@ -93,3 +93,5 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 ## Budget
 
 DeepSeek $7.76. GLM ~270k/900k.
+
+- **TL1** (tooling only): `glm-review.ps1` no longer crashes on the GLM `reasoning_effort` field; `lead-watch.ps1` writes a heartbeat. Self-checks pass. No deploy.
