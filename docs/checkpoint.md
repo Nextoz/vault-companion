@@ -68,7 +68,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-0. **Order (owner 2026-10-06, `.agent/owner-instructions.md`):** UX9 (clone `ux9`, brief only) -> MB3 (ADR schemaVersion 2). Workers: Codex gpt-6.1-sol default, GLM for reviews. Items 1-2 below are history.
+0. **UX9 worker RUNNING (Codex medium, started 2026-10-06 evening, clone `vault-companion-clones/ux9` at main babb5f3, log `.agent/run-ux9.log`): do NOT relaunch. On restart, look for `.agent/handoffs/ux9.md` (line "UX9 DONE"), then `handoff-check.ps1`.** **Order (owner 2026-10-06, `.agent/owner-instructions.md`):** UX9 -> MB3 (ADR schemaVersion 2). Workers: Codex gpt-6.1-sol default, GLM for reviews. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the
@@ -112,3 +112,5 @@ DeepSeek $7.76. GLM ~270k/900k.
 - **JN1FIX**: Ask Jev e2e now covers Yes/No + Choose + Rate in one flow and asserts focus returns to the Ask Jev button after Cancel, Escape and a successful answer + Close (`askJevButton` ref in `Notes.tsx`, because WebKit does not focus a tapped button). Presentation only; no Worker change. The DeepSeek worker died on 402 mid-run; Lead finished and ran e2e + `pnpm check`.
 
 - **DEPLOY1** (ADR-0058, high-risk): `ci.yml` gains job `deploy` (main push only, `needs: [check]`, environment `production` with the owner as required reviewer, queued `deploy-production`, SHA-pinned actions) running `wrangler deploy --domain --tag <sha>` (not `versions deploy`: crons), then `tools/smoke-test.mjs` (anonymous `/` and `/api/session` must be 302/403, new version at 100 %, 3 retries) and `wrangler rollback <previous>` on failure (still red; rollback failure is loud; HTTP failure rolls back even when the status API is unreadable). `config.test.ts` guards cron count <= 5 and `workers_dev`/preview URLs off. Reviews: GLM (7 findings, 1 valid) + intent review by hand (qwen: 5 findings, none valid) + Lead read (added `pipefail`, rollback-when-status-unreadable fix). **Owner one-time setup pending** (`docs/deploy.md`: token, `production` environment secrets, required reviewer, ruleset); until then the `deploy` job fails at the approval/secrets step. Unverified: whether `--domain` needs zone permissions on the token (doc says how to add them).
+
+- **TL3** (tooling only): hardened `tools/lead-watch.ps1` (poll errors never fatal, marker searched in 150 lines, `.agent/restart-now` sentinel file, empty-pane recovery, `.agent/lead-watch.alive` heartbeat); `-SelfTest` passes. The Lead now creates `.agent/restart-now` before printing `LEAD-RESTART-NOW`. Launcher note: merged `launch-worker.ps1` has no `-Effort` switch (codex = medium) and the codex home's model is `gpt-6-astra`, not `gpt-6.1-sol`.
