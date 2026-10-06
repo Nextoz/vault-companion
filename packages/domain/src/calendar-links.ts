@@ -213,7 +213,7 @@ async function readItemLines(store: VaultStore, revision: string, kind: 'task' |
       return null;
     }
     return parsedItemLines(markdown, kind);
-  } catch (e) {
+  } catch {
     // Legacy resolution is best-effort; the links file itself is still the answer.
     return null;
   }
@@ -316,7 +316,12 @@ export function createCalendarLinksService(deps: CalendarLinksDeps) {
           if (legacy.text === current.text) exact.push([key, link]);
           else if (legacy.truncated && current.text.startsWith(legacy.text)) truncated.push([key, link]);
         }
-        if (exact.length === 1 && truncated.length === 0) return { status: 'legacy', key: exact[0]![0], link: exact[0]![1] };
+        if (exact.length === 1 && truncated.length === 0) {
+          const lines = await readItemLines(deps.store, revision, current.kind);
+          const currentMatches = lines?.filter((line) => normalizeCalendarItemText(line.text) === current.text).length ?? 0;
+          if (currentMatches > 1) return { status: 'ambiguous' };
+          return { status: 'legacy', key: exact[0]![0], link: exact[0]![1] };
+        }
         if (exact.length === 0 && truncated.length === 0) return { status: 'none' };
         return { status: 'ambiguous' };
       } catch (e) {
@@ -336,10 +341,16 @@ export function createCalendarLinksService(deps: CalendarLinksDeps) {
           return apiError('conflict:stale', 'the calendar link moved; reload the item', true);
         }
         if (!canWrite(PATH, 'update')) return apiError('refused:path', 'calendar links path is not allowed');
+        const legacyLink = existing.file.links[input.legacyKey]!;
         const prior = existing.file.links[input.itemKey];
-        if (prior) return { status: 'already-migrated', commitSha: base, blobSha: existing.blobSha, link: prior };
+        if (prior) {
+          if (prior.operationId === legacyLink.operationId) {
+            return { status: 'already-migrated', commitSha: base, blobSha: existing.blobSha, link: prior };
+          }
+          return apiError('conflict:stale', 'calendar link already exists for this item', true);
+        }
 
-        const link = existing.file.links[input.legacyKey]!;
+        const link = legacyLink;
         const links = { ...existing.file.links, [input.itemKey]: link };
         delete links[input.legacyKey];
         const bytes = serializeCalendarLinksFile({ schema: 1, links });

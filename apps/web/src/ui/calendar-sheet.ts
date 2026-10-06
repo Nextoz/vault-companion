@@ -29,10 +29,10 @@ const NOTE_HEADER = 'From Vault Companion';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-/** The ordinal that makes duplicate text unambiguous; pre-ADR-0056 locators without one are not linkable. */
-function calendarOrdinal(locator: { occurrencesAtRead: number; occurrenceIndex?: number | undefined }): number {
+/** The ordinal that makes duplicate text unambiguous; pre-ADR-0056 locators fall back to a read-only line ordinal. */
+function calendarOrdinal(locator: { occurrencesAtRead: number; lineIndex: number; occurrenceIndex?: number | undefined }): number {
   if (typeof locator.occurrenceIndex === 'number' && locator.occurrenceIndex >= 1) return locator.occurrenceIndex;
-  return locator.occurrencesAtRead === 1 ? 1 : -1;
+  return locator.occurrencesAtRead === 1 ? 1 : locator.lineIndex + 1;
 }
 
 /**

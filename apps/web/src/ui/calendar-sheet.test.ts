@@ -144,6 +144,25 @@ describe('item keys', () => {
   it('strips control characters that the key schema refuses', () => {
     expect(taskCalendarKey(locator({ lineText: 'a\tb' }))).not.toContain('\t');
   });
+  it('keeps a pre-ADR-0056 duplicate locator parseable with a line-ordinal fallback', () => {
+    const ambiguous = locator({ occurrencesAtRead: 2 });
+    delete ambiguous.occurrenceIndex;
+    const key = taskCalendarKey(ambiguous);
+    expect(key).toMatch(/^task:[1-9]\d*:/);
+    expect(key).toContain(ambiguous.lineText);
+  });
+  it('matches the e2e MockApi twin/conflict shape: two identical lines stay distinct and parseable', () => {
+    const text = '- [ ] Call the bike shop';
+    const first = { ...locator({ lineText: text, lineIndex: 10, occurrencesAtRead: 2 }) };
+    const second = { ...locator({ lineText: text, lineIndex: 12, occurrencesAtRead: 2 }) };
+    delete first.occurrenceIndex;
+    delete second.occurrenceIndex;
+    const firstKey = taskCalendarKey(first);
+    const secondKey = taskCalendarKey(second);
+    expect(firstKey).not.toBe(secondKey);
+    expect(firstKey).toMatch(/^task:[1-9]\d*:/);
+    expect(secondKey).toMatch(/^task:[1-9]\d*:/);
+  });
 });
 
 describe('calendarErrorMessage', () => {

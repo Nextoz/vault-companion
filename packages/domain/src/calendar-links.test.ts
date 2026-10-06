@@ -172,3 +172,31 @@ describe('readCalendarLinks', () => {
     expect(result).toEqual({ revision: store.headCommit, links: {} });
   });
 });
+
+describe('findCalendarItemLink ADR-0056', () => {
+  it('returns ambiguous when a legacy text currently occurs more than once', async () => {
+    const text = '- [ ] Call the bank #todo';
+    const legacyKey = `task:${'a'.repeat(40)}:4:${text}`;
+    const markdown = ['## Open', text, text, '## Done'].join('\n') + '\n';
+    const store = await InMemoryStore.create({
+      [CALENDAR_LINKS_PATH]: serializeCalendarLinksFile(file({ [legacyKey]: link('event-legacy', OP_A) })),
+      [TODO_LIST_PATH]: new TextEncoder().encode(markdown),
+    });
+    const result = await makeService(store).findCalendarItemLink(calendarItemKey('task', text, 2));
+    expect(result).toEqual({ status: 'ambiguous' });
+  });
+
+  it('does not report already-migrated when the new key holds a different link', async () => {
+    const text = '- [ ] Call the bank #todo';
+    const legacyKey = `task:${'a'.repeat(40)}:4:${text}`;
+    const newKey = calendarItemKey('task', text, 1);
+    const store = await InMemoryStore.create({
+      [CALENDAR_LINKS_PATH]: serializeCalendarLinksFile(file({
+        [legacyKey]: link('event-legacy', OP_A),
+        [newKey]: link('event-other', OP_B),
+      })),
+    });
+    const result = await makeService(store).migrateCalendarLink({ operationId: OP_C, itemKey: newKey, legacyKey, raw: {} });
+    expect(result).toMatchObject({ code: 'conflict:stale' });
+  });
+});
