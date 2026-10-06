@@ -154,7 +154,7 @@ export function parseJevAnswers(raw: unknown, questions: readonly AskJevQuestion
 function refusalError(note: Extract<NoteReadResponse, { status: 'refused' }>): ApiError {
   if (note.code === 'not-found') return apiError('not-found', note.message, false);
   if (note.code === 'too-large') return apiError('note-too-long', note.message, false);
-  return apiError('jev-excluded-path', note.message, false);
+  return apiError('refused:path', note.message, false);
 }
 
 export function createJevService(deps: JevServiceDeps) {
