@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 test('a degraded scout is never a Needs you row', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -15,7 +16,10 @@ test('a degraded scout is never a Needs you row', async ({ page }) => {
   api.scouts.scouts = [learning, stale];
   await api.install(page);
   await page.goto('/');
+  // UX8: the scouts attention line is on Boards, the Needs you tile on Overview; check each where it now lives.
+  await goTo(page, 'Board');
   await expect(page.getByRole('button', { name: '1 scout needs attention' })).toBeVisible();
+  await goTo(page, 'Today');
   await expect(page.getByRole('button', { name: /^Needs you/ })).toHaveCount(0);
 });
 
@@ -35,11 +39,16 @@ test('a failed scout row shows its error, hides on Got it, and the line disappea
   await expect(sheet.getByRole('button', { name: /City events/ })).toHaveCount(0);
 
   await sheet.getByRole('button', { name: 'Close' }).click();
-  // The Failed scout's line proves the card rendered its read while the dismissed row stays hidden.
+  // The Failed scout's line proves the card rendered its read while the dismissed row stays hidden. UX8: that line is
+  // on Boards, while the (absent) Needs you tile is on Overview.
+  await goTo(page, 'Board');
   await expect(page.getByRole('button', { name: '1 scout needs attention' })).toBeVisible();
+  await goTo(page, 'Today');
   await expect(page.getByRole('button', { name: /^Needs you/ })).toHaveCount(0);
   // Device-held: the dismissal survives a reload while the same error text persists.
   await page.reload();
+  await goTo(page, 'Board');
   await expect(page.getByRole('button', { name: '1 scout needs attention' })).toBeVisible();
+  await goTo(page, 'Today');
   await expect(page.getByRole('button', { name: /^Needs you/ })).toHaveCount(0);
 });

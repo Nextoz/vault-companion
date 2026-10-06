@@ -1358,3 +1358,141 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 .calendar-remove { border-color: var(--danger); color: var(--danger); }
+
+/* UX8 (layout C): the compact header line, the Today title + Overview/Boards switch, the Next up card, the
+   two-column tile grid and the collapsed Since I was here pane. Dark iOS tokens as the rest of the sheet. */
+.top-actions .sync-line { margin-right: auto; }
+
+.today-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 4px;
+}
+
+.today-title {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.today-view {
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 2px;
+  min-width: 180px;
+}
+
+.today-view button { min-height: 36px; padding: 0 12px; }
+
+.today-overview { margin-top: 8px; }
+
+/* The one prominent card: the pick and its Start action, then the quiet "N more tasks today" line. */
+.next-up {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+
+.next-up-eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.next-up-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.next-up-time { margin: 0; font-variant-numeric: tabular-nums; }
+
+.next-up-start {
+  align-self: flex-start;
+  margin-top: 4px;
+  min-height: var(--tap);
+  padding: 0 24px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent);
+  color: var(--ios-bg);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.next-up-empty {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.next-up-add { align-self: flex-start; }
+
+.next-up-more { align-self: flex-start; margin-top: 2px; }
+
+/* Two columns; the grid maps the pure tile list, so two more tiles slot in without a layout change. */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  min-height: 84px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+
+.tile-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tile-text {
+  font-size: 0.95rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* SIWH collapsed to one summary line that expands to the changes and the dismiss controls. */
+.siwh-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.siwh-toggle[aria-expanded='true'] { border-color: var(--accent); }
+
+.scout-diagnostics .scout-diagnostics-open { margin: 0; }

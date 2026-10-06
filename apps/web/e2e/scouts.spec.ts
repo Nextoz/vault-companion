@@ -7,6 +7,8 @@ test('Today attention opens Scouts, compact rows and history lead to sanitised f
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
+  // UX8: the scouts attention line moved from Today's card to Boards (scout diagnostics).
+  await goTo(page, 'Board');
   await page.getByRole('button', { name: '1 scout needs attention' }).click();
   const scouts = page.getByRole('region', { name: 'Scouts', exact: true });
   const failed = scouts.getByRole('button', { name: /City events/ });
@@ -40,7 +42,7 @@ test('Today attention opens Scouts, compact rows and history lead to sanitised f
   expect(api.scoutOutputRequests).toEqual(['learning', 'learning']);
   api.scouts.scouts = api.scouts.scouts.filter((entry) => entry.state === 'ok' && entry.status.runStatus === 'success');
   const refreshed = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/scouts');
-  await goTo(page, 'Today');
+  await goTo(page, 'Board');
   expect((await (await refreshed).json()).scouts).toHaveLength(1);
   await expect(page.getByRole('button', { name: /scouts need attention/ })).toHaveCount(0);
 });
@@ -60,6 +62,7 @@ test('five-column offers become labelled cards at 390px with relative freshness'
     markdown: '| Item | Store | Price | Was | Until |\n| --- | --- | --- | --- | --- |\n| [Synthetic tea](https://example.com/tea) | Example shop | 12 DKK | 20 DKK | Sunday |\n| Coffee | Other shop | 30 DKK | 40 DKK | Monday |\n\n| A | B |\n| --- | --- |\n| uneven |',
   } }));
   await page.goto('/');
+  await goTo(page, 'Board');
   await page.getByRole('button', { name: '2 scouts need attention' }).click();
   const panel = page.getByRole('button', { name: /Learning opportunities/ });
   await expect(panel).toContainText('Failed');
@@ -104,6 +107,7 @@ test('a failing calendar sync is one attention line, not a health row, and opens
   } });
   await api.install(page);
   await page.goto('/');
+  await goTo(page, 'Board');
   await page.getByRole('button', { name: '2 scouts need attention' }).click();
   const scouts = page.getByRole('region', { name: 'Scouts', exact: true });
   await expect(scouts.getByRole('button', { name: /Triage applier/ })).toHaveCount(0);

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 test('scout insights show totals, picks, states and bounded parallel previews at phone width', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -29,6 +30,7 @@ test('scout insights show totals, picks, states and bounded parallel previews at
   api.scoutOutputGates.set('extra-1', new Promise(() => {}));
   await api.install(page);
   await page.goto('/');
+  await goTo(page, 'Board');
   await page.getByRole('button', { name: '2 scouts need attention' }).click();
 
   const insights = page.locator('.insights');

@@ -32,6 +32,7 @@ import { ResearchRadar } from './ResearchRadar.tsx';
 import { ReportSheet, screenName } from './ReportSheet.tsx';
 import { Notes } from './Notes.tsx';
 import { Scouts } from './Scouts.tsx';
+import { ScoutDiagnostics } from './ScoutDiagnostics.tsx';
 import { StatusSheet } from './StatusSheet.tsx';
 import { Training } from './Training.tsx';
 import { TrainingSheet } from './TrainingSheet.tsx';
@@ -65,6 +66,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const [sessionSignedOut, setSessionSignedOut] = useState(false);
   const [accountKey, setAccountKey] = useState<string | null>(() => prefs.lastAccountKey());
   const [tab, setTab] = useState<Tab>('today');
+  // UX8: which Today layout is showing; Overview (the pick + tiles) leads, Boards holds the dashboard stack.
+  const [todayView, setTodayView] = useState<'overview' | 'boards'>('overview');
   // Where the header's Status screen returns to (the tab that opened it).
   const [statusReturn, setStatusReturn] = useState<Tab>('today');
   // Where the full-screen Research Radar returns to (the screen that opened it).
@@ -317,6 +320,11 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
     [accountKey, queue, tasks],
   );
 
+  // UX8: Start on the Next up task opens that task's detail (the Tasks tab's ordinary edit sheet).
+  const startTask = useCallback((task: TaskView) => {
+    if (tasks) setEditing({ task, account: accountKey, revision: tasks.revision });
+  }, [tasks, accountKey]);
+
   // Completions with an Undo being minted: the toast and the Done today row cannot mint a second one (P4-B).
   const undoingRef = useRef(new Set<string>());
   const lock = taskListLock(tasks);
@@ -354,6 +362,10 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
     : needsAttention || readsInFlight > 0 || snapshot.items.some((i) => i.state !== 'saved')
       ? 'yellow'
       : 'green';
+  // UX8: the compact header line that replaced Today's large sync block; Refresh stays in the Status sheet.
+  const syncedText = checkedAt === null
+    ? 'Not synced yet'
+    : `Synced ${new Date(checkedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
   const openStatus = () => {
     setStatusReturn((prev) => (tab === 'status' ? prev : tab));
     setTab('status');
@@ -369,13 +381,14 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
       <header className="top" inert={noteOpen || editing !== null}>
         <div className="top-actions">
           <button type="button" className="status-dot" data-state={statusDot} aria-label="Status" onClick={openStatus} />
+          {!signedOut && <span className="sync-line muted small">{syncedText}</span>}
           <button type="button" className="link" aria-label="Report a bug or wish" disabled={signedOut || writeBlocked || frozen} onClick={() => setReportOpen(true)}>Report</button>
         </div>
       </header>
 
       <main className="content" inert={noteOpen || editing !== null}>
         {updateReady && <div className="banner" role="status"><button type="button" onClick={() => window.location.reload()}>New version — tap to reload</button></div>}
-        {tab !== 'status' && <VaultStatus read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0} onRefresh={() => refreshTasks()} />}
+        {tab !== 'status' && tab !== 'today' && <VaultStatus read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0} onRefresh={() => refreshTasks()} />}
         {lock && (
           <div className="banner banner-warn" role="alert">
             {lock.banner}
@@ -488,17 +501,29 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           </>
         )}
 
-        {/* Today is the cockpit (UX2): the morning card, the check-in line, then the Dashboard boards. Each card line
-            keeps its detail reachable (weather inline; the brief and Reading in its sheet; scouts, events and the
-            research entry on their own screens). */}
+        {/* UX8 layout C: the Today title with the Overview/Boards switch. Overview leads with the Next up pick and the
+            data-driven tile grid; Boards holds the dashboard stack (markets/watchlist, detailed weather, AI usage) and
+            the scout diagnostics entry. Nothing was deleted: every detail the old card linked to is still reachable. */}
         {tab === 'today' && !signedOut && (
           <>
-            <MorningCard key={`morning-card:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey}
-              baseRevision={revision} blocked={writeBlocked || frozen} refreshKey={checkedAt} tasksToday={view.today.length}
-              onOpenTasks={() => setTab('tasks')} onOpenScouts={() => setTab('scouts')} onOpenRadar={openRadar}
-              onOpenHealth={() => setTab('health')} onOpenStatus={openStatus} />
-            {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
-            {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} />}
+            <div className="today-head">
+              <h1 className="today-title">Today</h1>
+              <div className="segmented today-view" role="group" aria-label="Today view">
+                <button type="button" aria-pressed={todayView === 'overview'} onClick={() => setTodayView('overview')}>Overview</button>
+                <button type="button" aria-pressed={todayView === 'boards'} onClick={() => setTodayView('boards')}>Boards</button>
+              </div>
+            </div>
+            {todayView === 'overview'
+              ? <MorningCard key={`morning-card:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey}
+                  baseRevision={revision} blocked={writeBlocked || frozen} refreshKey={checkedAt} tasks={view.today}
+                  onStartTask={startTask} onAdd={() => setCaptureOpen(true)}
+                  onOpenTasks={() => setTab('tasks')} onOpenScouts={() => setTab('scouts')} onOpenRadar={openRadar}
+                  onOpenHealth={() => setTab('health')} onOpenStatus={openStatus} />
+              : <>
+                  {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
+                  {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} />}
+                  <ScoutDiagnostics key={`scout-diagnostics:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} onOpenScouts={() => setTab('scouts')} />
+                </>}
           </>
         )}
 

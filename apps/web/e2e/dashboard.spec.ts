@@ -24,9 +24,9 @@ test('Dashboard keeps Today default and supports mobile ranges, touch and keyboa
   await page.goto('/');
   const nav = page.getByRole('navigation', { name: 'Views' });
   await expect(nav.getByRole('button', { name: 'Today', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('region', { name: 'Dashboard', exact: true })).toBeVisible();
   await expect(nav.getByRole('button')).toHaveText(['Today', 'Tasks', 'Scouts', 'Notes', 'Log']);
-  await goTo(page, 'Today');
+  // UX8 layout C: the Dashboard stack lives on the Today screen's Boards view (Overview is the default).
+  await goTo(page, 'Board');
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
   const market = dashboard.getByRole('article', { name: 'BTC / USD', exact: true });
   await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
@@ -114,7 +114,7 @@ test('stale market times stay honest and ticker-only polling preserves history o
   api.dashboardFetchedAt = '2026-09-30T11:55:00Z';
   await api.install(page);
   await page.goto('/');
-  await goTo(page, 'Today');
+  await goTo(page, 'Board');
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
   const market = dashboard.getByRole('article', { name: 'BTC / USD' });
   await expect(market.locator('.dash-chip')).toHaveText('Stale');
@@ -144,7 +144,7 @@ test('partial history failure and unavailable market leave honest overview cards
   api.dashboardMode = 'no-history';
   await api.install(page);
   await page.goto('/');
-  await goTo(page, 'Today');
+  await goTo(page, 'Board');
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
   const market = dashboard.getByRole('article', { name: 'BTC / USD' });
   await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
@@ -159,7 +159,7 @@ test('partial history failure and unavailable market leave honest overview cards
   await expect(market.locator('.dash-price, time, svg')).toHaveCount(0);
   await expectUnconfigured(dashboard);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await goTo(page, 'Today');
+  await goTo(page, 'Board');
   await expect(page.getByRole('region', { name: 'Dashboard', exact: true })).toBeVisible();
 });
 
@@ -170,7 +170,7 @@ test('SP3c (ADR-0038): a range seen before reopens from its labelled copy when t
   const session = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/session' && r.ok());
   await page.goto('/');
   await session;
-  await goTo(page, 'Today');
+  await goTo(page, 'Board');
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
   const market = dashboard.getByRole('article', { name: 'BTC / USD', exact: true });
   // The Health panel keeps its own copy note; this test is about the Dashboard's.
@@ -180,7 +180,7 @@ test('SP3c (ADR-0038): a range seen before reopens from its labelled copy when t
 
   await goTo(page, 'Tasks');
   api.network = 'down';
-  await goTo(page, 'Today');
+  await goTo(page, 'Board');
   await expect(dashNote).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
   await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
   await expect(market.locator('.dash-chip')).toHaveText('Stale');

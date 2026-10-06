@@ -11,7 +11,7 @@ test('AB3b: the AI usage panel shows one tile per provider with its budget left 
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
-  await goTo(page, 'Today');
+  await goTo(page, 'Board');
   const panel = page.getByRole('region', { name: 'AI usage', exact: true });
   await expect(panel).toBeVisible();
   await expect(panel.locator('.ai-usage-tile')).toHaveCount(5);
@@ -37,7 +37,7 @@ test('AB3b: an unknown provider still gets a tile titled with its id', async ({ 
   });
   await api.install(page);
   await page.goto('/');
-  await goTo(page, 'Today');
+  await goTo(page, 'Board');
   const panel = page.getByRole('region', { name: 'AI usage', exact: true });
   await expect(panel.locator('.ai-usage-tile', { hasText: 'mystery' })).toHaveCount(1);
 });

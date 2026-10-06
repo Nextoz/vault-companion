@@ -1,24 +1,24 @@
-// UX2: the Today cockpit's compact morning card. A "Needs you" line (NY1), then up to four one-liners plus the tasks
-// line, each tapping through to its detail; weather opens its panel inline, scouts and events open the Scouts tab, and
-// the one research entry opens Research Radar as its own screen. Below it the check-in line, once there is no check-in.
-// UX7 replaces "Review my morning" with a Morning Brief button that opens the whole brief, its Reading section and a
-// link to Research Radar.
-import type { ActiveWorkResponse, HealthResponse, MorningBriefReadResponse, MorningResponse, RadarResponse, ScoutsResponse, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
+// UX2/UX7/UX8: the Today Overview (layout C). A single "Next up" card, then a data-driven two-column tile grid
+// (Morning Brief, Needs you, Weather, Research), the collapsed Since I was here pane above it, and the check-in line.
+// Each tile opens a detail the app already has (the brief sheet, the Needs you sheet, the morning weather panel, the
+// Radar screen); the grid renders the pure `todayTiles` list, so more tiles need no layout change. No new read: the
+// card projects the reads it already holds.
+import type { ActiveWorkResponse, HealthResponse, MorningBriefReadResponse, MorningResponse, RadarResponse, ScoutsResponse, TaskView, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { getActiveWork, getMorning, getMorningBrief, getRadar, getScouts, getTriage, getWeather, type Fetched } from '../api.ts';
 import { lastCopies } from '../lastCopy.ts';
 import { prefs } from '../prefs.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
-import { dateIn } from '../time.ts';
 import { deriveTriage } from '../triage.ts';
 import { localDate, MoodCard } from './MoodCard.tsx';
 import { Morning } from './Morning.tsx';
 import { NeedsYouSheet } from './NeedsYouSheet.tsx';
-import { liveDismissals, needsYou, sameDismissals, type NeedsYouFacts, type NeedsYouRow, type NeedsYouTarget } from './needs-you.ts';
+import { liveDismissals, needsYou, needsYouText, sameDismissals, type NeedsYouFacts, type NeedsYouRow, type NeedsYouTarget } from './needs-you.ts';
 import { SinceIWasHere } from './SinceIWasHere.tsx';
 import { sinceIWasHereFacts, type SiwhTarget } from './since-i-was-here.ts';
 import { WeatherMorning } from './WeatherLab.tsx';
-import { checkinDue, isMissingBrief, morningBriefSheet, morningLines, radarHighlights, type MorningBriefSheetState, type MorningLineId } from './morning-card.ts';
+import { checkinDue, isMissingBrief, morningBriefSheet, radarHighlights, researchHighlightsText, weatherLine, type MorningBriefSheetState } from './morning-card.ts';
+import { moreTasksText, selectNextUp, todayTiles, type NextUp, type NextUpEvent } from './today.ts';
 
 export interface MorningCardProps {
   queue: PendingQueue;
@@ -27,7 +27,10 @@ export interface MorningCardProps {
   baseRevision: string | null;
   blocked: boolean;
   refreshKey: number | null;
-  tasksToday: number;
+  /** Today's task rows, in the app's own order; reused for the pick and the "more tasks" line, never listed here. */
+  tasks: readonly TodayTaskRow[];
+  onStartTask: (task: TaskView) => void;
+  onAdd: () => void;
   onOpenTasks: () => void;
   onOpenScouts: () => void;
   onOpenRadar: () => void;
@@ -35,7 +38,17 @@ export interface MorningCardProps {
   onOpenStatus: () => void;
 }
 
-export function MorningCard({ queue, items, accountKey, baseRevision, blocked, refreshKey, tasksToday, onOpenTasks, onOpenScouts, onOpenRadar, onOpenHealth, onOpenStatus }: MorningCardProps) {
+/** The slice of a Today row the pick needs: a description and, when the row is a live server task, its TaskView. */
+export interface TodayTaskRow {
+  readonly key: string;
+  readonly description: string;
+  readonly task: TaskView | null;
+}
+
+/** The event row's wall clock in its own offset; never the device's zone (the brief does the same for its gaps). */
+const eventTime = (start: string): string => start.slice(11, 16);
+
+export function MorningCard({ queue, items, accountKey, baseRevision, blocked, refreshKey, tasks, onStartTask, onAdd, onOpenTasks, onOpenScouts, onOpenRadar, onOpenHealth, onOpenStatus }: MorningCardProps) {
   const [weather, setWeather] = useState<Fetched<WeatherResponse> | null>(null);
   const [scouts, setScouts] = useState<Fetched<ScoutsResponse> | null>(null);
   const [morning, setMorning] = useState<Fetched<MorningResponse> | null>(null);
@@ -43,7 +56,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   const [radar, setRadar] = useState<Fetched<RadarResponse> | null>(null);
   const [triage, setTriage] = useState<TriageResponse | null>(null);
   const [activeWork, setActiveWork] = useState<Fetched<ActiveWorkResponse> | null>(null);
-  const [open, setOpen] = useState<MorningLineId | null>(null);
+  const [open, setOpen] = useState<'weather' | null>(null);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [needsOpen, setNeedsOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
@@ -70,11 +83,16 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   }, [refreshKey, accountKey, blocked]);
 
   const triageView = triage ? deriveTriage(triage, items, accountKey) : null;
+  // UX8: the pick's event slice (the triage cards, which carry the event's own start) and the ids the pane tracks.
+  const triageEvents: NextUpEvent[] = triageView
+    ? triageView.cards.map((card) => ({ eventId: card.eventId, title: card.title, start: card.start }))
+    : [];
+  // Event ids, not just the count: a card handled elsewhere then replaced by a new one on the same count is new.
+  const triageIds = triageView ? [...triageView.cards.map((card) => card.eventId), ...triageView.checkins.map((checkin) => checkin.eventId)] : [];
   // UX7: the Morning Brief sheet's own state - a usable brief for today, or the ADR-0055 "No brief yet" reason.
   const briefData = brief !== null && brief.kind === 'ok' ? brief.data : null;
   const briefFile = briefData !== null && !isMissingBrief(briefData) ? briefData : null;
   const briefSheet = morningBriefSheet(briefData, localDate());
-  const eventsToTriage = triageView ? triageView.cards.length + triageView.checkins.length : 0;
   const scoutData = scouts?.kind === 'ok' ? scouts.data : null;
   // NY3: drop a stored dismissal once its scout recovers (or its text changes), so a later failure shows again.
   useEffect(() => {
@@ -87,25 +105,28 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   const needsFacts: NeedsYouFacts = {
     scouts: scoutData,
     activeWork: activeWork?.kind === 'ok' && activeWork.data.status === 'ok' ? activeWork.data : null,
-    eventsToTriage,
+    eventsToTriage: triageIds.length,
     actionsNeedingAttention: items.filter((item) => item.state === 'attention').length,
     dismissedScouts,
   };
-  const needsRows = needsYou(needsFacts, dateIn(new Date().toISOString(), 'Europe/Copenhagen'));
-  const lines = morningLines({
-    weather: weather?.kind === 'ok' ? weather.data : null,
-    weatherFailed: weather !== null && weather.kind !== 'ok',
-    scouts: scouts?.kind === 'ok' ? scouts.data : null,
-    eventsToTriage,
-    tasksToday,
-    researchHighlights: radar?.kind === 'ok' ? radarHighlights(radar.data) : null,
-    needs: needsRows,
+  const needsRows = needsYou(needsFacts, localDate());
+  // UX8: the single pick - the next commitment today, else today's first task, else a quiet empty state.
+  const pick: NextUp<TodayTaskRow> = selectNextUp(triageEvents, tasks, localDate(), new Date().toISOString());
+  const moreCount = pick.kind === 'task' ? tasks.length - 1 : tasks.length;
+  const weatherTile = weather?.kind === 'ok'
+    ? (weather.data.status === 'ok' ? weatherLine(weather.data.projection) : weather.data.message)
+    : weather !== null ? 'Weather unavailable' : null;
+  const researchCount = radar?.kind === 'ok' ? radarHighlights(radar.data) : null;
+  const tiles = todayTiles({
+    brief: briefFile ? briefFile.brief.dayLine : briefSheet.missing ?? 'No brief yet',
+    needs: needsRows.length > 0 ? needsYouText(needsRows.length) : null,
+    weather: weatherTile,
+    research: researchCount === null ? null : researchHighlightsText(researchCount),
   });
   // SIWH: the same reads the card already holds, narrowed to counts and keys. No read is added for the pane; the health
   // day comes from the app's in-memory last copy (populated when the Health screen has been visited this session).
   const siwhFacts = sinceIWasHereFacts({
-    // Event ids, not just the count: a card handled elsewhere then replaced by a new one on the same count is new.
-    triage: triageView ? [...triageView.cards.map((card) => card.eventId), ...triageView.checkins.map((checkin) => checkin.eventId)] : null,
+    triage: triageView ? triageIds : null,
     scouts: scoutData,
     brief: briefFile,
     morning: morning !== null && morning.kind === 'ok' ? morning.data : null,
@@ -113,12 +134,11 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
     today: localDate(),
   });
 
-  function openLine(id: MorningLineId) {
+  function openTile(id: string) {
+    if (id === 'brief') return setBriefOpen(true);
     if (id === 'needs') return setNeedsOpen(true);
-    if (id === 'tasks') return onOpenTasks();
-    if (id === 'scouts' || id === 'triage') return onOpenScouts();
     if (id === 'research') return onOpenRadar();
-    setOpen((current) => (current === id ? null : id));
+    setOpen((current) => (current === 'weather' ? null : 'weather'));
   }
 
   function openNeedsTarget(target: NeedsYouTarget) {
@@ -142,13 +162,16 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   const due = checkinDue(items);
   return <>
     <SinceIWasHere facts={siwhFacts} onOpen={openSiwh} />
-    <section className="group morning-card" aria-label="Today at a glance">
-      <button type="button" className="morning-line morning-brief-open" onClick={() => setBriefOpen(true)}>Morning Brief</button>
-      {lines.map((line) => {
-        const expands = line.id === 'weather';
-        return <button key={line.id} type="button" className={`morning-line morning-line-${line.id}`}
-          aria-expanded={expands ? open === line.id : undefined} onClick={() => openLine(line.id)}>{line.text}</button>;
-      })}
+    <section className="group morning-card today-overview" aria-label="Today at a glance">
+      <NextUpCard pick={pick} moreText={moreTasksText(moreCount)} onStartTask={onStartTask} onStartEvent={() => onOpenScouts()} onOpenTasks={onOpenTasks} onAdd={onAdd} />
+      <div className="tile-grid" role="group" aria-label="Today tiles">
+        {tiles.map((tile) => (
+          <button key={tile.id} type="button" className={`tile tile-${tile.id}`} aria-label={tile.label} onClick={() => openTile(tile.id)}>
+            <span className="tile-title">{tile.title}</span>
+            <span className="tile-text">{tile.text}</span>
+          </button>
+        ))}
+      </div>
       {open === 'weather' && <WeatherMorning refreshKey={refreshKey} accountKey={accountKey} blocked={blocked} />}
     </section>
     {needsOpen && <NeedsYouSheet rows={needsRows} queue={queue} accountKey={accountKey} onNavigate={openNeedsTarget} onDismiss={dismissNeedsRow} onClose={() => setNeedsOpen(false)} />}
@@ -158,6 +181,33 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
       ? <button type="button" className="checkin-line" onClick={() => setCheckinOpen(true)}>How are you today? Check in</button>
       : <MoodCard queue={queue} items={items} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked} />}
   </>;
+}
+
+/** The one prominent card: the pick and its Start action, then the quiet "N more tasks today" line to the Tasks tab. */
+function NextUpCard({ pick, moreText, onStartTask, onStartEvent, onOpenTasks, onAdd }: {
+  pick: NextUp<TodayTaskRow>; moreText: string; onStartTask: (task: TaskView) => void; onStartEvent: () => void;
+  onOpenTasks: () => void; onAdd: () => void;
+}) {
+  return (
+    <section className="next-up" aria-label="Next up">
+      {pick.kind === 'none'
+        ? <>
+            <p className="next-up-empty">Nothing planned</p>
+            <button type="button" className="link next-up-add" onClick={onAdd}>Add a task</button>
+          </>
+        : <>
+            <p className="next-up-eyebrow">Next up</p>
+            <p className="next-up-title">{pick.kind === 'event' ? pick.event.title : pick.task.description}</p>
+            {pick.kind === 'event' && <p className="next-up-time muted small">{eventTime(pick.event.start)}</p>}
+            <button type="button" className="next-up-start" onClick={() => {
+              if (pick.kind === 'event') return onStartEvent();
+              // An overlay row has no live TaskView to edit; the Tasks tab is its detail instead.
+              return pick.task.task ? onStartTask(pick.task.task) : onOpenTasks();
+            }}>Start</button>
+          </>}
+      <button type="button" className="link next-up-more" onClick={onOpenTasks}>{moreText}</button>
+    </section>
+  );
 }
 
 /**

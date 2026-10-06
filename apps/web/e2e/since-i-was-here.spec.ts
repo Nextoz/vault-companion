@@ -64,6 +64,8 @@ test('an older snapshot lists exactly the new items, and it stays closed until s
   await page.goto('/');
 
   const pane = page.getByRole('region', { name: 'Since I was here' });
+  // UX8: the pane is one summary line until it is expanded.
+  await pane.getByRole('button', { name: /^Since I was here/ }).click();
   await expect(pane.locator('.siwh-line')).toHaveText([
     '3 events in triage', 'Learning opportunities \u00b7 3 new findings', 'New morning brief', '2 new explained papers',
   ]);
@@ -76,5 +78,7 @@ test('an older snapshot lists exactly the new items, and it stays closed until s
 
   api.triage = { ...api.triage, cards: [card(4, 'Synthetic event four', '2026-10-04T17:00:00+02:00'), ...cards] };
   await page.reload();
-  await expect(page.getByRole('region', { name: 'Since I was here' }).locator('.siwh-line')).toHaveText(['1 event in triage']);
+  const reopened = page.getByRole('region', { name: 'Since I was here' });
+  await reopened.getByRole('button', { name: /^Since I was here/ }).click();
+  await expect(reopened.locator('.siwh-line')).toHaveText(['1 event in triage']);
 });

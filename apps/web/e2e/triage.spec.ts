@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
 
 test('Today indicator → real stack and details → go → Calendar pending → undo', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-09-27T12:00:00Z') });
@@ -14,8 +15,8 @@ test('Today indicator → real stack and details → go → Calendar pending →
   ] };
   await api.install(page);
   await page.goto('/');
-  // UX2: the events line on Today opens the Scouts tab, where triage now lives.
-  await page.getByRole('button', { name: '1 new event' }).click();
+  // UX8: event triage lives on the Scouts tab (the old Today events line is gone; Needs you still surfaces pending decisions).
+  await goTo(page, 'Scouts');
   await page.getByRole('button', { name: '1 new event' }).click();
   const dialog = page.getByRole('dialog', { name: 'Event triage stack' });
   await expect(dialog.getByText('Event feed from 2026-09-25T06:50:00+02:00')).toBeVisible();
@@ -54,8 +55,8 @@ test('a decision made while the previous one is still saving is kept, and Undo t
   api.commandMode = 'hold';
   await api.install(page);
   await page.goto('/');
-  // UX2: the events line on Today opens the Scouts tab, where triage now lives.
-  await page.getByRole('button', { name: '2 new events' }).click();
+  // UX8: event triage lives on the Scouts tab (see the first test).
+  await goTo(page, 'Scouts');
   await page.getByRole('button', { name: '2 new events' }).click();
   const dialog = page.getByRole('dialog', { name: 'Event triage stack' });
   await dialog.getByRole('button', { name: /^Skip/ }).click();
@@ -84,8 +85,8 @@ test('check-ins are extra, attended undo works, summaries and both Go overlap so
   api.triage = { ...api.triage, feedState: 'ok', generatedAt: '2026-09-27T06:50:00+02:00', cards,
     checkins: [{ eventId: 'eeeeeeeeeeeeeeeeeeee', title: 'Synthetic past meetup', start: '2026-09-25T17:00:00+02:00' }] };
   await api.install(page); await page.goto('/');
-  // UX2: the events line on Today opens the Scouts tab, where triage now lives.
-  await page.getByRole('button', { name: '11 new events' }).click();
+  // UX8: event triage lives on the Scouts tab (see the first test).
+  await goTo(page, 'Scouts');
   await page.getByRole('button', { name: '11 new events' }).click();
   const dialog = page.getByRole('dialog', { name: 'Event triage stack' });
   await expect(dialog.getByRole('region', { name: 'Event check-in' })).toBeVisible();

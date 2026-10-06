@@ -14,7 +14,7 @@ test('Dashboard mounts Weather with attribution, model comparison and touch/keyb
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
-  await goTo(page, 'Today');
+  await goTo(page, 'Board');
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
   const weather = dashboard.getByRole('article', { name: 'Weather', exact: true });
   await expect(weather.locator('.dash-chip')).toHaveText('Live');
@@ -57,7 +57,7 @@ test('partial comparison failure is labelled single-model, not a made-up agreeme
   api.weather = sampleWeather(true);
   await api.install(page);
   await page.goto('/');
-  await goTo(page, 'Today');
+  await goTo(page, 'Board');
   const weather = page.getByRole('region', { name: 'Dashboard' }).getByRole('article', { name: 'Weather' });
   await expect(weather).toContainText('one model unavailable');
   await expect(weather).toContainText('One model covers this window');
@@ -91,7 +91,7 @@ test('unavailable weather stays honest on Dashboard and Today', async ({ page })
   // The honest failure is the line's copy; tapping it opens the same panel that scrolls its detail.
   await page.getByRole('button', { name: /No weather model returned usable forecast points/ }).click();
   await expect(page.getByRole('region', { name: 'This morning weather' })).toContainText('No weather model returned usable forecast points.');
-  await goTo(page, 'Today');
+  await goTo(page, 'Board');
   const weather = page.getByRole('region', { name: 'Dashboard' }).getByRole('article', { name: 'Weather' });
   await expect(weather.locator('.dash-chip')).toHaveText('Unavailable');
   await expect(weather).toContainText('Weather is unavailable.');
