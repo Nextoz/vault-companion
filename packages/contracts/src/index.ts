@@ -467,6 +467,16 @@ export const ErrorCode = z.enum([
   'refused:daily-template-missing',
   /** Undo: more than one compare page (250 commits) since the completion (ADR-0013). Undo it in Obsidian. */
   'refused:undo-expired',
+  /** ADR-0057: the note is under Health/ or Journal/, which Ask Jev never reads. */
+  'jev-excluded-path',
+  /** ADR-0057: the note is over the Jev state budget; v1 refuses rather than truncates. */
+  'note-too-long',
+  /** ADR-0057: no TYPESAFE_API_KEY, or the TypeSafe call failed/timed out. */
+  'jev-unavailable',
+  /** ADR-0057: the per-day Ask Jev call budget in the Worker is spent. */
+  'jev-rate-limited',
+  /** ADR-0057: TypeSafe answered in a shape this app cannot read. */
+  'jev-bad-answer',
   'operation-id-reused',
   'dedupe-unknown',
   /** POST's X-VC-Account differs from the authenticated identity (review A7). Not retryable. */
@@ -893,6 +903,64 @@ export function decodeNoteHeader(value: string | undefined): string | null {
     return null;
   }
 }
+
+// ---- Ask Jev about a note (ADR-0057): typed questions and typed answers, read-only ----
+
+const jevQuestionText = z.string().min(1).max(400);
+const jevLabelText = z.string().min(1).max(120);
+
+export const AskJevYesNoQuestion = z.strictObject({
+  kind: z.literal('yes-no'),
+  question: jevQuestionText,
+});
+export const AskJevChooseQuestion = z.strictObject({
+  kind: z.literal('choose'),
+  question: jevQuestionText,
+  options: z.array(jevLabelText).min(2).max(8),
+});
+export const AskJevRateQuestion = z.strictObject({
+  kind: z.literal('rate'),
+  question: jevQuestionText,
+  levels: z.array(jevLabelText).min(2).max(8),
+});
+export const AskJevQuestion = z.discriminatedUnion('kind', [
+  AskJevYesNoQuestion,
+  AskJevChooseQuestion,
+  AskJevRateQuestion,
+]);
+export type AskJevQuestion = z.infer<typeof AskJevQuestion>;
+
+export const AskJevRequest = z.strictObject({
+  questions: z.array(AskJevQuestion).min(1).max(3),
+});
+export type AskJevRequest = z.infer<typeof AskJevRequest>;
+
+const jevProbability = z.number().min(0).max(1);
+
+export const JevYesNoAnswer = z.strictObject({
+  kind: z.literal('yes-no'),
+  question: z.string(),
+  probability: jevProbability,
+});
+export const JevChooseAnswer = z.strictObject({
+  kind: z.literal('choose'),
+  question: z.string(),
+  choice: z.string(),
+  probabilities: z.record(z.string(), jevProbability),
+});
+export const JevRateAnswer = z.strictObject({
+  kind: z.literal('rate'),
+  question: z.string(),
+  score: z.string(),
+  probabilities: z.record(z.string(), jevProbability),
+});
+export const JevAnswer = z.discriminatedUnion('kind', [JevYesNoAnswer, JevChooseAnswer, JevRateAnswer]);
+export type JevAnswer = z.infer<typeof JevAnswer>;
+
+export const AskJevResponse = z.strictObject({
+  answers: z.array(JevAnswer).max(3),
+});
+export type AskJevResponse = z.infer<typeof AskJevResponse>;
 
 // ---- Event triage (ADR-0024): feed, decisions and applier status, read-only except TriageDecide ----
 

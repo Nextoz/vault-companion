@@ -15,6 +15,8 @@ import {
   WeatherLocationRequest,
   type AiBudgetResponse,
   type AiUsageResponse,
+  type AskJevQuestion,
+  type AskJevResponse,
   type MarketTickerResponse,
   type MorningBriefReadResponse,
   type MorningBriefResponse,
@@ -41,6 +43,7 @@ import {
   type TriageResponse,
   type WeatherResponse,
 } from '@vault-companion/contracts';
+import { AskJevRequest } from '@vault-companion/contracts';
 import { Hono } from 'hono';
 import {
   CalendarEventCreateRequest,
@@ -83,6 +86,8 @@ export interface Services {
   /** Inbox notes (ADR-0022). Optional: without them the routes answer 404. */
   listNotes?(): Promise<NotesResponse | ApiError>;
   readNote?(path: string): Promise<NoteReadResponse | ApiError>;
+  /** Ask Jev about an open note (ADR-0057). Optional: without it the route answers 404. */
+  askJev?(path: string, questions: readonly AskJevQuestion[]): Promise<AskJevResponse | ApiError>;
   /** Dashboard (DASH1). Optional: without them the routes answer 404. */
   readDashboard?(range: DashboardRange): Promise<DashboardResponse | ApiError>;
   readMarketTicker?(): Promise<MarketTickerResponse | ApiError>;
@@ -128,6 +133,10 @@ export function statusFor(code: ErrorCode): number {
   if (code === 'not-found') return 404;
   if (code === 'upstream-unavailable') return 503;
   if (code === 'calendar-write-unavailable' || code === 'google-reauth-needed' || code === 'google-scope-mismatch') return 503;
+  if (code === 'jev-unavailable') return 503;
+  if (code === 'jev-bad-answer') return 502;
+  if (code === 'jev-rate-limited') return 429;
+  if (code === 'jev-excluded-path' || code === 'note-too-long') return 422;
   if (code.startsWith('refused:')) return 422;
   return 409; // conflict:*, operation-id-reused, dedupe-unknown
 }
@@ -143,7 +152,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | AskJevResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -470,6 +479,43 @@ export function createApp(deps: AppDeps) {
     }
     if (result.status === 'refused') meta.errorCode = `note:${result.code}`;
     meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Ask Jev (ADR-0057): the note path still rides in the same header; the body carries only the typed questions.
+  // This is a read-only call, but it spends money, so it uses the same origin/account/JSON guards as other POSTs.
+  app.post('/api/notes/ask-jev', async (c) => {
+    const ask = deps.services.askJev;
+    if (!ask) return c.json(err('invalid', 'not found'), 404);
+    if (c.req.header('Origin') !== deps.appOrigin || c.req.header('X-VC-Request') !== '1') {
+      return c.json(err('forbidden', 'request origin not allowed'), 403);
+    }
+    if (!(c.req.header('Content-Type') ?? '').toLowerCase().startsWith('application/json')) {
+      return c.json(err('forbidden', 'JSON required'), 403);
+    }
+    if (c.req.header('X-VC-Account') !== c.get('identity').accountKey) {
+      return c.json(err('account-mismatch', 'this action was saved under a different sign-in'), 409);
+    }
+    const path = decodeNoteHeader(c.req.header(NOTE_HEADER));
+    if (path === null) return c.json(err('invalid', 'invalid note path'), 400);
+    const text = await c.req.text();
+    if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return c.json(err('invalid', 'body too large'), 400);
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      return c.json(err('invalid', 'body is not JSON'), 400);
+    }
+    const parsed = AskJevRequest.safeParse(raw);
+    if (!parsed.success) return c.json(err('invalid', 'invalid questions'), 400);
+    const meta = c.get('logMeta');
+    meta.operationId = deps.newRequestId?.() ?? crypto.randomUUID();
+    meta.commandType = `jev:${parsed.data.questions.map((question) => question.kind).join(',')}`;
+    const result = await ask(path, parsed.data.questions);
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
     return c.json(result);
   });
 
