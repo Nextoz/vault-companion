@@ -68,7 +68,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-0. **Order (owner 2026-10-06, `.agent/owner-instructions.md`):** DEPLOY1 second review + merge (clone `deploy1`, candidate committed, fix round pending) -> UX9 (clone `ux9`, brief only) -> MB3 (ADR schemaVersion 2). Workers: Codex gpt-6.1-sol default, GLM for reviews. Items 1-2 below are history.
+0. **Order (owner 2026-10-06, `.agent/owner-instructions.md`):** UX9 (clone `ux9`, brief only) -> MB3 (ADR schemaVersion 2). Workers: Codex gpt-6.1-sol default, GLM for reviews. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the
@@ -110,3 +110,5 @@ DeepSeek $7.76. GLM ~270k/900k.
 - **TL2** (tooling only, owner 2026-10-06): `tools/launch-worker.ps1` gains `-Tier glm -Files a,b` (GLM-5.2 default worker: single-shot `scaleway-patch-worker.ps1` in a Herdr pane; Scaleway has no Responses API for glm-5.2, verified 422, so Codex cannot drive it; no `-Fix`, put the correction in the brief) and `-Tier codex` (Codex subscription via `C:/Dev/tools/vault-companion-codex-home`, UI and Morning Brief work, needs the owner's autoMode rule). `flash`/`pro` (DeepSeek, balance 0) now throw unless `VC_ALLOW_DEEPSEEK=1`. Gotcha: set `FORCE_COLOR=0 NO_COLOR=1` before launching (node colours the Herdr pane count).
 
 - **JN1FIX**: Ask Jev e2e now covers Yes/No + Choose + Rate in one flow and asserts focus returns to the Ask Jev button after Cancel, Escape and a successful answer + Close (`askJevButton` ref in `Notes.tsx`, because WebKit does not focus a tapped button). Presentation only; no Worker change. The DeepSeek worker died on 402 mid-run; Lead finished and ran e2e + `pnpm check`.
+
+- **DEPLOY1** (ADR-0058, high-risk): `ci.yml` gains job `deploy` (main push only, `needs: [check]`, environment `production` with the owner as required reviewer, queued `deploy-production`, SHA-pinned actions) running `wrangler deploy --domain --tag <sha>` (not `versions deploy`: crons), then `tools/smoke-test.mjs` (anonymous `/` and `/api/session` must be 302/403, new version at 100 %, 3 retries) and `wrangler rollback <previous>` on failure (still red; rollback failure is loud; HTTP failure rolls back even when the status API is unreadable). `config.test.ts` guards cron count <= 5 and `workers_dev`/preview URLs off. Reviews: GLM (7 findings, 1 valid) + intent review by hand (qwen: 5 findings, none valid) + Lead read (added `pipefail`, rollback-when-status-unreadable fix). **Owner one-time setup pending** (`docs/deploy.md`: token, `production` environment secrets, required reviewer, ruleset); until then the `deploy` job fails at the approval/secrets step. Unverified: whether `--domain` needs zone permissions on the token (doc says how to add them).
