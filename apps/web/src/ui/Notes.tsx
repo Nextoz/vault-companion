@@ -9,6 +9,7 @@ import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import type { NoteRenderer } from '../note/render.ts';
 import { loadRenderer, REFUSED } from './NoteView.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
+import { AskJevSheet } from './AskJevSheet.tsx';
 
 type Entry = NotesResponse['notes'][number];
 type OkNote = Extract<NoteReadResponse, { status: 'ok' }>;
@@ -61,6 +62,7 @@ export function NoteScreen({ entry, refreshKey, queue, items, accountKey, baseRe
   const res = view.res;
   const [render, setRender] = useState<NoteRenderer | 'failed' | null>(null);
   const [editing, setEditing] = useState(false);
+  const [askingJev, setAskingJev] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -87,6 +89,7 @@ export function NoteScreen({ entry, refreshKey, queue, items, accountKey, baseRe
     <header className="note-head">
       <button type="button" onClick={onBack} aria-label="Back to notes">‹ Back</button>
       <h1 ref={heading} tabIndex={-1}>{entry.title}</h1>
+      {note && accountKey && <button type="button" aria-label="Ask Jev" onClick={() => setAskingJev(true)}>Ask Jev</button>}
       {note && <button type="button" className="primary" disabled={!editable} onClick={() => setEditing(true)}>Edit</button>}
     </header>
     <CopyNote view={view} />
@@ -99,6 +102,8 @@ export function NoteScreen({ entry, refreshKey, queue, items, accountKey, baseRe
       : <article className="note-body" data-testid="note-body" dangerouslySetInnerHTML={{ __html: html }} />}
     {editing && note && accountKey && baseRevision &&
       <NoteEditSheet note={note} title={entry.title} queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={() => setEditing(false)} />}
+    {askingJev && note && accountKey &&
+      <AskJevSheet path={note.path} accountKey={accountKey} onClose={() => setAskingJev(false)} />}
   </section>;
 }
 
