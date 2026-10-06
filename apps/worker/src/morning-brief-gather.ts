@@ -41,6 +41,8 @@ export interface MorningBriefCandidates {
   readonly weatherWindows: WeatherRunWindow[];
   /** Names of the readers that failed (ApiError or throw); the other slots still hold their values. */
   readonly unavailable: string[];
+  /** Per-reader reason for `unavailable`: the `ApiError.code` enum string, or `threw` for an exception. Names match `unavailable`. */
+  readonly unavailableCodes: Record<string, string>;
 }
 
 export interface MorningBriefGatherDeps {
@@ -189,15 +191,15 @@ export function toWeatherWindows(models: readonly WeatherModelSeries[], briefDay
 
 // ---- Gatherer ----
 
-type Settled<T> = { readonly ok: true; readonly value: T } | { readonly ok: false };
+type Settled<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly code: string };
 
-/** Invoke a reader exactly once; an ApiError or a throw is a failure, never a rethrow. */
+/** Invoke a reader exactly once; an ApiError or a throw is a failure, never a rethrow. The failure keeps only a fixed code. */
 async function settle<T>(read: () => Promise<T | ApiError>): Promise<Settled<T>> {
   try {
     const value = await read();
-    return isApiError(value) ? { ok: false } : { ok: true, value };
+    return isApiError(value) ? { ok: false, code: value.code } : { ok: true, value };
   } catch {
-    return { ok: false };
+    return { ok: false, code: 'threw' };
   }
 }
 
@@ -218,19 +220,20 @@ export async function gatherCandidates(deps: MorningBriefGatherDeps): Promise<Mo
   ]);
 
   const unavailable: string[] = [];
+  const unavailableCodes: Record<string, string> = {};
   const todos = [...(tasks.ok ? toBriefTodos(tasks.value.allOpen) : []), ...(mail.ok ? toMailTodos(mail.value) : [])];
-  if (!tasks.ok) unavailable.push('tasks');
+  if (!tasks.ok) { unavailable.push('tasks'); unavailableCodes.tasks = tasks.code; }
   const events = calendar.ok ? [...calendar.value] : [];
   const metrics = health.ok ? toHealthMetrics(health.value.days, deps.day) : [];
-  if (!health.ok) unavailable.push('health');
+  if (!health.ok) { unavailable.push('health'); unavailableCodes.health = health.code; }
   const trainingRecent = training.ok && training.value.status === 'ok' ? recentTraining(training.value.rows, deps.day) : { count: 0, dates: [] };
-  if (!training.ok) unavailable.push('training');
+  if (!training.ok) { unavailable.push('training'); unavailableCodes.training = training.code; }
   const weatherWindows = weather.ok && weather.value.status === 'ok' ? toWeatherWindows(weather.value.projection.models, deps.day, timeZone) : [];
-  if (!weather.ok) unavailable.push('weather');
+  if (!weather.ok) { unavailable.push('weather'); unavailableCodes.weather = weather.code; }
   const moodSnapshot = mood.ok ? latestMood(mood.value) : null;
-  if (!mood.ok) unavailable.push('mood');
-  if (!calendar.ok) unavailable.push('calendar');
-  if (!mail.ok) unavailable.push('mail');
+  if (!mood.ok) { unavailable.push('mood'); unavailableCodes.mood = mood.code; }
+  if (!calendar.ok) { unavailable.push('calendar'); unavailableCodes.calendar = calendar.code; }
+  if (!mail.ok) { unavailable.push('mail'); unavailableCodes.mail = mail.code; }
 
-  return { todos, events, metrics, mood: moodSnapshot, trainingRecent, weatherWindows, unavailable };
+  return { todos, events, metrics, mood: moodSnapshot, trainingRecent, weatherWindows, unavailable, unavailableCodes };
 }

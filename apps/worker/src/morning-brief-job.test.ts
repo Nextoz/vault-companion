@@ -28,6 +28,7 @@ const candidates = (over: Partial<MorningBriefCandidates> = {}): MorningBriefCan
   trainingRecent: { count: 0, dates: [] },
   weatherWindows: [],
   unavailable: [],
+  unavailableCodes: {},
   ...over,
 });
 
@@ -280,5 +281,17 @@ describe('morning brief job (ADR-0046)', () => {
     expect(logged).not.toContain(sent[0]!.subject);
     expect(logged).not.toContain('free block(s)');
     expect(logged).not.toContain(TODO_TEXT);
+  });
+
+  it('records the fixed per-reader codes on the committed run, and only codes', async () => {
+    const store = await InMemoryStore.create({});
+    const logs = await run(store, {
+      gather: async () => candidates({
+        unavailable: ['calendar', 'mail'],
+        unavailableCodes: { calendar: 'google-reauth-needed', mail: 'upstream-unavailable' },
+      }),
+    });
+    expect(logs).toMatchObject([{ status: 200, unavailableCodes: { calendar: 'google-reauth-needed', mail: 'upstream-unavailable' } }]);
+    expect(JSON.stringify(logs)).not.toContain(TODO_TEXT);
   });
 });
