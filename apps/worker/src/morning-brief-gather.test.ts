@@ -13,6 +13,7 @@ import type {
   WeatherPoint,
   WeatherResponse,
 } from '@vault-companion/contracts';
+import { InMemoryStore } from '@vault-companion/domain/testing';
 import {
   gatherCandidates,
   latestMood,
@@ -23,6 +24,7 @@ import {
   toWeatherWindows,
   type MorningBriefGatherDeps,
 } from './morning-brief-gather.ts';
+import { createMoodReader } from './mood-reader.ts';
 
 const DAY = '2026-06-15';
 const TZ = 'Europe/Copenhagen';
@@ -242,6 +244,15 @@ describe('gatherCandidates', () => {
     readCalendar: async () => [],
     readMail: async () => [],
     ...over,
+  });
+
+  it('uses the Daily-note mood reader output for the state-line snapshot', async () => {
+    const note = ['---', `date: ${DAY}`, 'mood: -2', 'energy: 1', 'sleep: 6.5', 'checkin_at: 2026-06-15T07:00:00.000Z', '---', '', 'Synthetic body', ''].join('\n');
+    const store = await InMemoryStore.create({ [`Journal/Daily/${DAY}.md`]: note });
+    const result = await gatherCandidates(deps({ readMood: () => createMoodReader({ store }).readMood(DAY) }));
+    expect(result.mood).toEqual({ mood: -2, energy: 1, sleep: 6.5 });
+    expect(result.unavailable).toEqual([]);
+    expect(result.unavailableCodes).toEqual({});
   });
 
   it('assembles every slot from the injected readers', async () => {

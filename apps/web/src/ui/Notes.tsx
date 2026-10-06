@@ -63,6 +63,8 @@ export function NoteScreen({ entry, refreshKey, queue, items, accountKey, baseRe
   const [render, setRender] = useState<NoteRenderer | 'failed' | null>(null);
   const [editing, setEditing] = useState(false);
   const [askingJev, setAskingJev] = useState(false);
+  // WebKit (iOS) does not focus a button on tap, so the sheet cannot find its invoker via activeElement: refocus by ref.
+  const askJevButton = useRef<HTMLButtonElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -89,7 +91,7 @@ export function NoteScreen({ entry, refreshKey, queue, items, accountKey, baseRe
     <header className="note-head">
       <button type="button" onClick={onBack} aria-label="Back to notes">‹ Back</button>
       <h1 ref={heading} tabIndex={-1}>{entry.title}</h1>
-      {note && accountKey && <button type="button" aria-label="Ask Jev" onClick={() => setAskingJev(true)}>Ask Jev</button>}
+      {note && accountKey && <button type="button" ref={askJevButton} aria-label="Ask Jev" onClick={() => setAskingJev(true)}>Ask Jev</button>}
       {note && <button type="button" className="primary" disabled={!editable} onClick={() => setEditing(true)}>Edit</button>}
     </header>
     <CopyNote view={view} />
@@ -103,7 +105,7 @@ export function NoteScreen({ entry, refreshKey, queue, items, accountKey, baseRe
     {editing && note && accountKey && baseRevision &&
       <NoteEditSheet note={note} title={entry.title} queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={() => setEditing(false)} />}
     {askingJev && note && accountKey &&
-      <AskJevSheet path={note.path} accountKey={accountKey} onClose={() => setAskingJev(false)} />}
+      <AskJevSheet path={note.path} accountKey={accountKey} onClose={() => { setAskingJev(false); queueMicrotask(() => askJevButton.current?.focus()); }} />}
   </section>;
 }
 

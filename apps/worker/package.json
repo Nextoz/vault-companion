@@ -13,6 +13,7 @@
     "@vault-companion/contracts": "workspace:*",
     "@vault-companion/domain": "workspace:*",
     "@vault-companion/github": "workspace:*",
+    "@vault-companion/vault-markdown": "workspace:*",
     "hono": "^4.13.8",
     "jose": "^6.2.12"
   },

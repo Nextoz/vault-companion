@@ -15,6 +15,14 @@ export interface MoodCheckinEffect {
   readonly kind: 'mood-checkin';
 }
 
+/** The four frontmatter value spans parsed back out of a Daily note (ADR-0036). */
+export interface MoodCheckinRead {
+  readonly mood: number;
+  readonly energy: number;
+  readonly sleep: number;
+  readonly checkinAt: string;
+}
+
 export interface DailyNoteEffect {
   readonly kind: 'daily-note-rendered';
 }
@@ -65,6 +73,51 @@ function validInput(input: MoodCheckinInput): boolean {
     isHalfStep(input.sleep) &&
     isValidInstant(input.checkinAt)
   );
+}
+
+/**
+ * The inverse read of `applyMoodCheckin`: the four top-level check-in spans in a Daily note, or `null` when the note
+ * holds no valid check-in (missing/blank fields, ambiguous keys, unsupported values, or a time-only `checkin_at`).
+ * Read-only and never throws; it only recognises the exact value shapes `applyMoodCheckin` writes.
+ */
+export function parseMoodCheckin(text: string, date: string): MoodCheckinRead | null {
+  if (!isValidDate(date)) return null;
+  const parts = splitNote(text);
+  if ('ok' in parts || parts.frontmatter === '') return null;
+  const lines = parts.frontmatter.split(parts.eol);
+  const closeIndex = lines.findIndex((line, index) => index > 0 && DELIM.test(line));
+  if (closeIndex < 0) return null;
+  const targets = findTargets(lines, closeIndex);
+
+  const counts = new Map<TargetKey, number>();
+  for (const target of targets) counts.set(target.key, (counts.get(target.key) ?? 0) + 1);
+  if (TARGET_KEYS.some((key) => (counts.get(key) ?? 0) !== 1)) return null;
+
+  const byKey = new Map<TargetKey, TargetLine>();
+  for (const target of targets) byKey.set(target.key, target);
+
+  const values: Record<TargetKey, string> = {
+    mood: '',
+    energy: '',
+    sleep: '',
+    checkin_at: '',
+  };
+  for (const key of TARGET_KEYS) {
+    const target = byKey.get(key)!;
+    if (hasFollowingIndentedLine(target.index, closeIndex, lines)) return null;
+    values[key] = target.value.trim();
+    if (values[key] === '') return null;
+  }
+
+  const mood = Number(values.mood);
+  const energy = Number(values.energy);
+  const sleep = Number(values.sleep);
+  const checkinAt = unquote(values.checkin_at) ?? values.checkin_at;
+  if (!SIGNED_INTEGER.test(values.mood) || !Number.isInteger(mood) || mood < -3 || mood > 3) return null;
+  if (!SIGNED_INTEGER.test(values.energy) || !Number.isInteger(energy) || energy < -3 || energy > 3) return null;
+  if (!NUMBER.test(values.sleep) || !Number.isFinite(sleep) || sleep < 0 || sleep > 24 || !isHalfStep(sleep)) return null;
+  if (!isValidInstant(checkinAt)) return null;
+  return { mood, energy, sleep, checkinAt };
 }
 
 function unquote(value: string): string | undefined {
