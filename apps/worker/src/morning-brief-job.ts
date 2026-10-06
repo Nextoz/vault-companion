@@ -115,10 +115,16 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
       unavailable = [...candidates.unavailable];
       unavailableCodes = { ...candidates.unavailableCodes };
       const meetings = findClashes(candidates.events);
+      const timedMeetings = meetings.filter((meeting) => !meeting.allDay);
       const input = buildWriterInput({
         day: date,
         blocks: unavailable.includes('calendar') ? [] : freeBlocks(candidates.events, date, deps.timeZone),
-        calendar: { count: meetings.length, firstStart: meetings[0]?.start ?? null, clashCount: meetings.filter((meeting) => meeting.clash).length },
+        calendar: {
+          count: timedMeetings.length,
+          allDayCount: meetings.length - timedMeetings.length,
+          firstStart: timedMeetings[0]?.start ?? null,
+          clashCount: timedMeetings.filter((meeting) => meeting.clash).length,
+        },
         unavailableReasons: unavailableCodes,
         todos: candidates.todos,
         state: stateLine(candidates.metrics, candidates.mood),

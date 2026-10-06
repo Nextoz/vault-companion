@@ -239,7 +239,7 @@ describe('morning brief job (ADR-0046)', () => {
     const logs = await run(store, { mailer });
     expect(sent).toHaveLength(1);
     expect(sent[0]!.subject).toBe(`Morning Brief - ${DATE}`);
-    expect(sent[0]!.text).toContain(`${DATE}: 0 meeting(s).`);
+    expect(sent[0]!.text).toContain(`${DATE}: no meetings.`);
     expect(logs).toMatchObject([{ status: 200, operationId: await morningBriefOperationId(DATE) }]);
   });
 
@@ -318,7 +318,7 @@ it.each([false, true])('writes three sorted meetings with clashes; model=%s', as
     ['SYNTHETIC-A', true, 'SYNTHETIC-B'], ['SYNTHETIC-B', true, 'SYNTHETIC-A'], ['SYNTHETIC-C', false, undefined],
   ]);
   expect(file.brief.meetings[0]?.link).toContain('https://calendar.google.com/');
-  expect(file.brief.dayLine).toContain('3 meeting(s), first starts 2026-06-15T09:00:00.000Z');
+  expect(file.brief.dayLine).toBe(`${DATE}: 3 meetings, first at 11:00, 2 clashes.`);
   expect(file.brief.dayLine).not.toMatch(/open/i);
   expect(prompt).not.toContain('SYNTHETIC-');
   if (model) expect(prompt).toContain('Clashing meetings: 2');
@@ -333,7 +333,7 @@ it('writes a busy day with six meetings and two separate clash groups', async ()
   ] }) });
   const brief = parseBriefFile(store.text(MORNING_BRIEF_PATH))!.brief;
   expect(brief.meetings.map((m) => m.clash)).toEqual([true, true, true, true, false, false]);
-  expect(brief.dayLine).toContain('6 meeting(s)');
+  expect(brief.dayLine).toBe(`${DATE}: 6 meetings, first at 09:00, 4 clashes.`);
   expect(brief.dayLine).not.toMatch(/open/i);
 });
 
@@ -357,7 +357,29 @@ it('an empty available calendar has zero meetings and a real free block', async 
   await run(store);
   const file = parseBriefFile(store.text(MORNING_BRIEF_PATH))!;
   expect(file.brief.meetings).toEqual([]);
-  expect(file.brief.dayLine).toContain('0 meeting(s)');
+  expect(file.brief.dayLine).toBe(`${DATE}: no meetings.`);
   expect(file.brief.gaps).toHaveLength(1);
   expect(file.unavailableReasons).toEqual({});
+});
+
+it.each([false, true])('counts all-day events separately and takes the first timed start; timed=%s', async (timed) => {
+  const store = await InMemoryStore.create({});
+  const events = [
+    { ...meeting('SYNTHETIC-ALL-DAY-A', 0, 23), allDay: true },
+    { ...meeting('SYNTHETIC-ALL-DAY-B', 0, 23), allDay: true },
+    ...(timed ? [meeting('SYNTHETIC-TIMED', 7, 8)] : []),
+  ];
+  let prompt = '';
+  await run(store, { gather: async () => candidates({ events }), chat: { chat: async ({ user }) => {
+    prompt = user;
+    return { kind: 'ok', text: JSON.stringify({ todos: [{ id: 0, firstStep: 'Start.' }], encouragement: 'Go.' }) };
+  } } });
+  const file = parseBriefFile(store.text(MORNING_BRIEF_PATH))!;
+  const expected = timed ? `${DATE}: 1 meeting, first at 09:00. +2 all-day.` : `${DATE}: no meetings. +2 all-day.`;
+  expect(file.source).toBe('model');
+  expect(file.brief.dayLine).toBe(expected);
+  expect(file.brief.meetings).toHaveLength(events.length);
+  expect(prompt).toContain(expected);
+  expect(prompt).toContain('Clashing meetings: 0');
+  expect(prompt).not.toContain('SYNTHETIC-');
 });

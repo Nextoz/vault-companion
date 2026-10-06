@@ -165,3 +165,31 @@ it('computes whole overdue days only for past due dates, in model and fallback b
     expect(brief.todos.filter((t) => t.text !== 'Past').every((t) => t.overdueDays === undefined)).toBe(true);
   }
 });
+
+describe('calendar day line', () => {
+  it.each([
+    { day: DAY, count: 0, allDayCount: 0, firstStart: null, clashCount: 0, sentence: 'no meetings.' },
+    { day: DAY, count: 1, allDayCount: 0, firstStart: `${DAY}T07:30:00Z`, clashCount: 0, sentence: '1 meeting, first at 09:30.' },
+    { day: DAY, count: 3, allDayCount: 0, firstStart: `${DAY}T07:30:00Z`, clashCount: 1, sentence: '3 meetings, first at 09:30, 1 clash.' },
+    { day: DAY, count: 3, allDayCount: 2, firstStart: `${DAY}T07:30:00Z`, clashCount: 2, sentence: '3 meetings, first at 09:30, 2 clashes. +2 all-day.' },
+    { day: DAY, count: 0, allDayCount: 2, firstStart: null, clashCount: 0, sentence: 'no meetings. +2 all-day.' },
+    { day: '2026-01-15', count: 1, allDayCount: 0, firstStart: '2026-01-15T08:30:00Z', clashCount: 0, sentence: '1 meeting, first at 09:30.' },
+    { day: '2026-03-29', count: 1, allDayCount: 0, firstStart: '2026-03-29T07:30:00Z', clashCount: 0, sentence: '1 meeting, first at 09:30.' },
+    { day: '2026-10-25', count: 1, allDayCount: 0, firstStart: '2026-10-25T08:30:00Z', clashCount: 0, sentence: '1 meeting, first at 09:30.' },
+  ])('formats $day: $sentence for both sources', ({ day, sentence, ...calendar }) => {
+    const input: WriterInput = { ...makeInput(), day, calendar };
+    const parsed = parseWriterOutput(JSON.stringify(draft({ dayLine: undefined })), input);
+    expect(parsed).not.toBeNull();
+    expect(toBrief(parsed!, input).dayLine).toBe(`${day}: ${sentence}`);
+    expect(fallbackBrief(input).dayLine).toBe(`${day}: ${sentence}`);
+    expect(input.calendar?.firstStart).toBe(calendar.firstStart);
+  });
+
+  it('keeps unavailable wording and does not request a model dayLine', () => {
+    const input: WriterInput = { ...makeInput(), unavailable: ['calendar'], unavailableReasons: { calendar: 'threw' } };
+    const parsed = parseWriterOutput(JSON.stringify(draft({ dayLine: undefined })), input)!;
+    expect(toBrief(parsed, input).dayLine).toBe(`${DAY}: Calendar unavailable (threw).`);
+    expect(fallbackBrief(input).dayLine).toBe(`${DAY}: Calendar unavailable (threw).`);
+    expect(buildWriterPrompt(input).user).not.toContain('"dayLine"');
+  });
+});
