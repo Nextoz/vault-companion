@@ -47,8 +47,8 @@ export function briefLines(file: MorningBriefResponse | null, today: string): Br
   if (file.brief.meetings !== undefined) {
     lines.push({ id: 'today', text: 'Today', heading: true, marker: false, todo: false });
     briefMeetingRows(file).forEach((row, i) => lines.push({ ...row, id: `meeting-${i}`, marker: false, todo: false }));
-    briefUnavailableLines(file).forEach((text, i) => lines.push({ id: `unavailable-${i}`, text, marker: false, todo: false }));
   }
+  briefUnavailableLines(file).forEach((text, i) => lines.push({ id: `unavailable-${i}`, text, marker: false, todo: false }));
   file.brief.gaps.forEach((gap, i) => {
     if (file.unavailable.includes('calendar')) return;
     if (gap.suggestion === undefined) return;
