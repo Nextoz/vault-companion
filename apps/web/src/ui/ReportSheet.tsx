@@ -1,3 +1,4 @@
+import { SheetHeader } from './SheetHeader.tsx';
 import { useRef, useState } from 'react';
 import { reportFeedback } from '../commands.ts';
 import type { PendingQueue } from '../queue/queue.ts';
@@ -70,7 +71,7 @@ export function ReportSheet({ queue, accountKey, baseRevision, screen, onClose }
     // A stray tap outside must not throw away typed text; Cancel still closes explicitly.
     <div className="sheet-backdrop" role="presentation" onClick={() => text.length === 0 && onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Report" onClick={(e) => e.stopPropagation()}>
-        <h2>Report</h2>
+        <SheetHeader title="Report" onClose={onClose} closeLabel="Cancel" />
         <div className="segmented" role="group" aria-label="Kind">
           <button type="button" aria-pressed={kind === 'bug'} onClick={() => setKind('bug')}>Bug</button>
           <button type="button" aria-pressed={kind === 'wish'} onClick={() => setKind('wish')}>Wish</button>
@@ -87,7 +88,6 @@ export function ReportSheet({ queue, accountKey, baseRevision, screen, onClose }
         {!connected && <p className="muted small">Connect once to set up this device before reporting.</p>}
         {error && <p className="error" role="alert">{error}</p>}
         <div className="sheet-buttons">
-          <button type="button" onClick={onClose}>Cancel</button>
           <button type="button" className="primary" disabled={saving || !ready} onClick={() => void save()}>Save</button>
         </div>
       </div>

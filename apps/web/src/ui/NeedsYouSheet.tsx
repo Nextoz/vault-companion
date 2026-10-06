@@ -1,3 +1,4 @@
+import { SheetHeader } from './SheetHeader.tsx';
 // NY1: the "Needs you" sheet - the rows only the owner can decide. Each row opens an existing screen; an Active
 // Work row opens that item's existing edit sheet in place. No new command and no write path of its own.
 import { useEffect, useRef, useState } from 'react';
@@ -30,7 +31,7 @@ export function NeedsYouSheet({ rows, queue, accountKey, onNavigate, onDismiss, 
     if (!dismissed.current) return;
     dismissed.current = false;
     const next = dialog.current?.querySelector<HTMLElement>('.needs-you-row:not(:disabled)')
-      ?? dialog.current?.querySelector<HTMLElement>('.sheet-buttons button:not(:disabled)');
+      ?? dialog.current?.querySelector<HTMLElement>('.sheet-header button:not(:disabled)');
     next?.focus();
   }, [rows]);
 
@@ -61,7 +62,7 @@ export function NeedsYouSheet({ rows, queue, accountKey, onNavigate, onDismiss, 
           if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
           else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
         }}>
-        <h2>Needs you</h2>
+        <SheetHeader title="Needs you" onClose={onClose} />
         {rows.length === 0
           ? <p className="muted">Nothing needs you</p>
           : (
@@ -80,9 +81,6 @@ export function NeedsYouSheet({ rows, queue, accountKey, onNavigate, onDismiss, 
               ))}
             </ul>
           )}
-        <div className="sheet-buttons">
-          <button type="button" onClick={onClose}>Close</button>
-        </div>
       </div>
     </div>
   );

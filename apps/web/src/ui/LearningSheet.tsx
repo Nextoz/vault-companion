@@ -1,3 +1,4 @@
+import { SheetHeader } from './SheetHeader.tsx';
 import { LearningSession, type LearningResponse } from '@vault-companion/contracts';
 import { useRef, useState } from 'react';
 import { getLearning } from '../api.ts';
@@ -44,7 +45,7 @@ export function LearningSheet({ queue, accountKey, baseRevision, onClose, now = 
   };
   return <div className="sheet-backdrop" role="presentation"><form className="sheet learning-sheet" role="dialog" aria-modal="true" aria-label="Add session"
     onSubmit={(e) => { e.preventDefault(); void save(); }}>
-    <h2>Add session</h2>
+    <SheetHeader title="Add session" onClose={onClose} disabled={saving} />
     <label>Paste line<input type="text" value={paste} placeholder="LG | kind | date | min n | score n | topic: text" onChange={(e) => onPasteChange(e.target.value)} /></label>
     {pasteError && <p className="muted small" role="alert">{pasteError}</p>}
     <label>Date<input type="date" required value={draft.date} onChange={(e) => set('date', e.target.value)} /></label>
@@ -59,7 +60,7 @@ export function LearningSheet({ queue, accountKey, baseRevision, onClose, now = 
     <label>Note (optional)<textarea maxLength={280} rows={2} value={draft.note} onChange={(e) => set('note', e.target.value)} /></label>
     {(!accountKey || !baseRevision) && <p>Connect once to set up this device before logging a session.</p>}
     {error && <p className="error" role="alert">{error}</p>}
-    <div className="sheet-buttons"><button type="button" disabled={saving} onClick={onClose}>Close</button>
+    <div className="sheet-buttons">
       <button type="submit" className="primary" disabled={saving || !parsed.success || !accountKey || !baseRevision}>Save</button></div>
   </form></div>;
 }

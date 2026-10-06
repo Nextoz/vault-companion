@@ -73,3 +73,13 @@ export function todayTiles(facts: TodayTileFacts): TodayTile[] {
   if (facts.research !== null) tiles.push({ id: 'research', title: 'Research', text: facts.research, label: facts.research });
   return tiles;
 }
+
+/** Tile identity owns title colour; future ids get a stable hue without changing the grid. */
+export function tileTitleColors(id: string): { '--tile-title-dark': string } {
+  const colors: Record<string, string> = {
+    brief: '#378ADD', needs: '#DD6036', weather: '#BA7517', research: '#1D9E75',
+  };
+  let hash = 0;
+  for (const char of id) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
+  return { '--tile-title-dark': colors[id] ?? `hsl(${hash % 360} 65% 72%)` };
+}

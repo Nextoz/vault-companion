@@ -1,3 +1,4 @@
+import { SheetHeader } from './SheetHeader.tsx';
 // CAL-b: the "Add to Calendar" / "In Calendar" bottom sheet. It writes Google Calendar directly through the API (the
 // vault is never touched): no offline queue, so a failure shows inline instead of replaying later. One operation ID
 // per open, so a repeated send is the same event; the pure decisions live in calendar-sheet.ts.
@@ -96,13 +97,12 @@ export function CalendarSheet({ target, accountKey, onClose, onSaved }: {
       <form className="sheet calendar-sheet" role="dialog" aria-modal="true"
         aria-label={target.linked ? 'In Calendar' : 'Add to Calendar'}
         onSubmit={(e) => { e.preventDefault(); void save(); }}>
-        <h2>{target.linked ? 'In Calendar' : 'Add to Calendar'}</h2>
+        <SheetHeader title={target.linked ? 'In Calendar' : 'Add to Calendar'} onClose={onClose} disabled={saving} closeLabel={target.linked ? 'Close' : 'Cancel'} />
         {error && <p role="alert" className="error">{error}</p>}
         {target.linked ? (
           <>
             <p className="muted small">This item is linked to a Google Calendar event.</p>
             <div className="sheet-buttons">
-              <button type="button" disabled={saving} onClick={onClose}>Close</button>
               <button type="button" className="calendar-remove" disabled={saving || !accountKey} onClick={() => void remove()}>
                 Remove from Calendar
               </button>
@@ -138,7 +138,6 @@ export function CalendarSheet({ target, accountKey, onClose, onSaved }: {
             </label>
             <label>Notes<textarea rows={3} maxLength={NOTES_MAX} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
             <div className="sheet-buttons">
-              <button type="button" disabled={saving} onClick={onClose}>Cancel</button>
               <button type="submit" className="primary" disabled={saving || !accountKey || title.trim() === '' || date === ''}>Save</button>
             </div>
           </>

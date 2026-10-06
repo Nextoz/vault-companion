@@ -1,3 +1,4 @@
+import { tileTitleColors } from './today.ts';
 import { describe, expect, it } from 'vitest';
 import { moreTasksText, selectNextUp, todayTiles, todaysUpcomingEvents, type TodayTileFacts } from './today.ts';
 
@@ -67,5 +68,14 @@ describe('todayTiles', () => {
   it('is data-driven: an extra tile is one more entry, not a layout change', () => {
     const extra = [...todayTiles(facts), { id: 'later', title: 'Later', text: 'Added later', label: 'Added later' }];
     expect(extra.map((tile) => tile.id)).toEqual(['brief', 'needs', 'weather', 'research', 'later']);
+  });
+});
+
+describe('tile title colours', () => {
+  it('assigns four distinct colours by id and stable future hues', () => {
+    expect(['brief', 'needs', 'weather', 'research'].map((id) => tileTitleColors(id)['--tile-title-dark']))
+      .toEqual(['#378ADD', '#DD6036', '#BA7517', '#1D9E75']);
+    expect(tileTitleColors('future')).toEqual(tileTitleColors('future'));
+    expect(tileTitleColors('future')).not.toEqual(tileTitleColors('another'));
   });
 });

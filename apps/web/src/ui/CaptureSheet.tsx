@@ -1,3 +1,4 @@
+import { SheetHeader } from './SheetHeader.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { captureActiveWork, captureNote, captureTask } from '../commands.ts';
 import { DraftKeeper, type DraftStatus, type DraftStore } from '../draft.ts';
@@ -158,6 +159,7 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, defaultK
     // A stray tap outside must not throw away typed text; Cancel still closes explicitly.
     <div className="sheet-backdrop" role="presentation" onClick={() => text.length === 0 && onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Capture" onClick={(e) => e.stopPropagation()}>
+        <SheetHeader title="Capture" onClose={onClose} />
         <div className="segmented" role="group" aria-label="Capture type">
           <button type="button" aria-pressed={kind === 'task'} disabled={taskBlocked !== null} onClick={() => choose('task')}>
             Task
@@ -196,9 +198,7 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, defaultK
               Discard draft
             </button>
           )}
-          <button type="button" onClick={onClose}>
-            Close
-          </button>
+
           <button type="button" className="primary" disabled={!canSave} onClick={() => void save()}>
             Save
           </button>

@@ -1,4 +1,4 @@
-// "This morning" on Today (ADR-0029 Part 2, owner 2026-09-28/29): one tappable panel. Collapsed: a one-line brief.
+// Reading view reached from Research Radar. Collapsed: a one-line brief.
 // Expanded: the day's Reading Brief and the research explanations, each rendered read-only by the scout renderer.
 import type { LinkedNoteResponse, MorningResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
@@ -28,7 +28,7 @@ export function morningSummary(data: MorningResponse): string {
   return parts.join(' · ');
 }
 
-/** `startOpen` renders the panel expanded (the Morning Brief sheet's Reading section). */
+/** `startOpen` renders the panel expanded (Research Radar’s Reading link). */
 export function Morning({ refreshKey, startOpen = false }: { refreshKey: number | null; startOpen?: boolean }) {
   const [result, setResult] = useState<Fetched<MorningResponse> | null>(null);
   const [open, setOpen] = useState(startOpen);

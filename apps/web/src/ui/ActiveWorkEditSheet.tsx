@@ -1,3 +1,4 @@
+import { SheetHeader } from './SheetHeader.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { activeWorkChanges, type ActiveWorkItem } from '../active-work.ts';
 import { editActiveWork } from '../commands.ts';
@@ -43,14 +44,13 @@ export function ActiveWorkEditSheet({ item, queue, accountKey, revision, onClose
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
         else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
       }}>
-      <h2>Edit Active Work</h2>
+      <SheetHeader title="Edit Active Work" onClose={onClose} disabled={saving} closeLabel="Cancel" />
       <label>Name<input value={name} maxLength={500} onChange={(e) => setName(e.target.value)} /></label>
       <label>Next action<input value={next} maxLength={500} onChange={(e) => setNext(e.target.value)} /></label>
       <label>Review date<input type="date" value={review} onChange={(e) => setReview(e.target.value)} /></label>
       <button type="button" disabled={!review} onClick={() => setReview('')}>Clear review date</button>
       {error && <p role="alert" className="error">{error}</p>}
       <div className="sheet-buttons">
-        <button type="button" disabled={saving} onClick={onClose}>Cancel</button>
         <button type="button" className="primary" disabled={!canSave} onClick={() => void save()}>Save</button>
       </div>
     </div>

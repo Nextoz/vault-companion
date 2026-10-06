@@ -1,3 +1,4 @@
+import { Morning } from './Morning.tsx';
 import {
   effectiveRadarDecisions,
   ResearchRadarDecideCommand,
@@ -262,6 +263,7 @@ export function ResearchRadar({ accountKey, refreshKey, blocked, defaultOpen = f
 }) {
   const [read, setRead] = useState<RadarResponse | null>(null);
   const [open, setOpen] = useState(defaultOpen);
+  const [readingOpen, setReadingOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [intents, setIntents] = useState<RadarIntent[]>(() => loadRadarIntents(accountKey));
   const [savingIds, setSavingIds] = useState<ReadonlySet<string>>(new Set());
@@ -492,6 +494,8 @@ export function ResearchRadar({ accountKey, refreshKey, blocked, defaultOpen = f
           Research Radar
         </button>
       </h2>
+      <button type="button" className="link" disabled={blocked} aria-expanded={readingOpen} onClick={() => setReadingOpen((open) => !open)}>Reading</button>
+      {readingOpen && <Morning refreshKey={refreshKey} startOpen />}
       {view && (
         <p className="muted small" data-testid="radar-summary">
           {view.cards.length === 0 ? 'No papers yet' : `${view.cards.length} paper${view.cards.length === 1 ? '' : 's'} ranked this week`}

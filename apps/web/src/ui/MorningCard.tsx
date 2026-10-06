@@ -4,21 +4,21 @@
 // Radar screen); the grid renders the pure `todayTiles` list, so more tiles need no layout change. No new read: the
 // card projects the reads it already holds.
 import type { ActiveWorkResponse, HealthResponse, MorningBriefReadResponse, MorningResponse, RadarResponse, ScoutsResponse, TaskView, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { getActiveWork, getMorning, getMorningBrief, getRadar, getScouts, getTriage, getWeather, type Fetched } from '../api.ts';
 import { lastCopies } from '../lastCopy.ts';
 import { prefs } from '../prefs.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { deriveTriage } from '../triage.ts';
 import { localDate, MoodCard } from './MoodCard.tsx';
-import { Morning } from './Morning.tsx';
+import { SheetHeader } from './SheetHeader.tsx';
 import { NeedsYouSheet } from './NeedsYouSheet.tsx';
 import { liveDismissals, needsYou, needsYouText, sameDismissals, type NeedsYouFacts, type NeedsYouRow, type NeedsYouTarget } from './needs-you.ts';
 import { SinceIWasHere } from './SinceIWasHere.tsx';
 import { sinceIWasHereFacts, type SiwhTarget } from './since-i-was-here.ts';
 import { WeatherMorning } from './WeatherLab.tsx';
 import { checkinDue, isMissingBrief, morningBriefSheet, radarHighlights, researchHighlightsText, weatherLine, type MorningBriefSheetState } from './morning-card.ts';
-import { moreTasksText, selectNextUp, todayTiles, type NextUp, type NextUpEvent } from './today.ts';
+import { moreTasksText, selectNextUp, todayTiles, tileTitleColors, type NextUp, type NextUpEvent } from './today.ts';
 
 export interface MorningCardProps {
   queue: PendingQueue;
@@ -58,6 +58,18 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   const [activeWork, setActiveWork] = useState<Fetched<ActiveWorkResponse> | null>(null);
   const [open, setOpen] = useState<'weather' | null>(null);
   const [checkinOpen, setCheckinOpen] = useState(false);
+  const [today, setToday] = useState(localDate);
+  useEffect(() => {
+    const update = () => setToday(localDate());
+    const timer = window.setInterval(update, 1000);
+    window.addEventListener('focus', update);
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', update);
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, []);
   const [needsOpen, setNeedsOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
   // NY3: device-held dismissals for the Needs you scout rows; copied out of prefs so a dismissal re-renders at once.
@@ -148,7 +160,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
 
   function openSiwh(target: SiwhTarget) {
     if (target === 'health') return onOpenHealth();
-    if (target === 'papers') return setBriefOpen(true);
+    if (target === 'papers') return onOpenRadar();
     onOpenScouts();
   }
 
@@ -159,14 +171,18 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
     setDismissedScouts(next);
   }
 
-  const due = checkinDue(items);
+  const due = checkinDue(items, today);
+  useEffect(() => { if (!due) setCheckinOpen(false); }, [due]);
   return <>
     <SinceIWasHere facts={siwhFacts} onOpen={openSiwh} />
     <section className="group morning-card today-overview" aria-label="Today at a glance">
       <NextUpCard pick={pick} moreText={moreTasksText(moreCount)} onStartTask={onStartTask} onStartEvent={() => onOpenScouts()} onOpenTasks={onOpenTasks} onAdd={onAdd} />
+      {due && (!checkinOpen
+        ? <button type="button" className="checkin-line" onClick={() => setCheckinOpen(true)}>How are you today? Check in</button>
+        : <MoodCard queue={queue} items={items} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked} />)}
       <div className="tile-grid" role="group" aria-label="Today tiles">
         {tiles.map((tile) => (
-          <button key={tile.id} type="button" className={`tile tile-${tile.id}`} aria-label={tile.label} onClick={() => openTile(tile.id)}>
+          <button key={tile.id} type="button" className={`tile tile-${tile.id}`} aria-label={tile.label} style={tileTitleColors(tile.id) as CSSProperties} onClick={(event) => { event.currentTarget.focus(); openTile(tile.id); }}>
             <span className="tile-title">{tile.title}</span>
             <span className="tile-text">{tile.text}</span>
           </button>
@@ -175,11 +191,9 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
       {open === 'weather' && <WeatherMorning refreshKey={refreshKey} accountKey={accountKey} blocked={blocked} />}
     </section>
     {needsOpen && <NeedsYouSheet rows={needsRows} queue={queue} accountKey={accountKey} onNavigate={openNeedsTarget} onDismiss={dismissNeedsRow} onClose={() => setNeedsOpen(false)} />}
-    {briefOpen && <MorningBriefSheet state={briefSheet} refreshKey={refreshKey} onOpenTasks={onOpenTasks}
-      onOpenRadar={onOpenRadar} onClose={() => setBriefOpen(false)} />}
-    {due && !checkinOpen
-      ? <button type="button" className="checkin-line" onClick={() => setCheckinOpen(true)}>How are you today? Check in</button>
-      : <MoodCard queue={queue} items={items} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked} />}
+    {briefOpen && <MorningBriefSheet state={brief === null ? { missing: 'Loading brief…', lines: [] } : brief.kind !== 'ok' ? { missing: 'Brief unavailable. Try Refresh in Status.', lines: [] } : briefSheet} onOpenTasks={onOpenTasks}
+      onClose={() => setBriefOpen(false)} />}
+
   </>;
 }
 
@@ -210,17 +224,10 @@ function NextUpCard({ pick, moreText, onStartTask, onStartEvent, onOpenTasks, on
   );
 }
 
-/**
- * UX7: the Morning Brief sheet. It shows the whole brief (day, state, gaps, to-dos, encouragement) or the "No brief
- * yet" reason, plus a Reading section (the day's reading brief and explanations, the content the old card line opened)
- * and a link to Research Radar. To-dos open Tasks; the Radar link opens the Radar screen. No new read: the card passes
- * its already-loaded brief state, and Reading reuses the existing read-only panel.
- */
-function MorningBriefSheet({ state, refreshKey, onOpenTasks, onOpenRadar, onClose }: {
+/** The brief only; all content uses the reads already held by Today. */
+function MorningBriefSheet({ state, onOpenTasks, onClose }: {
   state: MorningBriefSheetState;
-  refreshKey: number | null;
   onOpenTasks: () => void;
-  onOpenRadar: () => void;
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
@@ -241,21 +248,14 @@ function MorningBriefSheet({ state, refreshKey, onOpenTasks, onOpenRadar, onClos
           if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
           else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
         }}>
-        <h2>Morning Brief</h2>
+        <SheetHeader title="Morning Brief" onClose={onClose} />
         {state.missing !== null
           ? <p className="muted">{state.missing}</p>
           : state.lines.map((row) => (row.todo
             ? <button key={row.id} type="button" className="morning-line morning-brief-line"
                 onClick={() => { onOpenTasks(); onClose(); }}>{row.text}</button>
             : <p key={row.id} className={`morning-line morning-brief-line${row.marker ? ' morning-brief-marker' : ''}`}>{row.text}</p>))}
-        <section className="morning-brief-reading" aria-label="Reading">
-          <h3>Reading</h3>
-          <Morning refreshKey={refreshKey} startOpen />
-          <button type="button" className="link morning-brief-radar" onClick={() => { onOpenRadar(); onClose(); }}>Research Radar</button>
-        </section>
-        <div className="sheet-buttons">
-          <button type="button" onClick={onClose}>Close</button>
-        </div>
+
       </div>
     </div>
   );

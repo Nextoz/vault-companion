@@ -1,3 +1,4 @@
+import { SheetHeader } from './SheetHeader.tsx';
 import { TrainingSession, type TrainingResponse, type TrainingRow } from '@vault-companion/contracts';
 import { useRef, useState } from 'react';
 import { getTraining } from '../api.ts';
@@ -52,7 +53,7 @@ export function TrainingSheet({ queue, accountKey, baseRevision, onClose, edit }
   };
   return <div className="sheet-backdrop" role="presentation"><form className="sheet training-sheet" role="dialog" aria-modal="true" aria-label={edit ? 'Edit session' : 'Log training'}
     onSubmit={(e) => { e.preventDefault(); void save(); }}>
-    <h2>{edit ? 'Edit session' : 'Log training'}</h2>
+    <SheetHeader title={edit ? 'Edit session' : 'Log training'} onClose={onClose} disabled={saving} />
     <div className="segmented" role="group" aria-label="Training type">
       {(['Gym', 'Run'] as const).map((t) => <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)}>{t}</button>)}
     </div>
@@ -74,7 +75,7 @@ export function TrainingSheet({ queue, accountKey, baseRevision, onClose, edit }
     <label>Note (optional)<textarea maxLength={280} rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></label>
     {(!accountKey || !baseRevision) && <p>Connect once to set up this device before logging training.</p>}
     {error && <p className="error" role="alert">{error}</p>}
-    <div className="sheet-buttons"><button type="button" disabled={saving} onClick={onClose}>Close</button>
+    <div className="sheet-buttons">
       <button type="submit" className="primary" disabled={saving || !parsed.success || !accountKey || !baseRevision}>{edit ? 'Save changes' : 'Save'}</button></div>
   </form></div>;
 }
