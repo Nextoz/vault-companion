@@ -68,7 +68,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-0. **Order from the vault Ready Backlog (owner 2026-10-04):** SP phone check (RR3, UX7, SC2, JV1 done). Before that: one MB live proof run with `BRIEF_ANY_HOUR=1`, then day-8 re-run gate. Items 1-2 below are history.
+0. **Order (owner 2026-10-06, `.agent/owner-instructions.md`):** DEPLOY1 second review + merge (clone `deploy1`, candidate committed, fix round pending) -> UX9 (clone `ux9`, brief only) -> MB3 (ADR schemaVersion 2). Workers: Codex gpt-6.1-sol default, GLM for reviews. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the
@@ -108,3 +108,5 @@ DeepSeek $7.76. GLM ~270k/900k.
 - **QB1** (tooling only, owner quality bar): `tools/intent-review.ps1` (brief + capped diff -> `qwen3.5-397b-a17b`/`glm-5.2`, one question set: Outcome delivered?, cut corners, better design, unhandled states; `.agent/intent-<task>.jsonl` in the glm-review shape, cut corner/unhandled state = major) is called by `handoff-check.ps1 -Intent auto|on|off` (auto on UI/worker/packages). `handoff-check` now exits 50 when `.agent/brief.md` has no `## Outcome` or `## Acceptance` bullets and reports a missing `## Alternatives` in the handoff (advisory). Selfchecks: `intent-review.selfcheck.ps1`, `handoff-check.selfcheck.ps1`. Brief format for every worker: Outcome, Acceptance (one `- ` bullet per check), Quality bar, Alternatives in the handoff.
 
 - **TL2** (tooling only, owner 2026-10-06): `tools/launch-worker.ps1` gains `-Tier glm -Files a,b` (GLM-5.2 default worker: single-shot `scaleway-patch-worker.ps1` in a Herdr pane; Scaleway has no Responses API for glm-5.2, verified 422, so Codex cannot drive it; no `-Fix`, put the correction in the brief) and `-Tier codex` (Codex subscription via `C:/Dev/tools/vault-companion-codex-home`, UI and Morning Brief work, needs the owner's autoMode rule). `flash`/`pro` (DeepSeek, balance 0) now throw unless `VC_ALLOW_DEEPSEEK=1`. Gotcha: set `FORCE_COLOR=0 NO_COLOR=1` before launching (node colours the Herdr pane count).
+
+- **JN1FIX**: Ask Jev e2e now covers Yes/No + Choose + Rate in one flow and asserts focus returns to the Ask Jev button after Cancel, Escape and a successful answer + Close (`askJevButton` ref in `Notes.tsx`, because WebKit does not focus a tapped button). Presentation only; no Worker change. The DeepSeek worker died on 402 mid-run; Lead finished and ran e2e + `pnpm check`.
