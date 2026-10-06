@@ -259,6 +259,7 @@ describe('gatherCandidates', () => {
     const sentinel = 'SENTINEL-THROW';
     const result = await gatherCandidates(deps({ readTasks: async () => Promise.reject(new Error(sentinel)) }));
     expect(result.unavailable).toEqual(['tasks']);
+    expect(result.unavailableCodes).toEqual({ tasks: 'threw' });
     expect(result.todos).toEqual([]);
     expect(result.metrics).toHaveLength(4);
     expect(result.mood).toEqual({ mood: 1, energy: 1, sleep: 7 });
@@ -268,6 +269,7 @@ describe('gatherCandidates', () => {
   it('an ApiError reader lands in unavailable and leaves its slot empty', async () => {
     const result = await gatherCandidates(deps({ readWeather: async () => ({ code: 'upstream-unavailable', message: 'no weather', retryable: true }) }));
     expect(result.unavailable).toEqual(['weather']);
+    expect(result.unavailableCodes).toEqual({ weather: 'upstream-unavailable' });
     expect(result.weatherWindows).toEqual([]);
     expect(result.todos).toHaveLength(1);
   });
@@ -280,7 +282,7 @@ describe('gatherCandidates', () => {
       readWeather: async () => weatherResponse([]),
       readMood: async () => [],
     }));
-    expect(result).toEqual({ todos: [], events: [], metrics: [], mood: null, trainingRecent: { count: 0, dates: [] }, weatherWindows: [], unavailable: [] });
+    expect(result).toEqual({ todos: [], events: [], metrics: [], mood: null, trainingRecent: { count: 0, dates: [] }, weatherWindows: [], unavailable: [], unavailableCodes: {} });
   });
 
   it('a non-ok union status is an honest empty slot, not a gatherer failure', async () => {
@@ -317,5 +319,6 @@ describe('gatherCandidates', () => {
     }));
     expect(result.events).toEqual([]);
     expect(result.unavailable).toEqual(['calendar', 'mail']);
+    expect(result.unavailableCodes).toEqual({ calendar: 'google-scope-mismatch', mail: 'upstream-unavailable' });
   });
 });

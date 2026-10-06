@@ -82,8 +82,13 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
   const operationId = await morningBriefOperationId(date);
   let outcome: MorningBriefOutcome = 'internal';
   let unavailable: string[] = [];
+  let unavailableCodes: Readonly<Record<string, string>> = {};
   let source: 'model' | 'fallback' = 'fallback';
   let errorCode: string | null = 'internal';
+
+  // Fixed per-reader codes only: an empty map adds no fact, so clean runs log nothing extra.
+  const codesFact = (): { readonly unavailableCodes?: Readonly<Record<string, string>> } =>
+    Object.keys(unavailableCodes).length > 0 ? { unavailableCodes } : {};
 
   try {
     const path = parseVaultPath(MORNING_BRIEF_PATH);
@@ -107,6 +112,7 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
     if (outcome === 'internal') {
       const candidates = await deps.gather(date);
       unavailable = [...candidates.unavailable];
+      unavailableCodes = { ...candidates.unavailableCodes };
       const input = buildWriterInput({
         day: date,
         blocks: freeBlocks(candidates.events, date, deps.timeZone),
@@ -138,7 +144,7 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
       if (result.kind === 'committed') {
         outcome = 'committed';
         errorCode = null;
-        deps.log(sanitize({ ...base, status: 200, durationMs, operationId: result.operationId, commitSha: result.commitSha }));
+        deps.log(sanitize({ ...base, status: 200, durationMs, operationId: result.operationId, commitSha: result.commitSha, ...codesFact() }));
         if (deps.mailer) {
           // Delivery is best-effort: a send failure is logged but never fails or rolls back the committed brief.
           try {
@@ -151,17 +157,18 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
               operationId: result.operationId,
               commitSha: result.commitSha,
               errorCode: 'email-failed',
+              ...codesFact(),
             }));
           }
         }
       } else if (result.kind === 'already-written') {
         outcome = 'already-written';
         errorCode = null;
-        deps.log(sanitize({ ...base, status: 204, durationMs, operationId: result.operationId, errorCode: 'already-written' }));
+        deps.log(sanitize({ ...base, status: 204, durationMs, operationId: result.operationId, errorCode: 'already-written', ...codesFact() }));
       } else {
         outcome = 'not-written';
         errorCode = `not-written:${result.reason}`;
-        deps.log(sanitize({ ...base, status: 503, durationMs, errorCode: `not-written:${result.reason}` }));
+        deps.log(sanitize({ ...base, status: 503, durationMs, errorCode: `not-written:${result.reason}`, ...codesFact() }));
       }
     }
   } catch (err) {
@@ -179,7 +186,7 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
   } finally {
     const budget = deps.budget ?? BRIEF_SUBREQUEST_BUDGET;
     if (deps.subrequests && deps.subrequests() + MORNING_BRIEF_STATUS_COMMIT_COST > budget) {
-      deps.log(sanitize({ ...base, status: 503, durationMs: Date.now() - started, errorCode: 'status-not-written:budget' }));
+      deps.log(sanitize({ ...base, status: 503, durationMs: Date.now() - started, errorCode: 'status-not-written:budget', ...codesFact() }));
     } else {
       try {
         const statusResult = await writeMorningBriefStatus({
@@ -187,7 +194,7 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
           facts: { nowIso: now.toISOString(), operationId, outcome, unavailable, source, errorCode },
         });
         if (statusResult.kind !== 'committed') {
-          deps.log(sanitize({ ...base, status: 503, durationMs: Date.now() - started, errorCode: `status-not-written:${statusResult.reason}` }));
+          deps.log(sanitize({ ...base, status: 503, durationMs: Date.now() - started, errorCode: `status-not-written:${statusResult.reason}`, ...codesFact() }));
         }
       } catch (statusErr) {
         const detail = diagnosticDetail(statusErr);
@@ -198,6 +205,7 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
           errorCode: 'status-not-written:internal',
           errorClass: statusErr instanceof Error ? statusErr.name : 'unknown',
           ...(detail ? { errorDetail: detail } : {}),
+          ...codesFact(),
         }));
       }
     }

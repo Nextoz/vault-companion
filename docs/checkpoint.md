@@ -95,3 +95,5 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 DeepSeek $7.76. GLM ~270k/900k.
 
 - **TL1** (tooling only): `glm-review.ps1` no longer crashes on the GLM `reasoning_effort` field; `lead-watch.ps1` writes a heartbeat. Self-checks pass. No deploy.
+
+- **MBC** (Morning Brief diagnosis): each unavailable reader now records its fixed `ApiError.code` (or `threw`) in `unavailableCodes`, logged by the brief cron through the `log.ts` allowlist (known reader names and codes only). Finding: `mood` is hard-wired unavailable in the cron (no server mood source); calendar/mail codes show on the next cron run (`wrangler tail` / logs). UX7+RR3 deployed 2026-10-06 (`1c01f3d2`). Brief JSON schema unchanged.
