@@ -33,6 +33,8 @@ const render = async (value: SiwhFacts, onOpen: (target: SiwhTarget) => void = (
 
 const lines = () => [...document.querySelectorAll('.siwh-line')];
 const button = (label: string) => [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === label)!;
+const toggle = () => document.querySelector('.siwh-toggle') as HTMLElement;
+const expand = async () => { await act(async () => { toggle().click(); }); };
 
 describe('SinceIWasHere', () => {
   it('shows nothing on a first install and stores the baseline', async () => {
@@ -41,9 +43,21 @@ describe('SinceIWasHere', () => {
     expect(prefs.sinceIWasHereSnapshot()).toMatchObject({ triage: ['e1'], papers: [] });
   });
 
+  it('collapses to one summary line that expands to the changes', async () => {
+    localStorage.setItem('vc.sinceIWasHere', JSON.stringify({ at: 1, triage: [], papers: [] }));
+    await render(facts({ triage: ['e1'] }));
+    expect(toggle().textContent).toBe('Since I was here \u00b7 1 change');
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    expect(lines()).toHaveLength(0);
+    await expand();
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(lines().map((line) => line.textContent)).toEqual(['1 event in triage']);
+  });
+
   it('lists what is newer, then Dismiss all stores the snapshot and hides the pane', async () => {
     localStorage.setItem('vc.sinceIWasHere', JSON.stringify({ at: 1, triage: [], scouts: { learning: 1 }, papers: [] }));
     await render(facts({ triage: ['e1', 'e2', 'e3'], scouts: [{ id: 'learning', name: 'Learning', findings: 4 }], papers: ['a'] }));
+    await expand();
     expect(lines().map((line) => line.textContent)).toEqual(['3 events in triage', 'Learning \u00b7 3 new findings', '1 new explained paper']);
 
     await act(async () => { (button('Dismiss all') as HTMLElement).click(); });
@@ -55,6 +69,7 @@ describe('SinceIWasHere', () => {
     localStorage.setItem('vc.sinceIWasHere', JSON.stringify({ at: 1, triage: [], health: '2026-09-29' }));
     const opened: string[] = [];
     await render(facts({ triage: ['e1', 'e2'], health: '2026-09-30' }), (target) => opened.push(target));
+    await expand();
     expect(lines().map((line) => line.textContent)).toEqual(['2 events in triage', 'New health day']);
     await act(async () => { (lines()[0] as HTMLElement).click(); });
     expect(opened).toEqual(['triage']);

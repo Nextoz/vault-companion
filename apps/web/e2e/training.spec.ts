@@ -96,6 +96,7 @@ test('offline save survives reload and dependent Undo waits for the receipt', as
   await page.reload();
   await expect(page.getByTestId('action')).toContainText('Training');
   api.commandMode = 'hold';
+  await goTo(page, 'Tasks'); // UX8: Refresh lives with Vault status on the Tasks tab, not on Today
   await page.getByRole('button', { name: 'Refresh vault', exact: true }).click();
   await expect.poll(() => api.heldCount).toBe(1);
   await page.getByTestId('action').getByRole('button', { name: 'Undo', exact: true }).click();

@@ -30,6 +30,7 @@ test('collapsed by default, remembered when opened, absent on Scouts, and a prob
   await panel(page).getByRole('button', { name: 'Actions · 1', exact: true }).click();
   await expect(panel(page).getByTestId('action')).toHaveCount(0);
 
+  await goTo(page, 'Board');
   await page.getByRole('button', { name: /1 scout needs attention/ }).click();
   await expect(panel(page)).toHaveCount(0);
 
@@ -38,6 +39,7 @@ test('collapsed by default, remembered when opened, absent on Scouts, and a prob
   await captureNote(page, 'A refused synthetic thought');
   await expect(panel(page)).toContainText('1 needs attention');
   await expect(panel(page).getByTestId('action')).toHaveCount(0);
+  await goTo(page, 'Board');
   await page.getByRole('button', { name: /1 scout needs attention/ }).click();
   await expect(panel(page)).toContainText('1 needs attention');
 });

@@ -83,6 +83,8 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
   });
 
   await shot('Today - AI usage panel', async () => {
+    // UX8: the AI usage panel lives on the Today screen's Boards view (Overview is the default).
+    await goTo(page, 'Board');
     const panel = page.getByRole('region', { name: 'AI usage', exact: true });
     await panel.scrollIntoViewIfNeeded();
     await expect(panel.locator('.ai-usage-tile')).toHaveCount(5);

@@ -11,6 +11,8 @@ test('one app switch (focus + visibilitychange + online) makes one read; the nex
     if (new URL(request.url()).pathname === '/api/session') sessions++;
   });
   await page.goto('/');
+  // UX8: Today's large sync block is gone; the Vault status details live on the other tabs.
+  await goTo(page, 'Tasks');
   const refresh = page.getByRole('button', { name: 'Refresh vault' });
   await expect(refresh).toBeEnabled();
   await expect(page.getByRole('region', { name: 'Vault status' })).toContainText('Checked');
@@ -38,6 +40,8 @@ test('shows vault state, refreshes once, and preserves the last check after a fa
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
+  // UX8: Today's large sync block is gone; the Vault status details live on the other tabs.
+  await goTo(page, 'Tasks');
   const status = page.getByRole('region', { name: 'Vault status' });
   await expect(status).toContainText('Vault updated 14:07 · from desktop');
   await expect(status).toContainText('Checked 14:10');
@@ -69,6 +73,8 @@ test('ages without fetching and falls back to revision when metadata is absent',
   api.vault = null;
   await api.install(page);
   await page.goto('/');
+  // UX8: Today's large sync block is gone; the Vault status details live on the other tabs.
+  await goTo(page, 'Tasks');
   const status = page.getByRole('region', { name: 'Vault status' });
   await expect(status).toContainText('Vault revision 0000000');
   await expect(status).toContainText('Checked 14:10');
@@ -82,6 +88,8 @@ test('the Vault status details list the last read time per route (SP measure), w
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
+  // UX8: Today's large sync block is gone; the Vault status details live on the other tabs.
+  await goTo(page, 'Tasks');
   const status = page.getByRole('region', { name: 'Vault status' });
   await expect(status).toContainText('Checked');
   await status.locator('summary').click();
@@ -95,6 +103,8 @@ test('the Status sheet renders the AI budget rows', async ({ page }) => {
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
+  // UX8: Today's large sync block is gone; the Vault status details live on the other tabs.
+  await goTo(page, 'Tasks');
   await goTo(page, 'Status');
   await expect(page.getByRole('list', { name: 'AI budget' })).toContainText('Claude weekly');
 });
