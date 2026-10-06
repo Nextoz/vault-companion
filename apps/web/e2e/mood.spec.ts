@@ -15,6 +15,13 @@ test('mood check-in: chips, Danish sleep, no row on Today, and Undo brings the p
 
   // UX2: the form sits behind the one-line check-in prompt until it is tapped.
   const prompt = page.getByRole('button', { name: PROMPT });
+  await expect(prompt).toBeVisible();
+  const next = await page.getByRole('region', { name: 'Next up', exact: true }).boundingBox();
+  const row = await prompt.boundingBox();
+  const tiles = await page.getByRole('group', { name: 'Today tiles' }).boundingBox();
+  expect(row!.y).toBeGreaterThanOrEqual(next!.y + next!.height);
+  expect(row!.y + row!.height).toBeLessThanOrEqual(tiles!.y);
+  expect(row!.height).toBeGreaterThanOrEqual(44);
   await prompt.click();
   const card = page.getByRole('region', { name: 'Mood check-in' });
   await expect(card).toBeVisible();
@@ -99,8 +106,7 @@ test('today\'s check-in is edited from Log and Progress, and the row returns nex
 
   // Next morning the date-keyed check-in no longer hides the prompt.
   await page.clock.setSystemTime(NEXT_MORNING);
-  await goTo(page, 'Notes');
-  await goTo(page, 'Today');
+  await page.clock.runFor(1000);
   await expect(page.getByRole('button', { name: PROMPT })).toBeVisible();
   await page.getByRole('button', { name: PROMPT }).click();
   await expect(page.getByRole('region', { name: 'Mood check-in' })).toBeVisible();

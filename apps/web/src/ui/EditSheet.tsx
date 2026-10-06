@@ -1,3 +1,4 @@
+import { SheetHeader } from './SheetHeader.tsx';
 import type { Priority, TaskView } from '@vault-companion/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { editTask, type TaskChanges } from '../commands.ts';
@@ -66,7 +67,7 @@ export function EditSheet({ queue, task, accountKey, baseRevision, blocked, onCl
           if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
           else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
         }}>
-        <h2>Edit task</h2>
+        <SheetHeader title="Edit task" onClose={onClose} disabled={saving} closeLabel="Cancel" />
         <textarea aria-label="Task text" value={text} maxLength={2000} rows={3} onChange={(e) => setText(e.target.value)} />
         <label>Due<input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
         <button type="button" onClick={() => setDue('')} disabled={!due}>Clear due</button>
@@ -79,7 +80,6 @@ export function EditSheet({ queue, task, accountKey, baseRevision, blocked, onCl
         {blocked && <p role="status">Task editing is currently unavailable.</p>}
         {error && <p className="error" role="alert">{error}</p>}
         <div className="sheet-buttons">
-          <button type="button" onClick={onClose} disabled={saving}>Cancel</button>
           <button type="button" className="primary" disabled={!canSave} onClick={() => void save()}>Save</button>
         </div>
       </div>

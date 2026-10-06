@@ -70,6 +70,15 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Morning Brief', exact: true })).toBeVisible();
   });
 
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    await shot(`UX9 Morning Brief ${colorScheme}`, async () => {
+      await page.getByRole('button', { name: 'Morning Brief', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: 'Morning Brief' })).toBeVisible();
+    });
+    await page.getByRole('dialog', { name: 'Morning Brief' }).getByRole('button', { name: 'Close', exact: true }).click();
+  }
+
   await shot('Today - Needs You', async () => {
     const needs = page.getByRole('button', { name: /^Needs you/ });
     await needs.scrollIntoViewIfNeeded();

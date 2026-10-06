@@ -1,3 +1,4 @@
+import { SheetHeader } from './SheetHeader.tsx';
 // Inbox notes (ADR-0022): list → note → edit. Nothing here is stored on the device except a queued edit; note text is
 // fetched `no-store` and never cached by the SW. The last answers are kept in memory only (SP3, ADR-0038).
 import type { NoteReadResponse, NotesResponse } from '@vault-companion/contracts';
@@ -148,13 +149,12 @@ function NoteEditSheet({ note, title, queue, accountKey, baseRevision, onClose }
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
         else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
       }}>
-      <h2>Edit note</h2>
+      <SheetHeader title="Edit note" onClose={onClose} disabled={saving} closeLabel="Cancel" />
       <textarea aria-label="Note text" value={text} rows={14} onChange={(e) => setText(e.target.value)} />
       {tooLong && <p role="alert" className="error">This note is longer than 50,000 characters; shorten it to save.</p>}
       {error && <p role="alert" className="error">{error}</p>}
       <p className="muted small">Saved to the vault; reaches Obsidian at your next desktop sync.</p>
       <div className="sheet-buttons">
-        <button type="button" disabled={saving} onClick={onClose}>Cancel</button>
         <button type="button" className="primary" disabled={!canSave} onClick={() => void save()}>Save</button>
       </div>
     </div>

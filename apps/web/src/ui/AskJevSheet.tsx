@@ -1,3 +1,4 @@
+import { SheetHeader } from './SheetHeader.tsx';
 import type { JevAnswer } from '@vault-companion/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { askJev } from '../api.ts';
@@ -64,7 +65,7 @@ export function AskJevSheet({ path, accountKey, onClose }: { path: string; accou
       onKeyDown={(event) => {
         if (event.key === 'Escape' && phase !== 'loading') onClose();
       }}>
-      <h2 id="ask-jev-title">Ask Jev</h2>
+      <SheetHeader title="Ask Jev" onClose={onClose} titleId="ask-jev-title" disabled={phase === 'loading'} closeLabel={phase === 'editing' ? 'Cancel' : 'Close'} />
       {phase === 'loading' && <p role="status">Asking Jev…</p>}
       {phase === 'editing' && <>
         <div className="jev-questions">
@@ -101,7 +102,6 @@ export function AskJevSheet({ path, accountKey, onClose }: { path: string; accou
         </div>
         {message && <p role="alert" className="error">{message}</p>}
         <div className="sheet-buttons">
-          <button type="button" onClick={onClose}>Cancel</button>
           <button type="button" disabled={!canAdd} onClick={() => setDrafts((current) => [...current, emptyAskJevDraft()])}>Add question</button>
           <button type="button" className="primary" onClick={() => void submit()}>Ask Jev</button>
         </div>
@@ -110,7 +110,6 @@ export function AskJevSheet({ path, accountKey, onClose }: { path: string; accou
         <p role="alert" className="error">{message}</p>
         <div className="sheet-buttons">
           <button type="button" onClick={() => { setPhase('editing'); setMessage(null); }}>Back</button>
-          <button type="button" onClick={onClose}>Close</button>
         </div>
       </>}
       {phase === 'done' && answers && <>
@@ -127,9 +126,6 @@ export function AskJevSheet({ path, accountKey, onClose }: { path: string; accou
               </div>)}
             </div>
           </section>)}
-        </div>
-        <div className="sheet-buttons">
-          <button type="button" onClick={onClose}>Close</button>
         </div>
       </>}
       <p className="muted small">Based on this note only; a hint, not a verdict.</p>
