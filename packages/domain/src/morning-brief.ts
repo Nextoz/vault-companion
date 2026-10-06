@@ -17,6 +17,7 @@ export interface BriefEvent {
   /** ISO instant. */
   end: string;
   allDay: boolean;
+  link?: string;
 }
 
 export interface FreeBlock {
@@ -151,7 +152,7 @@ interface RankedTodo {
 
 /**
  * Bills and todos due today or within 3 days (earliest due first), then overdue (oldest first), then the rest in
- * input order. At most 3. Stable and pure.
+ * input order. At most 5. Stable and pure.
  */
 export function rankTodos(todos: BriefTodo[], date: string): BriefTodo[] {
   const soon = addDays(date, 3);
@@ -169,7 +170,7 @@ export function rankTodos(todos: BriefTodo[], date: string): BriefTodo[] {
   const group0 = ranked.filter((r) => r.group === 0).sort(byDueThenInput);
   const group1 = ranked.filter((r) => r.group === 1).sort(byDueThenInput);
   const group2 = ranked.filter((r) => r.group === 2);
-  return [...group0, ...group1, ...group2].slice(0, 3).map((r) => r.todo);
+  return [...group0, ...group1, ...group2].slice(0, 5).map((r) => r.todo);
 }
 
 /**
@@ -182,4 +183,14 @@ export function stateLine(metrics: HealthMetric[], mood: MoodSnapshot | null): S
     if (metric.compare === 'above' || metric.compare === 'below') flags.push({ key: metric.key, compare: metric.compare });
   }
   return { flags, mood, low: mood !== null && (mood.mood <= -2 || mood.energy <= -2) };
+}
+
+/** Sorted calendar meetings; each clash names the other overlapping meetings in start order. */
+export function findClashes(events: readonly BriefEvent[]): (BriefEvent & { clash: boolean; clashWith?: string })[] {
+  const sorted = [...events].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+  return sorted.map((event, index) => {
+    const others = sorted.filter((other, otherIndex) => index !== otherIndex && !event.allDay && !other.allDay &&
+      Math.min(Date.parse(event.end), Date.parse(other.end)) > Math.max(Date.parse(event.start), Date.parse(other.start)));
+    return { ...event, clash: others.length > 0, ...(others.length ? { clashWith: others.map((other) => other.title).join('; ') } : {}) };
+  });
 }

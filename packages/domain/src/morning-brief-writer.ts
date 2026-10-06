@@ -3,7 +3,7 @@
 // metric values, series, or non-candidate text. Parsing validates against the candidate ids/blocks and never throws.
 
 import { z } from 'zod';
-import type { HealthMetricKey, WeatherRunWindow } from '@vault-companion/contracts';
+import { WEATHER_TIME_ZONE, type HealthMetricKey, type WeatherRunWindow } from '@vault-companion/contracts';
 import { rankTodos, type BriefTodo, type FreeBlock, type StateLine } from './morning-brief.ts';
 
 /** Training window summary; structurally the gatherer's `TrainingRecent`. Counts and dates only. */
@@ -18,10 +18,13 @@ export interface WriterTodo {
   readonly text: string;
   readonly due: string | null;
   readonly bill: boolean;
+  readonly overdueDays?: number;
 }
 
 /** Everything the writer may see. `state` already carries flags only (no metric values). */
 export interface WriterInput {
+  readonly calendar?: { readonly count: number; readonly allDayCount: number; readonly firstStart: string | null; readonly clashCount: number };
+  readonly unavailableReasons?: Readonly<Record<string, string>>;
   readonly day: string;
   readonly blocks: readonly FreeBlock[];
   readonly todos: readonly WriterTodo[];
@@ -33,6 +36,8 @@ export interface WriterInput {
 }
 
 export interface BuildWriterInputArgs {
+  readonly calendar?: { readonly count: number; readonly allDayCount: number; readonly firstStart: string | null; readonly clashCount: number };
+  readonly unavailableReasons?: Readonly<Record<string, string>>;
   readonly day: string;
   readonly blocks: readonly FreeBlock[];
   readonly todos: readonly BriefTodo[];
@@ -42,17 +47,19 @@ export interface BuildWriterInputArgs {
   readonly unavailable: readonly string[];
 }
 
-/** Rank the day's todos (`rankTodos`, top 3) and number them 0..n-1; the model may only reference these ids. */
+/** Rank the day's todos (`rankTodos`, top 5) and number them 0..n-1; the model may only reference these ids. */
 export function buildWriterInput(args: BuildWriterInputArgs): WriterInput {
   const ranked = rankTodos([...args.todos], args.day);
   return {
     day: args.day,
-    blocks: args.blocks,
+    calendar: args.calendar ?? { count: 0, allDayCount: 0, firstStart: null, clashCount: 0 },
+    unavailableReasons: args.unavailableReasons ?? {},
+    blocks: args.unavailable.includes('calendar') ? [] : args.blocks,
     state: args.state,
     weatherWindows: args.weatherWindows,
     trainingRecent: args.trainingRecent,
     unavailable: args.unavailable,
-    todos: ranked.map((todo, id) => ({ id, text: todo.text, due: todo.due, bill: todo.bill })),
+    todos: ranked.map((todo, id) => ({ id, text: todo.text, due: todo.due, bill: todo.bill, ...overdueAge(todo.due, args.day) })),
   };
 }
 
@@ -74,6 +81,7 @@ export const WRITER_SYSTEM_PROMPT = [
   '- If the state is low, choose fewer items and exactly one meaningful action.',
   '- If no state flags are given, make no claim about the state.',
   '- Keep every string at most 240 characters.',
+  '- When meetings exist or Calendar is unavailable, never say open day or open block.',
 ].join('\n');
 
 function blockLine(index: number, block: FreeBlock): string {
@@ -99,6 +107,8 @@ export function buildWriterPrompt(input: WriterInput): { system: string; user: s
 
   const user = [
     `Day: ${input.day}`,
+    calendarDayLine(input),
+    `Clashing meetings: ${input.calendar?.clashCount ?? 0}`,
     '',
     'Free blocks (index. start to end):',
     ...(input.blocks.length ? input.blocks.map((block, index) => blockLine(index, block)) : ['(none)']),
@@ -115,8 +125,8 @@ export function buildWriterPrompt(input: WriterInput): { system: string; user: s
     `Unavailable sources: ${input.unavailable.length ? input.unavailable.join(', ') : 'none'}`,
     '',
     'Reply with JSON only:',
-    '{"dayLine": string, "stateLine": string (optional), "gaps": [{"blockIndex": number, "suggestion": string}], "todos": [{"id": number, "firstStep": string}], "encouragement": string}',
-    'gaps may only reference a long free block by its index; todos may only use a candidate id and at most 3.',
+    '{"stateLine": string (optional), "gaps": [{"blockIndex": number, "suggestion": string}], "todos": [{"id": number, "firstStep": string}], "encouragement": string}',
+    'gaps may only reference a long free block by its index; todos may only use a candidate id and at most 5.',
   ].join('\n');
 
   return { system: WRITER_SYSTEM_PROMPT, user };
@@ -128,7 +138,8 @@ const capped = z.string().trim().min(1).max(240);
 
 /** The model's JSON contract. Unknown/duplicate ids and non-long gaps are filtered in `parseWriterOutput`. */
 export const BriefDraft = z.object({
-  dayLine: capped,
+  // Optional for compatibility: toBrief always supplies the deterministic calendar sentence.
+  dayLine: capped.optional(),
   stateLine: capped.optional(),
   gaps: z.array(z.object({ blockIndex: z.number().int().nonnegative(), suggestion: capped })).optional().default([]),
   todos: z.array(z.object({ id: z.number().int().nonnegative(), firstStep: capped })).optional().default([]),
@@ -145,7 +156,7 @@ function unfence(raw: string): string {
 
 /**
  * Validate a model reply against the candidate set. Drops todos with an unknown or duplicate id, gaps on a non-long
- * block or duplicate block, and keeps at most 3 todos. Returns null when the reply is unusable; never throws.
+ * block or duplicate block, and keeps at most 5 todos. Returns null when the reply is unusable; never throws.
  */
 export function parseWriterOutput(raw: string, input: WriterInput): BriefDraft | null {
   try {
@@ -154,12 +165,15 @@ export function parseWriterOutput(raw: string, input: WriterInput): BriefDraft |
     const parsed = BriefDraft.safeParse(JSON.parse(text));
     if (!parsed.success) return null;
     const draft = parsed.data;
+    if ((input.calendar?.count || input.unavailable.includes('calendar')) &&
+        [...draft.gaps.map((gap) => gap.suggestion), ...draft.todos.map((todo) => todo.firstStep),
+          draft.stateLine ?? '', draft.encouragement].some((text) => /open\s+(?:day|block)/i.test(text))) return null;
 
     const candidateIds = new Set(input.todos.map((todo) => todo.id));
     const seenTodos = new Set<number>();
     const todos: BriefDraft['todos'] = [];
     for (const todo of draft.todos) {
-      if (todos.length >= 3) break;
+      if (todos.length >= 5) break;
       if (!candidateIds.has(todo.id) || seenTodos.has(todo.id)) continue;
       seenTodos.add(todo.id);
       todos.push(todo);
@@ -197,6 +211,7 @@ export interface BriefTodoItem {
   readonly text: string;
   readonly due: string | null;
   readonly bill: boolean;
+  readonly overdueDays?: number;
   /** The model's first step; absent in a fallback brief (nothing is invented). */
   readonly firstStep?: string;
 }
@@ -219,11 +234,11 @@ export function toBrief(draft: BriefDraft, input: WriterInput): Brief {
   });
   const todos: BriefTodoItem[] = draft.todos.map((todo) => {
     const candidate = input.todos.find((item) => item.id === todo.id)!;
-    return { id: todo.id, text: candidate.text, due: candidate.due, bill: candidate.bill, firstStep: todo.firstStep };
+    return { id: todo.id, text: candidate.text, due: candidate.due, bill: candidate.bill, ...overdueAge(candidate.due, input.day), firstStep: todo.firstStep };
   });
   return {
     source: 'model',
-    dayLine: draft.dayLine,
+    dayLine: calendarDayLine(input),
     ...(draft.stateLine !== undefined ? { stateLine: draft.stateLine } : {}),
     gaps,
     todos,
@@ -231,15 +246,33 @@ export function toBrief(draft: BriefDraft, input: WriterInput): Brief {
   };
 }
 
-/** Deterministic render of the same input: top 3 todos (no firstStep), free blocks, and state flags as plain words. */
+/** Deterministic render of the same input: top 5 todos (no firstStep), free blocks, and state flags as plain words. */
 export function fallbackBrief(input: WriterInput): Brief {
   const stateWords = input.state.flags.map((flag) => `${FLAG_LABEL[flag.key]} ${flag.compare} its 30-day median`);
   if (input.state.low) stateWords.push('state is low');
   return {
     source: 'fallback',
-    dayLine: `${input.day}: ${input.blocks.length} free block(s), ${input.todos.length} todo candidate(s).`,
+    dayLine: calendarDayLine(input),
     ...(stateWords.length ? { stateLine: stateWords.join('; ') } : {}),
     gaps: input.blocks.map((block, blockIndex) => ({ blockIndex, start: block.start, end: block.end })),
-    todos: input.todos.slice(0, 3).map((todo) => ({ id: todo.id, text: todo.text, due: todo.due, bill: todo.bill })),
+    todos: input.todos.slice(0, 5).map((todo) => ({ id: todo.id, text: todo.text, due: todo.due, bill: todo.bill, ...overdueAge(todo.due, input.day) })),
   };
+}
+
+function overdueAge(due: string | null, day: string): { overdueDays?: number } {
+  return due && due < day ? { overdueDays: Math.floor((Date.parse(day) - Date.parse(due)) / 86_400_000) } : {};
+}
+
+/** Calendar facts are authoritative even when a model phrases the rest of the brief. */
+function calendarDayLine(input: WriterInput): string {
+  if (input.unavailable.includes('calendar')) return `${input.day}: Calendar unavailable (${input.unavailableReasons?.calendar ?? 'threw'}).`;
+  const calendar = input.calendar ?? { count: 0, allDayCount: 0, firstStart: null, clashCount: 0 };
+  const meetings = calendar.count === 0 ? 'no meetings' : `${calendar.count} meeting${calendar.count === 1 ? '' : 's'}`;
+  const first = calendar.count > 0 && calendar.firstStart
+    ? `, first at ${new Intl.DateTimeFormat('en-GB', {
+      timeZone: WEATHER_TIME_ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).format(new Date(calendar.firstStart))}` : '';
+  const clashes = calendar.clashCount > 0 ? `, ${calendar.clashCount} clash${calendar.clashCount === 1 ? '' : 'es'}` : '';
+  const allDay = calendar.allDayCount > 0 ? ` +${calendar.allDayCount} all-day.` : '';
+  return `${input.day}: ${meetings}${first}${clashes}.${allDay}`;
 }

@@ -735,12 +735,17 @@ const MorningBriefTodo = z.strictObject({
   due: z.iso.date().nullable(),
   bill: z.boolean(),
   firstStep: z.string().optional(),
+  overdueDays: z.number().int().positive().optional(),
 });
 
 export const MorningBriefBody = z.strictObject({
   source: z.enum(['model', 'fallback']),
   dayLine: z.string(),
   stateLine: z.string().optional(),
+  meetings: z.array(z.strictObject({
+    title: z.string(), start: isoInstant, end: isoInstant, allDay: z.boolean(),
+    clash: z.boolean(), clashWith: z.string().optional(), link: z.string().optional(),
+  })).optional(),
   gaps: z.array(MorningBriefGap),
   todos: z.array(MorningBriefTodo),
   encouragement: z.string().optional(),
@@ -754,6 +759,7 @@ export const MorningBriefResponse = z.strictObject({
   generatedAt: isoInstant,
   source: z.enum(['model', 'fallback']),
   unavailable: z.array(z.string()),
+  unavailableReasons: z.record(z.string(), z.union([ErrorCode, z.literal('threw')])).optional(),
   brief: MorningBriefBody,
 });
 export type MorningBriefResponse = z.infer<typeof MorningBriefResponse>;

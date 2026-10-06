@@ -7,12 +7,14 @@ import { StoreUnavailable, type VaultStore } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 const briefFile = (dayLine: string): BriefFile => ({
-  schemaVersion: 1,
+  schemaVersion: 2,
   date: '2026-10-02',
   generatedAt: '2026-10-02T04:31:00+02:00',
   source: 'model',
   unavailable: [],
+  unavailableReasons: {},
   brief: {
+    meetings: [],
     source: 'model',
     dayLine,
     gaps: [{ blockIndex: 3, start: '2026-10-02T09:00:00+02:00', end: '2026-10-02T10:30:00+02:00', suggestion: 'Deep work' }],
@@ -55,6 +57,7 @@ describe('readMorningBrief (MB2)', () => {
       generatedAt: '2026-10-02T04:31:00+02:00',
       source: 'model',
       unavailable: [],
+  unavailableReasons: {},
       brief: briefFile('Real day.').brief,
     });
   });

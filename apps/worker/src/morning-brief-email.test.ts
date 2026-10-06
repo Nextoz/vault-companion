@@ -7,12 +7,14 @@ const decode = (b64: string): string => new TextDecoder().decode(Uint8Array.from
 const DATE = '2026-06-15';
 
 const file = (over: Partial<BriefFile> = {}): BriefFile => ({
-  schemaVersion: 1,
+  schemaVersion: 2,
   date: DATE,
   generatedAt: `${DATE}T04:30:05Z`,
   source: 'model',
   unavailable: ['mail'],
+  unavailableReasons: {},
   brief: {
+    meetings: [],
     source: 'model',
     dayLine: 'A short day with room to breathe.',
     stateLine: 'steps above its 30-day median',
@@ -37,6 +39,7 @@ describe('renderBriefEmail', () => {
     const attack = '<script>alert("x")</script>';
     const dangerous = file({
       brief: {
+        meetings: [],
         source: 'model',
         dayLine: attack,
         gaps: [{ blockIndex: 0, start: `${DATE}T07:00:00Z`, end: `${DATE}T08:30:00Z`, suggestion: attack }],
@@ -59,6 +62,7 @@ describe('renderBriefEmail', () => {
         date: hostile,
         unavailable: [hostile],
         brief: {
+          meetings: [],
           source: 'model',
           dayLine: 'ok',
           stateLine: hostile,
@@ -75,6 +79,7 @@ describe('renderBriefEmail', () => {
     const fallback = file({
       source: 'fallback',
       brief: {
+        meetings: [],
         source: 'fallback',
         dayLine: `${DATE}: 1 free block(s), 1 todo candidate(s).`,
         gaps: [{ blockIndex: 0, start: `${DATE}T07:00:00Z`, end: `${DATE}T08:30:00Z` }],

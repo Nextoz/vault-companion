@@ -58,8 +58,8 @@ describe('buildWriterInput', () => {
       todo('SENTINEL-CANDIDATE-A', { due: DAY }),
       todo('SENTINEL-CANDIDATE-0', { bill: true }),
     ]);
-    expect(input.todos.map((t) => t.text)).toEqual(['SENTINEL-CANDIDATE-B', 'SENTINEL-CANDIDATE-A', 'SENTINEL-CANDIDATE-0']);
-    expect(input.todos.map((t) => t.id)).toEqual([0, 1, 2]);
+    expect(input.todos.map((t) => t.text)).toEqual(['SENTINEL-CANDIDATE-B', 'SENTINEL-CANDIDATE-A', 'SENTINEL-CANDIDATE-0', 'SENTINEL-NON-CANDIDATE-D', 'SENTINEL-NON-CANDIDATE-C']);
+    expect(input.todos.map((t) => t.id)).toEqual([0, 1, 2, 3, 4]);
   });
 });
 
@@ -115,10 +115,10 @@ describe('parseWriterOutput', () => {
     expect(parsed?.gaps).toHaveLength(1);
   });
 
-  it('keeps at most 3 todos', () => {
-    const wide: WriterInput = { ...makeInput(), todos: [0, 1, 2, 3].map((id) => ({ id, text: `T${id}`, due: null, bill: false })) };
-    const parsed = parseWriterOutput(JSON.stringify(draft({ todos: [0, 1, 2, 3].map((id) => ({ id, firstStep: `S${id}` })) })), wide);
-    expect(parsed?.todos.map((t) => t.id)).toEqual([0, 1, 2]);
+  it('keeps at most 5 todos', () => {
+    const wide: WriterInput = { ...makeInput(), todos: [0, 1, 2, 3, 4, 5].map((id) => ({ id, text: `T${id}`, due: null, bill: false })) };
+    const parsed = parseWriterOutput(JSON.stringify(draft({ todos: [0, 1, 2, 3, 4, 5].map((id) => ({ id, firstStep: `S${id}` })) })), wide);
+    expect(parsed?.todos.map((t) => t.id)).toEqual([0, 1, 2, 3, 4]);
   });
 
   it('returns null for garbage, empty and out-of-contract replies', () => {
@@ -150,8 +150,46 @@ describe('fallbackBrief', () => {
     expect(first.source).toBe('fallback');
     expect(first.encouragement).toBeUndefined();
     expect(first.todos.every((t) => t.firstStep === undefined)).toBe(true);
-    expect(first.todos.map((t) => t.text)).toEqual(input.todos.slice(0, 3).map((t) => t.text));
+    expect(first.todos.map((t) => t.text)).toEqual(input.todos.slice(0, 5).map((t) => t.text));
     expect(first.gaps.map((g) => g.blockIndex)).toEqual([0, 1]);
     expect(first.stateLine).toContain('steps below its 30-day median');
+  });
+});
+
+it('computes whole overdue days only for past due dates, in model and fallback briefs', () => {
+  const input = makeInput([todo('Past', { due: '2026-06-12' }), todo('Today', { due: DAY }),
+    todo('Future', { due: '2026-06-16' }), todo('Undated')]);
+  const parsed = parseWriterOutput(JSON.stringify(draft({ todos: input.todos.map((t) => ({ id: t.id, firstStep: 'Start.' })) })), input)!;
+  for (const brief of [fallbackBrief(input), toBrief(parsed, input)]) {
+    expect(brief.todos.find((t) => t.text === 'Past')?.overdueDays).toBe(3);
+    expect(brief.todos.filter((t) => t.text !== 'Past').every((t) => t.overdueDays === undefined)).toBe(true);
+  }
+});
+
+describe('calendar day line', () => {
+  it.each([
+    { day: DAY, count: 0, allDayCount: 0, firstStart: null, clashCount: 0, sentence: 'no meetings.' },
+    { day: DAY, count: 1, allDayCount: 0, firstStart: `${DAY}T07:30:00Z`, clashCount: 0, sentence: '1 meeting, first at 09:30.' },
+    { day: DAY, count: 3, allDayCount: 0, firstStart: `${DAY}T07:30:00Z`, clashCount: 1, sentence: '3 meetings, first at 09:30, 1 clash.' },
+    { day: DAY, count: 3, allDayCount: 2, firstStart: `${DAY}T07:30:00Z`, clashCount: 2, sentence: '3 meetings, first at 09:30, 2 clashes. +2 all-day.' },
+    { day: DAY, count: 0, allDayCount: 2, firstStart: null, clashCount: 0, sentence: 'no meetings. +2 all-day.' },
+    { day: '2026-01-15', count: 1, allDayCount: 0, firstStart: '2026-01-15T08:30:00Z', clashCount: 0, sentence: '1 meeting, first at 09:30.' },
+    { day: '2026-03-29', count: 1, allDayCount: 0, firstStart: '2026-03-29T07:30:00Z', clashCount: 0, sentence: '1 meeting, first at 09:30.' },
+    { day: '2026-10-25', count: 1, allDayCount: 0, firstStart: '2026-10-25T08:30:00Z', clashCount: 0, sentence: '1 meeting, first at 09:30.' },
+  ])('formats $day: $sentence for both sources', ({ day, sentence, ...calendar }) => {
+    const input: WriterInput = { ...makeInput(), day, calendar };
+    const parsed = parseWriterOutput(JSON.stringify(draft({ dayLine: undefined })), input);
+    expect(parsed).not.toBeNull();
+    expect(toBrief(parsed!, input).dayLine).toBe(`${day}: ${sentence}`);
+    expect(fallbackBrief(input).dayLine).toBe(`${day}: ${sentence}`);
+    expect(input.calendar?.firstStart).toBe(calendar.firstStart);
+  });
+
+  it('keeps unavailable wording and does not request a model dayLine', () => {
+    const input: WriterInput = { ...makeInput(), unavailable: ['calendar'], unavailableReasons: { calendar: 'threw' } };
+    const parsed = parseWriterOutput(JSON.stringify(draft({ dayLine: undefined })), input)!;
+    expect(toBrief(parsed, input).dayLine).toBe(`${DAY}: Calendar unavailable (threw).`);
+    expect(fallbackBrief(input).dayLine).toBe(`${DAY}: Calendar unavailable (threw).`);
+    expect(buildWriterPrompt(input).user).not.toContain('"dayLine"');
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HealthCompare, HealthMetric, HealthMetricKey } from '@vault-companion/contracts';
-import { rankTodos, stateLine, freeBlocks, type BriefEvent, type BriefTodo } from './morning-brief.ts';
+import { findClashes, rankTodos, stateLine, freeBlocks, type BriefEvent, type BriefTodo } from './morning-brief.ts';
 
 // All data synthetic. Europe/Copenhagen on 2026-06-15 is CEST (UTC+02:00), so local 07:00 = 05:00Z, 22:00 = 20:00Z.
 const DAY = '2026-06-15';
@@ -97,7 +97,7 @@ describe('freeBlocks', () => {
 const todo = (text: string, due: string | null, bill = false): BriefTodo => ({ text, due, bill });
 
 describe('rankTodos', () => {
-  it('orders bill/due-soon first, then overdue oldest-first, caps at 3', () => {
+  it('orders bill/due-soon first, then overdue oldest-first, caps at 5', () => {
     const todos = [
       todo('overdue-1', '2026-06-14'),
       todo('undated', null),
@@ -105,7 +105,7 @@ describe('rankTodos', () => {
       todo('overdue-old', '2026-06-10'),
       todo('tomorrow', '2026-06-16'),
     ];
-    expect(rankTodos(todos, DAY).map((t) => t.text)).toEqual(['bill', 'tomorrow', 'overdue-old']);
+    expect(rankTodos(todos, DAY).map((t) => t.text)).toEqual(['bill', 'tomorrow', 'overdue-old', 'overdue-1', 'undated']);
   });
 
   it('sorts the due-soon group by earliest due, keeps input order on ties, and caps', () => {
@@ -115,7 +115,7 @@ describe('rankTodos', () => {
       todo('d16a', '2026-06-16'),
       todo('d16b', '2026-06-16'),
     ];
-    expect(rankTodos(todos, DAY).map((t) => t.text)).toEqual(['d15', 'd16a', 'd16b']);
+    expect(rankTodos(todos, DAY).map((t) => t.text)).toEqual(['d15', 'd16a', 'd16b', 'd17']);
   });
 
   it('treats any bill as top priority even when undated or overdue', () => {
@@ -156,4 +156,17 @@ describe('stateLine', () => {
     expect(stateLine([], { mood: -2, energy: 0, sleep: 0 }).low).toBe(true);
     expect(stateLine([], { mood: -1, energy: -1, sleep: 0 }).low).toBe(false);
   });
+});
+
+it('clashes exclude all-day events, zero duration and touching endpoints; input stays unchanged', () => {
+  const event = (title: string, start: string, end: string, allDay = false): BriefEvent => ({ title,
+    start: `2026-06-15T${start}:00Z`, end: `2026-06-15T${end}:00Z`, allDay });
+  const events = [event('B', '10:00', '11:00'), event('A', '09:00', '10:00'),
+    event('All day', '00:00', '23:59', true), event('Zero', '09:30', '09:30')];
+  const before = JSON.stringify(events);
+  expect(findClashes(events).every((m) => !m.clash && m.clashWith === undefined)).toBe(true);
+  expect(findClashes(events).map((m) => m.title)).toEqual(['All day', 'A', 'Zero', 'B']);
+  expect(JSON.stringify(events)).toBe(before);
+  expect(findClashes([])).toEqual([]);
+  expect(rankTodos(Array.from({ length: 7 }, (_, i) => todo(`T${i}`, null)), DAY)).toHaveLength(5);
 });

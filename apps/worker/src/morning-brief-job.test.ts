@@ -33,12 +33,14 @@ const candidates = (over: Partial<MorningBriefCandidates> = {}): MorningBriefCan
 });
 
 const seedFile: BriefFile = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   date: DATE,
   generatedAt: NOW,
   source: 'fallback',
   unavailable: ['mail'],
+  unavailableReasons: {},
   brief: {
+    meetings: [],
     source: 'fallback',
     dayLine: `${DATE}: 0 free block(s), 0 todo candidate(s).`,
     gaps: [],
@@ -131,7 +133,7 @@ describe('morning brief job (ADR-0046)', () => {
     const logs = await run(store);
     expect(store.writeCalls).toBe(2);
     const parsed = parseBriefFile(store.text(MORNING_BRIEF_PATH));
-    expect(parsed).toMatchObject({ schemaVersion: 1, date: DATE, source: 'fallback', unavailable: [] });
+    expect(parsed).toMatchObject({ schemaVersion: 2, date: DATE, source: 'fallback', unavailable: [] });
     expect(parsed?.brief.source).toBe('fallback');
     const op = await morningBriefOperationId(DATE);
     const commits = store.commitsWithOp(op);
@@ -153,14 +155,14 @@ describe('morning brief job (ADR-0046)', () => {
     expect(logs).toMatchObject([{ status: 200 }]);
   });
 
-  it('passes real free blocks from calendar events and never hard-codes calendar/mail unavailability', async () => {
+  it('suppresses free blocks when calendar is unavailable', async () => {
     const store = await InMemoryStore.create({});
     const event = { title: 'Focus block', start: '2026-06-15T10:00:00.000Z', end: '2026-06-15T11:00:00.000Z', allDay: false };
     const logs = await run(store, {
       gather: async () => candidates({ events: [event], unavailable: ['calendar'] }),
     });
     const parsed = parseBriefFile(store.text(MORNING_BRIEF_PATH));
-    expect(parsed?.brief.gaps.length).toBeGreaterThan(0);
+    expect(parsed?.brief.gaps).toEqual([]);
     expect(parsed?.unavailable).toEqual(['calendar']);
     expect(JSON.stringify(logs)).not.toContain('mail');
   });
@@ -237,7 +239,7 @@ describe('morning brief job (ADR-0046)', () => {
     const logs = await run(store, { mailer });
     expect(sent).toHaveLength(1);
     expect(sent[0]!.subject).toBe(`Morning Brief - ${DATE}`);
-    expect(sent[0]!.text).toContain(`${DATE}: 1 free block(s), 1 todo candidate(s).`);
+    expect(sent[0]!.text).toContain(`${DATE}: no meetings.`);
     expect(logs).toMatchObject([{ status: 200, operationId: await morningBriefOperationId(DATE) }]);
   });
 
@@ -294,4 +296,90 @@ describe('morning brief job (ADR-0046)', () => {
     expect(logs).toMatchObject([{ status: 200, unavailableCodes: { calendar: 'google-reauth-needed', mail: 'upstream-unavailable' } }]);
     expect(JSON.stringify(logs)).not.toContain(TODO_TEXT);
   });
+});
+
+const meeting = (title: string, hour: number, end: number) => ({ title,
+  start: `${DATE}T${String(hour).padStart(2, '0')}:00:00.000Z`,
+  end: `${DATE}T${String(end).padStart(2, '0')}:00:00.000Z`, allDay: false,
+  link: 'https://calendar.google.com/calendar/event?eid=synthetic',
+});
+
+it.each([false, true])('writes three sorted meetings with clashes; model=%s', async (model) => {
+  const store = await InMemoryStore.create({});
+  let prompt = '';
+  const chat: ScalewayChat = { chat: async ({ user }) => { prompt = user; return { kind: 'ok', text: JSON.stringify({
+    dayLine: 'An open day with an open block.', todos: [{ id: 0, firstStep: 'Start.' }], encouragement: 'Go.' }) }; } };
+  const logs = await run(store, { ...(model ? { chat } : {}), gather: async () => candidates({
+    events: [meeting('SYNTHETIC-C', 14, 15), meeting('SYNTHETIC-B', 10, 12), meeting('SYNTHETIC-A', 9, 11)],
+  }) });
+  const file = parseBriefFile(store.text(MORNING_BRIEF_PATH))!;
+  expect(file.schemaVersion).toBe(2);
+  expect(file.brief.meetings.map((m) => [m.title, m.clash, m.clashWith])).toEqual([
+    ['SYNTHETIC-A', true, 'SYNTHETIC-B'], ['SYNTHETIC-B', true, 'SYNTHETIC-A'], ['SYNTHETIC-C', false, undefined],
+  ]);
+  expect(file.brief.meetings[0]?.link).toContain('https://calendar.google.com/');
+  expect(file.brief.dayLine).toBe(`${DATE}: 3 meetings, first at 11:00, 2 clashes.`);
+  expect(file.brief.dayLine).not.toMatch(/open/i);
+  expect(prompt).not.toContain('SYNTHETIC-');
+  if (model) expect(prompt).toContain('Clashing meetings: 2');
+  expect(JSON.stringify(logs)).not.toContain('SYNTHETIC-');
+});
+
+it('writes a busy day with six meetings and two separate clash groups', async () => {
+  const store = await InMemoryStore.create({});
+  await run(store, { gather: async () => candidates({ events: [
+    meeting('A', 7, 9), meeting('B', 8, 10), meeting('C', 11, 13),
+    meeting('D', 12, 14), meeting('E', 15, 16), meeting('F', 17, 18),
+  ] }) });
+  const brief = parseBriefFile(store.text(MORNING_BRIEF_PATH))!.brief;
+  expect(brief.meetings.map((m) => m.clash)).toEqual([true, true, true, true, false, false]);
+  expect(brief.dayLine).toBe(`${DATE}: 6 meetings, first at 09:00, 4 clashes.`);
+  expect(brief.dayLine).not.toMatch(/open/i);
+});
+
+it.each([false, true])('persists partial-failure reasons and suppresses failed-calendar gaps; model=%s', async (model) => {
+  const store = await InMemoryStore.create({});
+  await run(store, { ...(model ? { chat: modelChat } : {}), gather: async () => candidates({
+    unavailable: ['calendar', 'weather'], unavailableCodes: { calendar: 'google-reauth-needed', weather: 'threw' },
+  }) });
+  const file = parseBriefFile(store.text(MORNING_BRIEF_PATH))!;
+  expect(file.unavailable).toEqual(['calendar', 'weather']);
+  expect(file.unavailableReasons).toEqual({ calendar: 'google-reauth-needed', weather: 'threw' });
+  expect(file.brief.gaps).toEqual([]);
+  expect(file.brief.meetings).toEqual([]);
+  expect(file.brief.todos).toHaveLength(1);
+  expect(file.brief.dayLine).toContain('Calendar unavailable (google-reauth-needed)');
+  expect(file.brief.dayLine).not.toMatch(/open/i);
+});
+
+it('an empty available calendar has zero meetings and a real free block', async () => {
+  const store = await InMemoryStore.create({});
+  await run(store);
+  const file = parseBriefFile(store.text(MORNING_BRIEF_PATH))!;
+  expect(file.brief.meetings).toEqual([]);
+  expect(file.brief.dayLine).toBe(`${DATE}: no meetings.`);
+  expect(file.brief.gaps).toHaveLength(1);
+  expect(file.unavailableReasons).toEqual({});
+});
+
+it.each([false, true])('counts all-day events separately and takes the first timed start; timed=%s', async (timed) => {
+  const store = await InMemoryStore.create({});
+  const events = [
+    { ...meeting('SYNTHETIC-ALL-DAY-A', 0, 23), allDay: true },
+    { ...meeting('SYNTHETIC-ALL-DAY-B', 0, 23), allDay: true },
+    ...(timed ? [meeting('SYNTHETIC-TIMED', 7, 8)] : []),
+  ];
+  let prompt = '';
+  await run(store, { gather: async () => candidates({ events }), chat: { chat: async ({ user }) => {
+    prompt = user;
+    return { kind: 'ok', text: JSON.stringify({ todos: [{ id: 0, firstStep: 'Start.' }], encouragement: 'Go.' }) };
+  } } });
+  const file = parseBriefFile(store.text(MORNING_BRIEF_PATH))!;
+  const expected = timed ? `${DATE}: 1 meeting, first at 09:00. +2 all-day.` : `${DATE}: no meetings. +2 all-day.`;
+  expect(file.source).toBe('model');
+  expect(file.brief.dayLine).toBe(expected);
+  expect(file.brief.meetings).toHaveLength(events.length);
+  expect(prompt).toContain(expected);
+  expect(prompt).toContain('Clashing meetings: 0');
+  expect(prompt).not.toContain('SYNTHETIC-');
 });
