@@ -1,15 +1,56 @@
-# Deploy runbook (human gate G2)
+# Deploy runbook (CI/CD plus owner bootstrap)
 
-The owner's steps to take Vault Companion live on Cloudflare. Everything here is done by the owner on their own
-machine; agents never log in, deploy or touch an account. Config: `apps/worker/wrangler.jsonc`. Placeholders below
-(`<team>`, `<host>`, `<owner>`, `<vault-repo>`, `<path-outside-repos>`) are never committed with real values — the
-repository is public.
+The owner bootstraps Cloudflare and GitHub once (this page), then **merges to `main` are the only production deploy
+path**. GitHub Actions runs CI, deploys with `wrangler deploy`, smoke-tests the public origin anonymously, and rolls
+back to the previous version if the smoke test fails. Nobody runs `wrangler deploy` by hand as the normal path, and
+the Lead does not need production deploy rights. The sections after the bootstrap are the one-time Cloudflare setup;
+the manual fallback at the end exists for emergencies and the first-ever deploy.
+
+Config: `apps/worker/wrangler.jsonc`. Placeholders below (`<team>`, `<host>`, `<owner>`, `<vault-repo>`,
+`<path-outside-repos>`) are never committed with real values — the repository is public.
 
 One Worker serves both the PWA (`apps/web/dist` via Workers static assets) and the API: `/api/*` always runs the
 Worker; everything else is a static file. One origin is required by the origin/CSRF checks in `apps/worker/src/app.ts`.
 That origin is the owner's **custom domain behind Cloudflare Access, and nothing else**: `wrangler.jsonc` sets
 `workers_dev: false` and `preview_urls: false` (asserted by `apps/worker/src/config.test.ts`), so no `*.workers.dev`
 or per-version preview hostname exists to bypass Access.
+
+## CI/CD flow (ADR-0058)
+
+1. A pull request runs `check` exactly as before. `deploy` never runs on `pull_request` or `workflow_dispatch`; only
+   a push to `main` starts it, and it waits for the full PR checks (`needs: [check]`).
+2. `deploy` uses the `production` GitHub environment, whose required reviewers make one owner approval mandatory
+   before any merge deploy. The job concurrency group `deploy-production` has `cancel-in-progress: false`, so two
+   merges in a row queue instead of overlapping.
+3. The job installs with `pnpm install --frozen-lockfile`, builds the web app, tags the Worker version with the commit
+   SHA, and from `apps/worker` runs `pnpm exec wrangler deploy --domain "$PRODUCTION_HOST" --tag "$GITHUB_SHA"`.
+   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` exist only as `production` environment secrets.
+4. `tools/smoke-test.mjs` requests `/` and `/api/session` anonymously. Both must be stopped by Access (302/403,
+   never 200) and the new version must carry 100% traffic. Each fetch is retried up to three times before the smoke
+   test is declared failed.
+5. On smoke failure the job runs `wrangler rollback <previous-version-id>` and exits red. The step summary always
+   shows the new version id, previous version id, and the exact rollback command; token or secret values are never
+   printed. If the status API is down the run is red and rollback is deliberately not attempted.
+6. Docs-only merges still run the job; deploying the unchanged Worker is functionally idempotent and the smoke test
+   still verifies production.
+
+### Owner one-time setup
+
+1. Create a Cloudflare API token: My Profile → API Tokens → Create Token → **Create Custom Token**.
+2. Permissions: `Account` → `Workers Scripts` → `Edit`. Account Resources: include **only this account**; Zone
+   Resources: leave as-is (no zone permission is granted). Continue to summary → Create Token, and copy the value.
+   If the first approved deploy fails on the custom domain with an authentication or zone error (unverified: depends
+   on how wrangler attaches `--domain`), edit the token and add `Zone` → `Workers Routes` → `Edit` and `Zone` → `Zone`
+   → `Read`, restricted to the one zone of the custom domain, then re-run the failed job.
+3. In GitHub, open the repository → Settings → Environments → **New environment**, name it `production`.
+4. Add three environment secrets: `CLOUDFLARE_API_TOKEN` (the token from step 2), `CLOUDFLARE_ACCOUNT_ID` (Cloudflare
+   dashboard → Workers & Pages → Account ID), and `PRODUCTION_HOST` (the custom domain hostname only, e.g.
+   `vc.example.com`). The Worker's nine runtime secrets stay in Cloudflare and are never copied here.
+5. On the same environment page, tick **Required reviewers** and add one owner. Until two approved deploys have been
+   watched, leave the reviewer in place; removing it would make deploys automatic.
+6. Under Settings → Rules → Rulesets, add a `main` ruleset that requires a pull request before merging and requires
+   the `ci` status check. The exact fields available on this public free plan are to verify by owner while creating
+   the ruleset.
 
 ## 0. Choose the plan (subrequests and CPU)
 
@@ -188,3 +229,21 @@ app shell and `/api/*`. Anything else enabled ⇒ disable it before continuing.
    the same.) `https://<host>/_headers` must return the app's HTML, never the rules file.
 5. The task list loads (read path through the GitHub App). Do **not** complete a task yet: the first live write is
    gate G3.
+
+## 10. Manual fallback (emergencies only)
+
+If GitHub Actions is unavailable and a deploy is urgent, the owner can reproduce the CI path from a clean checkout.
+This is not the normal flow and is done only when the pipeline itself is broken.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm --filter @vault-companion/web build
+export CLOUDFLARE_API_TOKEN="<token>" CLOUDFLARE_ACCOUNT_ID="<account-id>"
+pnpm --filter @vault-companion/worker exec wrangler versions upload --tag "$(git rev-parse HEAD)"
+pnpm --filter @vault-companion/worker exec wrangler versions deploy <uploaded-version-id>@100 --yes
+pnpm --filter @vault-companion/worker exec wrangler triggers deploy
+```
+
+The three Cloudflare commands match the historical `versions` workflow: upload first, then deploy that version, then
+apply cron triggers. Do not skip the final `triggers deploy`; `wrangler versions deploy` alone does not apply crons
+(the 4 Oct Morning Brief miss), while the normal CI path uses `wrangler deploy`, which does apply them.

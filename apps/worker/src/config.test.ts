@@ -65,6 +65,11 @@ describe('wrangler.jsonc', () => {
     expect(config.preview_urls).toBe(false);
   });
 
+  it('stays within the Workers Free cron-trigger cap of five', () => {
+    // The account has no paid plan headroom: exceeding five cron triggers fails the deploy guard.
+    expect((config.triggers?.crons ?? []).length).toBeLessThanOrEqual(5);
+  });
+
   it('commits only the fixed non-identifying vars (public repo); everything else is a secret', () => {
     // Vault branch is main; durable dates are Copenhagen dates (docs/vault-contract.md). No placeholders.
     expect(vars).toEqual({ AUTH_MODE: 'access', VAULT_BRANCH: 'main', USER_TIME_ZONE: 'Europe/Copenhagen' });
