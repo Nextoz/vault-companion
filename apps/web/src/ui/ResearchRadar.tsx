@@ -494,7 +494,7 @@ export function ResearchRadar({ accountKey, refreshKey, blocked, defaultOpen = f
           Research Radar
         </button>
       </h2>
-      <button type="button" className="link" disabled={blocked} aria-expanded={readingOpen} onClick={() => setReadingOpen(!readingOpen)}>Reading</button>
+      <button type="button" className="link" disabled={blocked} aria-expanded={readingOpen} onClick={() => setReadingOpen((open) => !open)}>Reading</button>
       {readingOpen && <Morning refreshKey={refreshKey} startOpen />}
       {view && (
         <p className="muted small" data-testid="radar-summary">

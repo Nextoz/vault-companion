@@ -113,7 +113,11 @@ function Send-StartPrompt {
 while ($true) {
     # One bad poll (Herdr hiccup, locked file) must never end the watcher: it died once on 2026-10-06 and the Lead sat idle.
     try {
-        $screen = if ($TestText) { $TestText } else { (& herdr pane read $LeadPane --source recent-unwrapped --lines 200 --format text) -join "`n" }
+        # `recent-unwrapped` returns only ~4 lines for the Claude Code screen (found 2026-10-06: the watcher was nearly blind and
+        # sent the start prompt into a busy Lead). `recent` (scrollback) and `visible` (the screen) are complete.
+        $recent = if ($TestText) { $TestText } else { (& herdr pane read $LeadPane --source recent --lines 200 --format text) -join "`n" }
+        $visible = if ($TestText) { $TestText } else { (& herdr pane read $LeadPane --source visible --lines 80 --format text) -join "`n" }
+        $screen = "$recent`n$visible"
         $cooled = ((Get-Date) - $lastRestart).TotalMinutes -ge 5   # the same marker must not restart the Lead twice
         if (-not $TestText -and (Test-Path -LiteralPath $sentinel)) {
             Remove-Item -LiteralPath $sentinel -Force -ErrorAction SilentlyContinue
@@ -128,7 +132,7 @@ while ($true) {
 
         $status = Get-LeadStatus
         # A cleared pane that never received the start prompt (an owner /clear, a lost send): give it the prompt, no /clear.
-        if (Test-FreshPane $screen $status) { $freshPolls++ } else { $freshPolls = 0 }
+        if ((Test-FreshPane $visible $status) -and (Test-FreshPane $recent $status)) { $freshPolls++ } else { $freshPolls = 0 }
         if ($freshPolls -ge 2 -and $cooled) {
             Log 'empty idle pane: sending the start prompt'
             Send-StartPrompt
