@@ -68,7 +68,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-0. **Order (owner 2026-10-06, `.agent/owner-instructions.md`):** UX9 (clone `ux9`, brief only) -> MB3 (ADR schemaVersion 2). Workers: Codex gpt-6.1-sol default, GLM for reviews. Items 1-2 below are history.
+0. **UX9 worker RUNNING (Codex medium, started 2026-10-06 evening, clone `vault-companion-clones/ux9` at main babb5f3, log `.agent/run-ux9.log`): do NOT relaunch. On restart, look for `.agent/handoffs/ux9.md` (line "UX9 DONE"), then `handoff-check.ps1`.** **Order (owner 2026-10-06, `.agent/owner-instructions.md`):** UX9 -> MB3 (ADR schemaVersion 2). Workers: Codex gpt-6.1-sol default, GLM for reviews. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the
