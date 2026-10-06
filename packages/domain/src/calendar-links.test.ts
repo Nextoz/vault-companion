@@ -7,7 +7,8 @@ import {
   type CalendarLink,
   type CalendarLinksFile,
 } from './calendar-links.ts';
-import { CALENDAR_LINKS_PATH } from './paths.ts';
+import { calendarItemKey } from '@vault-companion/contracts';
+import { CALENDAR_LINKS_PATH, TODO_LIST_PATH } from './paths.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
 const OP_A = '00000000-0000-4000-8000-000000000001';
@@ -136,5 +137,66 @@ describe('readCalendarLinks', () => {
     expect(await makeService(await InMemoryStore.create({})).readCalendarLinks()).toMatchObject({ code: 'not-found' });
     const bad = await InMemoryStore.create({ [CALENDAR_LINKS_PATH]: '{not json' });
     expect(await makeService(bad).readCalendarLinks()).toMatchObject({ code: 'invalid' });
+  });
+
+  it('resolves a legacy key to the current ADR-0056 key from text and file, after unrelated changes', async () => {
+    const text = '- [ ] Call the bank #todo';
+    const legacyKey = `task:${'a'.repeat(40)}:4:${text}`;
+    const markdown = [
+      '## Open',
+      '- [ ] Water the plants #todo',
+      '- [ ] Buy oat milk #todo',
+      text,
+      '## Done',
+    ].join('\n') + '\n';
+    const store = await InMemoryStore.create({
+      [CALENDAR_LINKS_PATH]: serializeCalendarLinksFile(file({ [legacyKey]: link('event-legacy', OP_A) })),
+      [TODO_LIST_PATH]: new TextEncoder().encode(markdown),
+    });
+    const result = await makeService(store).readCalendarLinks();
+    expect(result).toEqual({
+      revision: store.headCommit,
+      links: { [calendarItemKey('task', text, 1)]: 'event-legacy' },
+    });
+  });
+
+  it('does not silently bind an ambiguous duplicate legacy line', async () => {
+    const text = '- [ ] Call the bank #todo';
+    const legacyKey = `task:${'a'.repeat(40)}:4:${text}`;
+    const markdown = ['## Open', text, text, '## Done'].join('\n') + '\n';
+    const store = await InMemoryStore.create({
+      [CALENDAR_LINKS_PATH]: serializeCalendarLinksFile(file({ [legacyKey]: link('event-legacy', OP_A) })),
+      [TODO_LIST_PATH]: new TextEncoder().encode(markdown),
+    });
+    const result = await makeService(store).readCalendarLinks();
+    expect(result).toEqual({ revision: store.headCommit, links: {} });
+  });
+});
+
+describe('findCalendarItemLink ADR-0056', () => {
+  it('returns ambiguous when a legacy text currently occurs more than once', async () => {
+    const text = '- [ ] Call the bank #todo';
+    const legacyKey = `task:${'a'.repeat(40)}:4:${text}`;
+    const markdown = ['## Open', text, text, '## Done'].join('\n') + '\n';
+    const store = await InMemoryStore.create({
+      [CALENDAR_LINKS_PATH]: serializeCalendarLinksFile(file({ [legacyKey]: link('event-legacy', OP_A) })),
+      [TODO_LIST_PATH]: new TextEncoder().encode(markdown),
+    });
+    const result = await makeService(store).findCalendarItemLink(calendarItemKey('task', text, 2));
+    expect(result).toEqual({ status: 'ambiguous' });
+  });
+
+  it('does not report already-migrated when the new key holds a different link', async () => {
+    const text = '- [ ] Call the bank #todo';
+    const legacyKey = `task:${'a'.repeat(40)}:4:${text}`;
+    const newKey = calendarItemKey('task', text, 1);
+    const store = await InMemoryStore.create({
+      [CALENDAR_LINKS_PATH]: serializeCalendarLinksFile(file({
+        [legacyKey]: link('event-legacy', OP_A),
+        [newKey]: link('event-other', OP_B),
+      })),
+    });
+    const result = await makeService(store).migrateCalendarLink({ operationId: OP_C, itemKey: newKey, legacyKey, raw: {} });
+    expect(result).toMatchObject({ code: 'conflict:stale' });
   });
 });

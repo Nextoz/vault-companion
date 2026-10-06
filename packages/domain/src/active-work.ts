@@ -31,7 +31,7 @@ async function read(store: VaultStore, today: string): Promise<ActiveWorkRespons
     }
     const parsed = parseActiveWork(markdown, today);
     const items = parsed.ok ? parsed.items.filter((t) => t.section === 'Now').map((t) => ({
-      locator: { path: ACTIVE_WORK_PATH as typeof ACTIVE_WORK_PATH, blobSha: file.blobSha, lineIndex: t.lineIndex, lineText: t.lineText, occurrencesAtRead: t.occurrences },
+      locator: { path: ACTIVE_WORK_PATH as typeof ACTIVE_WORK_PATH, blobSha: file.blobSha, lineIndex: t.lineIndex, lineText: t.lineText, occurrencesAtRead: t.occurrences, occurrenceIndex: t.occurrenceIndex },
       name: t.name, outcome: t.outcome, next: t.next, review: t.review, link: t.link, needsReview: t.needsReview,
     })) : [];
     return { status: 'ok', revision: x, blobSha: file.blobSha, markdown, items,

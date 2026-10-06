@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { CALENDAR_TYPE_FALLBACK, activeWorkCalendarKey, calendarChips, calendarDate, calendarErrorMessage,
-  calendarPrefill, guessEventType, itemTitle, parseTimeHint, taskCalendarKey, timedWindow } from './calendar-sheet.ts';
+  calendarPrefill, guessEventType, itemTitle, parseTimeHint, taskCalendarKey, timedWindow, ITEM_KEY_MAX } from './calendar-sheet.ts';
 import type { ActiveWorkLocator, TaskLocator } from '@vault-companion/contracts';
 
 const locator = (over: Partial<TaskLocator> = {}): TaskLocator => ({
   path: 'Tasks/To-Do List.md', blobSha: '2'.repeat(40), lineIndex: 3, lineText: '- [ ] Call the bank 📅 2026-10-04',
-  occurrencesAtRead: 1, ...over,
+  occurrencesAtRead: 1, occurrenceIndex: 1, ...over,
 });
 
 describe('itemTitle', () => {
@@ -110,23 +110,58 @@ describe('calendarChips', () => {
 });
 
 describe('item keys', () => {
-  it('prefixes and stays within the Worker\u2019s cap', () => {
+  it('uses ADR-0056 text identity, not the old blob/line-index key, and fits the Worker cap', () => {
     const task = taskCalendarKey(locator());
     expect(task.startsWith('task:')).toBe(true);
-    expect(task).toContain(locator().blobSha);
-    expect(task.length).toBeLessThanOrEqual(512);
+    expect(task).not.toContain(locator().blobSha);
+    expect(task).not.toContain(`${locator().lineIndex}`);
+    expect(task).toBe('task:1:- [ ] Call the bank 📅 2026-10-04');
     const huge = taskCalendarKey(locator({ lineText: `- [ ] ${'x'.repeat(2000)}` }));
-    expect(huge.length).toBeLessThanOrEqual(512);
+    expect(huge.length).toBeLessThanOrEqual(ITEM_KEY_MAX);
   });
-  it('is stable for the same locator and distinct for another', () => {
-    expect(taskCalendarKey(locator())).toBe(taskCalendarKey(locator()));
-    expect(taskCalendarKey(locator())).not.toBe(taskCalendarKey(locator({ lineIndex: 4 })));
+  it('keeps the association across an unrelated blob and line change', () => {
+    const before = taskCalendarKey(locator());
+    const after = taskCalendarKey(locator({ blobSha: '9'.repeat(40), lineIndex: 17 }));
+    expect(before).toBe(after);
+  });
+  it('keeps duplicate text unambiguous by ordinal, without blob or line index', () => {
+    const text = '- [ ] Water the plants';
+    const first = taskCalendarKey(locator({ lineText: text, occurrencesAtRead: 2, occurrenceIndex: 1 }));
+    const second = taskCalendarKey(locator({ lineText: text, occurrencesAtRead: 2, occurrenceIndex: 2 }));
+    expect(first).not.toBe(second);
+    expect(first).not.toContain(locator().blobSha);
+    expect(second).not.toContain(`${locator().lineIndex}`);
+  });
+  it('gives Active Work the same stable identity and never embeds its blob SHA', () => {
     const active: ActiveWorkLocator = { path: 'Tasks/Active Work Now.md', blobSha: '5'.repeat(40), lineIndex: 1,
-      lineText: '- [ ] **Garden plan:** Next: Order seeds', occurrencesAtRead: 1 };
-    expect(activeWorkCalendarKey(active).startsWith('active:')).toBe(true);
+      lineText: '- [ ] **Garden plan:** Next: Order seeds', occurrencesAtRead: 1, occurrenceIndex: 1 };
+    const before = activeWorkCalendarKey(active);
+    const after = activeWorkCalendarKey({ ...active, blobSha: '7'.repeat(40), lineIndex: 9 });
+    expect(before.startsWith('active:')).toBe(true);
+    expect(before).toBe(after);
+    expect(before).not.toContain(active.blobSha);
   });
   it('strips control characters that the key schema refuses', () => {
     expect(taskCalendarKey(locator({ lineText: 'a\tb' }))).not.toContain('\t');
+  });
+  it('keeps a pre-ADR-0056 duplicate locator parseable with a line-ordinal fallback', () => {
+    const ambiguous = locator({ occurrencesAtRead: 2 });
+    delete ambiguous.occurrenceIndex;
+    const key = taskCalendarKey(ambiguous);
+    expect(key).toMatch(/^task:[1-9]\d*:/);
+    expect(key).toContain(ambiguous.lineText);
+  });
+  it('matches the e2e MockApi twin/conflict shape: two identical lines stay distinct and parseable', () => {
+    const text = '- [ ] Call the bike shop';
+    const first = { ...locator({ lineText: text, lineIndex: 10, occurrencesAtRead: 2 }) };
+    const second = { ...locator({ lineText: text, lineIndex: 12, occurrencesAtRead: 2 }) };
+    delete first.occurrenceIndex;
+    delete second.occurrenceIndex;
+    const firstKey = taskCalendarKey(first);
+    const secondKey = taskCalendarKey(second);
+    expect(firstKey).not.toBe(secondKey);
+    expect(firstKey).toMatch(/^task:[1-9]\d*:/);
+    expect(secondKey).toMatch(/^task:[1-9]\d*:/);
   });
 });
 
@@ -136,5 +171,6 @@ describe('calendarErrorMessage', () => {
     expect(calendarErrorMessage('error', 'calendar-write-unavailable')).toBe('Calendar writing is not set up');
     expect(calendarErrorMessage('error', 'google-reauth-needed')).toContain('reconnected');
     expect(calendarErrorMessage('error', 'invalid')).toContain('Try again');
+    expect(calendarErrorMessage('error', 'calendar-link-needs-recheck')).toContain('Reload tasks');
   });
 });

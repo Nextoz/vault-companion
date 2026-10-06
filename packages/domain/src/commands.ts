@@ -1147,7 +1147,7 @@ async function answerKnown(store: VaultStore, known: readonly string[], x: strin
 
 export function toView(t: md.ParsedTask, blobSha: string): TaskView {
   return {
-    locator: { path: TODO_LIST_PATH, blobSha, lineIndex: t.lineIndex, lineText: t.lineText, occurrencesAtRead: t.occurrences },
+    locator: { path: TODO_LIST_PATH, blobSha, lineIndex: t.lineIndex, lineText: t.lineText, occurrencesAtRead: t.occurrences, occurrenceIndex: t.occurrenceIndex },
     description: t.description,
     status: t.status,
     section: t.section,
