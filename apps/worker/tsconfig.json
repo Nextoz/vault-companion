@@ -17,6 +17,9 @@
     },
     {
       "path": "../../packages/github"
+    },
+    {
+      "path": "../../packages/vault-markdown"
     }
   ]
 }
