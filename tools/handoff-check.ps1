@@ -4,6 +4,9 @@
   Run by the Lead (or the launcher) after a worker exits, BEFORE the Lead reads the diff. Policy: docs/orchestration.md.
 
 .DESCRIPTION
+  0. Brief format guard: fails fast when .agent/brief.md has no `## Outcome` heading or no `## Acceptance`
+     heading with at least one `- ` bullet. Also reports (advisory) a missing `## Alternatives` section
+     in .agent/handoffs/<Task>.md. Exit 50 = brief not reviewable.
   1. Boundary: commits the worker's changes in the disposable clone as one candidate commit, never `.agent/`,
      logs or env files; refuses if such paths are already in the committed delta.
   2. Tests: runs -TestCmd (the brief's touched-test command) in the clone; failure => exit 20, no review spent.
@@ -14,13 +17,16 @@
      is bounded to 25 s and a failure writes "Jev check skipped".
   3. Review: `cr review --agent --committed --base-commit <Base> --fresh` over the complete task delta, or GLM-5.2 via
      tools/glm-review.ps1 when CodeRabbit is out of hourly reviews (-Reviewer auto|coderabbit|glm|both). `all` runs
-     CodeRabbit + GLM-5.2 + qwen3.5-397b-a17b (the last two via glm-review.ps1 -Model). Never
-     `--use-credits`. Incomplete/unavailable review => exit 30 (not "clean").
+      CodeRabbit + GLM-5.2 + qwen3.5-397b-a17b (the last two via glm-review.ps1 -Model). Never
+      `--use-credits`. Incomplete/unavailable review => exit 30 (not "clean").
+  3b. Intent review (after code review): for UI, feature and high-risk slices (-Intent auto|on|off) asks
+      tools/intent-review.ps1 one bounded question set about the diff versus the brief and folds its findings
+      into the same triage/fix-<Task>.md flow. Unavailable intent review is advisory only.
   4. Triage: each finding gets one Jev choice (~400 tokens). Deterministic floor: critical/major always go to
      the fix list. Jev "must-fix" (p >= 0.5) also goes to the fix list; everything else is listed as skipped.
   5. Writes .agent/check-<Task>.md (summary for the Lead) and, if needed, .agent/fix-<Task>.md (one correction
      round for the SAME worker). Exit 0 clean, 10 fixes needed, 20 tests failed, 30 review unavailable,
-     40 boundary refused.
+     40 boundary refused, 50 brief not reviewable.
 
 .EXAMPLE
   pwsh -NoProfile -File tools/handoff-check.ps1 -Clone C:\Dev\vault-companion-clones\mood -Base 1a2b3c4 -Task mood1 `
@@ -37,6 +43,9 @@ param(
     # auto: CodeRabbit while it has hourly reviews, else GLM-5.2. both: CodeRabbit + GLM (high-risk second opinion).
     # all: CodeRabbit + GLM-5.2 + qwen3.5-397b-a17b.
     [ValidateSet('auto', 'coderabbit', 'glm', 'both', 'all')][string]$Reviewer = 'auto',
+    # auto: run intent review only when the diff touches apps/web/src/ui, apps/worker/src or packages/*.
+    # on: always run it; off: never run it (docs-only/tooling slices).
+    [ValidateSet('auto', 'on', 'off')][string]$Intent = 'auto',
     [switch]$NoJev
 )
 $ErrorActionPreference = 'Stop'
@@ -99,6 +108,47 @@ function Get-ChangedTestNames([string]$base) {
     }
     return [pscustomobject]@{ files = $files; names = $names.ToArray() }
 }
+
+function Test-BriefReviewable([string]$path) {
+    if (-not (Test-Path -LiteralPath $path)) { return [pscustomobject]@{ ok = $false; reason = '.agent/brief.md is missing' } }
+    $hasOutcome = $false; $hasAcceptance = $false; $acceptanceBullet = $false; $inAcceptance = $false
+    foreach ($raw in @(Get-Content -LiteralPath $path)) {
+        if ($raw -match '^##\s+(.+?)\s*$') {
+            $heading = $matches[1]
+            if ($heading -eq 'Outcome') { $hasOutcome = $true; $inAcceptance = $false }
+            elseif ($heading -eq 'Acceptance') { $hasAcceptance = $true; $inAcceptance = $true }
+            else { $inAcceptance = $false }
+            continue
+        }
+        if ($inAcceptance -and $raw -match '^\s*-\s+\S') { $acceptanceBullet = $true }
+    }
+    if (-not $hasOutcome) { return [pscustomobject]@{ ok = $false; reason = 'missing `## Outcome` heading' } }
+    if (-not $hasAcceptance) { return [pscustomobject]@{ ok = $false; reason = 'missing `## Acceptance` heading' } }
+    if (-not $acceptanceBullet) { return [pscustomobject]@{ ok = $false; reason = '`## Acceptance` has no `- ` bullet' } }
+    return [pscustomobject]@{ ok = $true; reason = '' }
+}
+
+function Test-IntentEligible([string[]]$paths) {
+    foreach ($p in $paths) {
+        if ($p -match '^(apps/web/src/ui|apps/worker/src|packages)/') { return $true }
+    }
+    return $false
+}
+
+# 0. Brief format guard (fails fast, before commit/tests/review): the handoff must be reviewable.
+$briefPath = Join-Path $agent 'brief.md'
+$briefCheck = Test-BriefReviewable $briefPath
+if (-not $briefCheck.ok) {
+    $lines.Add("Brief not reviewable: $($briefCheck.reason)")
+    $lines.Add('Required: `## Outcome` heading and `## Acceptance` heading with at least one `- ` bullet.')
+    Write-Output "handoff-check ${Task}: brief not reviewable - $($briefCheck.reason)"
+    Finish 50 'BRIEF NOT REVIEWABLE'
+}
+$handoffPath = Join-Path $agent "handoffs/$Task.md"
+if (-not (Test-Path -LiteralPath $handoffPath)) { $lines.Add('Handoff alternatives: advisory (missing .agent/handoffs/<task>.md)') }
+elseif (-not ((Get-Content -LiteralPath $handoffPath -Raw) -match '(?im)^##\s+Alternatives\s*$')) { $lines.Add('Handoff alternatives: advisory (missing `## Alternatives`)') }
+else { $lines.Add('Handoff alternatives: present') }
+
 # 1. Boundary + candidate commit
 git cat-file -e "$Base^{commit}" 2>$null; if ($LASTEXITCODE -ne 0) { throw "Base commit $Base not found in $Clone" }
 $blocked = '^(\.agent/|\.env|.*\.log$|.*\.runner\.sh$)'
@@ -181,6 +231,11 @@ function Invoke-Glm([string]$Model, [string]$Name) {
     & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'glm-review.ps1') -Clone $Clone -Base $Base -Out $f -Model $Model | Out-Null
     Read-Review $f $Name
 }
+function Invoke-Intent {
+    $f = Join-Path $agent "intent-$Task.jsonl"
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'intent-review.ps1') -Clone $Clone -Base $Base -Task $Task -Out $f | Out-Null
+    Read-Review $f 'Intent'
+}
 
 $results = @()
 if ($FindingsFile) { $results += , (Read-Review $FindingsFile 'saved review') }
@@ -202,7 +257,26 @@ else {
 }
 $completed = @($results | Where-Object { $null -ne $_ })
 if ($completed.Count -eq 0) { $lines.Add('No review completed. Not a clean review.'); Finish 30 'REVIEW UNAVAILABLE' }
-$findings = @($completed | ForEach-Object { $_ })
+
+# 3b. Intent review (after code review): one bounded stronger-model question set about diff versus brief.
+$intentFindings = @()
+if ($Intent -eq 'on' -or ($Intent -eq 'auto' -and (Test-IntentEligible $delta))) {
+    $lines.Add('## Intent review')
+    try {
+        $intentResult = Invoke-Intent
+        if ($null -eq $intentResult) {
+            $lines.Add('- Intent review unavailable; advisory only (no findings folded).')
+        } else {
+            $intentFindings = @($intentResult)
+            if ($intentFindings.Count -eq 0) { $lines.Add('- Intent review completed with no findings.') }
+        }
+    } catch {
+        $lines.Add("- Intent review unavailable: $($_.Exception.Message)")
+        $intentFindings = @()
+    }
+}
+
+$findings = @($completed | ForEach-Object { $_ }) + @($intentFindings)
 
 # 4. Triage: deterministic floor, then Jev
 $jev = Join-Path $env:USERPROFILE 'Obsidian Vault/Second Brain/Tools/jev.ps1'
