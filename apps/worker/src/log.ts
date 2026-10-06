@@ -17,13 +17,15 @@ export interface LogRecord {
   readonly errorClass?: string;
   /** The error's message, only when it is one of the adapters' fixed diagnostics (see `diagnosticDetail`). */
   readonly errorDetail?: string;
+  /** Per-reader fixed codes (ApiError.code enum strings, or `threw`), keyed by reader name; never free text. */
+  readonly unavailableCodes?: Readonly<Record<string, string>>;
 }
 
 export type LogSink = (record: LogRecord) => void;
 
 const ALLOWED: ReadonlySet<string> = new Set([
   'requestId', 'method', 'route', 'status', 'durationMs', 'commandType', 'operationId', 'errorCode', 'pathHash', 'commitSha',
-  'errorClass', 'errorDetail',
+  'errorClass', 'errorDetail', 'unavailableCodes',
 ]);
 
 /** Drops any key not in the allowlist even if a caller casts around the type. */
