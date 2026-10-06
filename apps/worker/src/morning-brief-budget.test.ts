@@ -8,6 +8,11 @@ const HEAD = '1'.repeat(40);
 const TODO = 'Tasks/To-Do List.md';
 const TRAINING = 'Health/Training Log.md';
 const HEALTH = 'Health/Data/Apple Health Daily.csv';
+const DAILY_TODAY = 'Journal/Daily/2026-10-04.md';
+const DAILY_YESTERDAY = 'Journal/Daily/2026-10-03.md';
+
+const dailyMood = (date: string, checkinAt: string): string =>
+  ['---', `date: ${date}`, 'mood: -1', 'energy: 1', 'sleep: 7', `checkin_at: ${checkinAt}`, '---', '', 'Synthetic body', ''].join('\n');
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), {
   status,
@@ -189,6 +194,8 @@ describe('Morning Brief cron subrequest budget (ADR-0055)', () => {
       [TODO]: '## Open\n\n- [ ] Synthetic task one #todo\n\n## Done\n',
       [TRAINING]: '## Sessions\n| Date | Time | Type | Distance | Duration | Weight | Split | Note |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n',
       [HEALTH]: 'date,steps,headphone_min,first_move,last_move\n',
+      [DAILY_TODAY]: dailyMood('2026-10-04', '2026-10-04T04:15:00.000Z'),
+      [DAILY_YESTERDAY]: dailyMood('2026-10-03', '2026-10-03T21:30:00.000Z'),
     };
     for (let i = 0; i < 100; i++) files[`Tasks/Synthetic note ${i}.md`] = '# Synthetic note\n';
     const fake = createFakeFetch(files);
@@ -218,5 +225,12 @@ describe('Morning Brief cron subrequest budget (ADR-0055)', () => {
     expect(fake.calls.length).toBeLessThanOrEqual(45);
     expect(fake.calls.some((call) => call.kind === 'github-write')).toBe(true);
     expect(fake.calls.some((call) => call.kind === 'scaleway')).toBe(true);
+    const moodReads = fake.calls.filter((call) => {
+      if (call.kind !== 'github-contents') return false;
+      const after = call.url.split('/contents/')[1]?.split('?')[0] ?? '';
+      const path = after.split('/').map((segment) => decodeURIComponent(segment)).join('/');
+      return path === DAILY_TODAY || path === DAILY_YESTERDAY;
+    });
+    expect(moodReads).toHaveLength(2);
   });
 });
