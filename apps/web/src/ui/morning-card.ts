@@ -3,6 +3,7 @@
 // UX7: the weather line is plain day language plus the run window's own wording, and one research entry replaces the
 // old reading-brief line (its content now lives in the Morning Brief sheet). Pure.
 import { effectiveRadarDecisions, WEATHER_TIME_ZONE } from '@vault-companion/contracts';
+import { briefMeetingRows, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
 import type { MorningBriefMissingResponse, MorningBriefReadResponse, MorningBriefResponse, RadarResponse, ScoutsResponse, WeatherProjection, WeatherResponse, WeatherRunWindow } from '@vault-companion/contracts';
 import type { QueueItem } from '../queue/queue.ts';
 import { attentionCount, pluralise, scoutsNeedAttention } from '../scouts.ts';
@@ -20,6 +21,9 @@ export interface MorningLine {
 
 /** One row the Morning Brief (MB2) adds above the existing morning lines. `todo` rows open Tasks; nothing else does. */
 export interface BriefLine {
+  readonly heading?: boolean;
+  readonly clash?: string | undefined;
+  readonly link?: string | undefined;
   readonly id: string;
   readonly text: string;
   /** The small "Fallback brief" marker shown when the brief was written without the model. */
@@ -40,12 +44,18 @@ export function briefLines(file: MorningBriefResponse | null, today: string): Br
   if (file.source === 'fallback') lines.push({ id: 'fallback', text: 'Fallback brief', marker: true, todo: false });
   lines.push({ id: 'day', text: file.brief.dayLine, marker: false, todo: false });
   if (file.brief.stateLine !== undefined) lines.push({ id: 'state', text: file.brief.stateLine, marker: false, todo: false });
+  if (file.brief.meetings !== undefined) {
+    lines.push({ id: 'today', text: 'Today', heading: true, marker: false, todo: false });
+    briefMeetingRows(file).forEach((row, i) => lines.push({ ...row, id: `meeting-${i}`, marker: false, todo: false }));
+  }
+  briefUnavailableLines(file).forEach((text, i) => lines.push({ id: `unavailable-${i}`, text, marker: false, todo: false }));
   file.brief.gaps.forEach((gap, i) => {
+    if (file.unavailable.includes('calendar')) return;
     if (gap.suggestion === undefined) return;
     lines.push({ id: `gap-${i}`, text: `${wallClock(gap.start)}-${wallClock(gap.end)}  ${gap.suggestion}`, marker: false, todo: false });
   });
-  file.brief.todos.forEach((todo) => {
-    lines.push({ id: `todo-${todo.id}`, text: todo.firstStep === undefined ? todo.text : `${todo.text} - ${todo.firstStep}`, marker: false, todo: true });
+  file.brief.todos.slice(0, 5).forEach((todo) => {
+    lines.push({ id: `todo-${todo.id}`, text: `${todo.text}${briefTodoAge(todo)}${todo.firstStep === undefined ? '' : ` - ${todo.firstStep}`}`, marker: false, todo: true });
   });
   if (file.brief.encouragement !== undefined) lines.push({ id: 'encouragement', text: file.brief.encouragement, marker: false, todo: false });
   return lines;

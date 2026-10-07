@@ -1501,7 +1501,7 @@ textarea:focus-visible {
 .sheet-header button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
 
 /* Prose stays compact; only actionable to-dos retain the button treatment. */
-.morning-brief-sheet p.morning-brief-line {
+.morning-brief-sheet :is(p, div).morning-brief-line {
   margin: 0;
   padding: 4px 0;
   border: 0;
