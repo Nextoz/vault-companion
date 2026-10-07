@@ -89,7 +89,9 @@ export async function fetchWithRetry(url, { fetchImpl = globalThis.fetch, attemp
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      response = await fetchImpl(url);
+      // Never follow redirects: Cloudflare Access answers an anonymous visitor with a 302 to its login page, and following
+      // it ends on that page's 200, which the smoke test would read as "app is open" and roll back (2026-10-07).
+      response = await fetchImpl(url, { redirect: 'manual' });
       if (isAllowedSmokeStatus(response?.status)) {
         return { response, attempts: attempt, error: null };
       }

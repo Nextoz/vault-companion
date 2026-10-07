@@ -56,6 +56,19 @@ describe('smoke-test.mjs', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it('requests with redirect: manual so the Access 302 is seen, not the login page 200 behind it', async () => {
+    const fetchImpl = vi.fn(async () => ({ status: 302 }));
+    await runSmokeTest({
+      baseUrl: 'https://example.test',
+      newVersionId: 'new',
+      deploymentStatus: { versions: [{ version_id: 'new', percentage: 100 }] },
+      fetchImpl,
+      sleep: async () => {},
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    for (const call of fetchImpl.mock.calls) expect(call[1]).toEqual({ redirect: 'manual' });
+  });
+
   it('retries a flaky fetch up to three times before failing', async () => {
     const fetchImpl = vi
       .fn()
