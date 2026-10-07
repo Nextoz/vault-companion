@@ -21,7 +21,9 @@ param(
     [Parameter(Mandatory)][string]$Clone,
     [Parameter(Mandatory)][ValidatePattern('^[a-z0-9][a-z0-9-]*$')][string]$Task,
     [switch]$Fix,
-    [string[]]$Files = @()
+    [string[]]$Files = @(),
+    # codex tier only: gpt-6.1-sol effort. low for ordinary work, medium for UI/data/features (owner 2026-10-06).
+    [ValidateSet('low', 'medium')][string]$Effort = 'low'
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
@@ -58,7 +60,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $Clone 'node_modules'))) {
     Write-Host 'pnpm install (worker commands have no network)...'
     Push-Location -LiteralPath $Clone; try { pnpm install --frozen-lockfile 2>&1 | Select-Object -Last 2 } finally { Pop-Location }
 }
-$model, $effort = if ($Tier -eq 'pro') { 'deepseek-v4-pro', 'medium' } elseif ($Tier -eq 'codex') { $null, 'medium' } else { 'deepseek-flash', 'high' }
+$model, $effort = if ($Tier -eq 'pro') { 'deepseek-v4-pro', 'medium' } elseif ($Tier -eq 'codex') { 'gpt-6.1-sol', $Effort } else { 'deepseek-flash', 'high' }
 # codex tier: the owner's Codex subscription, own CODEX_HOME (auth + model from its config.toml), no DeepSeek provider/key.
 $codexHome = if ($Tier -eq 'codex') { 'C:/Dev/tools/vault-companion-codex-home' } else { 'C:/Dev/tools/vault-companion-deepseek-home' }
 $codex = @('env', "CODEX_HOME=$codexHome", 'codex', 'exec')
@@ -68,7 +70,8 @@ if ($Fix) {
     if (-not $sid) { throw "No session id in $first; cannot resume the same worker" }
     $codex += @('resume')
 }
-if ($Tier -ne 'codex') { $codex += @('-m', $model, '-c', 'model_provider=deepseek') }
+$codex += @('-m', $model)
+if ($Tier -ne 'codex') { $codex += @('-c', 'model_provider=deepseek') }
 $codex += @('-c', "model_reasoning_effort=$effort",
     '-c', 'model_reasoning_summary=concise', '-c', 'model_verbosity=low', '-c', 'windows.sandbox=elevated',
     '-c', 'features.memories=false', '-c', 'memories.use_memories=false', '-c', 'memories.generate_memories=false',

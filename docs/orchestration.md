@@ -48,7 +48,7 @@ public-repo questions over the plain API, not for edits: it is the **second code
 Launch every worker with **one command**, from inside Herdr (it opens a visible pane in the Agents tab):
 
 ```sh
-pwsh -NoProfile -File tools/launch-worker.ps1 -Tier flash|pro|gemini -Clone <clone> -Task <task>        # brief: <clone>/.agent/brief.md
+pwsh -NoProfile -File tools/launch-worker.ps1 -Tier glm -Files a,b | codex [-Effort low|medium] | gemini -Clone <clone> -Task <task>        # brief: <clone>/.agent/brief.md
 pwsh -NoProfile -File tools/launch-worker.ps1 -Tier flash|pro -Clone <clone> -Task <task> -Fix          # resumes the same session with .agent/fix-<task>.md
 ```
 
@@ -95,7 +95,7 @@ question is a typed choice/score/yes-no over **public repo** material. Owner wan
 - **Before every dispatch (required):** choose the worker tier; state the brief's outcome, size and risk in a few
   lines. Follow Jev's pick unless the deterministic floor says otherwise (high-risk ⇒ Pro or Lead review), and say
   which in the STATUS line:
-  `pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,flash,pro,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks?" -Json`
+  `pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,sol-low,sol-medium,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks? sol-low = small mechanical fix, sol-medium = UI, data, new feature, Morning Brief" -Json`
 - **Instead of deliberating:** "is this in scope?", "is this handoff claim supported by the test output?", "real
   failure or flaky?", "which backlog item is smallest?" — ask Jev (`-Ask` / `-Choose` / `-Rate`) first.
 - **Test tier (advisory):** `tools/select-tests.ps1 -Paths <paths> [-HighRisk] [-NoJev]` prints `{tier, reason, source}`; the floor decides first.
