@@ -21,7 +21,7 @@ export function CharacterCard({ refreshKey, accountKey, onOpen }: {
             <p className="muted">{view.res === null ? 'Loading character…' : 'Character could not be loaded.'}</p>
             {view.res !== null && <button type="button" onClick={retry}>Retry</button>}
           </div>}
-          {data && <button type="button" className="character-card-button" onClick={onOpen} aria-label="Open Character">
+          {data && <button type="button" className="character-card-button" onClick={onOpen} aria-label={`Open Character: ${data.character.title}, level ${data.character.level}, ${label}, ${data.character.points.total} points`}>
             <span className="character-card-head">
               <strong className="character-card-title">{data.character.title}</strong>
               <span className="muted small">Level {data.character.level}</span>

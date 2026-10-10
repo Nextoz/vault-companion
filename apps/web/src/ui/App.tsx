@@ -475,7 +475,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
         {tab === 'radar' && !signedOut && (
           <>
-            <Back onBack={() => setTab(radarReturn)} />
+            <Back onBack={() => { if (logFromCharacter) { setLogFromCharacter(false); setCharacterOpen(true); setTab('training'); } else setTab(radarReturn); }} />
             <ResearchRadar accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} defaultOpen />
           </>
         )}
