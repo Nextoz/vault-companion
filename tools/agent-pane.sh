@@ -44,6 +44,8 @@ runner="${log%.*}.run.sh"
     printf 'export %s="$(powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('"'"'%s'"'"','"'"'User'"'"')" | tr -d '"'"'\\r\\n'"'"')"\n' "$name" "$name"
   done
   printf '%q ' "$@"; if [ -n "${AGENT_STDIN:-}" ]; then printf '< %q ' "$AGENT_STDIN"; fi; printf '2>&1 | tee %q\n' "$log"
+  # AGENT_AFTER: one trusted command line built by tools/launch-worker.ps1 (the pre-handoff review), run after the agent exits.
+  if [ -n "${AGENT_AFTER:-}" ]; then printf '%s 2>&1 | tee -a %q\n' "$AGENT_AFTER" "$log"; fi
   echo 'echo; echo "── finished $(date +%H:%M:%S) — pane closes in 60 s ──"; sleep 60'
   printf 'herdr pane close %q\n' "$pane"
 } > "$runner"

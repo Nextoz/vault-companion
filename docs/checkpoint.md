@@ -4,6 +4,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## State
 
+- **Tooling (2026-10-10)**: worker launcher uses DeepSeek Flash by default (`-Tier flash`), `tools/worker-after.ps1` runs handoff-check after a worker, hardened `lead-watch.ps1` (self-test 20/20, `.agent/restart-now` sentinel).
 - **CS (app side, lanes)**: Events triage shows a Work/Culture lane tag per card (`laneOf` in `apps/web/src/triage.ts`, category set per backlog), an All · Work · Culture filter (filtering never remounts the stack, so Undo/skip state survives) and a "6 work · 4 culture" line. Scouts tab needs no code: the registry is the status directory. Open: owner phone check of the mix; confirm `culture-events` shows on Scouts after its first run; tolerant missing record untested live.
 - **HC3b**: Health card → **History** toggle (lazy `GET /api/health/history`, all rows ≤ yesterday; chips 30 d / 90 d / 1 y / All slice client-side; range medians + SVG lines). Shares `readSource` with the card.
 - **HC3a** (ADR-0043): `POST /api/health/ingest`, own service-token verifier (ingest AUD only, no email claim),

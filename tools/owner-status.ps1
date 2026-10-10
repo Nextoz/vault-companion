@@ -20,7 +20,8 @@ try {
 $ledger = Join-Path $PSScriptRoot '..\.agent\budget\scaleway.jsonl'
 $used = 24457  # conservative local accounting before 2026-10-01 (previous Lead)
 if (Test-Path -LiteralPath $ledger) { Get-Content -LiteralPath $ledger | ForEach-Object { try { $used += [int]($_ | ConvertFrom-Json).tokens } catch { } } }
-$parts += ('GLM ~{0:N0}k/900k (local estimate)' -f ($used / 1000))
+# Bookkeeping only: the voucher limit is in EUR (owner instructions 2026-10-06/10: tell at EUR 20 left, stop at EUR 5).
+$parts += ('Scaleway ~{0:N0}k tokens used (EUR voucher rule)' -f ($used / 1000))
 $line = $parts -join ' · '
 Write-Output $line
 if ($free -lt $MinRamGB) { exit 1 }
