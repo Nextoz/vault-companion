@@ -1,4 +1,4 @@
-import type { AchievementDefinition, Criterion } from './types.ts';
+import type { AchievementDefinition, Criterion, StepMilestoneRules } from './types.ts';
 
 const single = (id: string, name: string, category: string, points: number, criterion: Criterion, type: AchievementDefinition['type'] = 'one-off'): AchievementDefinition => ({ id, name, category, points, criterion, type });
 const chain = (id: string, name: string, category: string, thresholds: readonly number[], points: readonly number[], criterion: (target: number) => Criterion): AchievementDefinition[] => thresholds.map((target, index) => ({
@@ -38,6 +38,35 @@ export const achievementCatalogue: readonly AchievementDefinition[] = [
   single('founding-hero', 'Founding Hero', 'feats', 0, { kind: 'founding', target: 1 }, 'feat'),
   single('day-one', 'Day One', 'feats', 0, { kind: 'dayOne', target: 2 }, 'feat'),
 ];
+
+/** A Journey step milestone: points only, never XP (owner decision 10 Oct 2026). Thresholds live in `steps` config. */
+export interface StepMilestoneDefinition {
+  readonly id: string;
+  readonly name: string;
+  readonly category: string;
+  readonly points: number;
+  readonly ladder: 'lifetime' | 'yearly';
+  readonly target: number;
+}
+
+export const STEP_MILESTONE_CATEGORY = 'Journey';
+
+const stepLabel = (target: number): string => target >= 1_000_000 ? `${target / 1_000_000}M` : `${target / 1_000}K`;
+const stepDefinition = (ladder: StepMilestoneDefinition['ladder'], target: number, name: string, points: number): StepMilestoneDefinition =>
+  ({ id: `steps-${ladder}-${target}`, name, category: STEP_MILESTONE_CATEGORY, points, ladder, target });
+
+/** Pairs the configured thresholds with Journey names and points. Recurring lifetime milestones use `recurringStepMilestone`. */
+export function stepMilestoneCatalogue(steps: StepMilestoneRules): readonly StepMilestoneDefinition[] {
+  return [
+    ...steps.lifetime.map((target, index) => stepDefinition('lifetime', target, `${stepLabel(target)} Steps`, steps.points.lifetime[index]!)),
+    ...steps.yearly.map((target, index) => stepDefinition('yearly', target, `${stepLabel(target)} Steps in a Year`, steps.points.yearly[index]!)),
+  ];
+}
+
+/** The definition for a lifetime threshold past the last explicit one (every `lifetimeEvery` steps). */
+export function recurringStepMilestone(target: number, steps: StepMilestoneRules): StepMilestoneDefinition {
+  return stepDefinition('lifetime', target, `${stepLabel(target)} Steps`, steps.points.recurring);
+}
 
 /** Returns configuration mistakes, including impossible bounded criteria and cyclic metas. */
 export function catalogueErrors(config: import('./types.ts').CharacterConfig): string[] {

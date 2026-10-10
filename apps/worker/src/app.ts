@@ -28,6 +28,7 @@ import {
   type ApiError,
   type DashboardResponse,
   type ErrorCode,
+  type GameResponse,
   type HistoryResponse,
   type HealthHistoryResponse,
   type HealthResponse,
@@ -82,6 +83,8 @@ export interface Services {
   readMorning?(): Promise<MorningResponse | ApiError>;
   /** Completion history (ADR-0021). Optional: without it the route answers 404. */
   readHistory?(): Promise<HistoryResponse | ApiError>;
+  /** Character projection (GAM1). Read-only, no request input. Optional: without it the route answers 404. */
+  readGame?(): Promise<GameResponse | ApiError>;
   readScoutOutput?(scoutId: string): Promise<LinkedNoteResponse | ApiError>;
   /** Inbox notes (ADR-0022). Optional: without them the routes answer 404. */
   listNotes?(): Promise<NotesResponse | ApiError>;
@@ -152,7 +155,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | ScoutsResponse | HistoryResponse | NotesResponse | NoteReadResponse | AskJevResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | ScoutsResponse | HistoryResponse | GameResponse | NotesResponse | NoteReadResponse | AskJevResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -312,6 +315,21 @@ export function createApp(deps: AppDeps) {
   // Completion history (ADR-0021): read-only, no request input. Logs carry no task text.
   app.get('/api/history', async (c) => {
     const read = deps.services.readHistory;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Character projection (GAM1): read-only, no request input, computed from existing reads only. Logs carry only the
+  // commit SHA and an error code; never note/task text, and never the `unavailable` reasons.
+  app.get('/api/game', async (c) => {
+    const read = deps.services.readGame;
     if (!read) return c.json(err('invalid', 'not found'), 404);
     const result = await read();
     const meta = c.get('logMeta');

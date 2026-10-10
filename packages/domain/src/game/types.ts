@@ -35,6 +35,8 @@ export interface CharacterConfig {
   readonly rulesVersion: number;
   readonly professions: readonly { readonly id: string; readonly name: string }[];
   readonly sources: Readonly<Record<string, SourceRule>>;
+  /** Step-milestone thresholds and points; steps never award XP (owner decision 10 Oct 2026). */
+  readonly steps: StepMilestoneRules;
   readonly skill: { readonly max: number; readonly baseCost: number; readonly step: number };
   readonly ranks: readonly { readonly skill: number; readonly name: string; readonly title: string }[];
   readonly level: { readonly min: number; readonly max: number; readonly baseCost: number; readonly costStep: number };
@@ -42,6 +44,16 @@ export interface CharacterConfig {
   readonly titles: readonly { readonly level: number; readonly title: string }[];
   readonly dayOneDays: number;
   readonly achievements: readonly AchievementDefinition[];
+}
+
+/** Journey milestone data. Thresholds are cumulative step totals; each calendar year is counted separately. */
+export interface StepMilestoneRules {
+  readonly lifetime: readonly number[];
+  /** Recurring lifetime threshold every this many steps past the last explicit one. */
+  readonly lifetimeEvery: number;
+  readonly yearly: readonly number[];
+  /** One point value per threshold, plus the value for every recurring lifetime milestone. */
+  readonly points: { readonly lifetime: readonly number[]; readonly recurring: number; readonly yearly: readonly number[] };
 }
 export interface AchievementResult {
   readonly id: string;
