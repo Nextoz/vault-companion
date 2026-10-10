@@ -6,6 +6,7 @@ import {
   TRAINING_PATH,
 } from '@vault-companion/contracts';
 import {
+  characterConfig,
   createCommandService,
   createHealthService,
   createHistoryService,
@@ -103,6 +104,22 @@ describe('GET /api/game', () => {
     expect(body!.stepMilestones!.next).toEqual({ id: 'steps-lifetime-250000', name: '250K Steps', current: 100_000, target: 250_000 });
     expect(logs.at(-1)).toMatchObject({ route: '/api/game', status: 200, commitSha: (store as InMemoryStore).headCommit });
     expect(leaked()).toBe(false);
+  });
+
+  it('reports the live rules straight from characterConfig, so the web page cannot hard-code them', async () => {
+    const store = await InMemoryStore.create(await baseFiles());
+    const { body } = await get(store);
+    const rules = body!.rules;
+    expect(rules.rulesVersion).toBe(characterConfig.rulesVersion);
+    expect(rules.level).toEqual({ ...characterConfig.level });
+    expect(rules.skill).toEqual({ ...characterConfig.skill });
+    expect(rules.rested).toEqual({ ...characterConfig.rested });
+    expect(rules.professions).toEqual(characterConfig.professions.map((p) => ({ id: p.id, name: p.name })));
+    expect(rules.ranks).toEqual(characterConfig.ranks.map((r) => ({ skill: r.skill, name: r.name, title: r.title })));
+    expect(rules.sources.find((s) => s.id === 'training')).toEqual({
+      id: 'training', profession: 'athletics', enabled: true, baseXp: 30, dailyCap: 2,
+      minutes: { after: 20, step: 5, xp: 1, maxBonus: 20 }, overdue: null,
+    });
   });
 
   it('names a failed source and never zeroes the remaining ones', async () => {

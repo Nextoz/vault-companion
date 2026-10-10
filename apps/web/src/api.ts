@@ -6,6 +6,7 @@ import {
   AiUsageResponse,
   AskJevResponse,
   DashboardResponse,
+  GameResponse,
   MarketTickerResponse,
   TrainingResponse,
   LearningResponse,
@@ -206,6 +207,9 @@ export const postRadarDecision = (body: string, accountKey: string) =>
 
 export const getTraining = () => getJson('/api/training', z.union(TrainingResponse.options.map((option) => option.strip())));
 export const getLearning = () => getJson('/api/learning', z.union(LearningResponse.options.map((option) => option.strip())));
+
+/** Character projection (GAM1-B): read-only, `no-store`, never cached by the SW. Carries the live rules too. */
+export const getGame = () => getJson('/api/game', GameResponse.strip());
 
 /** Dashboard (DASH1): read-only, `no-store`, never cached by the SW. The range is an enum, never a provider URL. */
 export const getDashboard = (range: DashboardRange) => getJson(`/api/dashboard?range=${range}`, DashboardResponse);

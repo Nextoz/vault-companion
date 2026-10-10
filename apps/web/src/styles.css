@@ -213,6 +213,104 @@ textarea:focus-visible {
   margin: 12px 0;
 }
 
+/* GAM1-B: the Log Character card above the segmented switch, and the ring/achievement rows on the screen. */
+.character-card { margin: 12px 0; }
+
+.character-card-button {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.character-card-head,
+.character-card-foot,
+.character-card-empty {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.character-card-title { font-weight: 600; }
+.character-card-empty p { margin: 0; }
+
+/* The shared level and profession bar: a track, the fill, and the rested reserve laid over it. */
+.xp-bar {
+  position: relative;
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--raised);
+  overflow: hidden;
+}
+
+.xp-fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+.xp-rested { position: absolute; inset: 0 auto 0 0; background: var(--maybe); opacity: 0.85; }
+
+.character-sheet { max-height: 92dvh; overflow-y: auto; }
+.character-overall { display: flex; flex-direction: column; gap: 8px; }
+.character-overall-title { margin: 0; font-weight: 600; }
+.character-unavailable { margin: 0; padding-left: 18px; }
+
+.character-professions { list-style: none; margin: 0; padding: 0; }
+.character-profession {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap);
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.character-profession:first-child { border-top: none; }
+
+.character-ring-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.skill-ring { width: 40px; height: 40px; }
+.skill-ring-track { fill: none; stroke: var(--raised); stroke-width: 6; }
+.skill-ring-fill { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; }
+
+.character-profession-body { min-width: 0; }
+.character-profession-name { margin: 0; font-weight: 600; }
+.character-profession-body p { margin: 0; }
+
+.character-recent h3,
+.character-how-xp h3 { margin: 8px 0 4px; font-size: 0.95rem; }
+
+.character-achievements { list-style: none; margin: 0; padding: 0; }
+.character-achievements li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+
+.character-achievements li:first-child { border-top: none; }
+.character-how-link { align-self: flex-start; }
+.character-how-xp ul { margin: 0; padding-left: 18px; }
+.character-how-xp section { margin-bottom: 12px; }
+
 /* UX5: the Mood check-in history at the top of the Log's Progress view. Read-only evidence rows. */
 .log-mood {
   margin-top: 12px;

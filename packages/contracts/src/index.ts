@@ -1307,6 +1307,7 @@ export const GameAchievement = z.strictObject({
   tier: z.number().int().nullable(),
   progress: GameAchievementProgress.nullable(),
 });
+export type GameAchievement = z.infer<typeof GameAchievement>;
 
 export const GameProfession = z.strictObject({
   id: z.string(),
@@ -1316,6 +1317,7 @@ export const GameProfession = z.strictObject({
   rank: z.string(),
   title: z.string(),
 });
+export type GameProfession = z.infer<typeof GameProfession>;
 
 export const GameCharacter = z.strictObject({
   rulesVersion: z.number().int(),
@@ -1331,6 +1333,7 @@ export const GameCharacter = z.strictObject({
   points: z.strictObject({ total: z.number(), byCategory: z.record(z.string(), z.number()) }),
   skippedRecords: z.number().int().nonnegative(),
 });
+export type GameCharacter = z.infer<typeof GameCharacter>;
 
 /** A Journey step milestone: points, never XP. `earnedDate` is the real day the running total crossed the threshold. */
 export const GameStepMilestone = z.strictObject({
@@ -1350,10 +1353,39 @@ export const GameStepMilestones = z.strictObject({
   retroactiveSummary: z.strictObject({ count: z.number().int().nonnegative(), firstYear: z.number().int() }).nullable(),
 });
 
+/**
+ * The live tuning rules (a read-only projection of the Worker's `characterConfig`). GAM1-B prints these on the
+ * "How XP works" page so the copy cannot drift from the config; a rule edit reaches the screen through this field.
+ */
+export const GameRuleSource = z.strictObject({
+  id: z.string(),
+  profession: z.string(),
+  enabled: z.boolean(),
+  baseXp: z.number(),
+  dailyCap: z.number().int(),
+  minutes: z.strictObject({ after: z.number(), step: z.number(), xp: z.number(), maxBonus: z.number() }).nullable(),
+  overdue: z.strictObject({ days: z.number(), xp: z.number(), dailyCap: z.number().int() }).nullable(),
+});
+export type GameRuleSource = z.infer<typeof GameRuleSource>;
+
+export const GameRules = z.strictObject({
+  rulesVersion: z.number().int(),
+  professions: z.array(z.strictObject({ id: z.string(), name: z.string() })),
+  sources: z.array(GameRuleSource),
+  skill: z.strictObject({ max: z.number().int(), baseCost: z.number(), step: z.number() }),
+  ranks: z.array(z.strictObject({ skill: z.number().int(), name: z.string(), title: z.string() })),
+  level: z.strictObject({ min: z.number().int(), max: z.number().int(), baseCost: z.number(), costStep: z.number() }),
+  rested: z.strictObject({ perDay: z.number(), max: z.number(), multiplier: z.number() }),
+  titles: z.array(z.strictObject({ level: z.number().int(), title: z.string() })),
+});
+export type GameRules = z.infer<typeof GameRules>;
+
 export const GameResponse = z.strictObject({
   revision: commitSha,
   now: isoInstant,
   character: GameCharacter,
+  /** The live rules the Character was computed with; the "How XP works" page renders these, not hard-coded copy. */
+  rules: GameRules,
   /** Null when the health read failed; named in `unavailable` then, never shown as zero. */
   stepMilestones: GameStepMilestones.nullable(),
   /** Named sources that failed to read: `training`, `learning`, `library`, `tasks`, `health`. */

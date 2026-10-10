@@ -38,6 +38,8 @@ import { Training } from './Training.tsx';
 import { TrainingSheet } from './TrainingSheet.tsx';
 import { Learning } from './Learning.tsx';
 import { LearningSheet } from './LearningSheet.tsx';
+import { CharacterCard } from './CharacterCard.tsx';
+import { CharacterSheet } from './CharacterSheet.tsx';
 import { Triage } from './Triage.tsx';
 import { TaskList } from './TaskList.tsx';
 import { TabBar, type Tab } from './TabBar.tsx';
@@ -72,6 +74,10 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const [statusReturn, setStatusReturn] = useState<Tab>('today');
   // Where the full-screen Research Radar returns to (the screen that opened it).
   const [radarReturn, setRadarReturn] = useState<Tab>('today');
+  // GAM1-B: the Character screen opened from the Log card; `logFromCharacter` marks a Log view reached from a ring,
+  // so its Back returns to the Character screen rather than Today.
+  const [characterOpen, setCharacterOpen] = useState(false);
+  const [logFromCharacter, setLogFromCharacter] = useState(false);
   const [editing, setEditing] = useState<{ task: TaskView; account: string | null; revision: string } | null>(null);
   // CAL-b: the item keys the calendar link file names, and the row whose sheet is open.
   const [calendarLinks, setCalendarLinks] = useState<ReadonlySet<string>>(() => new Set<string>());
@@ -356,6 +362,9 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const frozen = lock?.conflict ?? false;
   // Calm by default: the actions list sits below the tasks unless something needs the user.
   const needsAttention = snapshot.items.some((i) => i.state === 'attention');
+  // GAM1-B: the four Log views share one segmented switch and the Character card above it.
+  const logView = tab === 'training' || tab === 'history' || tab === 'health' || tab === 'learning';
+  const selectLogView = (next: Tab) => { setLogFromCharacter(false); setTab(next); };
   // ADR-0037 tokens: red = cannot work, yellow = something to see, green = settled.
   const statusDot = signedOut || readFailed || connection === 'error' || connection === 'offline'
     ? 'red'
@@ -378,7 +387,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
   return (
     <div className="app" data-tab={tab}>
-      <header className="top" inert={noteOpen || editing !== null}>
+      <header className="top" inert={noteOpen || editing !== null || characterOpen}>
         <div className="top-actions">
           <button type="button" className="status-dot" data-state={statusDot} aria-label="Status" onClick={openStatus} />
           {!signedOut && <span className="sync-line muted small">{syncedText}</span>}
@@ -386,7 +395,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         </div>
       </header>
 
-      <main className="content" inert={noteOpen || editing !== null}>
+      <main className="content" inert={noteOpen || editing !== null || characterOpen}>
         {updateReady && <div className="banner" role="status"><button type="button" onClick={() => window.location.reload()}>New version — tap to reload</button></div>}
         {tab !== 'status' && tab !== 'today' && <VaultStatus read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0} onRefresh={() => refreshTasks()} />}
         {lock && (
@@ -471,13 +480,17 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           </>
         )}
 
-        {(tab === 'training' || tab === 'history' || tab === 'health' || tab === 'learning') && !signedOut && (
-          <div className="segmented log-view" role="group" aria-label="Log view">
-            <button type="button" aria-pressed={tab === 'training'} onClick={() => setTab('training')}>Training</button>
-            <button type="button" aria-pressed={tab === 'history'} onClick={() => setTab('history')}>Progress</button>
-            <button type="button" aria-pressed={tab === 'health'} onClick={() => setTab('health')}>Health</button>
-            <button type="button" aria-pressed={tab === 'learning'} onClick={() => setTab('learning')}>Learning</button>
-          </div>
+        {logView && !signedOut && (
+          <>
+            {logFromCharacter && <Back onBack={() => { setLogFromCharacter(false); setCharacterOpen(true); }} />}
+            <CharacterCard refreshKey={checkedAt} accountKey={accountKey} onOpen={() => setCharacterOpen(true)} />
+            <div className="segmented log-view" role="group" aria-label="Log view">
+              <button type="button" aria-pressed={tab === 'training'} onClick={() => selectLogView('training')}>Training</button>
+              <button type="button" aria-pressed={tab === 'history'} onClick={() => selectLogView('history')}>Progress</button>
+              <button type="button" aria-pressed={tab === 'health'} onClick={() => selectLogView('health')}>Health</button>
+              <button type="button" aria-pressed={tab === 'learning'} onClick={() => selectLogView('learning')}>Learning</button>
+            </div>
+          </>
         )}
 
         {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} />}
@@ -573,15 +586,20 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         )}
       </main>
 
-      <TabBar tab={tab} onSelect={setTab} inert={noteOpen || editing !== null} />
+      <TabBar tab={tab} onSelect={(next) => { setLogFromCharacter(false); setTab(next); }} inert={noteOpen || editing !== null || characterOpen} />
 
-      <button type="button" className="fab" inert={noteOpen || editing !== null} onClick={() => setCaptureOpen(true)} aria-label={tab === 'training' ? 'Add training' : tab === 'learning' ? 'Add session' : 'Capture'}>
+      <button type="button" className="fab" inert={noteOpen || editing !== null || characterOpen} onClick={() => setCaptureOpen(true)} aria-label={tab === 'training' ? 'Add training' : tab === 'learning' ? 'Add session' : 'Capture'}>
         +
       </button>
 
       {editing && editing.account === accountKey && !signedOut && (
         <EditSheet queue={queue} task={editing.task} accountKey={accountKey} baseRevision={editing.revision}
           blocked={writeBlocked} onClose={() => setEditing(null)} />
+      )}
+      {characterOpen && !signedOut && (
+        <CharacterSheet refreshKey={checkedAt} accountKey={accountKey}
+          onClose={() => setCharacterOpen(false)}
+          onOpenProfession={(destination) => { setCharacterOpen(false); setLogFromCharacter(true); setTab(destination as Tab); }} />
       )}
       {captureOpen && tab === 'training' && !signedOut && <TrainingSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} onClose={() => setCaptureOpen(false)} />}
       {captureOpen && tab === 'learning' && !signedOut && <LearningSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} onClose={() => setCaptureOpen(false)} />}
