@@ -3,7 +3,7 @@
 // interpolated string; a fallback brief renders exactly what it contains and invents nothing.
 
 import type { BriefFile } from '@vault-companion/domain';
-import { briefDigestUnavailable, briefMeetingRows, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
+import { briefCopenhagen, briefDigestUnavailable, briefMeetingRows, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
 
 /** One rendered message: a plain-text and an HTML body for the same subject. */
 export interface BriefEmail {
@@ -84,6 +84,8 @@ export function renderBriefEmail(file: BriefFile): BriefEmail {
   const unavailable = briefUnavailableLines(file);
   const meetings = briefMeetingRows(file);
   const gaps = file.unavailable.includes('calendar') ? [] : brief.gaps;
+  const needsYou = briefNeedsYou(file);
+  const copenhagen = briefCopenhagen(file);
   const news = briefNews(file);
   const research = briefResearch(file);
   const oneThing = briefOneThing(file);
@@ -119,6 +121,14 @@ export function renderBriefEmail(file: BriefFile): BriefEmail {
   if (digestUnavailable !== null) {
     text.push('', `News unavailable: ${digestUnavailable}`, `AI and research unavailable: ${digestUnavailable}`);
   } else {
+    if (needsYou.length > 0) {
+      text.push('', 'Needs you');
+      for (const item of needsYou) text.push(`- ${item.title} - ${item.line} (${item.url})`);
+    }
+    if (copenhagen.length > 0) {
+      text.push('', 'Copenhagen today');
+      for (const item of copenhagen) text.push(`- ${item.title} - ${item.line} (${item.url})`);
+    }
     if (news.length > 0) {
       text.push('', 'News');
       for (const item of news) text.push(`- ${item.title} - ${item.line} (${item.url})`);
@@ -166,6 +176,16 @@ export function renderBriefEmail(file: BriefFile): BriefEmail {
   if (digestUnavailable !== null) {
     html.push(`<p>${escapeHtml(`News unavailable: ${digestUnavailable}`)}</p>`, `<p>${escapeHtml(`AI and research unavailable: ${digestUnavailable}`)}</p>`);
   } else {
+    if (needsYou.length > 0) {
+      html.push('<h2>Needs you</h2>', '<ul>');
+      for (const item of needsYou) html.push(`<li>${escapeHtml(item.title)} - ${escapeHtml(item.line)} <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Link</a></li>`);
+      html.push('</ul>');
+    }
+    if (copenhagen.length > 0) {
+      html.push('<h2>Copenhagen today</h2>', '<ul>');
+      for (const item of copenhagen) html.push(`<li>${escapeHtml(item.title)} - ${escapeHtml(item.line)} <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Link</a></li>`);
+      html.push('</ul>');
+    }
     if (news.length > 0) {
       html.push('<h2>News</h2>', '<ul>');
       for (const item of news) html.push(`<li>${escapeHtml(item.title)} - ${escapeHtml(item.line)} <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Link</a></li>`);

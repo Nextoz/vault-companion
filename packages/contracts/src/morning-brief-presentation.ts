@@ -55,6 +55,16 @@ export function briefNews(file: Pick<MorningBriefResponse, 'brief'>): BriefDiges
   return httpsItems(file.brief.news);
 }
 
+/** The Needs-you bullets, in note order ([] when the file predates the digest fields). */
+export function briefNeedsYou(file: Pick<MorningBriefResponse, 'brief'>): BriefDigestItem[] {
+  return httpsItems(file.brief.needsYou);
+}
+
+/** The Copenhagen-today bullets, in note order ([] when the file predates the digest fields). */
+export function briefCopenhagen(file: Pick<MorningBriefResponse, 'brief'>): BriefDigestItem[] {
+  return httpsItems(file.brief.copenhagen);
+}
+
 /** The AI-and-research bullets, in note order ([] when the file predates the digest fields). */
 export function briefResearch(file: Pick<MorningBriefResponse, 'brief'>): BriefDigestItem[] {
   return httpsItems(file.brief.research);

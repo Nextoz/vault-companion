@@ -749,6 +749,8 @@ export const MorningBriefBody = z.strictObject({
   gaps: z.array(MorningBriefGap),
   todos: z.array(MorningBriefTodo),
   /** ADR-0059 amendment (MB3b): tracked-digest sections, absent in v1/v2 files that predate them. */
+  needsYou: z.array(z.strictObject({ title: z.string(), line: z.string(), url: z.string() })).max(5).optional(),
+  copenhagen: z.array(z.strictObject({ title: z.string(), line: z.string(), url: z.string() })).max(3).optional(),
   news: z.array(z.strictObject({ title: z.string(), line: z.string(), url: z.string() })).max(3).optional(),
   research: z.array(z.strictObject({ title: z.string(), line: z.string(), url: z.string() })).max(3).optional(),
   oneThing: z.strictObject({ text: z.string(), quote: z.string().optional() }).optional(),
@@ -768,7 +770,7 @@ export const MorningBriefResponse = z.strictObject({
 });
 export type MorningBriefResponse = z.infer<typeof MorningBriefResponse>;
 export {
-  briefDigestUnavailable, briefMeetingRows, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines,
+  briefCopenhagen, briefDigestUnavailable, briefMeetingRows, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines,
   type BriefDigestItem, type BriefOneThing,
 } from './morning-brief-presentation.ts';
 

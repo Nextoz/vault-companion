@@ -3,7 +3,7 @@
 // UX7: the weather line is plain day language plus the run window's own wording, and one research entry replaces the
 // old reading-brief line (its content now lives in the Morning Brief sheet). Pure.
 import { effectiveRadarDecisions, WEATHER_TIME_ZONE } from '@vault-companion/contracts';
-import { briefDigestUnavailable, briefMeetingRows, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
+import { briefCopenhagen, briefDigestUnavailable, briefMeetingRows, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
 import type { BriefDigestItem } from '@vault-companion/contracts';
 import type { MorningBriefMissingResponse, MorningBriefReadResponse, MorningBriefResponse, RadarResponse, ScoutsResponse, WeatherProjection, WeatherResponse, WeatherRunWindow } from '@vault-companion/contracts';
 import type { QueueItem } from '../queue/queue.ts';
@@ -167,6 +167,8 @@ export interface MorningBriefSheetState {
 }
 
 export interface MorningBriefDigest {
+  readonly needsYou: readonly BriefLine[];
+  readonly copenhagen: readonly BriefLine[];
   readonly news: readonly BriefLine[];
   readonly research: readonly BriefLine[];
   readonly oneThing: BriefLine | null;
@@ -174,7 +176,7 @@ export interface MorningBriefDigest {
   readonly unavailable: string | null;
 }
 
-const EMPTY_DIGEST: MorningBriefDigest = { news: [], research: [], oneThing: null, unavailable: null };
+const EMPTY_DIGEST: MorningBriefDigest = { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null };
 
 const digestRows = (prefix: string, items: readonly BriefDigestItem[]): BriefLine[] =>
   items.map((item, i) => ({ id: `${prefix}-${i}`, text: `${item.title} - ${item.line}`, link: item.url, marker: false, todo: false }));
@@ -189,6 +191,8 @@ export function morningBriefSheet(brief: MorningBriefReadResponse | null, today:
         missing: null,
         lines,
         digest: {
+          needsYou: unavailable === null ? digestRows('needs-you', briefNeedsYou(brief)) : [],
+          copenhagen: unavailable === null ? digestRows('copenhagen', briefCopenhagen(brief)) : [],
           news: unavailable === null ? digestRows('news', briefNews(brief)) : [],
           research: unavailable === null ? digestRows('research', briefResearch(brief)) : [],
           oneThing: oneThing === null ? null : { id: 'one-thing', text: oneThing.text, quote: oneThing.quote, marker: false, todo: false },

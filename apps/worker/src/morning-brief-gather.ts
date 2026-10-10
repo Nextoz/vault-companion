@@ -39,8 +39,8 @@ export interface MorningBriefCandidates {
   readonly mood: MoodSnapshot | null;
   readonly trainingRecent: TrainingRecent;
   readonly weatherWindows: WeatherRunWindow[];
-  /** MB3b: the tracked digest note's sections; empty when it was unavailable or carried none. Digest text stays local. */
-  readonly digest: { readonly news: DigestItem[]; readonly research: DigestItem[]; readonly oneThing: DigestOneThing | null };
+  /** MB3b/MB3b-2: the tracked digest note's sections; empty when it was unavailable or carried none. Digest text stays local. */
+  readonly digest: { readonly news: DigestItem[]; readonly research: DigestItem[]; readonly needsYou: DigestItem[]; readonly copenhagen: DigestItem[]; readonly oneThing: DigestOneThing | null };
   /** Names of the readers that failed (ApiError or throw); the other slots still hold their values. */
   readonly unavailable: string[];
   /** Per-reader reason for `unavailable`: the `ApiError.code` enum string, or `threw` for an exception. Names match `unavailable`. */
@@ -241,12 +241,12 @@ export async function gatherCandidates(deps: MorningBriefGatherDeps): Promise<Mo
   if (!mail.ok) { unavailable.push('mail'); unavailableCodes.mail = mail.code; }
 
   // A missing note is `not-found`; a note without any digest heading is `invalid`. Both leave the sections empty.
-  let digestSections: MorningBriefCandidates['digest'] = { news: [], research: [], oneThing: null };
+  let digestSections: MorningBriefCandidates['digest'] = { news: [], research: [], needsYou: [], copenhagen: [], oneThing: null };
   if (!digest.ok) { unavailable.push('digest'); unavailableCodes.digest = digest.code; }
   else if (digest.value === null) { unavailable.push('digest'); unavailableCodes.digest = 'not-found'; }
   else {
     const parsed = parseDigestNote(digest.value);
-    if (parsed.recognized) digestSections = { news: parsed.news, research: parsed.research, oneThing: parsed.oneThing };
+    if (parsed.recognized) digestSections = { news: parsed.news, research: parsed.research, needsYou: parsed.needsYou, copenhagen: parsed.copenhagen, oneThing: parsed.oneThing };
     else { unavailable.push('digest'); unavailableCodes.digest = 'invalid'; }
   }
 

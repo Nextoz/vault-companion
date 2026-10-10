@@ -262,6 +262,8 @@ function MorningBriefSheet({ state, onOpenTasks, onClose }: {
                 {row.link && <a href={row.link} target="_blank" rel="noopener noreferrer"
                   style={{ display: 'flex', alignItems: 'center', minHeight: 44 }}>Open in Calendar</a>}
               </div>))}
+            <TappableRows heading="Needs you" items={state.digest.needsYou} />
+            <TappableRows heading="Copenhagen today" items={state.digest.copenhagen} />
             <DigestSection heading="News" items={state.digest.news} unavailable={state.digest.unavailable === null ? null : `News unavailable: ${state.digest.unavailable}`} />
             <DigestSection heading="AI and research" items={state.digest.research} unavailable={state.digest.unavailable === null ? null : `AI and research unavailable: ${state.digest.unavailable}`} />
             {state.digest.oneThing && <div className="morning-line morning-brief-line" style={{ overflowWrap: 'anywhere', minWidth: 0 }}>
@@ -275,7 +277,22 @@ function MorningBriefSheet({ state, onOpenTasks, onClose }: {
   );
 }
 
-const EMPTY_SHEET_DIGEST: MorningBriefDigest = { news: [], research: [], oneThing: null, unavailable: null };
+const EMPTY_SHEET_DIGEST: MorningBriefDigest = { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null };
+
+/** MB3b-2: each Needs-you / Copenhagen-today row is one tappable 44px https target; News/research stay collapsed. */
+function TappableRows({ heading, items }: { heading: string; items: readonly BriefLine[] }) {
+  if (items.length === 0) return null;
+  return (
+    <section className="morning-brief-rows">
+      <h3>{heading}</h3>
+      <ul>{items.map((item) => (
+        <li key={item.id}>{item.link
+          ? <a href={item.link} target="_blank" rel="noopener noreferrer" className="morning-brief-row-link">{item.text}</a>
+          : <span className="morning-brief-row-text">{item.text}</span>}</li>
+      ))}</ul>
+    </section>
+  );
+}
 
 /** MB3b: News and AI-and-research collapse by default in the sheet (full in the email); a failed digest shows its reason. */
 function DigestSection({ heading, items, unavailable }: { heading: string; items: readonly BriefLine[]; unavailable: string | null }) {

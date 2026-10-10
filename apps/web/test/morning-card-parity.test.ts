@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MorningBriefResponse } from '@vault-companion/contracts';
+import { briefCopenhagen, briefNeedsYou, MorningBriefResponse } from '@vault-companion/contracts';
 import { briefLines } from '../src/ui/morning-card.ts';
 import { BriefFile } from '../../../packages/domain/src/morning-brief-file.ts';
 import { escapeHtml, renderBriefEmail } from '../../worker/src/morning-brief-email.ts';
@@ -74,6 +74,24 @@ describe('v2 brief sheet and email parity', () => {
     }
   });
 
+  it('renders the same Needs-you and Copenhagen-today rows in the sheet and the email', () => {
+    const file = synthetic();
+    file.brief.needsYou = [{ title: 'Synthetic Mail', line: 'A synthetic message.', url: 'https://mail.google.com/mail/u/0/#inbox/synthetic' }];
+    file.brief.copenhagen = [{ title: '17:00 Synthetic Event', line: 'A synthetic plan.', url: 'https://www.google.com/calendar/event?eid=synthetic' }];
+    const email = renderBriefEmail(file);
+    const responseFile = response(file);
+    for (const [heading, items] of [['Needs you', briefNeedsYou(responseFile)], ['Copenhagen today', briefCopenhagen(responseFile)]] as const) {
+      expect(items.length).toBeGreaterThan(0);
+      expect(email.text).toContain(heading);
+      expect(email.html).toContain(heading);
+      for (const item of items) {
+        expect(email.text).toContain(`${item.title} - ${item.line}`);
+        expect(email.html).toContain(escapeHtml(`${item.title} - ${item.line}`));
+        expect(email.html).toContain(`href="${escapeHtml(item.url)}"`);
+      }
+    }
+  });
+
   it.each(['javascript:alert(1)', 'http://calendar.google.com/event', 'invalid'])('omits unsafe links at rendering time: %s', (link) => {
     const file = synthetic();
     file.brief.meetings = [meeting('Unsafe link', { link })];
@@ -83,4 +101,3 @@ describe('v2 brief sheet and email parity', () => {
     expect(email.html).not.toContain('<a ');
   });
 });
-

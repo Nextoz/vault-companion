@@ -98,12 +98,18 @@ describe('renderBriefEmail', () => {
   it('renders the full digest sections and lets One thing replace the generic closing line', () => {
     const withDigest = file({ unavailable: [], brief: {
       meetings: [], source: 'model', dayLine: 'A day.', gaps: [], todos: [], encouragement: 'Generic closing.',
+      needsYou: [{ title: 'Synthetic Mail', line: 'A synthetic message.', url: 'https://mail.google.com/mail/u/0/#inbox/synthetic' }],
+      copenhagen: [{ title: '17:00 Synthetic Event', line: 'A synthetic plan.', url: 'https://www.google.com/calendar/event?eid=synthetic' }],
       news: [{ title: 'Synthetic Headline', line: 'A synthetic one-liner.', url: 'https://example.test/news' }],
       research: [{ title: 'Synthetic Study', line: 'A synthetic finding.', url: 'https://example.test/paper' }],
       oneThing: { text: 'A synthetic thought.', quote: 'A synthetic quote.' },
     } });
     const { text, html } = renderBriefEmail(withDigest);
     for (const output of [text, html]) {
+      expect(output).toContain('Synthetic Mail');
+      expect(output).toContain('A synthetic message.');
+      expect(output).toContain('17:00 Synthetic Event');
+      expect(output).toContain('A synthetic plan.');
       expect(output).toContain('Synthetic Headline');
       expect(output).toContain('A synthetic one-liner.');
       expect(output).toContain('Synthetic Study');
@@ -111,6 +117,10 @@ describe('renderBriefEmail', () => {
       expect(output).toContain('A synthetic quote.');
       expect(output).not.toContain('Generic closing.');
     }
+    expect(text).toContain('Needs you');
+    expect(text).toContain('Copenhagen today');
+    expect(html).toContain('href="https://mail.google.com/mail/u/0/#inbox/synthetic"');
+    expect(html).toContain('href="https://www.google.com/calendar/event?eid=synthetic"');
     expect(html).toContain('href="https://example.test/news"');
   });
 
