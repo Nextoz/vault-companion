@@ -41,3 +41,15 @@ Synthetic fixtures cover links, clashes, failures, prompt privacy and overdue da
   `unavailable`/`unavailableReasons`; the News and AI-and-research sections then show
   "<Section> unavailable: <plain reason>". Digest text is never sent to the model; the writer passes the parsed fields
   through unchanged. The sheet collapses News and AI and research by default; the email renders every section in full.
+
+## Amendment (MB3b-2): Needs-you and Copenhagen-today sections
+- Additive, optional schemaVersion 2 fields on `brief`: `needsYou[]` (`{title, line, url}`, https-only, at most five)
+  and `copenhagen[]` (same shape, https-only, at most three). v1/v2 and MB3b-1 files without them still parse unchanged.
+- The same tracked note also carries `## Needs you` (mail links) and `## Copenhagen today` (calendar or other https
+  links); the parser recognizes those headings with the identical bullet rule, dropping non-https links and skipping
+  malformed bullets. A missing note still reports the single `digest` unavailable reason, which covers every section;
+  a parsed note with an empty or absent section simply omits that field. Digest text is never sent to the model.
+- The sheet shows Needs you and Copenhagen today as always-visible lists of tappable https rows (44 px target, no
+  default underline) between the to-dos and the still-collapsed News/AI-and-research sections; the email renders the
+  same rows through the shared presentation helpers. Needs you does not replace the `Jev/*` label to-dos from the Gmail
+  reader; both remain. No new read/write target is added, and no title or line is logged.

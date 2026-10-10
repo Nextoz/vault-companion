@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DIGEST_COPENHAGEN_MAX,
   DIGEST_ITEM_MAX,
   DIGEST_LINE_MAX,
+  DIGEST_NEEDS_YOU_MAX,
   DIGEST_TITLE_MAX,
   morningDigestPath,
   parseDigestNote,
@@ -76,12 +78,50 @@ describe('parseDigestNote', () => {
     expect(parsed.oneThing).toEqual({ text: 'A synthetic paragraph for the day.', quote: 'A synthetic pull quote.' });
   });
 
+  it('parses Needs-you and Copenhagen-today bullets with their https links', () => {
+    const parsed = parseDigestNote(note([
+      '## Needs you',
+      bullet('Synthetic Mail', 'A synthetic message.', 'https://mail.google.com/mail/u/0/#inbox/synthetic-id'),
+      '',
+      '## Copenhagen today',
+      bullet('17:00 Synthetic Event', 'A synthetic plan.', 'https://www.google.com/calendar/event?eid=synthetic'),
+    ]));
+    expect(parsed.recognized).toBe(true);
+    expect(parsed.needsYou).toEqual([{ title: 'Synthetic Mail', line: 'A synthetic message.', url: 'https://mail.google.com/mail/u/0/#inbox/synthetic-id' }]);
+    expect(parsed.copenhagen).toEqual([{ title: '17:00 Synthetic Event', line: 'A synthetic plan.', url: 'https://www.google.com/calendar/event?eid=synthetic' }]);
+  });
+
+  it('drops non-https Needs-you and Copenhagen bullets and skips malformed ones', () => {
+    const parsed = parseDigestNote(note([
+      '## Needs you',
+      bullet('Synthetic Insecure', 'Insecure link.', 'http://mail.google.com/inbox'),
+      '- **No link at all** - missing',
+      bullet('Synthetic Kept', 'Secure link.', 'https://mail.google.com/mail/u/0/#inbox/keep'),
+      '## Copenhagen today',
+      bullet('Synthetic Insecure', 'Insecure link.', 'http://www.google.com/calendar/event'),
+      bullet('Synthetic Kept', 'Secure link.', 'https://www.google.com/calendar/event?eid=keep'),
+    ]));
+    expect(parsed.needsYou.map((item) => item.title)).toEqual(['Synthetic Kept']);
+    expect(parsed.copenhagen.map((item) => item.title)).toEqual(['Synthetic Kept']);
+  });
+
+  it('caps Needs you at five and Copenhagen today at three', () => {
+    const parsed = parseDigestNote(note([
+      '## Needs you',
+      ...Array.from({ length: 8 }, (_, i) => bullet(`N${i}`, 'short', `https://mail.google.com/mail/u/0/#inbox/${i}`)),
+      '## Copenhagen today',
+      ...Array.from({ length: 6 }, (_, i) => bullet(`C${i}`, 'short', `https://www.google.com/calendar/event?eid=${i}`)),
+    ]));
+    expect(parsed.needsYou).toHaveLength(DIGEST_NEEDS_YOU_MAX);
+    expect(parsed.copenhagen).toHaveLength(DIGEST_COPENHAGEN_MAX);
+  });
+
   it('never throws on garbage and reports an unrecognised note', () => {
     for (const input of ['', 'not a digest at all', '# Heading only', '\u0000 weird']) {
       expect(() => parseDigestNote(input)).not.toThrow();
       expect(parseDigestNote(input).recognized).toBe(false);
     }
     expect(parseDigestNote('a note with no sections').news).toEqual([]);
-    expect(parseDigestNote(null as unknown as string)).toEqual({ news: [], research: [], oneThing: null, recognized: false });
+    expect(parseDigestNote(null as unknown as string)).toEqual({ news: [], research: [], needsYou: [], copenhagen: [], oneThing: null, recognized: false });
   });
 });

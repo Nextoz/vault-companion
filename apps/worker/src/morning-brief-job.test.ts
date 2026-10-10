@@ -27,7 +27,7 @@ const candidates = (over: Partial<MorningBriefCandidates> = {}): MorningBriefCan
   mood: { mood: -1, energy: 0, sleep: 7 },
   trainingRecent: { count: 0, dates: [] },
   weatherWindows: [],
-  digest: { news: [], research: [], oneThing: null },
+  digest: { news: [], research: [], needsYou: [], copenhagen: [], oneThing: null },
   unavailable: [],
   unavailableCodes: {},
   ...over,
@@ -312,7 +312,7 @@ it.each([false, true])('writes three sorted meetings with clashes; model=%s', as
     dayLine: 'An open day with an open block.', todos: [{ id: 0, firstStep: 'Start.' }], encouragement: 'Go.' }) }; } };
   const logs = await run(store, { ...(model ? { chat } : {}), gather: async () => candidates({
     events: [meeting('SYNTHETIC-C', 14, 15), meeting('SYNTHETIC-B', 10, 12), meeting('SYNTHETIC-A', 9, 11)],
-    digest: { news: [{ title: 'SYNTHETIC-DIGEST', line: 'A synthetic digest line.', url: 'https://example.test/d' }], research: [], oneThing: { text: 'SYNTHETIC-ONETHING' } },
+    digest: { news: [{ title: 'SYNTHETIC-DIGEST', line: 'A synthetic digest line.', url: 'https://example.test/d' }], research: [], needsYou: [{ title: 'SYNTHETIC-NEEDS-YOU', line: 'A synthetic mail line.', url: 'https://mail.google.com/mail/u/0/#inbox/synthetic' }], copenhagen: [{ title: '17:00 SYNTHETIC-EVENT', line: 'A synthetic plan.', url: 'https://www.google.com/calendar/event?eid=synthetic' }], oneThing: { text: 'SYNTHETIC-ONETHING' } },
   }) });
   const file = parseBriefFile(store.text(MORNING_BRIEF_PATH))!;
   expect(file.schemaVersion).toBe(2);
@@ -324,6 +324,8 @@ it.each([false, true])('writes three sorted meetings with clashes; model=%s', as
   expect(file.brief.dayLine).not.toMatch(/open/i);
   // The digest is written through unchanged and never reaches the model prompt.
   expect(file.brief.news?.[0]?.title).toBe('SYNTHETIC-DIGEST');
+  expect(file.brief.needsYou?.[0]?.title).toBe('SYNTHETIC-NEEDS-YOU');
+  expect(file.brief.copenhagen?.[0]?.title).toBe('17:00 SYNTHETIC-EVENT');
   expect(file.brief.oneThing?.text).toBe('SYNTHETIC-ONETHING');
   expect(prompt).not.toContain('SYNTHETIC-');
   if (model) expect(prompt).toContain('Clashing meetings: 2');

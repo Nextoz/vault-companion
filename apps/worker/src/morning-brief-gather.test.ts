@@ -234,7 +234,7 @@ describe('toWeatherWindows', () => {
 
 describe('gatherCandidates', () => {
   const baseline = Array.from({ length: 20 }, () => hday('2026-05-01', { steps: 1000 }));
-  const digestNote = ['## News', '- **Synthetic Alpha** - A synthetic line. ([link](https://example.test/a))', '', '## AI and research', '- **Synthetic Beta** - Another line. ([link](https://example.test/b))', '', '## One thing', 'A synthetic thought.', '', '> A synthetic quote.'].join('\n');
+  const digestNote = ['## News', '- **Synthetic Alpha** - A synthetic line. ([link](https://example.test/a))', '', '## AI and research', '- **Synthetic Beta** - Another line. ([link](https://example.test/b))', '', '## Needs you', '- **Synthetic Mail** - A synthetic message. ([link](https://mail.google.com/mail/u/0/#inbox/synthetic))', '', '## Copenhagen today', '- **17:00 Synthetic Event** - A synthetic plan. ([link](https://www.google.com/calendar/event?eid=synthetic))', '', '## One thing', 'A synthetic thought.', '', '> A synthetic quote.'].join('\n');
   const deps = (over: Partial<MorningBriefGatherDeps> = {}): MorningBriefGatherDeps => ({
     day: DAY,
     readTasks: async () => tasksResponse([task('open', 'Alpha', DAY)]),
@@ -268,6 +268,8 @@ describe('gatherCandidates', () => {
     expect(result.digest).toEqual({
       news: [{ title: 'Synthetic Alpha', line: 'A synthetic line.', url: 'https://example.test/a' }],
       research: [{ title: 'Synthetic Beta', line: 'Another line.', url: 'https://example.test/b' }],
+      needsYou: [{ title: 'Synthetic Mail', line: 'A synthetic message.', url: 'https://mail.google.com/mail/u/0/#inbox/synthetic' }],
+      copenhagen: [{ title: '17:00 Synthetic Event', line: 'A synthetic plan.', url: 'https://www.google.com/calendar/event?eid=synthetic' }],
       oneThing: { text: 'A synthetic thought.', quote: 'A synthetic quote.' },
     });
     expect(result.unavailable).toEqual([]);
@@ -301,7 +303,7 @@ describe('gatherCandidates', () => {
       readMood: async () => [],
       readDigest: async () => '## News\n',
     }));
-    expect(result).toEqual({ todos: [], events: [], metrics: [], mood: null, trainingRecent: { count: 0, dates: [] }, weatherWindows: [], digest: { news: [], research: [], oneThing: null }, unavailable: [], unavailableCodes: {} });
+    expect(result).toEqual({ todos: [], events: [], metrics: [], mood: null, trainingRecent: { count: 0, dates: [] }, weatherWindows: [], digest: { news: [], research: [], needsYou: [], copenhagen: [], oneThing: null }, unavailable: [], unavailableCodes: {} });
   });
 
   it('a non-ok union status is an honest empty slot, not a gatherer failure', async () => {
@@ -343,7 +345,7 @@ describe('gatherCandidates', () => {
 
   it('a missing digest note is unavailable (not empty) with a fixed not-found reason', async () => {
     const result = await gatherCandidates(deps({ readDigest: async () => null }));
-    expect(result.digest).toEqual({ news: [], research: [], oneThing: null });
+    expect(result.digest).toEqual({ news: [], research: [], needsYou: [], copenhagen: [], oneThing: null });
     expect(result.unavailable).toEqual(['digest']);
     expect(result.unavailableCodes).toEqual({ digest: 'not-found' });
   });

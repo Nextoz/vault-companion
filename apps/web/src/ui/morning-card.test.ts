@@ -1,4 +1,4 @@
-import { briefNews, briefOneThing, briefResearch, MorningBriefMissingResponse, MorningBriefResponse, RadarResponse, ScoutsResponse, WeatherResponse, type Command, type RadarPaper, type WeatherProjection, type WeatherRunWindow } from '@vault-companion/contracts';
+import { briefCopenhagen, briefNeedsYou, briefNews, briefOneThing, briefResearch, MorningBriefMissingResponse, MorningBriefResponse, RadarResponse, ScoutsResponse, WeatherResponse, type Command, type RadarPaper, type WeatherProjection, type WeatherRunWindow } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
 import { moodCheckin, undoMoodCheckinDraft } from '../commands.ts';
 import type { QueueItem } from '../queue/queue.ts';
@@ -262,24 +262,30 @@ describe('Morning Brief sheet state (UX7)', () => {
 
   it('returns "No brief yet" plus the job reason for a missing file', () => {
     const missing = MorningBriefMissingResponse.parse({ kind: 'missing', revision: 'a'.repeat(40), statusError: 'not-written:precondition-failed' });
-    expect(morningBriefSheet(missing, '2026-10-02')).toEqual({ missing: 'No brief yet - not-written:precondition-failed', lines: [], digest: { news: [], research: [], oneThing: null, unavailable: null } });
+    expect(morningBriefSheet(missing, '2026-10-02')).toEqual({ missing: 'No brief yet - not-written:precondition-failed', lines: [], digest: { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null } });
     const noReason = MorningBriefMissingResponse.parse({ kind: 'missing', revision: 'a'.repeat(40), statusError: null });
-    expect(morningBriefSheet(noReason, '2026-10-02')).toEqual({ missing: 'No brief yet', lines: [], digest: { news: [], research: [], oneThing: null, unavailable: null } });
+    expect(morningBriefSheet(noReason, '2026-10-02')).toEqual({ missing: 'No brief yet', lines: [], digest: { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null } });
   });
 
   it('returns a plain "No brief yet" when the read failed or the only file is stale', () => {
-    expect(morningBriefSheet(null, '2026-10-02')).toEqual({ missing: 'No brief yet', lines: [], digest: { news: [], research: [], oneThing: null, unavailable: null } });
-    expect(morningBriefSheet(sample({ date: '2026-10-01' }), '2026-10-02')).toEqual({ missing: 'No brief yet', lines: [], digest: { news: [], research: [], oneThing: null, unavailable: null } });
+    expect(morningBriefSheet(null, '2026-10-02')).toEqual({ missing: 'No brief yet', lines: [], digest: { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null } });
+    expect(morningBriefSheet(sample({ date: '2026-10-01' }), '2026-10-02')).toEqual({ missing: 'No brief yet', lines: [], digest: { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null } });
   });
 
   it('projects the digest sections through the shared helpers and drops the generic closing line', () => {
     const file = sample({ brief: {
+      needsYou: [{ title: 'Synthetic Mail', line: 'A synthetic message.', url: 'https://mail.google.com/mail/u/0/#inbox/synthetic' }],
+      copenhagen: [{ title: '17:00 Synthetic Event', line: 'A synthetic plan.', url: 'https://www.google.com/calendar/event?eid=synthetic' }],
       news: [{ title: 'Synthetic Headline', line: 'A synthetic line.', url: 'https://example.test/a' }],
       research: [{ title: 'Synthetic Study', line: 'A synthetic finding.', url: 'https://example.test/b' }],
       oneThing: { text: 'A synthetic thought.', quote: 'A synthetic quote.' },
       encouragement: 'Generic closing.',
     } });
     const state = morningBriefSheet(file, '2026-10-02');
+    expect(state.digest.needsYou.map((line) => line.text)).toEqual(briefNeedsYou(file).map((item) => `${item.title} - ${item.line}`));
+    expect(state.digest.copenhagen.map((line) => line.text)).toEqual(briefCopenhagen(file).map((item) => `${item.title} - ${item.line}`));
+    expect(state.digest.needsYou[0]!.link).toBe('https://mail.google.com/mail/u/0/#inbox/synthetic');
+    expect(state.digest.copenhagen[0]!.link).toBe('https://www.google.com/calendar/event?eid=synthetic');
     expect(state.digest.news.map((line) => line.text)).toEqual(briefNews(file).map((item) => `${item.title} - ${item.line}`));
     expect(state.digest.research.map((line) => line.text)).toEqual(briefResearch(file).map((item) => `${item.title} - ${item.line}`));
     expect(state.digest.news[0]!.link).toBe('https://example.test/a');
@@ -295,6 +301,8 @@ describe('Morning Brief sheet state (UX7)', () => {
     });
     const state = morningBriefSheet(file, '2026-10-02');
     expect(state.digest.unavailable).toBe('the note was not found');
+    expect(state.digest.needsYou).toEqual([]);
+    expect(state.digest.copenhagen).toEqual([]);
     expect(state.digest.news).toEqual([]);
     expect(state.digest.oneThing).toBeNull();
     expect(state.lines.map((line) => line.text)).not.toContain('Digest unavailable');

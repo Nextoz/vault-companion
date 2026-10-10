@@ -59,6 +59,8 @@ const Brief = z.object({
   gaps: z.array(BriefGap),
   todos: z.array(BriefTodo),
   /** Additive v2 fields (ADR-0059 amendment): absent in v1 files and on days the digest note was unavailable. */
+  needsYou: z.array(BriefDigestItem).max(5).optional(),
+  copenhagen: z.array(BriefDigestItem).max(3).optional(),
   news: z.array(BriefDigestItem).max(3).optional(),
   research: z.array(BriefDigestItem).max(3).optional(),
   oneThing: BriefOneThing.optional(),
@@ -138,6 +140,8 @@ export function serializeBriefFile(file: BriefFile): Uint8Array {
       ...(todo.overdueDays !== undefined ? { overdueDays: todo.overdueDays } : {}),
       ...(todo.firstStep !== undefined ? { firstStep: todo.firstStep } : {}),
     })),
+    ...(file.brief.needsYou !== undefined ? { needsYou: file.brief.needsYou.map((item) => ({ title: item.title, line: item.line, url: item.url })) } : {}),
+    ...(file.brief.copenhagen !== undefined ? { copenhagen: file.brief.copenhagen.map((item) => ({ title: item.title, line: item.line, url: item.url })) } : {}),
     ...(file.brief.news !== undefined ? { news: file.brief.news.map((item) => ({ title: item.title, line: item.line, url: item.url })) } : {}),
     ...(file.brief.research !== undefined ? { research: file.brief.research.map((item) => ({ title: item.title, line: item.line, url: item.url })) } : {}),
     ...(file.brief.oneThing !== undefined ? { oneThing: { text: file.brief.oneThing.text, ...(file.brief.oneThing.quote !== undefined ? { quote: file.brief.oneThing.quote } : {}) } } : {}),
