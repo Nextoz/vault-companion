@@ -1,6 +1,6 @@
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
-import { createTrainingService, createLearningService, createActiveWorkService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, slotForCron, type VaultStore } from '@vault-companion/domain';
+import { createTrainingService, createLearningService, createActiveWorkService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, morningDigestPath, slotForCron, type VaultStore } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
 import { WEATHER_TIME_ZONE, type ApiError } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
@@ -267,6 +267,12 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
         readMood: () => mood.readMood(day),
         readCalendar: () => googleReader.readCalendar(),
         readMail: () => googleReader.readMail(),
+        readDigest: async () => {
+          const digestPath = morningDigestPath(day);
+          if (!digestPath) return { code: 'invalid', message: 'the digest date is not a calendar date', retryable: false };
+          const note = await readStore.readFile(digestPath, baseRevision);
+          return note ? new TextDecoder('utf-8', { fatal: false }).decode(note.bytes) : null;
+        },
       });
       await runBriefJob(cron, {
         store,

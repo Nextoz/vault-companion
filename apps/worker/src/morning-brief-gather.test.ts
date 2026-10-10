@@ -234,6 +234,7 @@ describe('toWeatherWindows', () => {
 
 describe('gatherCandidates', () => {
   const baseline = Array.from({ length: 20 }, () => hday('2026-05-01', { steps: 1000 }));
+  const digestNote = ['## News', '- **Synthetic Alpha** - A synthetic line. ([link](https://example.test/a))', '', '## AI and research', '- **Synthetic Beta** - Another line. ([link](https://example.test/b))', '', '## One thing', 'A synthetic thought.', '', '> A synthetic quote.'].join('\n');
   const deps = (over: Partial<MorningBriefGatherDeps> = {}): MorningBriefGatherDeps => ({
     day: DAY,
     readTasks: async () => tasksResponse([task('open', 'Alpha', DAY)]),
@@ -243,6 +244,7 @@ describe('gatherCandidates', () => {
     readMood: async () => [mood(DAY, '2026-06-15T07:00:00.000Z', [1, 1, 7])],
     readCalendar: async () => [],
     readMail: async () => [],
+    readDigest: async () => digestNote,
     ...over,
   });
 
@@ -263,6 +265,11 @@ describe('gatherCandidates', () => {
     expect(result.trainingRecent).toEqual({ count: 1, dates: [DAY] });
     expect(result.weatherWindows).toHaveLength(1);
     expect(result.events).toEqual([]);
+    expect(result.digest).toEqual({
+      news: [{ title: 'Synthetic Alpha', line: 'A synthetic line.', url: 'https://example.test/a' }],
+      research: [{ title: 'Synthetic Beta', line: 'Another line.', url: 'https://example.test/b' }],
+      oneThing: { text: 'A synthetic thought.', quote: 'A synthetic quote.' },
+    });
     expect(result.unavailable).toEqual([]);
   });
 
@@ -292,8 +299,9 @@ describe('gatherCandidates', () => {
       readTraining: async () => trainingResponse([]),
       readWeather: async () => weatherResponse([]),
       readMood: async () => [],
+      readDigest: async () => '## News\n',
     }));
-    expect(result).toEqual({ todos: [], events: [], metrics: [], mood: null, trainingRecent: { count: 0, dates: [] }, weatherWindows: [], unavailable: [], unavailableCodes: {} });
+    expect(result).toEqual({ todos: [], events: [], metrics: [], mood: null, trainingRecent: { count: 0, dates: [] }, weatherWindows: [], digest: { news: [], research: [], oneThing: null }, unavailable: [], unavailableCodes: {} });
   });
 
   it('a non-ok union status is an honest empty slot, not a gatherer failure', async () => {
@@ -331,5 +339,25 @@ describe('gatherCandidates', () => {
     expect(result.events).toEqual([]);
     expect(result.unavailable).toEqual(['calendar', 'mail']);
     expect(result.unavailableCodes).toEqual({ calendar: 'google-scope-mismatch', mail: 'upstream-unavailable' });
+  });
+
+  it('a missing digest note is unavailable (not empty) with a fixed not-found reason', async () => {
+    const result = await gatherCandidates(deps({ readDigest: async () => null }));
+    expect(result.digest).toEqual({ news: [], research: [], oneThing: null });
+    expect(result.unavailable).toEqual(['digest']);
+    expect(result.unavailableCodes).toEqual({ digest: 'not-found' });
+  });
+
+  it('a note without any digest heading is unavailable with a fixed invalid reason', async () => {
+    const result = await gatherCandidates(deps({ readDigest: async () => '## Something else\ntext\n' }));
+    expect(result.unavailable).toEqual(['digest']);
+    expect(result.unavailableCodes).toEqual({ digest: 'invalid' });
+  });
+
+  it('a throwing digest reader lands in unavailable without rejecting', async () => {
+    const result = await gatherCandidates(deps({ readDigest: async () => Promise.reject(new Error('SENTINEL-DIGEST')) }));
+    expect(result.unavailable).toEqual(['digest']);
+    expect(result.unavailableCodes).toEqual({ digest: 'threw' });
+    expect(JSON.stringify(result)).not.toContain('SENTINEL-DIGEST');
   });
 });

@@ -94,6 +94,35 @@ describe('renderBriefEmail', () => {
       expect(output).toContain('Mail unavailable: reason not provided');
     }
   });
+
+  it('renders the full digest sections and lets One thing replace the generic closing line', () => {
+    const withDigest = file({ unavailable: [], brief: {
+      meetings: [], source: 'model', dayLine: 'A day.', gaps: [], todos: [], encouragement: 'Generic closing.',
+      news: [{ title: 'Synthetic Headline', line: 'A synthetic one-liner.', url: 'https://example.test/news' }],
+      research: [{ title: 'Synthetic Study', line: 'A synthetic finding.', url: 'https://example.test/paper' }],
+      oneThing: { text: 'A synthetic thought.', quote: 'A synthetic quote.' },
+    } });
+    const { text, html } = renderBriefEmail(withDigest);
+    for (const output of [text, html]) {
+      expect(output).toContain('Synthetic Headline');
+      expect(output).toContain('A synthetic one-liner.');
+      expect(output).toContain('Synthetic Study');
+      expect(output).toContain('A synthetic thought.');
+      expect(output).toContain('A synthetic quote.');
+      expect(output).not.toContain('Generic closing.');
+    }
+    expect(html).toContain('href="https://example.test/news"');
+  });
+
+  it('renders per-section unavailable lines, never a bare Digest reader line, for a missing note', () => {
+    const missingDigest = file({ unavailable: ['mail', 'digest'], unavailableReasons: { digest: 'not-found' } });
+    const { text, html } = renderBriefEmail(missingDigest);
+    for (const output of [text, html]) {
+      expect(output).toContain('News unavailable: the note was not found');
+      expect(output).toContain('AI and research unavailable: the note was not found');
+      expect(output).not.toContain('Digest unavailable');
+    }
+  });
 });
 
 describe('cloudflareMailer', () => {

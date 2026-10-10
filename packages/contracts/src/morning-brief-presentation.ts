@@ -17,12 +17,59 @@ export function briefMeetingRows(file: Pick<MorningBriefResponse, 'brief' | 'una
 }
 
 export function briefUnavailableLines(file: Pick<MorningBriefResponse, 'unavailable' | 'unavailableReasons'>): string[] {
-  return file.unavailable.map((name) => {
-    const code = file.unavailableReasons?.[name];
-    const reason = code === 'google-reauth-needed' ? 'Google sign-in needs renewing'
-      : code === 'threw' ? 'it failed unexpectedly' : code ?? 'reason not provided';
-    return `${name.charAt(0).toUpperCase()}${name.slice(1)} unavailable: ${reason}`;
+  // The digest reader is rendered per section (News / AI and research) rather than as one reader line.
+  return file.unavailable.filter((name) => name !== DIGEST_READER).map((name) => {
+    return `${name.charAt(0).toUpperCase()}${name.slice(1)} unavailable: ${reasonText(file.unavailableReasons?.[name])}`;
   });
+}
+
+/** The gatherer name whose failure the News and AI-and-research sections report. */
+export const DIGEST_READER = 'digest';
+
+function reasonText(code: string | undefined): string {
+  return code === 'google-reauth-needed' ? 'Google sign-in needs renewing'
+    : code === 'not-found' ? 'the note was not found'
+    : code === 'invalid' ? 'the note could not be read'
+    : code === 'threw' ? 'it failed unexpectedly' : code ?? 'reason not provided';
+}
+
+/** One tracked-digest bullet. `url` is https-only; unsafe entries are dropped from the projection. */
+export interface BriefDigestItem {
+  readonly title: string;
+  readonly line: string;
+  readonly url: string;
+}
+
+/** The digest's closing thought, replacing the generic closing line when present. */
+export interface BriefOneThing {
+  readonly text: string;
+  readonly quote?: string | undefined;
+}
+
+function httpsItems(items: readonly { title: string; line: string; url: string }[] | undefined): BriefDigestItem[] {
+  return (items ?? []).filter((item) => /^https:\/\//.test(item.url)).map((item) => ({ title: item.title, line: item.line, url: item.url }));
+}
+
+/** The News bullets, in note order ([] when the file predates the digest fields). */
+export function briefNews(file: Pick<MorningBriefResponse, 'brief'>): BriefDigestItem[] {
+  return httpsItems(file.brief.news);
+}
+
+/** The AI-and-research bullets, in note order ([] when the file predates the digest fields). */
+export function briefResearch(file: Pick<MorningBriefResponse, 'brief'>): BriefDigestItem[] {
+  return httpsItems(file.brief.research);
+}
+
+/** The One-thing closing block, or null when the digest carried none (the generic closing line then applies). */
+export function briefOneThing(file: Pick<MorningBriefResponse, 'brief'>): BriefOneThing | null {
+  const oneThing = file.brief.oneThing;
+  if (!oneThing) return null;
+  return { text: oneThing.text, ...(oneThing.quote !== undefined ? { quote: oneThing.quote } : {}) };
+}
+
+/** The plain reason when the digest note could not be read; null when it was (or the file predates it). */
+export function briefDigestUnavailable(file: Pick<MorningBriefResponse, 'unavailable' | 'unavailableReasons'>): string | null {
+  return file.unavailable.includes(DIGEST_READER) ? reasonText(file.unavailableReasons?.[DIGEST_READER]) : null;
 }
 
 export function briefTodoAge(todo: { overdueDays?: number | undefined }): string {

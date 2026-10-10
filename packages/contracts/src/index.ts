@@ -748,6 +748,10 @@ export const MorningBriefBody = z.strictObject({
   })).optional(),
   gaps: z.array(MorningBriefGap),
   todos: z.array(MorningBriefTodo),
+  /** ADR-0059 amendment (MB3b): tracked-digest sections, absent in v1/v2 files that predate them. */
+  news: z.array(z.strictObject({ title: z.string(), line: z.string(), url: z.string() })).max(3).optional(),
+  research: z.array(z.strictObject({ title: z.string(), line: z.string(), url: z.string() })).max(3).optional(),
+  oneThing: z.strictObject({ text: z.string(), quote: z.string().optional() }).optional(),
   encouragement: z.string().optional(),
 });
 export type MorningBriefBody = z.infer<typeof MorningBriefBody>;
@@ -763,7 +767,10 @@ export const MorningBriefResponse = z.strictObject({
   brief: MorningBriefBody,
 });
 export type MorningBriefResponse = z.infer<typeof MorningBriefResponse>;
-export { briefMeetingRows, briefTodoAge, briefUnavailableLines } from './morning-brief-presentation.ts';
+export {
+  briefDigestUnavailable, briefMeetingRows, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines,
+  type BriefDigestItem, type BriefOneThing,
+} from './morning-brief-presentation.ts';
 
 /** ADR-0055: no brief file today. The card shows "No brief yet" plus the job's fixed status error code. */
 export const MorningBriefMissingResponse = z.strictObject({

@@ -17,7 +17,7 @@ import {
   type WeatherRunWindow,
   WEATHER_TIME_ZONE,
 } from '@vault-companion/contracts';
-import { chooseRunWindow, type BriefEvent, type BriefTodo, type MoodSnapshot } from '@vault-companion/domain';
+import { chooseRunWindow, parseDigestNote, type BriefEvent, type BriefTodo, type DigestItem, type DigestOneThing, type MoodSnapshot } from '@vault-companion/domain';
 import type { GoogleMailItem } from './google-reader.ts';
 
 /** Same shape the API layer uses to tell a projection from a typed error. */
@@ -39,6 +39,8 @@ export interface MorningBriefCandidates {
   readonly mood: MoodSnapshot | null;
   readonly trainingRecent: TrainingRecent;
   readonly weatherWindows: WeatherRunWindow[];
+  /** MB3b: the tracked digest note's sections; empty when it was unavailable or carried none. Digest text stays local. */
+  readonly digest: { readonly news: DigestItem[]; readonly research: DigestItem[]; readonly oneThing: DigestOneThing | null };
   /** Names of the readers that failed (ApiError or throw); the other slots still hold their values. */
   readonly unavailable: string[];
   /** Per-reader reason for `unavailable`: the `ApiError.code` enum string, or `threw` for an exception. Names match `unavailable`. */
@@ -59,6 +61,8 @@ export interface MorningBriefGatherDeps {
   readonly readCalendar: () => Promise<readonly BriefEvent[] | ApiError>;
   /** ADR-0044: today's Jev-labelled inbox mail (metadata only). */
   readonly readMail: () => Promise<readonly GoogleMailItem[] | ApiError>;
+  /** MB3b: today's tracked PC digest note text, or null when the note does not exist. */
+  readonly readDigest: () => Promise<string | null | ApiError>;
 }
 
 // ---- Tasks ----
@@ -209,7 +213,7 @@ async function settle<T>(read: () => Promise<T | ApiError>): Promise<Settled<T>>
  */
 export async function gatherCandidates(deps: MorningBriefGatherDeps): Promise<MorningBriefCandidates> {
   const timeZone = deps.timeZone ?? WEATHER_TIME_ZONE;
-  const [tasks, health, training, weather, mood, calendar, mail] = await Promise.all([
+  const [tasks, health, training, weather, mood, calendar, mail, digest] = await Promise.all([
     settle(deps.readTasks),
     settle(deps.readHealthHistory),
     settle(deps.readTraining),
@@ -217,6 +221,7 @@ export async function gatherCandidates(deps: MorningBriefGatherDeps): Promise<Mo
     settle(deps.readMood),
     settle(deps.readCalendar),
     settle(deps.readMail),
+    settle(deps.readDigest),
   ]);
 
   const unavailable: string[] = [];
@@ -235,5 +240,15 @@ export async function gatherCandidates(deps: MorningBriefGatherDeps): Promise<Mo
   if (!calendar.ok) { unavailable.push('calendar'); unavailableCodes.calendar = calendar.code; }
   if (!mail.ok) { unavailable.push('mail'); unavailableCodes.mail = mail.code; }
 
-  return { todos, events, metrics, mood: moodSnapshot, trainingRecent, weatherWindows, unavailable, unavailableCodes };
+  // A missing note is `not-found`; a note without any digest heading is `invalid`. Both leave the sections empty.
+  let digestSections: MorningBriefCandidates['digest'] = { news: [], research: [], oneThing: null };
+  if (!digest.ok) { unavailable.push('digest'); unavailableCodes.digest = digest.code; }
+  else if (digest.value === null) { unavailable.push('digest'); unavailableCodes.digest = 'not-found'; }
+  else {
+    const parsed = parseDigestNote(digest.value);
+    if (parsed.recognized) digestSections = { news: parsed.news, research: parsed.research, oneThing: parsed.oneThing };
+    else { unavailable.push('digest'); unavailableCodes.digest = 'invalid'; }
+  }
+
+  return { todos, events, metrics, mood: moodSnapshot, trainingRecent, weatherWindows, digest: digestSections, unavailable, unavailableCodes };
 }

@@ -148,6 +148,9 @@ export async function runBriefJob(cron: string, deps: BriefJobDeps): Promise<voi
           ...(brief.stateLine !== undefined ? { stateLine: brief.stateLine } : {}),
           gaps: [...brief.gaps],
           todos: [...brief.todos],
+          ...(candidates.digest.news.length > 0 ? { news: [...candidates.digest.news] } : {}),
+          ...(candidates.digest.research.length > 0 ? { research: [...candidates.digest.research] } : {}),
+          ...(candidates.digest.oneThing !== null ? { oneThing: candidates.digest.oneThing } : {}),
           ...(brief.encouragement !== undefined ? { encouragement: brief.encouragement } : {}),
         },
       };

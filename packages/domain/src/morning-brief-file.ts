@@ -39,6 +39,18 @@ const Meeting = z.object({
   }).optional(),
 });
 
+/** MB3b: one tracked-digest bullet; the parser already drops non-https links and caps every field. */
+const BriefDigestItem = z.object({
+  title: z.string(),
+  line: z.string(),
+  url: z.string(),
+});
+
+const BriefOneThing = z.object({
+  text: z.string(),
+  quote: z.string().optional(),
+});
+
 const Brief = z.object({
   source: z.enum(['model', 'fallback']),
   dayLine: z.string(),
@@ -46,6 +58,10 @@ const Brief = z.object({
   meetings: z.array(Meeting).default([]),
   gaps: z.array(BriefGap),
   todos: z.array(BriefTodo),
+  /** Additive v2 fields (ADR-0059 amendment): absent in v1 files and on days the digest note was unavailable. */
+  news: z.array(BriefDigestItem).max(3).optional(),
+  research: z.array(BriefDigestItem).max(3).optional(),
+  oneThing: BriefOneThing.optional(),
   encouragement: z.string().optional(),
 });
 
@@ -122,6 +138,9 @@ export function serializeBriefFile(file: BriefFile): Uint8Array {
       ...(todo.overdueDays !== undefined ? { overdueDays: todo.overdueDays } : {}),
       ...(todo.firstStep !== undefined ? { firstStep: todo.firstStep } : {}),
     })),
+    ...(file.brief.news !== undefined ? { news: file.brief.news.map((item) => ({ title: item.title, line: item.line, url: item.url })) } : {}),
+    ...(file.brief.research !== undefined ? { research: file.brief.research.map((item) => ({ title: item.title, line: item.line, url: item.url })) } : {}),
+    ...(file.brief.oneThing !== undefined ? { oneThing: { text: file.brief.oneThing.text, ...(file.brief.oneThing.quote !== undefined ? { quote: file.brief.oneThing.quote } : {}) } } : {}),
     ...(file.brief.encouragement !== undefined ? { encouragement: file.brief.encouragement } : {}),
   };
   const json = {
