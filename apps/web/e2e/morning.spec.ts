@@ -59,11 +59,19 @@ test('Today: News and AI-and-research stay collapsed until opened', async ({ pag
   await page.goto('/');
   await page.getByRole('button', { name: 'Morning Brief', exact: true }).click();
   const sheet = page.getByRole('dialog', { name: 'Morning Brief' });
-  // MB3b-2: Needs you and Copenhagen today are visible immediately, each a tappable https row.
+  // MB3b-2: Needs you and Copenhagen today are visible immediately, each row one 44px https link.
   await expect(sheet.getByText('Needs you', { exact: true })).toBeVisible();
-  await expect(sheet.getByText('Synthetic Mail - A synthetic message.')).toBeVisible();
   await expect(sheet.getByText('Copenhagen today', { exact: true })).toBeVisible();
-  await expect(sheet.getByText('17:00 Synthetic Event - A synthetic plan.')).toBeVisible();
+  for (const [name, href] of [
+    ['Synthetic Mail - A synthetic message.', 'https://mail.google.com/mail/u/0/#inbox/synthetic'],
+    ['17:00 Synthetic Event - A synthetic plan.', 'https://www.google.com/calendar/event?eid=synthetic'],
+  ] as const) {
+    const row = sheet.getByRole('link', { name, exact: true });
+    await expect(row).toBeVisible();
+    await expect(row).toHaveAttribute('href', href);
+    await expect(row).toHaveCSS('text-decoration-line', 'none');
+    expect((await row.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
   const headline = sheet.getByText('Synthetic Headline - A synthetic one-liner.');
   await expect(headline).toBeHidden();
   await sheet.getByText('News', { exact: true }).click();

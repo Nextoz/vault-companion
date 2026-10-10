@@ -279,17 +279,16 @@ function MorningBriefSheet({ state, onOpenTasks, onClose }: {
 
 const EMPTY_SHEET_DIGEST: MorningBriefDigest = { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null };
 
-/** MB3b-2: Needs you and Copenhagen today are always-visible tappable https rows; News/research stay collapsed. */
+/** MB3b-2: each Needs-you / Copenhagen-today row is one tappable 44px https target; News/research stay collapsed. */
 function TappableRows({ heading, items }: { heading: string; items: readonly BriefLine[] }) {
   if (items.length === 0) return null;
   return (
     <section className="morning-brief-rows">
       <h3>{heading}</h3>
       <ul>{items.map((item) => (
-        <li key={item.id}>
-          {item.text}
-          {item.link && <a href={item.link} target="_blank" rel="noopener noreferrer" className="morning-brief-row-link">Open link</a>}
-        </li>
+        <li key={item.id}>{item.link
+          ? <a href={item.link} target="_blank" rel="noopener noreferrer" className="morning-brief-row-link">{item.text}</a>
+          : <span className="morning-brief-row-text">{item.text}</span>}</li>
       ))}</ul>
     </section>
   );
