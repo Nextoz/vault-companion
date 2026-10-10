@@ -70,7 +70,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-0. **Order (owner 2026-10-06, `.agent/owner-instructions.md`):** MB3 in progress: MB3a and MB3a-2 done (below); **MB3b-1 done** (News, AI and research, One thing from the tracked digest note `Daily/Morning Digest/Morning Digest - <date>.md`; scout state JSON is gitignored so Copenhagen needs another route); **MB3b-2 done** (Needs you + Copenhagen today from the same digest note); GAM1-B merged, next MB4 (GAM1-C after owner review), WX1, WL4. Old digest retired only by the owner after a 3-day parity check. Workers: Codex gpt-6.1-sol default, GLM for reviews. Items 1-2 below are history.
+0. **Order (owner 2026-10-06, `.agent/owner-instructions.md`):** MB3 in progress: MB3a and MB3a-2 done (below); **MB3b-1 done** (News, AI and research, One thing from the tracked digest note `Daily/Morning Digest/Morning Digest - <date>.md`; scout state JSON is gitignored so Copenhagen needs another route); **MB3b-2 done** (Needs you + Copenhagen today from the same digest note); GAM1-B merged; **MB4 done** (Morning Brief day timeline: pure `briefTimeline` in `packages/contracts/src/morning-brief-presentation.ts` shared by sheet and email; presentation only, no schema change; phone light-theme and 390x844 screenshots not yet reviewed by owner); next WX1, WL4 (GAM1-C after owner review). Old digest retired only by the owner after a 3-day parity check. Workers: Codex gpt-6.1-sol default, GLM for reviews. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the
