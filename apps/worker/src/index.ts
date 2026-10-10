@@ -6,6 +6,7 @@ import { WEATHER_TIME_ZONE, type ApiError } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createApp } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
+import { createGameService } from './game.ts';
 import { createMarketSource } from './market.ts';
 import { createWatchlistSource } from './watchlist.ts';
 import { createWeatherProvider } from './weather-provider.ts';
@@ -133,22 +134,39 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     apiKey: env.TYPESAFE_API_KEY,
     fetch: fetchImpl,
   });
+  // The game projection reuses these same read services; it never adds a write target or a third-party call (GAM1-A2).
+  const timeZone = env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE;
+  const training = createTrainingService({ store });
+  const learning = createLearningService({ store });
+  const radar = createResearchRadarService({ store, now: () => new Date(), timeZone });
+  const health = createHealthService({ store, now: () => new Date(), timeZone });
+  const history = createHistoryService({ store, now: () => new Date(), timeZone });
   const services = {
     ...createCommandService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createLinkedNoteService({ store }),
     ...createActiveWorkService({ store }),
-    ...createTrainingService({ store }),
-    ...createLearningService({ store }),
+    ...training,
+    ...learning,
     ...createTriageService({ store }),
-    ...createResearchRadarService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
+    ...radar,
     ...createScoutService({ store }),
-    ...createHealthService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
+    ...health,
     ...(env.HEALTH_INGEST_AUD ? createHealthIngestService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }) : {}),
     ...createMorningService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createMorningBriefReadService({ store }),
     ...createAiBudgetReadService({ store }),
     ...createAiUsageReadService({ store }),
-    ...createHistoryService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
+    ...history,
+    ...createGameService({
+      store,
+      readTraining: () => training.readTraining(),
+      readLearning: () => learning.readLearning(),
+      readHistory: () => history.readHistory(),
+      readRadar: () => radar.readResearchRadar(),
+      readHealthHistory: () => health.readHealthHistory(),
+      now: () => new Date(),
+      timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE,
+    }),
     ...notesService,
     ...jevService,
     ...createDashboardService({

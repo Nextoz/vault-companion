@@ -40,6 +40,19 @@ deduplication and deletion policy before the owner has calibrated the rules.
   the earliest date and six following dates. Renaissance/Jack thresholds are 75/150, following
   the Lead decision rather than contradictory prose rank names.
 
+## Step milestones (GAM1-A2, owner decision 10 Oct 2026)
+Steps are achievements with points and **never XP**: no daily goal, no streak, and no XP or level from steps or any
+other health value. The source is the cumulative `steps` column of `Health/Data/Apple Health Daily.csv`, read through
+the existing health read (the same file the Health history uses); sleep, heart, mood, weight, distance and late
+activity are never read here. The pure `computeStepMilestones(days, config)` takes daily `{date, steps}` rows and
+returns the earned milestones with the real date the running total first crossed each threshold, the next lifetime
+`{current, target}` for a progress bar, and a `{count, firstYear}` summary for one toast. A blank or missing day adds
+nothing and is never guessed. Thresholds live only in `characterConfig.steps`: lifetime 100k, 250k, 500k, 1M, 2.5M,
+5M, 7.5M, 10M then every 2.5M, and per calendar year (counted separately, never reset) 1M, 2M, 3M, 4M. Catalogue
+entries (category `Journey`, tier points, `xp` untouched) pair the thresholds with names and points. `GET /api/game`
+returns the Character plus `stepMilestones` (null when the health read failed); any source that fails to read is named
+in `unavailable` and never counted as zero, and the engine still runs on the remaining sources.
+
 ## Consequences
 Identical records/config/today produce identical output, with sorting O(n log n) and linear replay
 for the fixed catalogue. An achievement based on a later-deleted record can disappear; rule edits

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { catalogueErrors } from './catalogue.ts';
+import { catalogueErrors, stepMilestoneCatalogue, STEP_MILESTONE_CATEGORY } from './catalogue.ts';
 import { characterConfig } from './config.ts';
 
 it('has unique ids and reachable thresholds with rulesVersion 1', () => {
@@ -11,6 +11,14 @@ it('has unique ids and reachable thresholds with rulesVersion 1', () => {
   for (const a of characterConfig.achievements) {
     if (a.chain) expect(characterConfig.achievements.filter(b => b.chain === a.chain).map(b => b.tier)).toEqual(Array.from({ length: characterConfig.achievements.filter(b => b.chain === a.chain).length }, (_, i) => i + 1));
   }
+});
+
+it('derives the Journey step catalogue from the configured thresholds with tier points', () => {
+  const catalogue = stepMilestoneCatalogue(characterConfig.steps);
+  expect(catalogue.filter((entry) => entry.ladder === 'lifetime').map((entry) => entry.target)).toEqual(characterConfig.steps.lifetime);
+  expect(catalogue.filter((entry) => entry.ladder === 'yearly').map((entry) => entry.target)).toEqual(characterConfig.steps.yearly);
+  expect(new Set(catalogue.map((entry) => entry.id)).size).toBe(catalogue.length);
+  expect(catalogue.every((entry) => entry.category === STEP_MILESTONE_CATEGORY && [5, 10, 25, 50].includes(entry.points))).toBe(true);
 });
 
 it('rejects collisions, impossible skill/level/profession targets, unavailable sources and broken metas', () => {

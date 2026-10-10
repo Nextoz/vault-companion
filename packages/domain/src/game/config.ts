@@ -11,6 +11,13 @@ export const characterConfig: CharacterConfig = {
     reflection: { profession: 'lorekeeper', enabled: false, identityField: 'id', baseXp: 25, dailyCap: 2 },
     task: { profession: 'quartermaster', enabled: true, identityField: 'id', baseXp: 3, dailyCap: 5, overdue: { field: 'overdueDays', days: 7, xp: 2, dailyCap: 3 } },
   },
+  // Journey step milestones (owner decision 10 Oct 2026): achievements with points, never XP. Thresholds only here.
+  steps: {
+    lifetime: [100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, 7_500_000, 10_000_000],
+    lifetimeEvery: 2_500_000,
+    yearly: [1_000_000, 2_000_000, 3_000_000, 4_000_000],
+    points: { lifetime: [5, 10, 10, 25, 25, 50, 50, 50], recurring: 50, yearly: [10, 25, 50, 50] },
+  },
   skill: { max: 300, baseCost: 5, step: 10 },
   ranks: [
     { skill: 0, name: 'Apprentice', title: 'Apprentice {profession}' },

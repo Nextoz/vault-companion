@@ -4,7 +4,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## State
 
-- **GAM1-A1** (ADR-0060, domain only): pure `computeCharacter` + one config (`packages/domain/src/game/`), 62-entry catalogue, simulation (level 15 at week 12). Skipped review findings: rest accrues from first valid record by design. Next: GAM1-A2 (`GET /api/game` + step-milestone source), then GAM1-B UI.
+- **GAM1-A1** (ADR-0060, domain only): pure `computeCharacter` + one config (`packages/domain/src/game/`), 62-entry catalogue, simulation (level 15 at week 12). Skipped review findings: rest accrues from first valid record by design. **GAM1-A2 done**: `GET /api/game` (adapters in `apps/worker/src/game.ts`, failed sources named in `unavailable`) + step milestones (achievements only, no XP; `step-milestones.ts`). `clean-slate` stays unearned until completions carry overdue data. Next: GAM1-B UI.
 - **Tooling (2026-10-10)**: worker launcher uses DeepSeek Flash by default (`-Tier flash`), `tools/worker-after.ps1` runs handoff-check after a worker, hardened `lead-watch.ps1` (self-test 20/20, `.agent/restart-now` sentinel).
 - **CS (app side, lanes)**: Events triage shows a Work/Culture lane tag per card (`laneOf` in `apps/web/src/triage.ts`, category set per backlog), an All · Work · Culture filter (filtering never remounts the stack, so Undo/skip state survives) and a "6 work · 4 culture" line. Scouts tab needs no code: the registry is the status directory. Open: owner phone check of the mix; confirm `culture-events` shows on Scouts after its first run; tolerant missing record untested live.
 - **HC3b**: Health card → **History** toggle (lazy `GET /api/health/history`, all rows ≤ yesterday; chips 30 d / 90 d / 1 y / All slice client-side; range medians + SVG lines). Shares `readSource` with the card.
@@ -70,7 +70,7 @@ Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orch
 
 ## Next actions (in order)
 
-0. **Order (owner 2026-10-06, `.agent/owner-instructions.md`):** MB3 in progress: MB3a and MB3a-2 done (below); **MB3b-1 done** (News, AI and research, One thing from the tracked digest note `Daily/Morning Digest/Morning Digest - <date>.md`; scout state JSON is gitignored so Copenhagen needs another route); **MB3b-2 done** (Needs you + Copenhagen today from the same digest note); next GAM1-A2/B (GAM1-A1 merged), then MB4, WX1, WL4. Old digest retired only by the owner after a 3-day parity check. Workers: Codex gpt-6.1-sol default, GLM for reviews. Items 1-2 below are history.
+0. **Order (owner 2026-10-06, `.agent/owner-instructions.md`):** MB3 in progress: MB3a and MB3a-2 done (below); **MB3b-1 done** (News, AI and research, One thing from the tracked digest note `Daily/Morning Digest/Morning Digest - <date>.md`; scout state JSON is gitignored so Copenhagen needs another route); **MB3b-2 done** (Needs you + Copenhagen today from the same digest note); next GAM1-B (GAM1-A1/A2 merged), then MB4, WX1, WL4. Old digest retired only by the owner after a 3-day parity check. Workers: Codex gpt-6.1-sol default, GLM for reviews. Items 1-2 below are history.
 
 1. **MB0 + MB1** (owner 2026-10-02, before UX2). MB0: ADR-0044 merged; waiting on owner Google setup
    (vault note "Morning Brief - Owner Setup Steps") + `tools/google-token-spike.ps1` day-0 PASS, then build the

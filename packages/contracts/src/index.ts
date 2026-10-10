@@ -1287,5 +1287,78 @@ export const HealthHistoryResponse = z.strictObject({
   days: z.array(HealthHistoryDay),
 });
 export type HealthHistoryResponse = z.infer<typeof HealthHistoryResponse>;
+
+// ---- Character projection (GAM1): a derived, read-only view. Markdown/Git stay authoritative (ADR-0060). ----
+
+export const GameAchievementProgress = z.strictObject({ current: z.number(), target: z.number() });
+
+export const GameAchievement = z.strictObject({
+  id: z.string(),
+  name: z.string(),
+  category: z.string(),
+  type: z.enum(['one-off', 'counter', 'chain', 'meta', 'hidden', 'feat']),
+  points: z.number(),
+  earned: z.boolean(),
+  earnedDate: z.iso.date().nullable(),
+  visible: z.boolean(),
+  locked: z.boolean(),
+  lockedReason: z.string().nullable(),
+  chain: z.string().nullable(),
+  tier: z.number().int().nullable(),
+  progress: GameAchievementProgress.nullable(),
+});
+
+export const GameProfession = z.strictObject({
+  id: z.string(),
+  name: z.string(),
+  xp: z.number(),
+  skill: z.number().int(),
+  rank: z.string(),
+  title: z.string(),
+});
+
+export const GameCharacter = z.strictObject({
+  rulesVersion: z.number().int(),
+  xp: z.number(),
+  level: z.number().int(),
+  levelXp: z.number(),
+  levelCost: z.number(),
+  restedXp: z.number(),
+  title: z.string(),
+  professions: z.array(GameProfession),
+  achievements: z.array(GameAchievement),
+  feats: z.array(GameAchievement),
+  points: z.strictObject({ total: z.number(), byCategory: z.record(z.string(), z.number()) }),
+  skippedRecords: z.number().int().nonnegative(),
+});
+
+/** A Journey step milestone: points, never XP. `earnedDate` is the real day the running total crossed the threshold. */
+export const GameStepMilestone = z.strictObject({
+  id: z.string(),
+  name: z.string(),
+  category: z.string(),
+  points: z.number(),
+  ladder: z.enum(['lifetime', 'yearly']),
+  target: z.number().int().positive(),
+  earnedDate: z.iso.date(),
+  year: z.number().int().nullable(),
+});
+
+export const GameStepMilestones = z.strictObject({
+  earned: z.array(GameStepMilestone),
+  next: z.strictObject({ id: z.string(), name: z.string(), current: z.number(), target: z.number().int().positive() }),
+  retroactiveSummary: z.strictObject({ count: z.number().int().nonnegative(), firstYear: z.number().int() }).nullable(),
+});
+
+export const GameResponse = z.strictObject({
+  revision: commitSha,
+  now: isoInstant,
+  character: GameCharacter,
+  /** Null when the health read failed; named in `unavailable` then, never shown as zero. */
+  stepMilestones: GameStepMilestones.nullable(),
+  /** Named sources that failed to read: `training`, `learning`, `library`, `tasks`, `health`. */
+  unavailable: z.array(z.string()),
+});
+export type GameResponse = z.infer<typeof GameResponse>;
 export * from './dashboard.ts';
 export * from './weather.ts';
