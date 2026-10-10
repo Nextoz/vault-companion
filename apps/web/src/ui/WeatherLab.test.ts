@@ -12,6 +12,7 @@ const NOW = '2026-09-30T12:00:00Z';
 const point = (hour: number, over: Record<string, unknown> = {}) => ({
   time: new Date(Date.parse('2026-09-30T06:00:00Z') + hour * 3_600_000).toISOString(),
   temperatureC: 14 + hour, rainMm: hour === 0 ? 0.1 : hour === 1 ? 0.2 : 1, windMs: 4 + hour * 0.5,
+  windDirectionDeg: 180, precipitationProbabilityPct: 40, weatherCode: 3,
   ...over,
 });
 const modelSeries = (model: 'dmi_harmonie_arome_europe' | 'ecmwf_ifs') => ({

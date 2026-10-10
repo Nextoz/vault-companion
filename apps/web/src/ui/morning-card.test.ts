@@ -38,7 +38,8 @@ type WeatherPoint = WeatherProjection['models'][number]['points'][number];
 
 /** One sunny/rainy projection point at a Copenhagen daytime hour (October = UTC+2). */
 const at = (localHour: number, over: Partial<WeatherPoint> = {}): WeatherPoint => ({
-  time: `2026-10-02T${String(localHour - 2).padStart(2, '0')}:00:00Z`, temperatureC: 12, rainMm: 0, windMs: 2, ...over,
+  time: `2026-10-02T${String(localHour - 2).padStart(2, '0')}:00:00Z`, temperatureC: 12, rainMm: 0, windMs: 2,
+  windDirectionDeg: 180, precipitationProbabilityPct: 40, weatherCode: 3, ...over,
 });
 
 const DAY_PROJECTION = (points: readonly WeatherPoint[], runWindow: WeatherRunWindow | null = null): WeatherProjection => ({

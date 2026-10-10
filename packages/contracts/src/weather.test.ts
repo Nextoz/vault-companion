@@ -2,14 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   roundWeatherCoordinate,
   WEATHER_FALLBACK_LOCATION,
-  WEATHER_FORECAST_HOURS,
+  WEATHER_MODEL_HOURS,
   WeatherProjection,
   WeatherResponse,
 } from './weather.ts';
 
 const time = (hour: number) => new Date(Date.parse('2026-09-30T00:00:00Z') + hour * 3_600_000).toISOString();
 const point = (hour: number, over: Record<string, unknown> = {}) => ({
-  time: time(hour), temperatureC: 15 + hour * 0.1, rainMm: hour % 4 === 0 ? 0.2 : null, windMs: 4.2, ...over,
+  time: time(hour), temperatureC: 15 + hour * 0.1, rainMm: hour % 4 === 0 ? 0.2 : null, windMs: 4.2,
+  windDirectionDeg: 180, precipitationProbabilityPct: 40, weatherCode: 3, ...over,
 });
 const series = (model: 'dmi_harmonie_arome_europe' | 'ecmwf_ifs', over: Record<string, unknown> = {}) => ({
   model,
@@ -17,7 +18,7 @@ const series = (model: 'dmi_harmonie_arome_europe' | 'ecmwf_ifs', over: Record<s
   resolutionKm: model === 'dmi_harmonie_arome_europe' ? 2 : 9,
   sourceUrl: 'https://open-meteo.com/en/docs/dmi-api',
   retrievedAt: '2026-09-30T12:00:00Z',
-  expectedPoints: WEATHER_FORECAST_HOURS,
+  expectedPoints: WEATHER_MODEL_HOURS[model],
   points: Array.from({ length: 8 }, (_, i) => point(i)),
   missingIntervals: 0,
   ...over,
@@ -28,7 +29,7 @@ const projection = (over: Record<string, unknown> = {}) => ({
   now: '2026-09-30T12:00:00Z',
   models: [series('dmi_harmonie_arome_europe'), series('ecmwf_ifs')],
   agreement: 'two-models',
-  coverage: { expectedPoints: 48, primaryReturned: 8, comparisonReturned: 8, primaryMissingIntervals: 0, comparisonMissingIntervals: 0 },
+  coverage: { expectedPoints: 72, primaryReturned: 8, comparisonReturned: 8, primaryMissingIntervals: 0, comparisonMissingIntervals: 0 },
   runWindow: {
     day: '2026-09-30', daytimeStart: '08:00', daytimeEnd: '20:00',
     start: '2026-09-30T08:00:00Z', end: '2026-09-30T10:00:00Z',
@@ -57,10 +58,30 @@ describe('weather contract (ADR-0033 W1)', () => {
     expect(WeatherProjection.safeParse(projection({ models: [series('dmi_harmonie_arome_europe', { points: [{ ...point(0), rainMm: -0.1 }] })] })).success).toBe(false);
   });
 
-  it('caps a series at 48 points and rejects an unknown model', () => {
-    const tooMany = series('dmi_harmonie_arome_europe', { points: Array.from({ length: 49 }, (_, i) => point(i)) });
-    expect(WeatherProjection.safeParse(projection({ models: [tooMany] })).success).toBe(false);
+  it('caps each series at its own horizon (DMI 72, ECMWF 168) and rejects an unknown model', () => {
+    const dmiFull = series('dmi_harmonie_arome_europe', { points: Array.from({ length: 72 }, (_, i) => point(i)) });
+    expect(WeatherProjection.safeParse(projection({ models: [dmiFull] })).success).toBe(true);
+    const dmiTooMany = series('dmi_harmonie_arome_europe', { points: Array.from({ length: 73 }, (_, i) => point(i)) });
+    expect(WeatherProjection.safeParse(projection({ models: [dmiTooMany] })).success).toBe(false);
+    const ecmwfTooMany = series('ecmwf_ifs', { points: Array.from({ length: 169 }, (_, i) => point(i)) });
+    expect(WeatherProjection.safeParse(projection({ models: [ecmwfTooMany] })).success).toBe(false);
     expect(WeatherProjection.safeParse(projection({ models: [{ ...series('dmi_harmonie_arome_europe'), model: 'generic' }] })).success).toBe(false);
+  });
+
+  it('accepts nullable wind direction, precipitation probability and weather code, and refuses out-of-range values', () => {
+    const withExtras = series('ecmwf_ifs', {
+      points: [
+        point(0, { windDirectionDeg: 210, precipitationProbabilityPct: 80, weatherCode: 61 }),
+        point(1, { windDirectionDeg: null, precipitationProbabilityPct: null, weatherCode: null }),
+      ],
+    });
+    const parsed = WeatherProjection.parse(projection({ models: [withExtras] }));
+    expect(parsed.models[0]!.points[0]).toMatchObject({ windDirectionDeg: 210, precipitationProbabilityPct: 80, weatherCode: 61 });
+    expect(parsed.models[0]!.points[1]).toMatchObject({ windDirectionDeg: null, precipitationProbabilityPct: null, weatherCode: null });
+    const outOfRange = (over: Record<string, unknown>) => series('ecmwf_ifs', { points: [point(0, over)] });
+    for (const over of [{ windDirectionDeg: 361 }, { precipitationProbabilityPct: 101 }, { weatherCode: 1.5 }]) {
+      expect(WeatherProjection.safeParse(projection({ models: [outOfRange(over)] })).success).toBe(false);
+    }
   });
 
   it('rounds coordinates to the fixed ~1 km grid before they can be sent or cached', () => {

@@ -117,6 +117,9 @@ const weatherPoint = (hour: number, over: Record<string, unknown> = {}) => ({
   temperatureC: 14 + hour * 0.5,
   rainMm: 0.1 + hour * 0.1,
   windMs: 3 + hour * 0.4,
+  windDirectionDeg: (hour * 45) % 360,
+  precipitationProbabilityPct: (hour * 20) % 100,
+  weatherCode: hour % 3 === 0 ? 61 : hour % 2 === 0 ? 3 : 1,
   ...over,
 });
 
@@ -145,7 +148,7 @@ export const sampleWeather = (partial = false): WeatherResponse => WeatherRespon
       {
         model: 'dmi_harmonie_arome_europe', label: 'DMI HARMONIE AROME Europe', resolutionKm: 2,
         sourceUrl: 'https://open-meteo.com/en/docs/dmi-api', retrievedAt: '2026-09-30T11:55:00Z', expectedPoints: 48,
-        points: [0, 1, 2, 3, 4, 5].map((hour) => weatherPoint(hour, { rainMm: 0.1 + hour * 0.1 })),
+        points: [0, 1, 2, 3, 4, 5].map((hour) => weatherPoint(hour, { rainMm: 0.1 + hour * 0.1, precipitationProbabilityPct: null })),
         missingIntervals: 42,
       },
       ...(partial ? [] : [{

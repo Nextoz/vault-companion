@@ -1,6 +1,10 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs';
 import { WeatherResponse, type WeatherLocationRequest } from '@vault-companion/contracts';
+import { createWeatherService } from '@vault-companion/domain';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp, type Services } from './app.ts';
+import { createWeatherProvider, WEATHER_MAX_BODY_BYTES } from './weather-provider.ts';
 
 const ORIGIN = 'https://vc.example.com';
 const ACCOUNT = 'a'.repeat(64);
@@ -67,5 +71,28 @@ describe('weather routes are authenticated and guarded (ADR-0033 W1)', () => {
     expect(res.status).toBe(200);
     expect(read).toHaveBeenCalledTimes(1);
     expect(res.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('serves the longer 7-day/3-day series with one provider request per model and a small body', async () => {
+    const calls: string[] = [];
+    const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`../test/fixtures/${name}`, import.meta.url), 'utf8'));
+    const provider = createWeatherProvider({
+      fetch: async (url) => {
+        const target = String(url);
+        calls.push(target);
+        return new Response(JSON.stringify(fixture(target.includes('/v1/ecmwf') ? 'open-meteo-ecmwf-7d.json' : 'open-meteo-dmi-7d.json')), { status: 200 });
+      },
+      now: () => Date.parse('2026-09-30T12:00:00Z'),
+    });
+    const service = createWeatherService({ reader: provider, now: () => new Date('2026-09-30T12:00:00Z') });
+    const res = await app({ readWeather: () => service.readWeather() }).request('/api/weather', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    const text = await res.text();
+    expect(new TextEncoder().encode(text).length).toBeLessThan(WEATHER_MAX_BODY_BYTES);
+    const body = WeatherResponse.parse(JSON.parse(text));
+    if (body.status !== 'ok') throw new Error('expected an ok projection');
+    expect(body.projection.models.map((series) => [series.model, series.points.length])).toEqual([['dmi_harmonie_arome_europe', 72], ['ecmwf_ifs', 168]]);
+    expect(calls).toHaveLength(2);
   });
 });

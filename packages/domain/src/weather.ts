@@ -4,7 +4,7 @@ import {
   roundWeatherCoordinate,
   WEATHER_ATTRIBUTION,
   WEATHER_FALLBACK_LOCATION,
-  WEATHER_FORECAST_HOURS,
+  WEATHER_MODEL_HOURS,
   WEATHER_MODELS,
   WEATHER_MODEL_PLAN,
   WEATHER_TERMS_URL,
@@ -19,8 +19,10 @@ import {
   type WeatherModelSeries,
   type WeatherPartialError,
   type WeatherPoint,
+  type WeatherProjection,
   type WeatherResponse,
   type WeatherRunWindow,
+  type WeatherWeekDay,
 } from '@vault-companion/contracts';
 import { userDate } from './time.ts';
 
@@ -103,7 +105,7 @@ function coverageFor(models: readonly WeatherModelSeries[]): WeatherCoverage {
   const primary = models[0] ?? null;
   const comparison = models[1] ?? null;
   return {
-    expectedPoints: WEATHER_FORECAST_HOURS,
+    expectedPoints: primary ? WEATHER_MODEL_HOURS[primary.model] : 0,
     primaryReturned: primary?.points.length ?? 0,
     comparisonReturned: comparison?.points.length ?? 0,
     primaryMissingIntervals: primary?.missingIntervals ?? 0,
@@ -178,6 +180,78 @@ export function chooseRunWindow(models: readonly WeatherModelSeries[], day: stri
       ? 'Lowest-rain two-hour window inside Copenhagen daytime 08:00-20:00. Not a guarantee of dry or daylight weather.'
       : 'Lowest-rain two-hour daytime window from the single model that covers it. Not a guarantee of dry or daylight weather.',
   };
+}
+
+interface WeekHour {
+  readonly timeMs: number;
+  readonly hour: number;
+  temperatureC: number | null;
+  rainMm: number | null;
+  weatherCode: number | null;
+  readonly models: Set<WeatherModel>;
+}
+
+/** The first model that reports a value for this hour wins; a null never overwrites a real value and stays a gap. */
+const firstValue = (current: number | null, next: number | null | undefined): number | null =>
+  current ?? (typeof next === 'number' ? next : null);
+
+function weekDay(projection: WeatherProjection, day: string, hours: Map<number, WeekHour>, timeZone: string): WeatherWeekDay {
+  const ordered = [...hours.values()].sort((a, b) => a.timeMs - b.timeMs);
+  const values = (pick: (hour: WeekHour) => number | null): number[] => ordered.map(pick).filter((value): value is number => value !== null);
+  const temperatures = values((hour) => hour.temperatureC);
+  const rains = values((hour) => hour.rainMm);
+  // The brief scopes precipitation probability to ECMWF, the only model that returns it; DMI days report null.
+  const ecmwf = projection.models.find((series) => series.model === 'ecmwf_ifs');
+  const probabilities = ecmwf
+    ? ecmwf.points.filter((point) => localPoint(point.time, timeZone).date === day).map((point) => point.precipitationProbabilityPct).filter((value): value is number => value !== null)
+    : [];
+  const daytimeCodes = ordered.filter((hour) => hour.hour >= 8 && hour.hour < 20).map((hour) => hour.weatherCode).filter((value): value is number => value !== null);
+  const codes = daytimeCodes.length > 0 ? daytimeCodes : values((hour) => hour.weatherCode);
+  const models = new Set(ordered.flatMap((hour) => [...hour.models]));
+  const contiguous = ordered.every((hour, index) => index === 0 || hour.timeMs - ordered[index - 1]!.timeMs === 3_600_000);
+  const first = ordered[0]!;
+  const last = ordered[ordered.length - 1]!;
+  const rainUnknown = ordered.some((hour) => hour.rainMm === null);
+  return {
+    day,
+    lowTemperatureC: temperatures.length > 0 ? round4(Math.min(...temperatures)) : null,
+    highTemperatureC: temperatures.length > 0 ? round4(Math.max(...temperatures)) : null,
+    // Summing only the known hours would understate the day: an unknown rain hour makes the daily total null.
+    rainMm: rainUnknown ? null : round4(rains.reduce((sum, value) => sum + value, 0)),
+    precipitationProbabilityPct: probabilities.length > 0 ? Math.max(...probabilities) : null,
+    weatherCode: codes.length > 0 ? Math.max(...codes) : null,
+    models: Math.min(Math.max(models.size, 1), 2),
+    // Complete only when the day spans its full local day, every hour is present and every rain value is known.
+    partial: !contiguous || first.hour !== 0 || last.hour !== 23 || rainUnknown,
+    runWindow: chooseRunWindow(projection.models, day, timeZone),
+  };
+}
+
+/**
+ * One entry per Copenhagen local day that has data (ADR-0033 W1). Hourly values merge across the available models,
+ * preferring the first model that has a value; provider nulls stay null and days beyond the DMI horizon report one
+ * model. A day that does not span the full local day (today, the last day) is flagged partial, never shown complete.
+ */
+export function weekDays(projection: WeatherProjection): WeatherWeekDay[] {
+  const timeZone = projection.location.timeZone;
+  const days = new Map<string, Map<number, WeekHour>>();
+  for (const series of projection.models) {
+    for (const point of series.points) {
+      const local = localPoint(point.time, timeZone);
+      const timeMs = Date.parse(point.time);
+      const hours = days.get(local.date) ?? new Map<number, WeekHour>();
+      days.set(local.date, hours);
+      const hour = hours.get(timeMs) ?? { timeMs, hour: local.hour, temperatureC: null, rainMm: null, weatherCode: null, models: new Set<WeatherModel>() };
+      hour.temperatureC = firstValue(hour.temperatureC, point.temperatureC);
+      hour.rainMm = firstValue(hour.rainMm, point.rainMm);
+      hour.weatherCode = firstValue(hour.weatherCode, point.weatherCode);
+      hour.models.add(series.model);
+      hours.set(timeMs, hour);
+    }
+  }
+  return [...days.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([day, hours]) => weekDay(projection, day, hours, timeZone));
 }
 
 function unavailableReason(primary: WeatherModelOutcome | undefined, comparison: WeatherModelOutcome | undefined): WeatherFailureReason {

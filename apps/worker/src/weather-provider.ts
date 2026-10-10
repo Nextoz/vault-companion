@@ -2,7 +2,7 @@
 // or model. Server-side fetch, strict unit/time/value validation, and a bounded cache keyed by rounded location/model.
 import {
   roundWeatherCoordinate,
-  WEATHER_FORECAST_HOURS,
+  WEATHER_MODEL_HOURS,
   WEATHER_MODEL_PLAN,
   type WeatherFailureReason,
   type WeatherLocation,
@@ -14,19 +14,19 @@ import type { WeatherModelOutcome } from '@vault-companion/domain';
 
 /** A request the provider has not answered by then is abandoned and reported as a timeout. */
 export const WEATHER_FETCH_TIMEOUT_MS = 8_000;
-/** Provider bodies above this are refused unread; 48 hourly points for two models are far smaller. */
+/** Provider bodies above this are refused unread; 168 + 72 hourly points for two models are far smaller. */
 export const WEATHER_MAX_BODY_BYTES = 256 * 1024;
 /** Forecasts change slowly: one cache entry is fresh for 15 minutes and is never polled every request. */
 export const WEATHER_CACHE_TTL_MS = 15 * 60_000;
 /** Two models at the fallback plus two models at one device-rounded location: bounded, then oldest entry is dropped. */
 export const WEATHER_CACHE_MAX_ENTRIES = 4;
 
-const HOURLY_FIELDS = 'temperature_2m,rain,wind_speed_10m';
+const HOURLY_FIELDS = 'temperature_2m,rain,wind_speed_10m,wind_direction_10m,precipitation_probability,weather_code';
 
 /** The only provider URLs this adapter may build. Coordinates are already rounded before this function is called. */
 export function weatherUrl(location: WeatherLocation, model: WeatherModel): string {
   const plan = WEATHER_MODEL_PLAN[model];
-  return `${plan.baseUrl}?latitude=${location.latitude}&longitude=${location.longitude}&hourly=${encodeURIComponent(HOURLY_FIELDS)}&forecast_hours=${WEATHER_FORECAST_HOURS}&wind_speed_unit=ms&timeformat=unixtime&timezone=GMT&models=${plan.selector}`;
+  return `${plan.baseUrl}?latitude=${location.latitude}&longitude=${location.longitude}&hourly=${encodeURIComponent(HOURLY_FIELDS)}&forecast_hours=${WEATHER_MODEL_HOURS[model]}&wind_speed_unit=ms&timeformat=unixtime&timezone=GMT&models=${plan.selector}`;
 }
 
 class TimedOut extends Error {}
@@ -88,16 +88,23 @@ async function readJson(
   }
 }
 
-function optionalNumber(value: unknown, minimum = -Infinity): number | null | undefined {
+function optionalNumber(value: unknown, minimum = -Infinity, maximum = Infinity): number | null | undefined {
   if (value === null) return null;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < minimum) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < minimum || value > maximum) return undefined;
+  return value;
+}
+
+function optionalInteger(value: unknown, minimum = 0): number | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum) return undefined;
   return value;
 }
 
 /**
- * Strict parser for the verified Open-Meteo shape. Units must be exactly unixtime/°C/mm/m/s with offset 0, times must be
- * strictly increasing unix seconds, and any non-null invalid value refuses the body. Provider nulls stay null: the UI
- * draws them as gaps.
+ * Strict parser for the verified Open-Meteo shape. Units must be exactly unixtime/°C/mm/m/s/°/%/wmo code with offset 0,
+ * times must be strictly increasing unix seconds, and any non-null invalid value refuses the body. Points at or beyond
+ * the model horizon are dropped (the provider returns a longer DMI tail of nulls). Provider nulls stay null: the UI
+ * draws them as gaps. DMI's precipitation_probability unit "undefined" is tolerated only when every value is null.
  */
 export function parseWeatherBody(body: unknown, model: WeatherModel, retrievedAt: string): WeatherModelSeries | null {
   if (typeof body !== 'object' || body === null) return null;
@@ -107,6 +114,7 @@ export function parseWeatherBody(body: unknown, model: WeatherModel, retrievedAt
   if (typeof units !== 'object' || units === null) return null;
   const unit = units as Record<string, unknown>;
   if (unit.time !== 'unixtime' || unit.temperature_2m !== '°C' || unit.rain !== 'mm' || unit.wind_speed_10m !== 'm/s') return null;
+  if (unit.wind_direction_10m !== '°' || unit.weather_code !== 'wmo code') return null;
   const hourly = raw.hourly;
   if (typeof hourly !== 'object' || hourly === null) return null;
   const h = hourly as Record<string, unknown>;
@@ -114,24 +122,35 @@ export function parseWeatherBody(body: unknown, model: WeatherModel, retrievedAt
   const temperatures = h.temperature_2m;
   const rains = h.rain;
   const winds = h.wind_speed_10m;
-  if (!Array.isArray(times) || !Array.isArray(temperatures) || !Array.isArray(rains) || !Array.isArray(winds)) return null;
-  if (times.length === 0 || times.length > WEATHER_FORECAST_HOURS) return null;
-  if (temperatures.length !== times.length || rains.length !== times.length || winds.length !== times.length) return null;
+  const directions = h.wind_direction_10m;
+  const probabilities = h.precipitation_probability;
+  const codes = h.weather_code;
+  if (!Array.isArray(times) || !Array.isArray(temperatures) || !Array.isArray(rains) || !Array.isArray(winds) || !Array.isArray(directions) || !Array.isArray(probabilities) || !Array.isArray(codes)) return null;
+  const length = times.length;
+  if (length === 0) return null;
+  if ([temperatures, rains, winds, directions, probabilities, codes].some((column) => column.length !== length)) return null;
+  if (unit.precipitation_probability !== '%' && (unit.precipitation_probability !== 'undefined' || probabilities.some((value) => value !== null))) return null;
 
+  const horizon = WEATHER_MODEL_HOURS[model];
+  const start = times[0] as number;
   const points: WeatherPoint[] = [];
   let previous = Number.NEGATIVE_INFINITY;
-  for (let i = 0; i < times.length; i++) {
+  for (let i = 0; i < length; i++) {
     const rawTime = times[i];
     if (typeof rawTime !== 'number' || !Number.isInteger(rawTime) || rawTime <= previous || rawTime % 3600 !== 0) return null;
-    if (rawTime - (times[0] as number) >= WEATHER_FORECAST_HOURS * 3600) return null;
+    if (rawTime - start >= horizon * 3600) break; // the provider's longer tail is dropped, never drawn
     const instant = new Date(rawTime * 1000);
     if (!Number.isFinite(instant.getTime())) return null;
     previous = rawTime;
     const temperatureC = optionalNumber(temperatures[i]);
     const rainMm = optionalNumber(rains[i], 0);
     const windMs = optionalNumber(winds[i], 0);
+    const windDirectionDeg = optionalNumber(directions[i], 0, 360);
+    const precipitationProbabilityPct = optionalNumber(probabilities[i], 0, 100);
+    const weatherCode = optionalInteger(codes[i], 0);
     if (temperatureC === undefined || rainMm === undefined || windMs === undefined) return null;
-    points.push({ time: instant.toISOString(), temperatureC, rainMm, windMs });
+    if (windDirectionDeg === undefined || precipitationProbabilityPct === undefined || weatherCode === undefined) return null;
+    points.push({ time: instant.toISOString(), temperatureC, rainMm, windMs, windDirectionDeg, precipitationProbabilityPct, weatherCode });
   }
   const plan = WEATHER_MODEL_PLAN[model];
   return {
@@ -140,9 +159,9 @@ export function parseWeatherBody(body: unknown, model: WeatherModel, retrievedAt
     resolutionKm: plan.resolutionKm,
     sourceUrl: plan.sourceUrl,
     retrievedAt,
-    expectedPoints: WEATHER_FORECAST_HOURS,
+    expectedPoints: horizon,
     points,
-    missingIntervals: WEATHER_FORECAST_HOURS - points.length + points.filter((p) => p.temperatureC === null || p.rainMm === null || p.windMs === null).length,
+    missingIntervals: horizon - points.length + points.filter((p) => p.temperatureC === null || p.rainMm === null || p.windMs === null).length,
   };
 }
 
