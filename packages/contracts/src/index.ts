@@ -770,8 +770,8 @@ export const MorningBriefResponse = z.strictObject({
 });
 export type MorningBriefResponse = z.infer<typeof MorningBriefResponse>;
 export {
-  briefCopenhagen, briefDigestUnavailable, briefMeetingRows, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines,
-  type BriefDigestItem, type BriefOneThing,
+  briefCopenhagen, briefDigestUnavailable, briefDurationText, briefMeetingRows, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTimeline, briefTodoAge, briefUnavailableLines,
+  type BriefDigestItem, type BriefOneThing, type BriefTimeline, type BriefTimelineRow,
 } from './morning-brief-presentation.ts';
 
 /** ADR-0055: no brief file today. The card shows "No brief yet" plus the job's fixed status error code. */

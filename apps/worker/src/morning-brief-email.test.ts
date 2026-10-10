@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { briefTimeline } from '@vault-companion/contracts';
 import type { BriefFile } from '@vault-companion/domain';
-import { cloudflareMailer, renderBriefEmail } from './morning-brief-email.ts';
+import { cloudflareMailer, escapeHtml, renderBriefEmail } from './morning-brief-email.ts';
 
 const decode = (b64: string): string => new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
 
@@ -55,24 +56,45 @@ describe('renderBriefEmail', () => {
     expect(text).toContain(attack);
   });
 
-  it('escapes hostile stateLine, gap times, due date, file.date and unavailable in the HTML', () => {
+  it('escapes hostile timeline text, stateLine, due date, file.date and unavailable in the HTML', () => {
     const hostile = '<img src=x onerror=1>';
     const { html } = renderBriefEmail(
       file({
         date: hostile,
         unavailable: [hostile],
         brief: {
-          meetings: [],
+          meetings: [{ title: hostile, start: `${DATE}T09:00:00Z`, end: `${DATE}T10:00:00Z`, allDay: false, clash: false }],
           source: 'model',
           dayLine: 'ok',
           stateLine: hostile,
-          gaps: [{ blockIndex: 0, start: hostile, end: hostile }],
+          gaps: [{ blockIndex: 0, start: `${DATE}T10:00:00Z`, end: `${DATE}T11:00:00Z`, suggestion: hostile }],
           todos: [{ id: 0, text: 'ok', due: hostile, bill: false }],
         },
       }),
     );
     expect(html).not.toContain('<img');
     expect(html.match(/&lt;img src=x onerror=1&gt;/g)?.length).toBe(6);
+  });
+
+  it('renders the timeline rows from the shared helper, in the same order as the phone sheet', () => {
+    const withMeetings = file({ unavailable: [], brief: {
+      meetings: [
+        { title: 'Team sync', start: `${DATE}T09:30:00+02:00`, end: `${DATE}T10:30:00+02:00`, allDay: false, clash: true, clashWith: 'Design review' },
+        { title: 'Design review', start: `${DATE}T09:00:00+02:00`, end: `${DATE}T10:00:00+02:00`, allDay: false, clash: true, clashWith: 'Team sync' },
+      ],
+      source: 'model', dayLine: 'A day.', gaps: [{ blockIndex: 0, start: `${DATE}T07:00:00+02:00`, end: `${DATE}T08:00:00+02:00`, suggestion: 'Take a walk' }], todos: [],
+    } });
+    const timeline = briefTimeline(withMeetings, new Date(`${DATE}T12:00:00+02:00`));
+    const { text, html } = renderBriefEmail(withMeetings, new Date(`${DATE}T12:00:00+02:00`));
+    let cursor = 0;
+    for (const row of timeline.rows) {
+      const label = `${row.time}  ${row.label}`;
+      expect(text.indexOf(label, cursor)).toBeGreaterThan(-1);
+      cursor = text.indexOf(label, cursor);
+      expect(html).toContain(escapeHtml(row.label));
+      if (row.overlap !== null) expect(text).toContain(row.overlap);
+    }
+    expect(text).not.toContain('Free blocks:');
   });
 
   it('renders a fallback brief without inventing suggestion, firstStep, state or encouragement text', () => {

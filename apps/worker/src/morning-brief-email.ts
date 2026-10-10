@@ -3,7 +3,7 @@
 // interpolated string; a fallback brief renders exactly what it contains and invents nothing.
 
 import type { BriefFile } from '@vault-companion/domain';
-import { briefCopenhagen, briefDigestUnavailable, briefMeetingRows, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
+import { briefCopenhagen, briefDigestUnavailable, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTimeline, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
 
 /** One rendered message: a plain-text and an HTML body for the same subject. */
 export interface BriefEmail {
@@ -78,37 +78,34 @@ export function escapeHtml(value: string): string {
 }
 
 /** Pure render of the committed brief: subject plus a text and an HTML body with every interpolation escaped. */
-export function renderBriefEmail(file: BriefFile): BriefEmail {
+export function renderBriefEmail(file: BriefFile, now: Date = new Date()): BriefEmail {
   const { brief } = file;
   const subject = `Morning Brief - ${file.date}`;
   const unavailable = briefUnavailableLines(file);
-  const meetings = briefMeetingRows(file);
-  const gaps = file.unavailable.includes('calendar') ? [] : brief.gaps;
+  // MB4: the email and the phone sheet share `briefTimeline`, so both show the same rows in the same order.
+  const timeline = briefTimeline(file, now);
   const needsYou = briefNeedsYou(file);
   const copenhagen = briefCopenhagen(file);
   const news = briefNews(file);
   const research = briefResearch(file);
   const oneThing = briefOneThing(file);
   const digestUnavailable = briefDigestUnavailable(file);
+  const noMeetings = !timeline.calendarFailed && timeline.allDay.length === 0 && timeline.rows.every((row) => row.kind !== 'meeting');
 
   const text: string[] = [brief.dayLine];
   if (brief.stateLine !== undefined) text.push(`State: ${brief.stateLine}`);
-  text.push('', 'Today');
-  for (const meeting of meetings) {
-    text.push(meeting.text);
-    if (meeting.clash) text.push(meeting.clash);
-    if (meeting.link) text.push(`Open in Calendar: ${meeting.link}`);
-  }
-  text.push('', 'Free blocks:');
-  if (gaps.length === 0) {
-    text.push('- none');
-  } else {
-    for (const gap of gaps) {
-      const suggestion = gap.suggestion !== undefined ? `: ${gap.suggestion}` : '';
-      text.push(`- ${gap.start} - ${gap.end}${suggestion}`);
+  if (unavailable.length > 0) text.push('', ...unavailable);
+  if (timeline.allDay.length > 0) text.push('', `All day: ${timeline.allDay.join(', ')}`);
+  if (!timeline.calendarFailed) {
+    text.push('', 'Today');
+    if (noMeetings) text.push('No meetings today');
+    for (const row of timeline.rows) {
+      text.push(`${row.time}  ${row.label}`);
+      if (row.clashBadge !== null && row.overlap !== null) text.push(`  ${row.clashBadge}: ${row.overlap}`);
+      if (row.link !== null) text.push(`  Open in Calendar: ${row.link}`);
     }
   }
-  text.push('', 'Todos:');
+  text.push('', 'Also today');
   if (brief.todos.length === 0) {
     text.push('- none');
   } else {
@@ -146,22 +143,22 @@ export function renderBriefEmail(file: BriefFile): BriefEmail {
 
   const html: string[] = [`<h1>Morning Brief - ${escapeHtml(file.date)}</h1>`, `<p>${escapeHtml(brief.dayLine)}</p>`];
   if (brief.stateLine !== undefined) html.push(`<p>State: ${escapeHtml(brief.stateLine)}</p>`);
-  html.push('<h2>Today</h2>');
-  for (const meeting of meetings) {
-    html.push(`<p>${escapeHtml(meeting.text)}${meeting.clash ? `<br>${escapeHtml(meeting.clash)}` : ''}${meeting.link ? `<br><a href="${escapeHtml(meeting.link)}" target="_blank" rel="noopener noreferrer">Open in Calendar</a>` : ''}</p>`);
-  }
-  html.push('<h2>Free blocks</h2>');
-  if (gaps.length === 0) {
-    html.push('<p>none</p>');
-  } else {
-    html.push('<ul>');
-    for (const gap of gaps) {
-      const suggestion = gap.suggestion !== undefined ? `: ${escapeHtml(gap.suggestion)}` : '';
-      html.push(`<li>${escapeHtml(gap.start)} - ${escapeHtml(gap.end)}${suggestion}</li>`);
+  html.push(...unavailable.map((line) => `<p class="morning-brief-unavailable">${escapeHtml(line)}</p>`));
+  if (timeline.allDay.length > 0) html.push(`<p>All day: ${escapeHtml(timeline.allDay.join(', '))}</p>`);
+  if (!timeline.calendarFailed) {
+    html.push('<h2>Today</h2>');
+    if (noMeetings) html.push('<p>No meetings today</p>');
+    if (timeline.rows.length > 0) {
+      html.push('<ol class="morning-brief-timeline">');
+      for (const row of timeline.rows) {
+        const clash = row.clashBadge !== null && row.overlap !== null ? ` <span class="morning-brief-clash">${escapeHtml(row.clashBadge)} - ${escapeHtml(row.overlap)}</span>` : '';
+        const link = row.link !== null ? ` <a href="${escapeHtml(row.link)}" target="_blank" rel="noopener noreferrer">Open in Calendar</a>` : '';
+        html.push(`<li><span class="morning-brief-time">${escapeHtml(row.time)}</span> <span class="morning-brief-row-label">${escapeHtml(row.label)}</span>${clash}${link}</li>`);
+      }
+      html.push('</ol>');
     }
-    html.push('</ul>');
   }
-  html.push('<h2>Todos</h2>');
+  html.push('<h2>Also today</h2>');
   if (brief.todos.length === 0) {
     html.push('<p>none</p>');
   } else {
@@ -201,7 +198,6 @@ export function renderBriefEmail(file: BriefFile): BriefEmail {
     html.push(`<p>${escapeHtml(oneThing.text)}</p>`);
     if (oneThing.quote !== undefined) html.push(`<blockquote>${escapeHtml(oneThing.quote)}</blockquote>`);
   } else if (brief.encouragement !== undefined) html.push(`<p>${escapeHtml(brief.encouragement)}</p>`);
-  html.push(...unavailable.map((line) => `<p>${escapeHtml(line)}</p>`));
 
   return { subject, text: text.join('\n'), html: html.join('\n') };
 }
