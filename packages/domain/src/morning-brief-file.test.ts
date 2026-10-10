@@ -98,3 +98,21 @@ it('defaults omitted v2 fields and rejects arbitrary error text or mismatched re
   expect(parseBriefFile(file({ unavailableReasons: { mail: 'private error message' } }))).toBeNull();
   expect(parseBriefFile(file({ unavailableReasons: { calendar: 'threw' } }))).toBeNull();
 });
+
+it('round-trips the additive digest fields (v2, schemaVersion unchanged) and caps each section at three', () => {
+  const item = (n: number) => ({ title: `Synthetic ${n}`, line: `A synthetic line ${n}.`, url: `https://example.test/${n}` });
+  const withDigest = file({ unavailable: ['digest'], unavailableReasons: { digest: 'not-found' }, brief: { ...file().brief,
+    news: [item(1), item(2)], research: [item(3)], oneThing: { text: 'A synthetic thought.', quote: 'A synthetic quote.' } } });
+  const bytes = serializeBriefFile(withDigest);
+  const parsed = parseBriefFile(bytes)!;
+  expect(parsed.schemaVersion).toBe(2);
+  expect(parsed.brief.news).toEqual([item(1), item(2)]);
+  expect(parsed.brief.research).toEqual([item(3)]);
+  expect(parsed.brief.oneThing).toEqual({ text: 'A synthetic thought.', quote: 'A synthetic quote.' });
+  expect(serializeBriefFile(parsed)).toEqual(bytes);
+  expect(Object.keys(JSON.parse(new TextDecoder().decode(bytes)).brief)).toEqual(
+    ['source', 'dayLine', 'meetings', 'gaps', 'todos', 'news', 'research', 'oneThing']);
+
+  const tooMany = file({ brief: { ...file().brief, news: [item(1), item(2), item(3), item(4)] } });
+  expect(parseBriefFile(tooMany)).toBeNull();
+});

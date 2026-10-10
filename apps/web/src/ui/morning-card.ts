@@ -3,7 +3,8 @@
 // UX7: the weather line is plain day language plus the run window's own wording, and one research entry replaces the
 // old reading-brief line (its content now lives in the Morning Brief sheet). Pure.
 import { effectiveRadarDecisions, WEATHER_TIME_ZONE } from '@vault-companion/contracts';
-import { briefMeetingRows, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
+import { briefDigestUnavailable, briefMeetingRows, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
+import type { BriefDigestItem } from '@vault-companion/contracts';
 import type { MorningBriefMissingResponse, MorningBriefReadResponse, MorningBriefResponse, RadarResponse, ScoutsResponse, WeatherProjection, WeatherResponse, WeatherRunWindow } from '@vault-companion/contracts';
 import type { QueueItem } from '../queue/queue.ts';
 import { attentionCount, pluralise, scoutsNeedAttention } from '../scouts.ts';
@@ -24,6 +25,8 @@ export interface BriefLine {
   readonly heading?: boolean;
   readonly clash?: string | undefined;
   readonly link?: string | undefined;
+  /** MB3b: the One-thing pull quote, rendered under its paragraph. */
+  readonly quote?: string | undefined;
   readonly id: string;
   readonly text: string;
   /** The small "Fallback brief" marker shown when the brief was written without the model. */
@@ -57,7 +60,10 @@ export function briefLines(file: MorningBriefResponse | null, today: string): Br
   file.brief.todos.slice(0, 5).forEach((todo) => {
     lines.push({ id: `todo-${todo.id}`, text: `${todo.text}${briefTodoAge(todo)}${todo.firstStep === undefined ? '' : ` - ${todo.firstStep}`}`, marker: false, todo: true });
   });
-  if (file.brief.encouragement !== undefined) lines.push({ id: 'encouragement', text: file.brief.encouragement, marker: false, todo: false });
+  // MB3b: the digest's One thing replaces the model's generic closing line when the digest carried one.
+  if (briefOneThing(file) === null && file.brief.encouragement !== undefined) {
+    lines.push({ id: 'encouragement', text: file.brief.encouragement, marker: false, todo: false });
+  }
   return lines;
 }
 
@@ -156,14 +162,42 @@ export function researchHighlightsText(count: number): string {
 export interface MorningBriefSheetState {
   readonly missing: string | null;
   readonly lines: readonly BriefLine[];
+  /** MB3b: the collapsed News / AI-and-research sections and the One-thing closing line. */
+  readonly digest: MorningBriefDigest;
 }
+
+export interface MorningBriefDigest {
+  readonly news: readonly BriefLine[];
+  readonly research: readonly BriefLine[];
+  readonly oneThing: BriefLine | null;
+  /** The plain reason when the digest note could not be read; null when it could. */
+  readonly unavailable: string | null;
+}
+
+const EMPTY_DIGEST: MorningBriefDigest = { news: [], research: [], oneThing: null, unavailable: null };
+
+const digestRows = (prefix: string, items: readonly BriefDigestItem[]): BriefLine[] =>
+  items.map((item, i) => ({ id: `${prefix}-${i}`, text: `${item.title} - ${item.line}`, link: item.url, marker: false, todo: false }));
 
 export function morningBriefSheet(brief: MorningBriefReadResponse | null, today: string): MorningBriefSheetState {
   if (brief !== null && !isMissingBrief(brief)) {
     const lines = briefLines(brief, today);
-    if (lines !== null) return { missing: null, lines };
+    if (lines !== null) {
+      const unavailable = briefDigestUnavailable(brief);
+      const oneThing = briefOneThing(brief);
+      return {
+        missing: null,
+        lines,
+        digest: {
+          news: unavailable === null ? digestRows('news', briefNews(brief)) : [],
+          research: unavailable === null ? digestRows('research', briefResearch(brief)) : [],
+          oneThing: oneThing === null ? null : { id: 'one-thing', text: oneThing.text, quote: oneThing.quote, marker: false, todo: false },
+          unavailable,
+        },
+      };
+    }
   }
-  return { missing: missingBriefText(brief !== null && isMissingBrief(brief) ? brief.statusError : null), lines: [] };
+  return { missing: missingBriefText(brief !== null && isMissingBrief(brief) ? brief.statusError : null), lines: [], digest: EMPTY_DIGEST };
 }
 
 /** Needs you, weather, scouts, the research entry, events and the tasks line - each omitted when it has nothing to say. */

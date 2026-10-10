@@ -30,3 +30,14 @@ Markdown + Git remain authoritative; this decision changes the existing JSON pro
 Meeting facts and failure reasons remain available without model output; models cannot invent calendar summaries.
 Existing v1 files remain readable; new files have stable v2 bytes.
 Synthetic fixtures cover links, clashes, failures, prompt privacy and overdue dates; logs contain no titles or task text.
+
+## Amendment (MB3b): digest sections
+- Additive, optional schemaVersion 2 fields on `brief`: `news[]` and `research[]` (`{title, line, url}`, https-only,
+  at most three each) and `oneThing {text, quote?}`. v1/v2 files without them still parse unchanged.
+- The tracked PC digest note (`Daily/Morning Digest/Morning Digest - <Copenhagen date>.md`) is read through the existing
+  vault read path with an injected reader and parsed by a pure, tolerant domain parser: malformed bullets are skipped,
+  non-https links dropped, and every field capped (title 200, line 300, url 500, text/quote 500). It never throws.
+- A missing note (`not-found`) or a note with no digest heading (`invalid`) adds reader `digest` to
+  `unavailable`/`unavailableReasons`; the News and AI-and-research sections then show
+  "<Section> unavailable: <plain reason>". Digest text is never sent to the model; the writer passes the parsed fields
+  through unchanged. The sheet collapses News and AI and research by default; the email renders every section in full.

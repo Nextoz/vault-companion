@@ -17,7 +17,7 @@ import { liveDismissals, needsYou, needsYouText, sameDismissals, type NeedsYouFa
 import { SinceIWasHere } from './SinceIWasHere.tsx';
 import { sinceIWasHereFacts, type SiwhTarget } from './since-i-was-here.ts';
 import { WeatherMorning } from './WeatherLab.tsx';
-import { checkinDue, isMissingBrief, morningBriefSheet, radarHighlights, researchHighlightsText, weatherLine, type MorningBriefSheetState } from './morning-card.ts';
+import { checkinDue, isMissingBrief, morningBriefSheet, radarHighlights, researchHighlightsText, weatherLine, type BriefLine, type MorningBriefDigest, type MorningBriefSheetState } from './morning-card.ts';
 import { moreTasksText, selectNextUp, todayTiles, tileTitleColors, type NextUp, type NextUpEvent } from './today.ts';
 
 export interface MorningCardProps {
@@ -191,7 +191,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
       {open === 'weather' && <WeatherMorning refreshKey={refreshKey} accountKey={accountKey} blocked={blocked} />}
     </section>
     {needsOpen && <NeedsYouSheet rows={needsRows} queue={queue} accountKey={accountKey} onNavigate={openNeedsTarget} onDismiss={dismissNeedsRow} onClose={() => setNeedsOpen(false)} />}
-    {briefOpen && <MorningBriefSheet state={brief === null ? { missing: 'Loading brief…', lines: [] } : brief.kind !== 'ok' ? { missing: 'Brief unavailable. Try Refresh in Status.', lines: [] } : briefSheet} onOpenTasks={onOpenTasks}
+    {briefOpen && <MorningBriefSheet state={brief === null ? { missing: 'Loading brief…', lines: [], digest: EMPTY_SHEET_DIGEST } : brief.kind !== 'ok' ? { missing: 'Brief unavailable. Try Refresh in Status.', lines: [], digest: EMPTY_SHEET_DIGEST } : briefSheet} onOpenTasks={onOpenTasks}
       onClose={() => setBriefOpen(false)} />}
 
   </>;
@@ -251,7 +251,7 @@ function MorningBriefSheet({ state, onOpenTasks, onClose }: {
         <SheetHeader title="Morning Brief" onClose={onClose} />
         {state.missing !== null
           ? <p className="muted">{state.missing}</p>
-          : state.lines.map((row) => (row.todo
+          : <>{state.lines.map((row) => (row.todo
             ? <button key={row.id} type="button" className="morning-line morning-brief-line"
                 onClick={() => { onOpenTasks(); onClose(); }}>{row.text}</button>
             : row.heading ? <h3 key={row.id}>{row.text}</h3>
@@ -262,8 +262,36 @@ function MorningBriefSheet({ state, onOpenTasks, onClose }: {
                 {row.link && <a href={row.link} target="_blank" rel="noopener noreferrer"
                   style={{ display: 'flex', alignItems: 'center', minHeight: 44 }}>Open in Calendar</a>}
               </div>))}
+            <DigestSection heading="News" items={state.digest.news} unavailable={state.digest.unavailable === null ? null : `News unavailable: ${state.digest.unavailable}`} />
+            <DigestSection heading="AI and research" items={state.digest.research} unavailable={state.digest.unavailable === null ? null : `AI and research unavailable: ${state.digest.unavailable}`} />
+            {state.digest.oneThing && <div className="morning-line morning-brief-line" style={{ overflowWrap: 'anywhere', minWidth: 0 }}>
+              {state.digest.oneThing.text}
+              {state.digest.oneThing.quote && <blockquote>{state.digest.oneThing.quote}</blockquote>}
+            </div>}
+          </>}
 
       </div>
     </div>
+  );
+}
+
+const EMPTY_SHEET_DIGEST: MorningBriefDigest = { news: [], research: [], oneThing: null, unavailable: null };
+
+/** MB3b: News and AI-and-research collapse by default in the sheet (full in the email); a failed digest shows its reason. */
+function DigestSection({ heading, items, unavailable }: { heading: string; items: readonly BriefLine[]; unavailable: string | null }) {
+  if (items.length === 0 && unavailable === null) return null;
+  return (
+    <details className="morning-brief-digest">
+      <summary>{heading}</summary>
+      {unavailable !== null
+        ? <p className="muted">{unavailable}</p>
+        : <ul>{items.map((item) => (
+            <li key={item.id}>
+              {item.text}
+              {item.link && <a href={item.link} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'flex', alignItems: 'center', minHeight: 44 }}>Open link</a>}
+            </li>
+          ))}</ul>}
+    </details>
   );
 }

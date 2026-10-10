@@ -3,7 +3,7 @@
 // interpolated string; a fallback brief renders exactly what it contains and invents nothing.
 
 import type { BriefFile } from '@vault-companion/domain';
-import { briefMeetingRows, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
+import { briefDigestUnavailable, briefMeetingRows, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
 
 /** One rendered message: a plain-text and an HTML body for the same subject. */
 export interface BriefEmail {
@@ -84,6 +84,10 @@ export function renderBriefEmail(file: BriefFile): BriefEmail {
   const unavailable = briefUnavailableLines(file);
   const meetings = briefMeetingRows(file);
   const gaps = file.unavailable.includes('calendar') ? [] : brief.gaps;
+  const news = briefNews(file);
+  const research = briefResearch(file);
+  const oneThing = briefOneThing(file);
+  const digestUnavailable = briefDigestUnavailable(file);
 
   const text: string[] = [brief.dayLine];
   if (brief.stateLine !== undefined) text.push(`State: ${brief.stateLine}`);
@@ -112,7 +116,22 @@ export function renderBriefEmail(file: BriefFile): BriefEmail {
       if (todo.firstStep !== undefined) text.push(`  First step: ${todo.firstStep}`);
     }
   }
-  if (brief.encouragement !== undefined) text.push('', brief.encouragement);
+  if (digestUnavailable !== null) {
+    text.push('', `News unavailable: ${digestUnavailable}`, `AI and research unavailable: ${digestUnavailable}`);
+  } else {
+    if (news.length > 0) {
+      text.push('', 'News');
+      for (const item of news) text.push(`- ${item.title} - ${item.line} (${item.url})`);
+    }
+    if (research.length > 0) {
+      text.push('', 'AI and research');
+      for (const item of research) text.push(`- ${item.title} - ${item.line} (${item.url})`);
+    }
+  }
+  if (oneThing !== null) {
+    text.push('', oneThing.text);
+    if (oneThing.quote !== undefined) text.push(`> ${oneThing.quote}`);
+  } else if (brief.encouragement !== undefined) text.push('', brief.encouragement);
   text.push('', ...unavailable);
 
   const html: string[] = [`<h1>Morning Brief - ${escapeHtml(file.date)}</h1>`, `<p>${escapeHtml(brief.dayLine)}</p>`];
@@ -144,7 +163,24 @@ export function renderBriefEmail(file: BriefFile): BriefEmail {
     }
     html.push('</ul>');
   }
-  if (brief.encouragement !== undefined) html.push(`<p>${escapeHtml(brief.encouragement)}</p>`);
+  if (digestUnavailable !== null) {
+    html.push(`<p>${escapeHtml(`News unavailable: ${digestUnavailable}`)}</p>`, `<p>${escapeHtml(`AI and research unavailable: ${digestUnavailable}`)}</p>`);
+  } else {
+    if (news.length > 0) {
+      html.push('<h2>News</h2>', '<ul>');
+      for (const item of news) html.push(`<li>${escapeHtml(item.title)} - ${escapeHtml(item.line)} <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Link</a></li>`);
+      html.push('</ul>');
+    }
+    if (research.length > 0) {
+      html.push('<h2>AI and research</h2>', '<ul>');
+      for (const item of research) html.push(`<li>${escapeHtml(item.title)} - ${escapeHtml(item.line)} <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Link</a></li>`);
+      html.push('</ul>');
+    }
+  }
+  if (oneThing !== null) {
+    html.push(`<p>${escapeHtml(oneThing.text)}</p>`);
+    if (oneThing.quote !== undefined) html.push(`<blockquote>${escapeHtml(oneThing.quote)}</blockquote>`);
+  } else if (brief.encouragement !== undefined) html.push(`<p>${escapeHtml(brief.encouragement)}</p>`);
   html.push(...unavailable.map((line) => `<p>${escapeHtml(line)}</p>`));
 
   return { subject, text: text.join('\n'), html: html.join('\n') };

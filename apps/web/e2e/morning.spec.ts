@@ -43,6 +43,28 @@ test('Today: the Morning Brief button opens only the whole brief and restores fo
   await expect(open).toBeFocused();
 });
 
+test('Today: News and AI-and-research stay collapsed until opened', async ({ page }) => {
+  await page.clock.install({ time: CLOCK });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const api = new MockApi();
+  api.morning = MockApi.SAMPLE_MORNING;
+  api.morningBrief = brief({
+    news: [{ title: 'Synthetic Headline', line: 'A synthetic one-liner.', url: 'https://example.test/news' }],
+    research: [{ title: 'Synthetic Study', line: 'A synthetic finding.', url: 'https://example.test/paper' }],
+    oneThing: { text: 'A synthetic thought.', quote: 'A synthetic quote.' },
+  });
+  await api.install(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Morning Brief', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Morning Brief' });
+  const headline = sheet.getByText('Synthetic Headline - A synthetic one-liner.');
+  await expect(headline).toBeHidden();
+  await sheet.getByText('News', { exact: true }).click();
+  await expect(headline).toBeVisible();
+  await expect(sheet.getByText('A synthetic thought.')).toBeVisible();
+  await expect(sheet.getByText('A synthetic quote.')).toBeVisible();
+});
+
 test('Today: no brief shows the reason, and one research entry opens Radar in one tap', async ({ page }) => {
   await page.clock.install({ time: CLOCK });
   await page.setViewportSize({ width: 390, height: 844 });
