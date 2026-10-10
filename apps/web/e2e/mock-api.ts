@@ -11,6 +11,7 @@ import {
   DASHBOARD_RANGE_PLAN,
   DashboardRange,
   DashboardResponse,
+  GameResponse,
   HealthHistoryResponse,
   HealthResponse,
   MarketTickerResponse,
@@ -171,6 +172,56 @@ export const sampleWeather = (partial = false): WeatherResponse => WeatherRespon
   },
 });
 
+/** GAM1-B: synthetic Character, no real vault text. Values mirror the shipped rules shape (never asserted verbatim). */
+export const sampleGame = (unavailable: string[] = []): GameResponse => GameResponse.parse({
+  revision: 'a'.repeat(40),
+  now: '2026-09-30T12:00:00Z',
+  rules: {
+    rulesVersion: 1,
+    professions: [
+      { id: 'athletics', name: 'Athletics' }, { id: 'scholar', name: 'Scholar' },
+      { id: 'lorekeeper', name: 'Lorekeeper' }, { id: 'quartermaster', name: 'Quartermaster' },
+    ],
+    sources: [
+      { id: 'training', profession: 'athletics', enabled: true, baseXp: 30, dailyCap: 2, minutes: { after: 20, step: 5, xp: 1, maxBonus: 20 }, overdue: null },
+      { id: 'learning', profession: 'scholar', enabled: true, baseXp: 15, dailyCap: 3, minutes: { after: 0, step: 2, xp: 1, maxBonus: 15 }, overdue: null },
+      { id: 'library', profession: 'lorekeeper', enabled: true, baseXp: 5, dailyCap: 5, minutes: null, overdue: null },
+      { id: 'task', profession: 'quartermaster', enabled: true, baseXp: 3, dailyCap: 5, minutes: null, overdue: { days: 7, xp: 2, dailyCap: 3 } },
+    ],
+    skill: { max: 300, baseCost: 5, step: 10 },
+    ranks: [
+      { skill: 0, name: 'Apprentice', title: 'Apprentice {profession}' },
+      { skill: 75, name: 'Journeyman', title: 'Journeyman of {profession}' },
+      { skill: 150, name: 'Expert', title: 'Expert {profession}' },
+      { skill: 225, name: 'Artisan', title: 'Artisan {profession}' },
+      { skill: 300, name: 'Master', title: 'Master {profession}' },
+    ],
+    level: { min: 1, max: 60, baseCost: 100, costStep: 15 },
+    rested: { perDay: 15, max: 150, multiplier: 0.5 },
+    titles: [{ level: 1, title: 'New Adventurer' }, { level: 10, title: 'Adventurer' }],
+  },
+  character: {
+    rulesVersion: 1, xp: 3456, level: 12, levelXp: 156, levelCost: 265, restedXp: 90,
+    title: 'Adventurer',
+    professions: [
+      { id: 'athletics', name: 'Athletics', xp: 1200, skill: 145, rank: 'Expert', title: 'Expert Athletics' },
+      { id: 'scholar', name: 'Scholar', xp: 900, skill: 110, rank: 'Journeyman', title: 'Journeyman of Scholar' },
+      { id: 'lorekeeper', name: 'Lorekeeper', xp: 400, skill: 60, rank: 'Apprentice', title: 'Apprentice Lorekeeper' },
+      { id: 'quartermaster', name: 'Quartermaster', xp: 950, skill: 120, rank: 'Journeyman', title: 'Journeyman of Quartermaster' },
+    ],
+    achievements: [
+      { id: 'a1', name: 'Founding Steps', category: 'General', type: 'one-off', points: 10, earned: true, earnedDate: '2026-09-02', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
+      { id: 'a2', name: 'Ten Sessions', category: 'Training', type: 'counter', points: 15, earned: true, earnedDate: '2026-09-12', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: { current: 10, target: 10 } },
+      { id: 'a3', name: 'Renaissance', category: 'General', type: 'meta', points: 25, earned: true, earnedDate: '2026-09-20', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
+    ],
+    feats: [],
+    points: { total: 50, byCategory: { General: 35, Training: 15 } },
+    skippedRecords: 0,
+  },
+  stepMilestones: null,
+  unavailable,
+});
+
 export class MockApi {
   // Public-market fixtures only; never contact a provider from a browser test.
   dashboardMode: 'ok' | 'no-history' | 'unavailable' = 'ok';
@@ -220,6 +271,10 @@ export class MockApi {
   learningUnknownLines: string[] = [];
   /** `absent`/`refused` answer the Learning read with that status instead of rows. */
   learningMode: 'ok' | 'absent' | 'refused' = 'ok';
+  /** GAM1-B: the Character read. `error`: /api/game answers 503. */
+  gameMode: 'ok' | 'error' = 'ok';
+  gameUnavailable: string[] = [];
+  gameReads = 0;
   #learningBefore = new Map<string, LearningRow[]>();
   session: 'ok' | 'signed-out' = 'ok';
   /** The account the session reports (switch it to simulate signing in as someone else). */
@@ -451,6 +506,7 @@ export class MockApi {
       : this.learningMode === 'absent' ? this.#json(route, 200, LearningResponse.parse({ status: 'absent', revision: this.#revision }))
       : this.learningMode === 'refused' ? this.#json(route, 200, LearningResponse.parse({ status: 'refused', revision: this.#revision, code: 'refused:learning-table-missing', message: 'Learning Gym Log table not found — fix it in Obsidian' }))
       : this.#json(route, 200, LearningResponse.parse({ status: 'ok', revision: this.#revision, blobSha: this.blobSha, kinds: this.learningKinds, rows: this.learningRows, unknownLines: this.learningUnknownLines })));
+    await on('**/api/game', (route) => this.#game(route));
     await on('**/api/active-work', (route) => this.#activeWork(route));
     await on('**/api/triage', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, TriageResponse.parse({ ...this.triage, revision: this.#revision })));
@@ -621,6 +677,13 @@ export class MockApi {
     return this.#json(route, 200, Receipt.parse({ operationId: command.operationId, status: 'applied',
       path: 'Research/Radar/Decisions/2026-09.jsonl', commitSha: this.#revision, blobSha: 'f'.repeat(40),
       effect: { kind: 'research-radar-decided', path: 'Research/Radar/Decisions/2026-09.jsonl', decisionId: command.operationId } }));
+  }
+
+  #game(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    this.gameReads++;
+    if (this.gameMode === 'error') return this.#json(route, 503, ApiError.parse({ code: 'upstream-unavailable', message: 'reader unavailable', retryable: true }));
+    return this.#json(route, 200, sampleGame(this.gameUnavailable));
   }
 
   #history(route: Route) {

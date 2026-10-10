@@ -14,6 +14,7 @@ import {
   effectiveRadarDecisions,
   type ApiError,
   type GameResponse,
+  type GameRules,
   type HealthHistoryResponse,
   type HistoryResponse,
   type LearningResponse,
@@ -37,6 +38,28 @@ const isError = (value: unknown): value is ApiError =>
   typeof value === 'object' && value !== null && 'code' in value && 'retryable' in value;
 /** One failing reader never rejects the batch: it becomes a named, unavailable source. */
 const settle = <T>(read: () => Promise<T | ApiError>): Promise<T | ApiError> => read().catch(() => UNAVAILABLE);
+
+/** The live rules, projected from the single `characterConfig` so the web "How XP works" page cannot drift. */
+function gameRules(): GameRules {
+  return {
+    rulesVersion: characterConfig.rulesVersion,
+    professions: characterConfig.professions.map((p) => ({ id: p.id, name: p.name })),
+    sources: Object.entries(characterConfig.sources).map(([id, s]) => ({
+      id,
+      profession: s.profession,
+      enabled: s.enabled,
+      baseXp: s.baseXp,
+      dailyCap: s.dailyCap,
+      minutes: s.minutes ? { after: s.minutes.after, step: s.minutes.step, xp: s.minutes.xp, maxBonus: s.minutes.maxBonus } : null,
+      overdue: s.overdue ? { days: s.overdue.days, xp: s.overdue.xp, dailyCap: s.overdue.dailyCap } : null,
+    })),
+    skill: { max: characterConfig.skill.max, baseCost: characterConfig.skill.baseCost, step: characterConfig.skill.step },
+    ranks: characterConfig.ranks.map((r) => ({ skill: r.skill, name: r.name, title: r.title })),
+    level: { min: characterConfig.level.min, max: characterConfig.level.max, baseCost: characterConfig.level.baseCost, costStep: characterConfig.level.costStep },
+    rested: { perDay: characterConfig.rested.perDay, max: characterConfig.rested.max, multiplier: characterConfig.rested.multiplier },
+    titles: characterConfig.titles.map((t) => ({ level: t.level, title: t.title })),
+  };
+}
 
 /** A kept paper becomes a Library record only once the desktop applied it to a real `Research/Library/` path. */
 function keptLibraryRecords(response: RadarResponse, timeZone: string): GameRecord[] {
@@ -103,6 +126,7 @@ export function createGameService(deps: GameDeps) {
         return {
           revision: commitSha,
           now: now.toISOString(),
+          rules: gameRules(),
           // Spreads turn the domain's readonly arrays into the wire schema's mutable shape.
           character: { ...character, professions: [...character.professions], achievements: [...character.achievements], feats: [...character.feats] },
           stepMilestones: stepMilestones === null ? null : { ...stepMilestones, earned: [...stepMilestones.earned] },
