@@ -187,7 +187,6 @@ interface WeekHour {
   readonly hour: number;
   temperatureC: number | null;
   rainMm: number | null;
-  precipitationProbabilityPct: number | null;
   weatherCode: number | null;
   readonly models: Set<WeatherModel>;
 }
@@ -201,22 +200,29 @@ function weekDay(projection: WeatherProjection, day: string, hours: Map<number, 
   const values = (pick: (hour: WeekHour) => number | null): number[] => ordered.map(pick).filter((value): value is number => value !== null);
   const temperatures = values((hour) => hour.temperatureC);
   const rains = values((hour) => hour.rainMm);
-  const probabilities = values((hour) => hour.precipitationProbabilityPct);
+  // The brief scopes precipitation probability to ECMWF, the only model that returns it; DMI days report null.
+  const ecmwf = projection.models.find((series) => series.model === 'ecmwf_ifs');
+  const probabilities = ecmwf
+    ? ecmwf.points.filter((point) => localPoint(point.time, timeZone).date === day).map((point) => point.precipitationProbabilityPct).filter((value): value is number => value !== null)
+    : [];
   const daytimeCodes = ordered.filter((hour) => hour.hour >= 8 && hour.hour < 20).map((hour) => hour.weatherCode).filter((value): value is number => value !== null);
   const codes = daytimeCodes.length > 0 ? daytimeCodes : values((hour) => hour.weatherCode);
   const models = new Set(ordered.flatMap((hour) => [...hour.models]));
   const contiguous = ordered.every((hour, index) => index === 0 || hour.timeMs - ordered[index - 1]!.timeMs === 3_600_000);
   const first = ordered[0]!;
   const last = ordered[ordered.length - 1]!;
+  const rainUnknown = ordered.some((hour) => hour.rainMm === null);
   return {
     day,
     lowTemperatureC: temperatures.length > 0 ? round4(Math.min(...temperatures)) : null,
     highTemperatureC: temperatures.length > 0 ? round4(Math.max(...temperatures)) : null,
-    rainMm: rains.length > 0 ? round4(rains.reduce((sum, value) => sum + value, 0)) : null,
+    // Summing only the known hours would understate the day: an unknown rain hour makes the daily total null.
+    rainMm: rainUnknown ? null : round4(rains.reduce((sum, value) => sum + value, 0)),
     precipitationProbabilityPct: probabilities.length > 0 ? Math.max(...probabilities) : null,
     weatherCode: codes.length > 0 ? Math.max(...codes) : null,
     models: Math.min(Math.max(models.size, 1), 2),
-    partial: !contiguous || first.hour !== 0 || last.hour !== 23,
+    // Complete only when the day spans its full local day, every hour is present and every rain value is known.
+    partial: !contiguous || first.hour !== 0 || last.hour !== 23 || rainUnknown,
     runWindow: chooseRunWindow(projection.models, day, timeZone),
   };
 }
@@ -235,10 +241,9 @@ export function weekDays(projection: WeatherProjection): WeatherWeekDay[] {
       const timeMs = Date.parse(point.time);
       const hours = days.get(local.date) ?? new Map<number, WeekHour>();
       days.set(local.date, hours);
-      const hour = hours.get(timeMs) ?? { timeMs, hour: local.hour, temperatureC: null, rainMm: null, precipitationProbabilityPct: null, weatherCode: null, models: new Set<WeatherModel>() };
+      const hour = hours.get(timeMs) ?? { timeMs, hour: local.hour, temperatureC: null, rainMm: null, weatherCode: null, models: new Set<WeatherModel>() };
       hour.temperatureC = firstValue(hour.temperatureC, point.temperatureC);
       hour.rainMm = firstValue(hour.rainMm, point.rainMm);
-      hour.precipitationProbabilityPct = firstValue(hour.precipitationProbabilityPct, point.precipitationProbabilityPct);
       hour.weatherCode = firstValue(hour.weatherCode, point.weatherCode);
       hour.models.add(series.model);
       hours.set(timeMs, hour);

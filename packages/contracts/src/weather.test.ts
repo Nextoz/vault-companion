@@ -9,7 +9,8 @@ import {
 
 const time = (hour: number) => new Date(Date.parse('2026-09-30T00:00:00Z') + hour * 3_600_000).toISOString();
 const point = (hour: number, over: Record<string, unknown> = {}) => ({
-  time: time(hour), temperatureC: 15 + hour * 0.1, rainMm: hour % 4 === 0 ? 0.2 : null, windMs: 4.2, ...over,
+  time: time(hour), temperatureC: 15 + hour * 0.1, rainMm: hour % 4 === 0 ? 0.2 : null, windMs: 4.2,
+  windDirectionDeg: 180, precipitationProbabilityPct: 40, weatherCode: 3, ...over,
 });
 const series = (model: 'dmi_harmonie_arome_europe' | 'ecmwf_ifs', over: Record<string, unknown> = {}) => ({
   model,

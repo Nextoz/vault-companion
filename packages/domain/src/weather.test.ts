@@ -21,7 +21,8 @@ import {
 
 const time = (hourUtc: number) => new Date(Date.parse('2026-09-30T00:00:00Z') + hourUtc * 3_600_000).toISOString();
 const point = (hourUtc: number, over: Record<string, unknown> = {}) => ({
-  time: time(hourUtc), temperatureC: 15 + hourUtc * 0.2, rainMm: 0.5, windMs: 4, ...over,
+  time: time(hourUtc), temperatureC: 15 + hourUtc * 0.2, rainMm: 0.5, windMs: 4,
+  windDirectionDeg: 180, precipitationProbabilityPct: 40, weatherCode: 3, ...over,
 });
 const series = (
   model: WeatherModel,
@@ -200,18 +201,18 @@ describe('weekDays (ADR-0033 W1, week overview)', () => {
     expect(days[6]!.models).toBe(1);
   });
 
-  it('reports null precipitation probability when only DMI (which never sends it) covers the day', () => {
-    const dmi = seriesOf('dmi_harmonie_arome_europe', 72, DAY0_MS, () => ({ precipitationProbabilityPct: null }));
+  it('ignores a non-ECMWF precipitation probability: a DMI-only day reports null', () => {
+    const dmi = seriesOf('dmi_harmonie_arome_europe', 72, DAY0_MS, () => ({ precipitationProbabilityPct: 55 }));
     const days = weekDays(projectionOf([dmi]));
     expect(days).toHaveLength(3);
     expect(days.every((day) => day.models === 1 && day.precipitationProbabilityPct === null)).toBe(true);
   });
 
-  it('keeps provider nulls as gaps (never interpolated) and flags a day missing hours as partial', () => {
-    const partialDay = seriesOf('ecmwf_ifs', 23, DAY0_MS, (index) => (index === 3 ? { temperatureC: null, rainMm: null, weatherCode: null } : {}));
-    const days = weekDays(projectionOf([partialDay]));
+  it('keeps provider nulls as gaps and makes the daily rain total null (partial) when any hour is unknown', () => {
+    const withGap = seriesOf('ecmwf_ifs', 24, DAY0_MS, (index) => (index === 3 ? { temperatureC: null, rainMm: null, weatherCode: null } : {}));
+    const days = weekDays(projectionOf([withGap]));
     expect(days).toHaveLength(1);
-    expect(days[0]).toMatchObject({ day: '2026-10-10', partial: true, lowTemperatureC: 10, highTemperatureC: 10, rainMm: 0 });
+    expect(days[0]).toMatchObject({ day: '2026-10-10', partial: true, lowTemperatureC: 10, highTemperatureC: 10, rainMm: null });
   });
 
   it('buckets days by Copenhagen local time across a DST change', () => {

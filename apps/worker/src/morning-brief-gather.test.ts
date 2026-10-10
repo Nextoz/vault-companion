@@ -85,7 +85,7 @@ const trow = (date: string, note: string): TrainingRow => ({ date, time: '07:00'
 
 const trainingResponse = (rows: readonly TrainingRow[]): TrainingResponse => ({ status: 'ok', revision: SHA, blobSha: SHA, rows: [...rows], unknownLines: [] });
 
-const wp = (time: string, over: Partial<WeatherPoint> = {}): WeatherPoint => ({ time, temperatureC: 15, rainMm: 0, windMs: 3, ...over });
+const wp = (time: string, over: Partial<WeatherPoint> = {}): WeatherPoint => ({ time, temperatureC: 15, rainMm: 0, windMs: 3, windDirectionDeg: 180, precipitationProbabilityPct: 40, weatherCode: 3, ...over });
 
 const model = (points: readonly WeatherPoint[]): WeatherModelSeries => ({
   model: 'dmi_harmonie_arome_europe',

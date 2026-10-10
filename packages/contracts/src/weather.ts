@@ -90,9 +90,9 @@ export const WeatherPoint = z.strictObject({
   rainMm: z.number().finite().min(0).nullable(),
   windMs: z.number().finite().min(0).nullable(),
   /** Provider nulls stay null: a missing direction/probability/code is a gap the charts never interpolate. */
-  windDirectionDeg: z.number().finite().min(0).max(360).nullable().optional(),
-  precipitationProbabilityPct: z.number().finite().min(0).max(100).nullable().optional(),
-  weatherCode: z.number().int().min(0).nullable().optional(),
+  windDirectionDeg: z.number().finite().min(0).max(360).nullable(),
+  precipitationProbabilityPct: z.number().finite().min(0).max(100).nullable(),
+  weatherCode: z.number().int().min(0).nullable(),
 });
 export type WeatherPoint = z.infer<typeof WeatherPoint>;
 
