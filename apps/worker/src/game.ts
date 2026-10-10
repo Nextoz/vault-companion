@@ -87,6 +87,8 @@ export function createGameService(deps: GameDeps) {
 
         if (isError(history)) unavailable.push('tasks');
         else for (const item of history.items) records.push({
+          // ADR-0021 completions carry no due date, so overdueDays is 0 and never a guess: the `clean-slate` overdue
+          // achievement stays unearned until a completion source carries real overdue data.
           source: 'task', date: item.doneDate, overdueDays: 0,
           id: `${item.source}:${item.locator.path}:${item.locator.lineIndex}`,
         });
