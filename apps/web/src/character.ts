@@ -49,6 +49,14 @@ export function levelLabel(levelXp: number, levelCost: number): string {
   return levelCost <= 0 ? 'Max level' : `${levelXp} / ${levelCost} XP`;
 }
 
+/**
+ * A fresh Character (level 1, no XP): the explicit friendly empty line, distinct from the loading state.
+ * Null once anything has been earned, so the caller shows the line only for the true empty case.
+ */
+export function emptyCharacterLine(character: { readonly level: number; readonly xp: number }): string | null {
+  return character.level <= 1 && character.xp <= 0 ? 'No XP yet - log a session to begin' : null;
+}
+
 /** True when the profession's source is named in `unavailable`; drives the "<Source> unavailable" note. */
 export function professionUnavailable(professionId: string, unavailable: readonly string[]): string | null {
   const source = PROFESSION_SOURCES[professionId];

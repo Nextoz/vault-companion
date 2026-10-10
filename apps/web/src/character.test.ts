@@ -1,7 +1,7 @@
 import type { GameAchievement, GameRules } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
 import {
-  howXpWorks, levelCostAt, levelExamples, levelLabel, professionUnavailable, recentlyEarned,
+  emptyCharacterLine, howXpWorks, levelCostAt, levelExamples, levelLabel, professionUnavailable, recentlyEarned,
   professionLine, restedSegment, skillLabel, skillPercent, sourceLabel, unavailableLines, xpBar,
 } from './character.ts';
 
@@ -79,12 +79,27 @@ describe('levelLabel', () => {
   });
 });
 
+describe('emptyCharacterLine', () => {
+  it('names the fresh-character empty state and stays silent once anything is earned', () => {
+    expect(emptyCharacterLine({ level: 1, xp: 0 })).toBe('No XP yet - log a session to begin');
+    expect(emptyCharacterLine({ level: 1, xp: 5 })).toBeNull();
+    expect(emptyCharacterLine({ level: 2, xp: 0 })).toBeNull();
+  });
+});
+
 describe('unavailable sources', () => {
   it('names the failed source on the right profession, never a zero', () => {
     expect(professionUnavailable('athletics', ['training'])).toBe('Training unavailable');
+    expect(professionUnavailable('scholar', ['learning'])).toBe('Learning unavailable');
+    expect(professionUnavailable('lorekeeper', ['library'])).toBe('Library unavailable');
+    expect(professionUnavailable('quartermaster', ['tasks'])).toBe('Tasks unavailable');
     expect(professionUnavailable('quartermaster', ['training'])).toBeNull();
     expect(professionUnavailable('unknown', ['training'])).toBeNull();
-    expect(unavailableLines(['library', 'health'])).toEqual(['Library unavailable', 'Health unavailable']);
+  });
+
+  it('labels every named source and the source list', () => {
+    expect(unavailableLines(['training', 'learning', 'library', 'tasks', 'health']))
+      .toEqual(['Training unavailable', 'Learning unavailable', 'Library unavailable', 'Tasks unavailable', 'Health unavailable']);
     expect(sourceLabel('tasks')).toBe('Tasks');
   });
 });

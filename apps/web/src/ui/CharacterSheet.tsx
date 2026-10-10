@@ -83,11 +83,15 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
 }) {
   const dialog = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState<'overview' | 'how-xp'>('overview');
+  // Return focus to the opener when the sheet closes (the card stays mounted behind the overlay).
   useEffect(() => {
     const invoker = document.activeElement;
-    dialog.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
     return () => { if (invoker instanceof HTMLElement && invoker.isConnected) invoker.focus(); };
   }, []);
+  // Move focus into the dialog on open and again on every overview <-> how-xp toggle, where the controls differ.
+  useEffect(() => {
+    dialog.current?.querySelector<HTMLElement>('button:not(:disabled), a[href]')?.focus();
+  }, [page]);
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === 'Escape') {
       if (page === 'how-xp') setPage('overview');

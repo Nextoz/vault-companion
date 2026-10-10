@@ -1,4 +1,4 @@
-import { levelLabel, restedSegment, xpBar } from '../character.ts';
+import { emptyCharacterLine, levelLabel, restedSegment, xpBar } from '../character.ts';
 import { CharacterRead } from './CharacterRead.tsx';
 import { CopyNote } from './useLastCopy.tsx';
 
@@ -14,6 +14,7 @@ export function CharacterCard({ refreshKey, accountKey, onOpen }: {
         const label = data ? levelLabel(data.character.levelXp, data.character.levelCost) : '';
         const bar = data ? xpBar(data.character.levelXp, data.character.levelCost) : null;
         const rested = data ? restedSegment(data.character.levelXp, data.character.levelCost, data.character.restedXp) : null;
+        const empty = data ? emptyCharacterLine(data.character) : null;
         return <>
           <CopyNote view={view} />
           {!data && <div className="character-card-empty">
@@ -33,6 +34,7 @@ export function CharacterCard({ refreshKey, accountKey, onOpen }: {
               <span className="small">{label}</span>
               <span className="muted small">{data.character.points.total} points</span>
             </span>
+            {empty !== null && <span className="muted small">{empty}</span>}
           </button>}
         </>;
       }}
