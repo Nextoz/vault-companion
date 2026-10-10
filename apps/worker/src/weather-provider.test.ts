@@ -1,3 +1,7 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs';
+import { WEATHER_MODEL_HOURS } from '@vault-companion/contracts';
+import { createWeatherService } from '@vault-companion/domain';
 import { describe, expect, it } from 'vitest';
 import {
   createWeatherProvider,
@@ -12,17 +16,30 @@ const NOW_ISO = new Date(NOW_MS).toISOString();
 const START_SEC = Math.floor(Date.parse('2026-09-30T06:00:00Z') / 1000);
 const LOCATION = { label: 'Copenhagen', latitude: 55.68, longitude: 12.57, precision: 'city-fallback' as const, timeZone: 'Europe/Copenhagen' as const };
 
+const UNITS = { time: 'unixtime', temperature_2m: '°C', rain: 'mm', wind_speed_10m: 'm/s', wind_direction_10m: '°', precipitation_probability: '%', weather_code: 'wmo code' };
 const raw = (over: Record<string, unknown> = {}): unknown => ({
   utc_offset_seconds: 0,
-  hourly_units: { time: 'unixtime', temperature_2m: '°C', rain: 'mm', wind_speed_10m: 'm/s' },
-  hourly: {
-    time: [START_SEC, START_SEC + 3600],
-    temperature_2m: [15.2, 16.1],
-    rain: [0, 0.4],
-    wind_speed_10m: [4.1, 5.2],
-  },
+  hourly_units: UNITS,
+  hourly: columns([START_SEC, START_SEC + 3600]),
   ...over,
 });
+
+/** A full verified hourly shape; individual columns can be overridden to probe each guard. */
+const columns = (times: number[], over: Record<string, unknown> = {}): Record<string, unknown> => {
+  const constant = (value: unknown) => times.map(() => value);
+  return {
+    time: times,
+    temperature_2m: constant(15.2),
+    rain: constant(0),
+    wind_speed_10m: constant(4.1),
+    wind_direction_10m: constant(200),
+    precipitation_probability: constant(10),
+    weather_code: constant(0),
+    ...over,
+  };
+};
+
+const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`../test/fixtures/${name}`, import.meta.url), 'utf8'));
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
@@ -34,34 +51,66 @@ describe('weatherUrl (fixed endpoints/models only)', () => {
     expect(weatherUrl(LOCATION, 'ecmwf_ifs')).toContain('models=ecmwf_ifs');
     expect(weatherUrl(LOCATION, 'dmi_harmonie_arome_europe')).toContain('wind_speed_unit=ms&timeformat=unixtime&timezone=GMT');
   });
+
+  it('asks each model for its own horizon and the week/meteogram hourly fields', () => {
+    expect(weatherUrl(LOCATION, 'ecmwf_ifs')).toContain(`forecast_hours=${WEATHER_MODEL_HOURS.ecmwf_ifs}`);
+    expect(weatherUrl(LOCATION, 'dmi_harmonie_arome_europe')).toContain(`forecast_hours=${WEATHER_MODEL_HOURS.dmi_harmonie_arome_europe}`);
+    const hourly = decodeURIComponent(weatherUrl(LOCATION, 'ecmwf_ifs').split('hourly=')[1]!.split('&')[0]!);
+    expect(hourly).toBe('temperature_2m,rain,wind_speed_10m,wind_direction_10m,precipitation_probability,weather_code');
+  });
 });
 
 describe('parseWeatherBody (strict provider validation)', () => {
-  it('refuses non-hourly instants and points outside the bounded 48-hour grid', () => {
-    for (const times of [[START_SEC + 1], [START_SEC, START_SEC + 48 * 3600]]) {
-      const values = times.map(() => 1);
-      expect(parseWeatherBody(raw({ hourly: { time: times, temperature_2m: values, rain: values, wind_speed_10m: values } }), 'dmi_harmonie_arome_europe', NOW_ISO)).toBeNull();
-    }
-    const parsed = parseWeatherBody(raw({ hourly: { time: [START_SEC, START_SEC + 2 * 3600], temperature_2m: [15, null], rain: [0, 0], wind_speed_10m: [4, 4] } }), 'dmi_harmonie_arome_europe', NOW_ISO)!;
-    expect(parsed.missingIntervals).toBe(47);
-  });
-  it('refuses a unix instant outside the JavaScript date range without throwing', () => {
-    expect(parseWeatherBody(raw({ hourly: { time: [Number.MAX_SAFE_INTEGER], temperature_2m: [15], rain: [0], wind_speed_10m: [4] } }), 'dmi_harmonie_arome_europe', NOW_ISO)).toBeNull();
-  });
-  it('accepts the verified unixtime/°C/mm/m/s shape and keeps null values as gaps', () => {
-    const parsed = parseWeatherBody(raw({ hourly: { time: [START_SEC, START_SEC + 3600], temperature_2m: [15.2, null], rain: [null, 0.4], wind_speed_10m: [4.1, 5.2] } }), 'dmi_harmonie_arome_europe', NOW_ISO);
+  it('accepts the verified units/shape and keeps the new nullable fields as gaps', () => {
+    const parsed = parseWeatherBody(raw({
+      hourly: columns([START_SEC, START_SEC + 3600], {
+        temperature_2m: [15.2, null],
+        rain: [null, 0.4],
+        wind_speed_10m: [4.1, 5.2],
+        wind_direction_10m: [null, 210],
+        precipitation_probability: [null, 80],
+        weather_code: [null, 61],
+      }),
+    }), 'dmi_harmonie_arome_europe', NOW_ISO);
     expect(parsed).not.toBeNull();
-    expect(parsed!.points[0]).toMatchObject({ temperatureC: 15.2, rainMm: null, windMs: 4.1 });
-    expect(parsed!.points[1]).toMatchObject({ temperatureC: null, rainMm: 0.4, windMs: 5.2 });
+    expect(parsed!.points[0]).toMatchObject({ temperatureC: 15.2, rainMm: null, windMs: 4.1, windDirectionDeg: null, precipitationProbabilityPct: null, weatherCode: null });
+    expect(parsed!.points[1]).toMatchObject({ temperatureC: null, rainMm: 0.4, windMs: 5.2, windDirectionDeg: 210, precipitationProbabilityPct: 80, weatherCode: 61 });
+    expect(parsed!.expectedPoints).toBe(WEATHER_MODEL_HOURS.dmi_harmonie_arome_europe);
+  });
+
+  it('refuses non-hourly instants but drops points beyond the model horizon instead of refusing the body', () => {
+    expect(parseWeatherBody(raw({ hourly: columns([START_SEC + 1]) }), 'dmi_harmonie_arome_europe', NOW_ISO)).toBeNull();
+    const beyond = parseWeatherBody(raw({ hourly: columns([START_SEC, START_SEC + 72 * 3600, START_SEC + 73 * 3600]) }), 'dmi_harmonie_arome_europe', NOW_ISO)!;
+    expect(beyond.points.map((point) => point.time)).toEqual([new Date(START_SEC * 1000).toISOString()]);
+    expect(beyond.missingIntervals).toBe(71);
+  });
+
+  it('refuses a unix instant outside the JavaScript date range without throwing', () => {
+    expect(parseWeatherBody(raw({ hourly: columns([Number.MAX_SAFE_INTEGER]) }), 'dmi_harmonie_arome_europe', NOW_ISO)).toBeNull();
+  });
+
+  it('tolerates the DMI precipitation_probability unit "undefined" only when every value is null', () => {
+    const units = { ...UNITS, precipitation_probability: 'undefined' };
+    expect(parseWeatherBody(raw({ hourly_units: units, hourly: columns([START_SEC], { precipitation_probability: [null] }) }), 'dmi_harmonie_arome_europe', NOW_ISO)!.points[0]!.precipitationProbabilityPct).toBeNull();
+    expect(parseWeatherBody(raw({ hourly_units: units, hourly: columns([START_SEC], { precipitation_probability: [40] }) }), 'dmi_harmonie_arome_europe', NOW_ISO)).toBeNull();
+    expect(parseWeatherBody(raw({ hourly_units: { ...UNITS, precipitation_probability: 'mm' }, hourly: columns([START_SEC], { precipitation_probability: [null] }) }), 'dmi_harmonie_arome_europe', NOW_ISO)).toBeNull();
   });
 
   it.each([
     ['wrong offset', { utc_offset_seconds: 7200 }],
-    ['wrong time unit', { hourly_units: { time: 'unixtime', temperature_2m: '°C', rain: 'mm', wind_speed_10m: 'km/h' } }],
-    ['non-finite value', { hourly: { time: [START_SEC], temperature_2m: [NaN], rain: [0], wind_speed_10m: [4] } }],
-    ['negative rain', { hourly: { time: [START_SEC], temperature_2m: [15], rain: [-0.1], wind_speed_10m: [4] } }],
-    ['out-of-order time', { hourly: { time: [START_SEC + 3600, START_SEC], temperature_2m: [15, 16], rain: [0, 0], wind_speed_10m: [4, 5] } }],
-    ['more than 48 points', { hourly: { time: Array.from({ length: 49 }, (_, i) => START_SEC + i * 3600), temperature_2m: Array.from({ length: 49 }, () => 15), rain: Array.from({ length: 49 }, () => 0), wind_speed_10m: Array.from({ length: 49 }, () => 4) } }],
+    ['wrong time unit', { hourly_units: { ...UNITS, time: 'iso8601' } }],
+    ['wrong temperature unit', { hourly_units: { ...UNITS, temperature_2m: 'K' } }],
+    ['wrong rain unit', { hourly_units: { ...UNITS, rain: 'cm' } }],
+    ['wrong wind unit', { hourly_units: { ...UNITS, wind_speed_10m: 'km/h' } }],
+    ['wrong direction unit', { hourly_units: { ...UNITS, wind_direction_10m: '%' } }],
+    ['wrong weather code unit', { hourly_units: { ...UNITS, weather_code: 'mm' } }],
+    ['non-increasing time', { hourly: columns([START_SEC + 3600, START_SEC]) }],
+    ['non-finite temperature', { hourly: columns([START_SEC], { temperature_2m: [NaN] }) }],
+    ['negative rain', { hourly: columns([START_SEC], { rain: [-0.1] }) }],
+    ['wind direction above 360', { hourly: columns([START_SEC], { wind_direction_10m: [400] }) }],
+    ['probability above 100', { hourly: columns([START_SEC], { precipitation_probability: [101] }) }],
+    ['fractional weather code', { hourly: columns([START_SEC], { weather_code: [1.5] }) }],
+    ['mismatched column length', { hourly: columns([START_SEC, START_SEC + 3600], { rain: [0] }) }],
   ])('refuses %s as malformed', (_name, over) => {
     expect(parseWeatherBody(raw(over), 'dmi_harmonie_arome_europe', NOW_ISO)).toBeNull();
   });
@@ -149,5 +198,50 @@ describe('weather provider cache and dedup', () => {
       now: () => NOW_MS,
     });
     await expect(provider.forecast(LOCATION, 'dmi_harmonie_arome_europe')).resolves.toEqual({ status: 'unavailable', reason: 'malformed' });
+  });
+});
+
+describe('captured provider fixtures (WX1a)', () => {
+  it('parses the 7-day ECMWF capture: 168 points, no nulls, no gaps', () => {
+    const series = parseWeatherBody(fixture('open-meteo-ecmwf-7d.json'), 'ecmwf_ifs', NOW_ISO)!;
+    expect(series.expectedPoints).toBe(168);
+    expect(series.points).toHaveLength(168);
+    expect(series.missingIntervals).toBe(0);
+    expect(series.points.some((point) => point.temperatureC === null || point.rainMm === null || point.windMs === null || point.windDirectionDeg === null || point.precipitationProbabilityPct === null || point.weatherCode === null)).toBe(false);
+  });
+
+  it('parses the DMI capture: only its 72-hour horizon is kept and the all-null undefined precipitation probability is tolerated', () => {
+    const series = parseWeatherBody(fixture('open-meteo-dmi-7d.json'), 'dmi_harmonie_arome_europe', NOW_ISO)!;
+    expect(series.expectedPoints).toBe(72);
+    expect(series.points).toHaveLength(72);
+    expect(series.missingIntervals).toBe(0);
+    expect(series.points.every((point) => point.precipitationProbabilityPct === null)).toBe(true);
+    expect(series.points.every((point) => point.windDirectionDeg !== null && point.weatherCode !== null)).toBe(true);
+  });
+
+  it('keeps the two captured series well under the response body cap', () => {
+    const ecmwf = parseWeatherBody(fixture('open-meteo-ecmwf-7d.json'), 'ecmwf_ifs', NOW_ISO)!;
+    const dmi = parseWeatherBody(fixture('open-meteo-dmi-7d.json'), 'dmi_harmonie_arome_europe', NOW_ISO)!;
+    expect(new TextEncoder().encode(JSON.stringify([ecmwf, dmi])).length).toBeLessThan(WEATHER_MAX_BODY_BYTES);
+  });
+});
+
+describe('one provider request per model per refresh', () => {
+  it('fetches each model once and serves the cached series on a re-read', async () => {
+    const calls: string[] = [];
+    const provider = createWeatherProvider({
+      fetch: async (url) => {
+        const target = String(url);
+        calls.push(target);
+        return new Response(JSON.stringify(fixture(target.includes('/v1/ecmwf') ? 'open-meteo-ecmwf-7d.json' : 'open-meteo-dmi-7d.json')), { status: 200 });
+      },
+      now: () => NOW_MS,
+    });
+    const service = createWeatherService({ reader: provider, now: () => new Date(NOW_MS) });
+    await service.readWeather();
+    await service.readWeather();
+    expect(calls).toHaveLength(2);
+    expect(calls.filter((url) => url.includes('forecast_hours=168'))).toHaveLength(1);
+    expect(calls.filter((url) => url.includes('forecast_hours=72'))).toHaveLength(1);
   });
 });

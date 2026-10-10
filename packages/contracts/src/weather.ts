@@ -10,15 +10,20 @@ const isoInstant = z.iso.datetime({ offset: true });
 /** The only timezone weather is interpreted in. The provider is asked in GMT (offset 0); UI daytime bounds use this. */
 export const WEATHER_TIME_ZONE = 'Europe/Copenhagen';
 
-/** Verified provider plan: 48 hourly points. */
-export const WEATHER_FORECAST_HOURS = 48;
-
 /** ~0.01 degrees is roughly 1 km in Copenhagen. Applied before any provider call, cache key or log. */
 export const WEATHER_COORDINATE_STEP = 0.01;
 
 export const WEATHER_MODELS = ['dmi_harmonie_arome_europe', 'ecmwf_ifs'] as const;
 export const WeatherModel = z.enum(WEATHER_MODELS);
 export type WeatherModel = z.infer<typeof WeatherModel>;
+
+/** Verified per-model horizons: the ECMWF 7-day series the week overview needs and the DMI 3-day series (ADR-0033 W1). */
+export const WEATHER_ECMWF_FORECAST_HOURS = 168;
+export const WEATHER_DMI_FORECAST_HOURS = 72;
+export const WEATHER_MODEL_HOURS: Record<WeatherModel, number> = {
+  dmi_harmonie_arome_europe: WEATHER_DMI_FORECAST_HOURS,
+  ecmwf_ifs: WEATHER_ECMWF_FORECAST_HOURS,
+};
 
 export const WeatherVariable = z.enum(['temperature', 'rain', 'wind']);
 export type WeatherVariable = z.infer<typeof WeatherVariable>;
@@ -84,6 +89,10 @@ export const WeatherPoint = z.strictObject({
   temperatureC: z.number().finite().nullable(),
   rainMm: z.number().finite().min(0).nullable(),
   windMs: z.number().finite().min(0).nullable(),
+  /** Provider nulls stay null: a missing direction/probability/code is a gap the charts never interpolate. */
+  windDirectionDeg: z.number().finite().min(0).max(360).nullable().optional(),
+  precipitationProbabilityPct: z.number().finite().min(0).max(100).nullable().optional(),
+  weatherCode: z.number().int().min(0).nullable().optional(),
 });
 export type WeatherPoint = z.infer<typeof WeatherPoint>;
 
@@ -95,9 +104,14 @@ export const WeatherModelSeries = z.strictObject({
   /** When this series was successfully retrieved. Never rewritten when a later refresh fails and stale data is reused. */
   retrievedAt: isoInstant,
   expectedPoints: z.number().int().positive(),
-  points: z.array(WeatherPoint).max(WEATHER_FORECAST_HOURS),
-  /** Hourly buckets inside the 48-hour range the provider did not return (and therefore we do not draw). */
+  points: z.array(WeatherPoint),
+  /** Hourly buckets inside this model's horizon the provider did not return (and therefore we do not draw). */
   missingIntervals: z.number().int().nonnegative(),
+}).superRefine((series, ctx) => {
+  const horizon = WEATHER_MODEL_HOURS[series.model];
+  if (series.points.length > horizon) {
+    ctx.addIssue({ code: 'custom', message: `A ${series.model} series keeps at most ${horizon} hourly points.` });
+  }
 });
 export type WeatherModelSeries = z.infer<typeof WeatherModelSeries>;
 
@@ -133,6 +147,27 @@ export const WeatherRunWindow = z.strictObject({
   note: z.string().min(1).max(300),
 });
 export type WeatherRunWindow = z.infer<typeof WeatherRunWindow>;
+
+/**
+ * One Copenhagen local day of the week overview (ADR-0033 W1). Values merge the available models hour by hour,
+ * preferring the first model that has a value; provider nulls stay null and a partial day (today, the last day) is
+ * flagged instead of being presented as a full day.
+ */
+export const WeatherWeekDay = z.strictObject({
+  day: z.iso.date(),
+  lowTemperatureC: z.number().finite().nullable(),
+  highTemperatureC: z.number().finite().nullable(),
+  rainMm: z.number().finite().min(0).nullable(),
+  /** Only ECMWF returns precipitation probability; otherwise null. */
+  precipitationProbabilityPct: z.number().finite().min(0).max(100).nullable(),
+  /** The most severe hourly WMO code of daytime 08:00-20:00, else of the whole day. */
+  weatherCode: z.number().int().min(0).nullable(),
+  /** Models with at least one point that day: 1 beyond the DMI horizon, else 2. */
+  models: z.number().int().min(1).max(2),
+  partial: z.boolean(),
+  runWindow: WeatherRunWindow.nullable(),
+});
+export type WeatherWeekDay = z.infer<typeof WeatherWeekDay>;
 
 export const WeatherCoverage = z.strictObject({
   expectedPoints: z.number().int().positive(),

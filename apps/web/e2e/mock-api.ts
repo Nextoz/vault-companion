@@ -117,6 +117,9 @@ const weatherPoint = (hour: number, over: Record<string, unknown> = {}) => ({
   temperatureC: 14 + hour * 0.5,
   rainMm: 0.1 + hour * 0.1,
   windMs: 3 + hour * 0.4,
+  windDirectionDeg: 180,
+  precipitationProbabilityPct: 20,
+  weatherCode: 1,
   ...over,
 });
 
