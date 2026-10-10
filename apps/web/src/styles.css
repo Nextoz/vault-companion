@@ -1619,3 +1619,22 @@ textarea:focus-visible {
 .morning-brief-row-link { display: flex; align-items: center; min-height: 44px; text-decoration: none; color: inherit; font-weight: 600; }
 .morning-brief-row-text { display: flex; align-items: center; min-height: 44px; }
 .morning-brief-sheet blockquote { margin: 4px 0 4px 12px; padding-left: 10px; border-left: 3px solid var(--accent); opacity: 0.85; }
+
+/* MB4: the day as one time-ordered timeline. Times slice the file's offset; the device zone is never used. */
+.morning-brief-unavailable { color: var(--warn); }
+.morning-brief-timeline { margin: 8px 0; padding: 0; list-style: none; }
+.morning-brief-timeline-row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; }
+.morning-brief-time { flex: 0 0 auto; min-width: 78px; padding-top: 2px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.morning-brief-row-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.morning-brief-row-label { font-weight: 600; }
+.morning-brief-timeline-row[data-kind='gap'] .morning-brief-row-label { font-weight: 400; color: var(--muted); }
+.morning-brief-clash { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--muted); }
+.morning-brief-badge { padding: 1px 6px; border-radius: 6px; background: var(--warn-soft); color: var(--warn); font-size: 0.75rem; font-weight: 600; }
+.morning-brief-overlap { color: var(--warn); }
+/* A row already over when the sheet opens is dimmed - never hidden, and never scrolled into view. */
+.morning-brief-timeline-row.is-ended { opacity: 0.55; }
+.morning-brief-calendar-icon { border-radius: 10px; color: var(--accent); }
+.morning-brief-todos { margin: 8px 0; }
+.morning-brief-todos h3 { margin: 4px 0; }
+.morning-brief-todos ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.morning-brief-todo { margin: 0; }

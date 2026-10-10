@@ -3,7 +3,7 @@
 // Each tile opens a detail the app already has (the brief sheet, the Needs you sheet, the morning weather panel, the
 // Radar screen); the grid renders the pure `todayTiles` list, so more tiles need no layout change. No new read: the
 // card projects the reads it already holds.
-import type { ActiveWorkResponse, HealthResponse, MorningBriefReadResponse, MorningResponse, RadarResponse, ScoutsResponse, TaskView, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
+import type { ActiveWorkResponse, BriefTimelineRow, HealthResponse, MorningBriefReadResponse, MorningResponse, RadarResponse, ScoutsResponse, TaskView, TriageResponse, WeatherResponse } from '@vault-companion/contracts';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { getActiveWork, getMorning, getMorningBrief, getRadar, getScouts, getTriage, getWeather, type Fetched } from '../api.ts';
 import { lastCopies } from '../lastCopy.ts';
@@ -104,7 +104,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   // UX7: the Morning Brief sheet's own state - a usable brief for today, or the ADR-0055 "No brief yet" reason.
   const briefData = brief !== null && brief.kind === 'ok' ? brief.data : null;
   const briefFile = briefData !== null && !isMissingBrief(briefData) ? briefData : null;
-  const briefSheet = morningBriefSheet(briefData, localDate());
+  const briefSheet = morningBriefSheet(briefData, localDate(), new Date());
   const scoutData = scouts?.kind === 'ok' ? scouts.data : null;
   // NY3: drop a stored dismissal once its scout recovers (or its text changes), so a later failure shows again.
   useEffect(() => {
@@ -191,7 +191,7 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
       {open === 'weather' && <WeatherMorning refreshKey={refreshKey} accountKey={accountKey} blocked={blocked} />}
     </section>
     {needsOpen && <NeedsYouSheet rows={needsRows} queue={queue} accountKey={accountKey} onNavigate={openNeedsTarget} onDismiss={dismissNeedsRow} onClose={() => setNeedsOpen(false)} />}
-    {briefOpen && <MorningBriefSheet state={brief === null ? { missing: 'Loading brief…', lines: [], digest: EMPTY_SHEET_DIGEST } : brief.kind !== 'ok' ? { missing: 'Brief unavailable. Try Refresh in Status.', lines: [], digest: EMPTY_SHEET_DIGEST } : briefSheet} onOpenTasks={onOpenTasks}
+    {briefOpen && <MorningBriefSheet state={brief === null ? emptyBriefState('Loading brief…') : brief.kind !== 'ok' ? emptyBriefState('Brief unavailable. Try Refresh in Status.') : briefSheet} onOpenTasks={onOpenTasks}
       onClose={() => setBriefOpen(false)} />}
 
   </>;
@@ -224,8 +224,8 @@ function NextUpCard({ pick, moreText, onStartTask, onStartEvent, onOpenTasks, on
   );
 }
 
-/** The brief only; all content uses the reads already held by Today. */
-function MorningBriefSheet({ state, onOpenTasks, onClose }: {
+/** MB4: the brief sheet - sticky title, the day line, amber source reasons, the timeline, to-dos, digest, One thing. */
+export function MorningBriefSheet({ state, onOpenTasks, onClose }: {
   state: MorningBriefSheetState;
   onOpenTasks: () => void;
   onClose: () => void;
@@ -251,17 +251,24 @@ function MorningBriefSheet({ state, onOpenTasks, onClose }: {
         <SheetHeader title="Morning Brief" onClose={onClose} />
         {state.missing !== null
           ? <p className="muted">{state.missing}</p>
-          : <>{state.lines.map((row) => (row.todo
-            ? <button key={row.id} type="button" className="morning-line morning-brief-line"
-                onClick={() => { onOpenTasks(); onClose(); }}>{row.text}</button>
-            : row.heading ? <h3 key={row.id}>{row.text}</h3>
-            : <div key={row.id} className={`morning-line morning-brief-line${row.marker ? ' morning-brief-marker' : ''}`}
-                style={{ overflowWrap: 'anywhere', minWidth: 0 }}>
-                {row.text}
-                {row.clash && <div><strong>{row.clash}</strong></div>}
-                {row.link && <a href={row.link} target="_blank" rel="noopener noreferrer"
-                  style={{ display: 'flex', alignItems: 'center', minHeight: 44 }}>Open in Calendar</a>}
-              </div>))}
+          : <>{state.head.map((row) => (
+              <div key={row.id} className={`morning-line morning-brief-line${row.marker ? ' morning-brief-marker' : ''}${row.id.startsWith('unavailable-') ? ' morning-brief-unavailable' : ''}`}
+                style={{ overflowWrap: 'anywhere', minWidth: 0 }}>{row.text}</div>
+            ))}
+            {!state.timeline.calendarFailed && state.timeline.rows.length > 0 && (
+              <ol className="morning-brief-timeline">
+                {state.timeline.rows.map((row) => <TimelineRow key={`${row.kind}-${row.start}-${row.label}`} row={row} />)}
+              </ol>
+            )}
+            {state.todos.length > 0 && (
+              <section className="morning-brief-todos">
+                <h3>Also today</h3>
+                <ul>{state.todos.map((todo) => (
+                  <li key={todo.id}><button type="button" className="morning-line morning-brief-line morning-brief-todo"
+                    onClick={() => { onOpenTasks(); onClose(); }}>{todo.text}</button></li>
+                ))}</ul>
+              </section>
+            )}
             <TappableRows heading="Needs you" items={state.digest.needsYou} />
             <TappableRows heading="Copenhagen today" items={state.digest.copenhagen} />
             <DigestSection heading="News" items={state.digest.news} unavailable={state.digest.unavailable === null ? null : `News unavailable: ${state.digest.unavailable}`} />
@@ -278,6 +285,39 @@ function MorningBriefSheet({ state, onOpenTasks, onClose }: {
 }
 
 const EMPTY_SHEET_DIGEST: MorningBriefDigest = { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null };
+
+/** MB4: the honesty states (still loading, or the read failed) show only the reason line - no fabricated timeline. */
+export function emptyBriefState(missing: string): MorningBriefSheetState {
+  return { missing, head: [], timeline: { allDay: [], rows: [], calendarFailed: false }, todos: [], digest: EMPTY_SHEET_DIGEST };
+}
+
+/** MB4: one timeline row - a left time column, the label, the clash badge/overlap, then a 44px calendar icon button. */
+function TimelineRow({ row }: { row: BriefTimelineRow }) {
+  return (
+    <li className={`morning-brief-timeline-row${row.ended ? ' is-ended' : ''}`} data-ended={row.ended ? 'true' : 'false'} data-kind={row.kind}>
+      <span className="morning-brief-time">{row.time}</span>
+      <span className="morning-brief-row-body">
+        <span className="morning-brief-row-label">{row.label}</span>
+        {row.clashBadge !== null && row.overlap !== null && (
+          <span className="morning-brief-clash"><span className="morning-brief-badge">{row.clashBadge}</span><span className="morning-brief-overlap">{row.overlap}</span></span>
+        )}
+      </span>
+      {row.link !== null && (
+        <a className="morning-brief-calendar-icon" href={row.link} target="_blank" rel="noopener noreferrer" aria-label={`Open ${row.label} in Calendar`}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 44, minHeight: 44, textDecoration: 'none', flexShrink: 0 }}>
+          <CalendarIcon />
+        </a>
+      )}
+    </li>
+  );
+}
+
+/** A plain calendar glyph in a 44px target; decorative, so the link's accessible name carries the meaning. */
+function CalendarIcon() {
+  return <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="currentColor">
+    <path d="M8 2a1 1 0 0 1 1 1v1h6V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm12 8H5v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9ZM6 6a1 1 0 0 0-1 1v1h14V7a1 1 0 0 0-1-1H6Z" />
+  </svg>;
+}
 
 /** MB3b-2: each Needs-you / Copenhagen-today row is one tappable 44px https target; News/research stay collapsed. */
 function TappableRows({ heading, items }: { heading: string; items: readonly BriefLine[] }) {
@@ -305,8 +345,8 @@ function DigestSection({ heading, items, unavailable }: { heading: string; items
         : <ul>{items.map((item) => (
             <li key={item.id}>
               {item.text}
-              {item.link && <a href={item.link} target="_blank" rel="noopener noreferrer"
-                style={{ display: 'flex', alignItems: 'center', minHeight: 44 }}>Open link</a>}
+              {item.link && <a href={item.link} target="_blank" rel="noopener noreferrer" className="morning-brief-link"
+                style={{ display: 'flex', alignItems: 'center', minHeight: 44, textDecoration: 'none' }}>Open link</a>}
             </li>
           ))}</ul>}
     </details>

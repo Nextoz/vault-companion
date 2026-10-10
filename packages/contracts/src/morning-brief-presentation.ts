@@ -85,3 +85,103 @@ export function briefDigestUnavailable(file: Pick<MorningBriefResponse, 'unavail
 export function briefTodoAge(todo: { overdueDays?: number | undefined }): string {
   return todo.overdueDays === undefined ? '' : ` (${todo.overdueDays} ${todo.overdueDays === 1 ? 'day' : 'days'} overdue)`;
 }
+
+/** One timeline row: a timed meeting or a free gap. `time` slices the file's own offset, never the device's zone. */
+export interface BriefTimelineRow {
+  readonly kind: 'meeting' | 'gap';
+  readonly start: string;
+  readonly end: string;
+  /** "09:00-10:00" rendered in the file's local offset (the existing slicing approach). */
+  readonly time: string;
+  /** Meeting title, or the gap line "Free 1 h 30 min · <suggestion>" / "Free 45 min". */
+  readonly label: string;
+  /** Gap duration text ("3 h", "45 min", "1 h 30 min"); null for a meeting. */
+  readonly duration: string | null;
+  /** True when the row's end instant is before the sheet's `now`. */
+  readonly ended: boolean;
+  /** "Clash" on a clashing meeting; null otherwise. */
+  readonly clashBadge: string | null;
+  /** "Overlaps 30 min with X" on a clashing meeting; null otherwise. */
+  readonly overlap: string | null;
+  /** The overlap length in whole minutes; null when the meeting does not clash (or no partner overlaps). */
+  readonly overlapMinutes: number | null;
+  /** https-only calendar link for a meeting; null otherwise. */
+  readonly link: string | null;
+}
+
+/** The day in time order (MB4): the same rows feed the phone sheet and the email, so both render identically. */
+export interface BriefTimeline {
+  readonly allDay: readonly string[];
+  readonly rows: readonly BriefTimelineRow[];
+  readonly calendarFailed: boolean;
+}
+
+const timelineWallClock = (instant: string): string => instant.slice(11, 16);
+
+/** "3 h", "45 min", "1 h 30 min" - plain-language duration for a gap and for an overlap. Tolerant of bad instants. */
+export function briefDurationText(minutes: number): string {
+  if (!Number.isFinite(minutes) || minutes <= 0) return '';
+  const whole = Math.round(minutes);
+  const hours = Math.floor(whole / 60);
+  const mins = whole % 60;
+  if (hours === 0) return `${mins} min`;
+  return mins === 0 ? `${hours} h` : `${hours} h ${mins} min`;
+}
+
+function httpsOnly(link: string | undefined): string | null {
+  if (!link) return null;
+  try { return new URL(link).protocol === 'https:' ? link : null; } catch { return null; }
+}
+
+/** Milliseconds of overlap between two intervals; 0 when they do not overlap (or an instant is unparseable). */
+function overlapMs(a: { start: string; end: string }, b: { start: string; end: string }): number {
+  const start = Math.max(Date.parse(a.start), Date.parse(b.start));
+  const end = Math.min(Date.parse(a.end), Date.parse(b.end));
+  return end > start ? end - start : 0;
+}
+
+/**
+ * MB4: the whole day in time order. One row per timed meeting or free gap (sorted by start), all-day meeting titles
+ * on their own line, and every clashing meeting tagged with its partner and overlap length. Calendar failure yields
+ * no rows and no gap suggestions (the caller shows the amber reason line instead). Shared by web and email.
+ */
+export function briefTimeline(file: Pick<MorningBriefResponse, 'brief' | 'unavailable'>, now: Date): BriefTimeline {
+  if (file.unavailable.includes('calendar')) return { allDay: [], rows: [], calendarFailed: true };
+  const meetings = [...(file.brief.meetings ?? [])].sort((a, b) => Date.parse(a.start) - Date.parse(b.start) || a.title.localeCompare(b.title));
+  const allDay = meetings.filter((meeting) => meeting.allDay).map((meeting) => meeting.title);
+  const timed = meetings.filter((meeting) => !meeting.allDay);
+  const rows: BriefTimelineRow[] = [];
+  for (const meeting of timed) {
+    const partner = meeting.clash
+      ? timed.filter((other) => other !== meeting)
+          .map((other) => ({ other, ms: overlapMs(meeting, other) }))
+          .filter((candidate) => candidate.ms > 0)
+          .sort((a, b) => b.ms - a.ms)[0]
+      : undefined;
+    const overlapMinutes = partner === undefined ? null : Math.round(partner.ms / 60_000);
+    const partnerName = meeting.clashWith ?? partner?.other.title;
+    rows.push({
+      kind: 'meeting', start: meeting.start, end: meeting.end,
+      time: `${timelineWallClock(meeting.start)}-${timelineWallClock(meeting.end)}`,
+      label: meeting.title, duration: null,
+      ended: Date.parse(meeting.end) < now.getTime(),
+      clashBadge: meeting.clash ? 'Clash' : null,
+      overlap: overlapMinutes === null ? null : `Overlaps ${briefDurationText(overlapMinutes)} with ${partnerName ?? 'another meeting'}`,
+      overlapMinutes,
+      link: httpsOnly(meeting.link),
+    });
+  }
+  for (const gap of file.brief.gaps) {
+    const duration = briefDurationText((Date.parse(gap.end) - Date.parse(gap.start)) / 60_000);
+    rows.push({
+      kind: 'gap', start: gap.start, end: gap.end,
+      time: `${timelineWallClock(gap.start)}-${timelineWallClock(gap.end)}`,
+      label: `Free${duration === '' ? '' : ` ${duration}`}${gap.suggestion === undefined ? '' : ` · ${gap.suggestion}`}`,
+      duration: duration === '' ? null : duration,
+      ended: Date.parse(gap.end) < now.getTime(),
+      clashBadge: null, overlap: null, overlapMinutes: null, link: null,
+    });
+  }
+  rows.sort((a, b) => Date.parse(a.start) - Date.parse(b.start) || Date.parse(a.end) - Date.parse(b.end) || (a.kind === 'meeting' ? 0 : 1) - (b.kind === 'meeting' ? 0 : 1));
+  return { allDay, rows, calendarFailed: false };
+}

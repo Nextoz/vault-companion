@@ -1,8 +1,12 @@
-import { briefCopenhagen, briefNeedsYou, briefNews, briefOneThing, briefResearch, MorningBriefMissingResponse, MorningBriefResponse, RadarResponse, ScoutsResponse, WeatherResponse, type Command, type RadarPaper, type WeatherProjection, type WeatherRunWindow } from '@vault-companion/contracts';
-import { describe, expect, it } from 'vitest';
+import { briefCopenhagen, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTimeline, MorningBriefMissingResponse, MorningBriefResponse, RadarResponse, ScoutsResponse, WeatherResponse, type Command, type RadarPaper, type WeatherProjection, type WeatherRunWindow } from '@vault-companion/contracts';
+import { JSDOM } from 'jsdom';
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { moodCheckin, undoMoodCheckinDraft } from '../commands.ts';
 import type { QueueItem } from '../queue/queue.ts';
-import { briefLines, checkinDue, missingBriefText, morningBriefSheet, morningLines, radarHighlights, researchHighlightsText, runWindowGlance, tasksTodayText, weatherDayGlance, weatherLine, type MorningCardFacts } from './morning-card.ts';
+import { MorningBriefSheet } from './MorningCard.tsx';
+import { briefLines, briefTodos, checkinDue, missingBriefText, morningBriefSheet, morningLines, radarHighlights, researchHighlightsText, runWindowGlance, tasksTodayText, weatherDayGlance, weatherLine, type MorningCardFacts } from './morning-card.ts';
 import type { NeedsYouRow } from './needs-you.ts';
 
 const ACCOUNT = 'a'.repeat(64);
@@ -222,26 +226,25 @@ describe('Morning Brief rows (MB2)', () => {
     expect(lines[0]).toEqual({ id: 'fallback', text: 'Fallback brief', marker: true, todo: false });
   });
 
-  it('renders gaps in their ISO offset wall clock and omits a gap without a suggestion', () => {
-    const lines = briefLines(sample({ brief: { gaps: [
+  it('renders gaps in their ISO offset wall clock, with a suggestion or without one', () => {
+    const file = sample({ brief: { gaps: [
       { blockIndex: 1, start: '2026-10-02T09:00:00+02:00', end: '2026-10-02T10:30:00+02:00', suggestion: 'Deep work' },
       { blockIndex: 2, start: '2026-10-02T11:00:00+02:00', end: '2026-10-02T11:20:00+02:00' },
-    ] } }), '2026-10-02')!;
-    expect(lines.map((l) => l.text)).toEqual(['A calm Thursday.', '09:00-10:30  Deep work']);
+    ] } });
+    const timeline = briefTimeline(file, new Date('2026-10-02T06:00:00+02:00'));
+    expect(timeline.rows.map((row) => row.label)).toEqual(['Free 1 h 30 min · Deep work', 'Free 20 min']);
+    expect(timeline.rows.map((row) => row.time)).toEqual(['09:00-10:30', '11:00-11:20']);
   });
 
-  it('appends a todo first step and marks only todos as opening Tasks', () => {
-    const lines = briefLines(sample({ brief: { stateLine: 'Low energy.', todos: [
-      { id: 1, text: 'Pay the bill', due: '2026-10-02', bill: true, firstStep: 'Open the banking app' },
-      { id: 2, text: 'Call the dentist', due: null, bill: false },
-    ], encouragement: 'You have got this.' } }), '2026-10-02')!;
-    expect(lines).toEqual([
-      { id: 'day', text: 'A calm Thursday.', marker: false, todo: false },
-      { id: 'state', text: 'Low energy.', marker: false, todo: false },
-      { id: 'todo-1', text: 'Pay the bill - Open the banking app', marker: false, todo: true },
-      { id: 'todo-2', text: 'Call the dentist', marker: false, todo: true },
-      { id: 'encouragement', text: 'You have got this.', marker: false, todo: false },
+  it('appends a todo first step, caps at five and marks only todos as opening Tasks', () => {
+    const todos = Array.from({ length: 6 }, (_, id) => ({ id, text: `Task ${id}`, due: null, bill: false, ...(id === 0 ? { firstStep: 'Open the banking app', overdueDays: 3 } : {}) }));
+    const file = sample({ brief: { stateLine: 'Low energy.', todos, encouragement: 'You have got this.' } });
+    expect(briefTodos(file, '2026-10-02').map((todo) => todo.text)).toEqual([
+      'Task 0 (3 days overdue) - Open the banking app', 'Task 1', 'Task 2', 'Task 3', 'Task 4',
     ]);
+    expect(briefTodos(file, '2026-10-02').every((todo) => todo.todo)).toBe(true);
+    expect(briefLines(file, '2026-10-02')!.map((line) => line.text)).toEqual(['A calm Thursday.', 'Low energy.', 'No meetings today']);
+    expect(morningBriefSheet(file, '2026-10-02').digest.oneThing).toMatchObject({ text: 'You have got this.' });
   });
 });
 
@@ -252,24 +255,28 @@ describe('Morning Brief sheet state (UX7)', () => {
       source: 'model', unavailable: [], brief: { source: 'model', dayLine: 'A calm Thursday.', gaps: [], todos: [], ...o.brief },
     });
 
-  it('returns the brief rows and no reason for a usable brief today', () => {
+  it('returns the head lines, the timeline and the to-dos for a usable brief today', () => {
     const state = morningBriefSheet(sample({ brief: { stateLine: 'Low energy.', todos: [
       { id: 1, text: 'Pay the bill', due: null, bill: false },
     ] } }), '2026-10-02');
     expect(state.missing).toBeNull();
-    expect(state.lines.map((line) => line.text)).toEqual(['A calm Thursday.', 'Low energy.', 'Pay the bill']);
+    expect(state.head.map((line) => line.text)).toEqual(['A calm Thursday.', 'Low energy.', 'No meetings today']);
+    expect(state.todos.map((line) => line.text)).toEqual(['Pay the bill']);
+    expect(state.timeline.rows).toEqual([]);
   });
 
   it('returns "No brief yet" plus the job reason for a missing file', () => {
+    const empty = { head: [], timeline: { allDay: [], rows: [], calendarFailed: false }, todos: [], digest: { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null } };
     const missing = MorningBriefMissingResponse.parse({ kind: 'missing', revision: 'a'.repeat(40), statusError: 'not-written:precondition-failed' });
-    expect(morningBriefSheet(missing, '2026-10-02')).toEqual({ missing: 'No brief yet - not-written:precondition-failed', lines: [], digest: { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null } });
+    expect(morningBriefSheet(missing, '2026-10-02')).toEqual({ missing: 'No brief yet - not-written:precondition-failed', ...empty });
     const noReason = MorningBriefMissingResponse.parse({ kind: 'missing', revision: 'a'.repeat(40), statusError: null });
-    expect(morningBriefSheet(noReason, '2026-10-02')).toEqual({ missing: 'No brief yet', lines: [], digest: { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null } });
+    expect(morningBriefSheet(noReason, '2026-10-02')).toEqual({ missing: 'No brief yet', ...empty });
   });
 
   it('returns a plain "No brief yet" when the read failed or the only file is stale', () => {
-    expect(morningBriefSheet(null, '2026-10-02')).toEqual({ missing: 'No brief yet', lines: [], digest: { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null } });
-    expect(morningBriefSheet(sample({ date: '2026-10-01' }), '2026-10-02')).toEqual({ missing: 'No brief yet', lines: [], digest: { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null } });
+    const empty = { head: [], timeline: { allDay: [], rows: [], calendarFailed: false }, todos: [], digest: { needsYou: [], copenhagen: [], news: [], research: [], oneThing: null, unavailable: null } };
+    expect(morningBriefSheet(null, '2026-10-02')).toEqual({ missing: 'No brief yet', ...empty });
+    expect(morningBriefSheet(sample({ date: '2026-10-01' }), '2026-10-02')).toEqual({ missing: 'No brief yet', ...empty });
   });
 
   it('projects the digest sections through the shared helpers and drops the generic closing line', () => {
@@ -290,7 +297,7 @@ describe('Morning Brief sheet state (UX7)', () => {
     expect(state.digest.research.map((line) => line.text)).toEqual(briefResearch(file).map((item) => `${item.title} - ${item.line}`));
     expect(state.digest.news[0]!.link).toBe('https://example.test/a');
     expect(state.digest.oneThing).toMatchObject({ text: briefOneThing(file)!.text, quote: briefOneThing(file)!.quote });
-    expect(state.lines.map((line) => line.text)).not.toContain('Generic closing.');
+    expect(state.head.map((line) => line.text)).not.toContain('Generic closing.');
   });
 
   it('reports the digest reason instead of empty sections when the note was unavailable', () => {
@@ -305,6 +312,138 @@ describe('Morning Brief sheet state (UX7)', () => {
     expect(state.digest.copenhagen).toEqual([]);
     expect(state.digest.news).toEqual([]);
     expect(state.digest.oneThing).toBeNull();
-    expect(state.lines.map((line) => line.text)).not.toContain('Digest unavailable');
+    expect(state.head.map((line) => line.text)).not.toContain('Digest unavailable');
+  });
+});
+
+describe('Morning Brief timeline state (MB4)', () => {
+  const sample = (o: { date?: string; brief?: Partial<MorningBriefResponse['brief']>; unavailable?: string[]; reasons?: MorningBriefResponse['unavailableReasons'] } = {}) =>
+    MorningBriefResponse.parse({
+      revision: 'a'.repeat(40), date: o.date ?? '2026-10-02', generatedAt: '2026-10-02T04:31:00+02:00', source: 'model',
+      unavailable: o.unavailable ?? [], unavailableReasons: o.reasons ?? {},
+      brief: { source: 'model', dayLine: 'A calm Thursday.', gaps: [], todos: [], ...o.brief },
+    });
+  const meeting = (title: string, start: string, end: string, extra: Record<string, unknown> = {}) =>
+    ({ title, start: `2026-10-02T${start}:00+02:00`, end: `2026-10-02T${end}:00+02:00`, allDay: false, clash: false, ...extra });
+  const busy = () => sample({ brief: {
+    meetings: [meeting('Lunch', '11:00', '12:00'), meeting('Team sync', '09:30', '10:30', { clash: true, clashWith: 'Design review' }), meeting('Design review', '09:00', '10:00', { clash: true, clashWith: 'Team sync' })],
+    gaps: [{ blockIndex: 1, start: '2026-10-02T07:00:00+02:00', end: '2026-10-02T08:00:00+02:00', suggestion: 'Take a walk' }, { blockIndex: 2, start: '2026-10-02T12:00:00+02:00', end: '2026-10-02T12:45:00+02:00' }],
+  } });
+
+  it('orders 3 meetings + 1 clash + 2 gaps by start, with both clash rows tagged', () => {
+    const { rows, calendarFailed } = briefTimeline(busy(), new Date('2026-10-02T12:30:00+02:00'));
+    expect(calendarFailed).toBe(false);
+    expect(rows.map((row) => row.time)).toEqual(['07:00-08:00', '09:00-10:00', '09:30-10:30', '11:00-12:00', '12:00-12:45']);
+    expect(rows.map((row) => row.kind)).toEqual(['gap', 'meeting', 'meeting', 'meeting', 'gap']);
+    expect(rows.filter((row) => row.clashBadge === 'Clash' && row.overlapMinutes === 30)).toHaveLength(2);
+    expect(rows.map((row) => row.label)).toEqual(['Free 1 h · Take a walk', 'Design review', 'Team sync', 'Lunch', 'Free 45 min']);
+  });
+
+  it('shows no timeline and no gap suggestions when Calendar failed', () => {
+    const file = sample({ unavailable: ['calendar'], reasons: { calendar: 'google-reauth-needed' }, brief: {
+      meetings: [meeting('Design review', '09:00', '10:00')],
+      gaps: [{ blockIndex: 1, start: '2026-10-02T11:00:00+02:00', end: '2026-10-02T12:00:00+02:00', suggestion: 'Take a walk' }],
+      todos: [{ id: 1, text: 'Pay the bill', due: null, bill: false }],
+    } });
+    expect(briefTimeline(file, new Date('2026-10-02T06:00:00+02:00'))).toEqual({ allDay: [], rows: [], calendarFailed: true });
+    const state = morningBriefSheet(file, '2026-10-02', new Date('2026-10-02T06:00:00+02:00'));
+    expect(state.head.map((line) => line.text)).toEqual(['A calm Thursday.', 'Calendar unavailable: Google sign-in needs renewing']);
+    expect(state.todos.map((line) => line.text)).toEqual(['Pay the bill']);
+    expect(JSON.stringify(state)).not.toContain('Take a walk');
+  });
+
+  it('covers the empty, all-day, stale and error states', () => {
+    const empty = morningBriefSheet(sample(), '2026-10-02', new Date('2026-10-02T06:00:00+02:00'));
+    expect(empty.head.map((line) => line.text)).toEqual(['A calm Thursday.', 'No meetings today']);
+    const allDay = morningBriefSheet(sample({ brief: { meetings: [meeting('Planning day', '00:00', '00:00', { allDay: true })] } }), '2026-10-02');
+    expect(allDay.head.map((line) => line.text)).toEqual(['A calm Thursday.', 'All day: Planning day']);
+    expect(allDay.timeline.rows).toEqual([]);
+    expect(morningBriefSheet(sample({ date: '2026-10-01' }), '2026-10-02').missing).toBe('No brief yet');
+    expect(morningBriefSheet(null, '2026-10-02').missing).toBe('No brief yet');
+  });
+});
+
+describe('Morning Brief sheet render (MB4)', () => {
+  let dom: JSDOM;
+  let root: Root | null = null;
+
+  beforeEach(() => {
+    dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'https://example.test/' });
+    Object.defineProperty(globalThis, 'window', { value: dom.window, configurable: true });
+    Object.defineProperty(globalThis, 'document', { value: dom.window.document, configurable: true });
+    Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
+    Object.defineProperty(globalThis, 'HTMLElement', { value: dom.window.HTMLElement, configurable: true });
+    Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { value: true, configurable: true });
+  });
+  afterEach(async () => {
+    if (root) await act(async () => root!.unmount());
+    root = null;
+    dom.window.close();
+  });
+
+  const sample = (o: { brief?: Partial<MorningBriefResponse['brief']>; unavailable?: string[]; reasons?: MorningBriefResponse['unavailableReasons'] } = {}) =>
+    MorningBriefResponse.parse({
+      revision: 'a'.repeat(40), date: '2026-10-02', generatedAt: '2026-10-02T04:31:00+02:00', source: 'model',
+      unavailable: o.unavailable ?? [], unavailableReasons: o.reasons ?? {},
+      brief: { source: 'model', dayLine: 'A calm Thursday.', gaps: [], todos: [], ...o.brief },
+    });
+  const meeting = (title: string, start: string, end: string, extra: Record<string, unknown> = {}) =>
+    ({ title, start: `2026-10-02T${start}:00+02:00`, end: `2026-10-02T${end}:00+02:00`, allDay: false, clash: false, ...extra });
+  const mount = async (state: ReturnType<typeof morningBriefSheet>) => {
+    root = createRoot(document.getElementById('root')!);
+    await act(async () => { root!.render(createElement(MorningBriefSheet, { state, onOpenTasks: () => {}, onClose: () => {} })); });
+  };
+
+  it('renders both clash badges and overlap lines in time order', async () => {
+    const file = sample({ brief: { meetings: [
+      meeting('Lunch', '11:00', '12:00'),
+      meeting('Team sync', '09:30', '10:30', { clash: true, clashWith: 'Design review' }),
+      meeting('Design review', '09:00', '10:00', { clash: true, clashWith: 'Team sync' }),
+    ] } });
+    await mount(morningBriefSheet(file, '2026-10-02', new Date('2026-10-02T12:30:00+02:00')));
+    expect([...document.querySelectorAll('.morning-brief-time')].map((node) => node.textContent)).toEqual(['09:00-10:00', '09:30-10:30', '11:00-12:00']);
+    expect(document.querySelectorAll('.morning-brief-badge')).toHaveLength(2);
+    expect([...document.querySelectorAll('.morning-brief-overlap')].map((node) => node.textContent))
+      .toEqual(['Overlaps 30 min with Team sync', 'Overlaps 30 min with Design review']);
+  });
+
+  it('dims rows already over at 13:00 and leaves later rows bright', async () => {
+    const file = sample({ brief: { meetings: [meeting('Morning', '09:00', '10:00'), meeting('Afternoon', '15:00', '16:00')] } });
+    await mount(morningBriefSheet(file, '2026-10-02', new Date('2026-10-02T13:00:00+02:00')));
+    const rows = [...document.querySelectorAll('.morning-brief-timeline-row')];
+    expect(rows.map((row) => row.getAttribute('data-ended'))).toEqual(['true', 'false']);
+    expect(rows[0]!.classList.contains('is-ended')).toBe(true);
+    expect(rows[1]!.classList.contains('is-ended')).toBe(false);
+  });
+
+  it('fails Calendar softly: amber reason, no timeline, to-dos still open Tasks', async () => {
+    const file = sample({ unavailable: ['calendar'], reasons: { calendar: 'google-reauth-needed' }, brief: {
+      meetings: [meeting('Design review', '09:00', '10:00')],
+      gaps: [{ blockIndex: 1, start: '2026-10-02T11:00:00+02:00', end: '2026-10-02T12:00:00+02:00', suggestion: 'Take a walk' }],
+      todos: [{ id: 1, text: 'Pay the bill', due: null, bill: false }],
+    } });
+    await mount(morningBriefSheet(file, '2026-10-02', new Date('2026-10-02T06:00:00+02:00')));
+    expect(document.querySelector('.morning-brief-unavailable')?.textContent).toBe('Calendar unavailable: Google sign-in needs renewing');
+    expect(document.querySelector('.morning-brief-timeline')).toBeNull();
+    expect(document.body.textContent).not.toContain('Take a walk');
+    expect(document.querySelector('.morning-brief-todo')?.textContent).toBe('Pay the bill');
+  });
+
+  it('keeps every link non-default and the calendar link a 44px icon target', async () => {
+    const file = sample({ brief: {
+      meetings: [meeting('Design review', '09:00', '10:00', { link: 'https://calendar.google.com/calendar/event?eid=synthetic' })],
+      needsYou: [{ title: 'Synthetic Mail', line: 'A synthetic message.', url: 'https://mail.google.com/mail/u/0/#inbox/synthetic' }],
+      news: [{ title: 'Synthetic Headline', line: 'A synthetic line.', url: 'https://example.test/a' }],
+    } });
+    await mount(morningBriefSheet(file, '2026-10-02', new Date('2026-10-02T06:00:00+02:00')));
+    const anchors = [...document.querySelectorAll('.morning-brief-sheet a')] as HTMLAnchorElement[];
+    expect(anchors.length).toBeGreaterThan(0);
+    for (const anchor of anchors) expect(['morning-brief-row-link', 'morning-brief-calendar-icon', 'morning-brief-link']).toContain(anchor.className);
+    const icon = document.querySelector('.morning-brief-calendar-icon') as HTMLAnchorElement;
+    expect(icon.getAttribute('href')).toBe('https://calendar.google.com/calendar/event?eid=synthetic');
+    expect(icon.style.minWidth).toBe('44px');
+    expect(icon.style.minHeight).toBe('44px');
+    expect(icon.style.textDecoration).toBe('none');
+    expect(icon.getAttribute('aria-label')).toContain('Design review');
   });
 });

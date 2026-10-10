@@ -32,7 +32,7 @@ test('Today: the Morning Brief button opens only the whole brief and restores fo
   await expect(sheet).toBeVisible();
   await expect(sheet).toContainText('A calm synthetic day.');
   await expect(sheet).toContainText('Low battery.');
-  await expect(sheet).toContainText('09:00-10:30  Deep work');
+  await expect(sheet).toContainText('Free 1 h 30 min · Deep work');
   await expect(sheet).toContainText('Pay the bill - Open the banking app');
   await expect(sheet).toContainText('One thing at a time.');
   await expect(sheet.getByText('This morning', { exact: true })).toHaveCount(0);

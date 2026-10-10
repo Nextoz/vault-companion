@@ -3,8 +3,8 @@
 // UX7: the weather line is plain day language plus the run window's own wording, and one research entry replaces the
 // old reading-brief line (its content now lives in the Morning Brief sheet). Pure.
 import { effectiveRadarDecisions, WEATHER_TIME_ZONE } from '@vault-companion/contracts';
-import { briefCopenhagen, briefDigestUnavailable, briefMeetingRows, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
-import type { BriefDigestItem } from '@vault-companion/contracts';
+import { briefCopenhagen, briefDigestUnavailable, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTimeline, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
+import type { BriefDigestItem, BriefTimeline } from '@vault-companion/contracts';
 import type { MorningBriefMissingResponse, MorningBriefReadResponse, MorningBriefResponse, RadarResponse, ScoutsResponse, WeatherProjection, WeatherResponse, WeatherRunWindow } from '@vault-companion/contracts';
 import type { QueueItem } from '../queue/queue.ts';
 import { attentionCount, pluralise, scoutsNeedAttention } from '../scouts.ts';
@@ -34,37 +34,37 @@ export interface BriefLine {
   readonly todo: boolean;
 }
 
-/** "HH:MM" of an ISO instant with an offset, rendered in that offset - never in the device's own zone. */
-const wallClock = (instant: string): string => instant.slice(11, 16);
-
 /**
  * MB2: the brief's rows, ABOVE the card's existing lines. Null when there is no usable brief for today (fetch
  * failure, invalid response, or a stale date), so the card falls back to its current lines unchanged. Pure.
  */
-export function briefLines(file: MorningBriefResponse | null, today: string): BriefLine[] | null {
+export function briefLines(file: MorningBriefResponse | null, today: string, now: Date = new Date()): BriefLine[] | null {
   if (file === null || file.date !== today) return null;
   const lines: BriefLine[] = [];
   if (file.source === 'fallback') lines.push({ id: 'fallback', text: 'Fallback brief', marker: true, todo: false });
   lines.push({ id: 'day', text: file.brief.dayLine, marker: false, todo: false });
   if (file.brief.stateLine !== undefined) lines.push({ id: 'state', text: file.brief.stateLine, marker: false, todo: false });
-  if (file.brief.meetings !== undefined) {
-    lines.push({ id: 'today', text: 'Today', heading: true, marker: false, todo: false });
-    briefMeetingRows(file).forEach((row, i) => lines.push({ ...row, id: `meeting-${i}`, marker: false, todo: false }));
-  }
   briefUnavailableLines(file).forEach((text, i) => lines.push({ id: `unavailable-${i}`, text, marker: false, todo: false }));
-  file.brief.gaps.forEach((gap, i) => {
-    if (file.unavailable.includes('calendar')) return;
-    if (gap.suggestion === undefined) return;
-    lines.push({ id: `gap-${i}`, text: `${wallClock(gap.start)}-${wallClock(gap.end)}  ${gap.suggestion}`, marker: false, todo: false });
-  });
-  file.brief.todos.slice(0, 5).forEach((todo) => {
-    lines.push({ id: `todo-${todo.id}`, text: `${todo.text}${briefTodoAge(todo)}${todo.firstStep === undefined ? '' : ` - ${todo.firstStep}`}`, marker: false, todo: true });
-  });
-  // MB3b: the digest's One thing replaces the model's generic closing line when the digest carried one.
-  if (briefOneThing(file) === null && file.brief.encouragement !== undefined) {
-    lines.push({ id: 'encouragement', text: file.brief.encouragement, marker: false, todo: false });
+  // MB4: the all-day line leads the timeline; "No meetings today" stands in when the calendar is fine but empty.
+  const timeline = briefTimeline(file, now);
+  if (!timeline.calendarFailed) {
+    if (timeline.allDay.length > 0) {
+      lines.push({ id: 'all-day', text: `All day: ${timeline.allDay.join(', ')}`, marker: false, todo: false });
+    } else if (timeline.rows.every((row) => row.kind !== 'meeting')) {
+      lines.push({ id: 'no-meetings', text: 'No meetings today', marker: false, todo: false });
+    }
   }
   return lines;
+}
+
+/** MB4: at most five to-dos in the file's order, each opening Tasks; overdue age via `briefTodoAge`. Pure. */
+export function briefTodos(file: MorningBriefResponse | null, today: string): BriefLine[] {
+  if (file === null || file.date !== today) return [];
+  return file.brief.todos.slice(0, 5).map((todo) => ({
+    id: `todo-${todo.id}`,
+    text: `${todo.text}${briefTodoAge(todo)}${todo.firstStep === undefined ? '' : ` - ${todo.firstStep}`}`,
+    marker: false, todo: true,
+  }));
 }
 
 /** True only for the ADR-0055 "no brief file today" response. */
@@ -161,7 +161,12 @@ export function researchHighlightsText(count: number): string {
  *  date, or a failed read) yields the ADR-0055 reason line and no rows. Pure. */
 export interface MorningBriefSheetState {
   readonly missing: string | null;
-  readonly lines: readonly BriefLine[];
+  /** MB4 header lines: fallback marker, day, state, the amber source reasons, the all-day line, "No meetings today". */
+  readonly head: readonly BriefLine[];
+  /** MB4: the day in time order, from the shared `briefTimeline` (empty when Calendar failed). */
+  readonly timeline: BriefTimeline;
+  /** MB4: at most five to-dos, each opening Tasks. */
+  readonly todos: readonly BriefLine[];
   /** MB3b: the collapsed News / AI-and-research sections and the One-thing closing line. */
   readonly digest: MorningBriefDigest;
 }
@@ -181,27 +186,30 @@ const EMPTY_DIGEST: MorningBriefDigest = { needsYou: [], copenhagen: [], news: [
 const digestRows = (prefix: string, items: readonly BriefDigestItem[]): BriefLine[] =>
   items.map((item, i) => ({ id: `${prefix}-${i}`, text: `${item.title} - ${item.line}`, link: item.url, marker: false, todo: false }));
 
-export function morningBriefSheet(brief: MorningBriefReadResponse | null, today: string): MorningBriefSheetState {
+export function morningBriefSheet(brief: MorningBriefReadResponse | null, today: string, now: Date = new Date()): MorningBriefSheetState {
   if (brief !== null && !isMissingBrief(brief)) {
-    const lines = briefLines(brief, today);
+    const lines = briefLines(brief, today, now);
     if (lines !== null) {
       const unavailable = briefDigestUnavailable(brief);
-      const oneThing = briefOneThing(brief);
+      // MB3b: the digest's One thing closes the sheet; the brief's own encouragement is the fallback closing line.
+      const oneThing = briefOneThing(brief) ?? (brief.brief.encouragement === undefined ? null : { text: brief.brief.encouragement });
       return {
         missing: null,
-        lines,
+        head: lines,
+        timeline: briefTimeline(brief, now),
+        todos: briefTodos(brief, today),
         digest: {
           needsYou: unavailable === null ? digestRows('needs-you', briefNeedsYou(brief)) : [],
           copenhagen: unavailable === null ? digestRows('copenhagen', briefCopenhagen(brief)) : [],
           news: unavailable === null ? digestRows('news', briefNews(brief)) : [],
           research: unavailable === null ? digestRows('research', briefResearch(brief)) : [],
-          oneThing: oneThing === null ? null : { id: 'one-thing', text: oneThing.text, quote: oneThing.quote, marker: false, todo: false },
+          oneThing: oneThing === null ? null : { id: 'one-thing', text: oneThing.text, ...(oneThing.quote === undefined ? {} : { quote: oneThing.quote }), marker: false, todo: false },
           unavailable,
         },
       };
     }
   }
-  return { missing: missingBriefText(brief !== null && isMissingBrief(brief) ? brief.statusError : null), lines: [], digest: EMPTY_DIGEST };
+  return { missing: missingBriefText(brief !== null && isMissingBrief(brief) ? brief.statusError : null), head: [], timeline: { allDay: [], rows: [], calendarFailed: false }, todos: [], digest: EMPTY_DIGEST };
 }
 
 /** Needs you, weather, scouts, the research entry, events and the tasks line - each omitted when it has nothing to say. */
