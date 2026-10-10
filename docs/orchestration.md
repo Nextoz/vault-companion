@@ -17,7 +17,7 @@ appending amendments. History: Git and branch `archive/codex-lead-2026-10-01`.
 
 ## Roles
 
-- **Lead: Claude Opus 5.5, effort medium.** An engineer, not a dispatcher: owns understanding the relevant code,
+- **Lead: Claude Sonnet 5.5, effort medium** (`tools/start-lead.ps1`; `-Overnight` = auto mode, no prompts). An engineer, not a dispatcher: owns understanding the relevant code,
   slicing, briefs, integration, acceptance, PRs and merges. **Delegates implementation by default** (Claude usage
   is the scarcest budget); writes code itself only for fixes of about 20 lines or after a worker failed twice.
 - **Workers:** implement one bounded slice each in a disposable full clone under `C:\Dev\vault-companion-clones\`.
@@ -38,8 +38,14 @@ appending amendments. History: Git and branch `archive/codex-lead-2026-10-01`.
 | Worker | Use for | Cost |
 |---|---|---|
 | **Gemini CLI** (Flash-Lite) | tiny, idempotent: docs, copy, rename, one-file tweak | free tier |
-| **DeepSeek Flash**, effort high | **default** ordinary implementation: UI, tests, bounded features, bug batches | cheap; half price off-peak |
+| **DeepSeek V4.1 Flash** (`flash`, API id `deepseek-flash`), effort high | **default** implementation: UI, tests, bounded features, bug batches | cheap; owner's DeepSeek credit |
+| **Codex gpt-6.1-sol** (`codex`, `-Effort low|medium`) | when needed: Flash failed once, or design-heavy UI / Morning Brief / data-integrity work | owner's Codex subscription (weekly limit) |
 | **DeepSeek Pro**, effort **medium** | high-risk implementation only (see Review by risk) | ~4x Flash |
+
+**Sub-workers:** Codex-driven workers (`flash`, `pro`, `codex`) may spawn up to 2 Codex sub-agents (one level deep,
+same model, same sandbox) for clearly separable parts, e.g. tests beside the implementation. The brief says when
+that is worth it; the worker stays responsible for one handoff. Scaleway's `deepseek-v4-flash-0731` is the older V4
+Flash and, like GLM-5.2, has no Responses API (verified 2026-10-10), so it cannot drive Codex.
 
 **Scaleway GLM-5.2 is not an implementation worker (2026-10-02):** Codex CLI needs the Responses API, which Scaleway
 does not serve for GLM-5.2 (chat completions only), and OpenCode exited silently twice. Use GLM only for one-shot
@@ -48,15 +54,16 @@ public-repo questions over the plain API, not for edits: it is the **second code
 Launch every worker with **one command**, from inside Herdr (it opens a visible pane in the Agents tab):
 
 ```sh
-pwsh -NoProfile -File tools/launch-worker.ps1 -Tier glm -Files a,b | codex [-Effort low|medium] | gemini -Clone <clone> -Task <task>        # brief: <clone>/.agent/brief.md
-pwsh -NoProfile -File tools/launch-worker.ps1 -Tier flash|pro -Clone <clone> -Task <task> -Fix          # resumes the same session with .agent/fix-<task>.md
+pwsh -NoProfile -File tools/launch-worker.ps1 -Tier flash|codex [-Effort low|medium]|pro|gemini|glm -Files a,b -Clone <clone> -Task <task> -Base <base> -TestCmd '<touched tests>' [-Reviewer both] [-Intent on|off]
 ```
 
 DeepSeek workers run **sandboxed** (Codex `workspace-write` + elevated Windows sandbox, set up by the owner
 2026-10-02): they edit and run tests inside their clone only; writes elsewhere are denied and their commands have no
 network (the launcher runs `pnpm install` first). Never launch workers with `--dangerously-bypass-approvals-and-sandbox`:
 it is unsafe and Claude Code's auto mode blocks it. Keys are read at run time, never printed.
-Verify the model in the log header and real activity before waiting. Wait on the log's last line, not by polling.
+Verify the model in the log header and real activity, then **end your turn** ("WAITING: <task>"): the watcher wakes
+you with `WORKER-READY: <task> … <verdict>` when the worker and its pre-handoff review are done (or `WORKER-STUCK`).
+Do not poll. The registry is `.agent/workers/<task>.json` (state running, checking, fixing, ready).
 
 ## Delivery loop (every slice)
 
@@ -65,13 +72,13 @@ Verify the model in the log header and real activity before waiting. Wait on the
 3. **Brief ≤ 40 lines** in `<clone>/.agent/brief.md`: outcome, base commit, owned files (and permission to read
    their direct dependencies), the invariant at risk, acceptance checks, the exact touched-test command, stop rule,
    handoff path `.agent/handoffs/<task>.md` (≤ 15 lines).
-4. **Worker runs once.** Then the Lead runs the pre-handoff check — before reading any diff:
-   `pwsh -NoProfile -File tools/handoff-check.ps1 -Clone <clone> -Base <base> -Task <task> -TestCmd '<touched tests>'`
-   It commits the candidate (never `.agent/`), runs the tests, reviews the complete delta (`-Reviewer auto`: CodeRabbit CLI while it has hourly reviews, else GLM-5.2; `both` for high-risk)
+4. **Worker runs once, then is reviewed before the handover** (automatic with `-Base`, owner 2026-10-10): the worker's
+   pane runs `tools/worker-after.ps1` → `tools/handoff-check.ps1` — before the Lead reads any diff. It commits the candidate (never `.agent/`), runs the tests, reviews the complete delta (`-Reviewer auto`: CodeRabbit CLI while it has hourly reviews, else GLM-5.2; `both` for high-risk)
    and triages each finding with Jev. Exit 0 clean · 10 fixes needed · 20 tests failed · 30 review unavailable ·
    40 boundary refused.
-5. **At most one correction round**, by the same worker session (`tools/launch-worker.ps1 … -Fix`),
-   then the check once more. Still failing ⇒ the Lead fixes it itself or re-slices. Never a third worker round.
+5. **At most one correction round**, started automatically on exit 10 by the same worker session (`-Fix`), then the
+   check once more; only then does the Lead get `WORKER-READY`. Still failing ⇒ the Lead fixes it itself or re-slices.
+   Never a third worker round. (Manual: `tools/handoff-check.ps1 -Clone <clone> -Base <base> -Task <task> -TestCmd '…'`.)
 6. **Lead acceptance:** read the diff (not the logs), run `pnpm check` + e2e **once** on the final candidate, push the
    branch, open the PR, merge when CI is green. One PR per slice; small fixes/docs batch into one PR per round.
 
@@ -95,7 +102,7 @@ question is a typed choice/score/yes-no over **public repo** material. Owner wan
 - **Before every dispatch (required):** choose the worker tier; state the brief's outcome, size and risk in a few
   lines. Follow Jev's pick unless the deterministic floor says otherwise (high-risk ⇒ Pro or Lead review), and say
   which in the STATUS line:
-  `pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,sol-low,sol-medium,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks? sol-low = small mechanical fix, sol-medium = UI, data, new feature, Morning Brief" -Json`
+  `pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,flash,sol-medium,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks? gemini = tiny docs/copy, flash = default implementation incl. UI, sol-medium = Flash already failed once or design-heavy UI / Morning Brief / data integrity" -Json`
 - **Instead of deliberating:** "is this in scope?", "is this handoff claim supported by the test output?", "real
   failure or flaky?", "which backlog item is smallest?" — ask Jev (`-Ask` / `-Choose` / `-Rate`) first.
 - **Test tier (advisory):** `tools/select-tests.ps1 -Paths <paths> [-HighRisk] [-NoJev]` prints `{tier, reason, source}`; the floor decides first.
@@ -149,7 +156,7 @@ line: free RAM, DeepSeek balance, Scaleway GLM estimate) and post a short update
   `ACTION NEEDED: free RAM — <x> GB free, need ~3 GB for <job>` and wait instead of launching.
 - **Credits:** after every paid DeepSeek run, include the balance; below $2 ⇒ `ACTION NEEDED:` with the remaining
   planned work, and switch to Gemini where the risk allows. After a GLM run, append `{"tokens":N}` (from its
-  log) to `.agent/budget/scaleway.jsonl`; above ~800k ⇒ tell the owner and stop GLM at 900k.
+  log) to `.agent/budget/scaleway.jsonl` (bookkeeping only). The Scaleway voucher limit is in EUR (owner instructions: tell the owner at EUR 20 left, stop at EUR 5), not tokens.
 - **CodeRabbit:** at 0 reviews left in the hour, `handoff-check.ps1 -Reviewer auto` switches to GLM-5.2; say so in the STATUS line.
 - Lines starting `ACTION NEEDED:` are the only ones that require the owner to act; everything else is information.
 
