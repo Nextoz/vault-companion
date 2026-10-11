@@ -182,7 +182,7 @@ test('Challenge me shows an AI question and saves only an answered follow-up', a
   await sheet.getByLabel('Your answer').fill('A synthetic answer.');
   await sheet.getByRole('button', { name: 'Save answer', exact: true }).click();
   await expect(page.getByTestId('action').filter({ hasText: 'Follow-up' })).toBeVisible();
-  expect(api.applied.map((c) => c.type)).toEqual(['SaveFollowUp']);
+  await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['SaveFollowUp']);
   expect(api.followUps).toEqual([{ title: 'Synthetic Book', date: '2026-10-05', ordinal: 1,
     question: 'What did that change for you?', answer: 'A synthetic answer.' }]);
 });
