@@ -147,6 +147,8 @@ notable misses in the checkpoint. Jev never accepts work, waives a check or auth
 ## Budget and stop rules
 
 - **One implementation worker at a time** (a free Gemini task may run beside it). One browser/e2e job at a time.
+  If two clones must run e2e anyway, give each its own `PW_PREVIEW_PORT`: locally Playwright reuses whatever
+  server holds port 4173, and silently tests the other clone's build (seen 2026-10-11).
 - A worker run above ~300k tokens, or two failed attempts on one slice ⇒ stop, re-slice or Lead takes over.
 - Quota/credit/tooling failure ⇒ reroute to another approved worker or record a blocker. Never raise effort for it.
 - DeepSeek: prefer off-peak (peak 03–06 and 08–12 Copenhagen, Mon–Fri). The Lead may read the balance endpoint
