@@ -14,7 +14,6 @@
 .dash-chip-unavailable { color: var(--danger); }
 .dash-chip-delayed { color: var(--warn); }
 .dash-market .dash-price, .dash-watch .dash-price { color: var(--ios-indigo); }
-.dash-watches { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
 .dash-change { margin: 0; font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .dash-change-up { color: var(--done); }
 .dash-change-down { color: var(--danger); }
@@ -67,7 +66,42 @@
 
 /* WL4b: the private-valuation card. No chart/price: the labelled last-round line and an https source link, with a
    44 px link target so the phone can tap it. */
-.dash-private { border-left: 3px solid var(--ios-indigo); }
 .dash-chip-private { color: var(--ios-indigo); }
-.dash-private-value { margin: 0; font-size: 1.05rem; font-weight: 600; overflow-wrap: anywhere; }
+.dash-private-value { margin: 0; font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
+.dash-private-meta { margin: 0; overflow-wrap: anywhere; }
 .dash-private-source { display: inline-flex; align-items: center; min-height: var(--tap); color: var(--ios-indigo); overflow-wrap: anywhere; }
+
+/* D1 Markets (Boards quick overview): one card, range chips in its header, one hairline-separated row per instrument
+   (name and sub line, sparkline, price and change). A row opens in place to the full chart, times and source; a lone
+   instrument renders open. Keeps 44 px targets. */
+.dash-markets .dash-card-head { flex-wrap: wrap; }
+.dash-markets .dash-ranges { display: flex; background: var(--bg); }
+.dash-markets .dash-ranges button { min-height: var(--tap); padding: 0 10px; font-size: .8rem; }
+.dash-market-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dash-market-list > li + li { border-top: 1px solid var(--line); }
+.dash-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dash-row-heading { margin: 0; font: inherit; }
+.dash-row-head {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--tap); padding: 8px 0;
+  background: none; border: 0; border-radius: 0; color: var(--text); font: inherit; text-align: left;
+}
+button.dash-row-head { cursor: pointer; }
+button.dash-row-head:focus-visible { outline: 2px solid var(--ios-indigo); outline-offset: 2px; border-radius: 8px; }
+.dash-row-name { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dash-row-title { margin: 0; font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
+.dash-row-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--muted); font-size: .78rem; }
+.dash-row-sub:empty { display: none; }
+.dash-row-sub .dash-chip { padding: 0 6px; font-size: .7rem; }
+.dash-row-sub .dash-note { font-size: .78rem; }
+.dash-spark { flex: 0 0 64px; width: 64px; height: 24px; }
+.dash-spark polyline { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.dash-spark-up polyline { stroke: var(--done); }
+.dash-spark-down polyline { stroke: var(--danger); }
+.dash-row-value { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-variant-numeric: tabular-nums; }
+.dash-row .dash-price { font-size: 1rem; font-weight: 650; line-height: 1.2; }
+.dash-row .dash-change { font-size: .8rem; }
+.dash-row-body { display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; min-width: 0; }
+.dash-row-meta { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dash-markets-hint { margin: 0; }
+.dash-private { padding: 8px 0; gap: 2px; }
+.dash-row-private-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

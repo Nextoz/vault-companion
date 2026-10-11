@@ -1,12 +1,12 @@
 // Dashboard (DASH1): read-only overview. One card per watched item (WL2) with a 1W/1M/3M/1Y series, honest overview
 // cards, and the AB3b AI usage panel (fed from App). No writes, no provider calls from the browser.
 import type { AiBudgetResponse, AiUsageResponse, DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketSeries, MarketTickerResponse, PrivateValuationCard, WatchCard, WeatherCard } from '@vault-companion/contracts';
-import { useCallback, useEffect, useId, useMemo, useState, type PointerEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState, type PointerEvent, type ReactNode } from 'react';
 import { getDashboard, getMarketTicker, type Fetched } from '../api.ts';
 import './Dashboard.css';
 import { AiUsagePanel } from './AiUsagePanel.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
-import { formatChange, formatPrivateValuation, formatWatchPrice, formatWatchValue, legacyMarketCard, privateValuationCards, seriesChange, watchCards, watchDelayLabel, watchFresh, watchTitle } from './watchlist.ts';
+import { formatChange, formatPrivateValuation, formatWatchPrice, formatWatchValue, legacyMarketCard, privateValuationCards, seriesChange, watchCards, watchDelayLabel, watchFresh, watchRowTitle, watchSubtitle, watchTitle, type WatchChange } from './watchlist.ts';
 import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
 
 export const TICKER_POLL_MS = 60_000;
@@ -126,90 +126,178 @@ function Chart({ series, title, formatValue = (value: number) => money.format(va
   );
 }
 
-function MarketView({ card, stale, onDrillthrough }: {
-  card: MarketCard; stale: boolean; onDrillthrough?: ((view: string) => void) | undefined;
+type RowStatus = 'Live' | 'Stale' | 'Unavailable';
+
+/** A row's sparkline (D1): the range's closes, split at provider gaps like the full chart, coloured by direction. */
+function Sparkline({ series, direction }: { series: MarketSeries; direction: WatchChange['direction'] }) {
+  const points = series.points;
+  const segments = useMemo(() => seriesSegments(series), [series]);
+  const closes = points.map((point) => point.close);
+  const min = Math.min(...closes);
+  const span = Math.max(...closes) - min || 1;
+  const W = 64;
+  const H = 24;
+  const x = (index: number) => 1 + (index * (W - 2)) / Math.max(1, points.length - 1);
+  const y = (value: number) => H - 2 - ((value - min) / span) * (H - 4);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className={`dash-spark dash-spark-${direction}`} aria-hidden="true">
+      {segments.filter((segment) => segment.length > 1).map((segment, index) => (
+        <polyline key={index} points={segment.map((i) => `${x(i)},${y(points[i]!.close)}`).join(' ')} />
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * D1 row head: name and sub line, a sparkline, price and range change. With `onToggle` it is the button that opens the
+ * row; a lone row has nothing to compress and renders open without one. A non-Live status sits in the sub line while
+ * the row is closed and moves into the body when open, so exactly one status chip is ever shown.
+ */
+function RowHead({ title, sub, series, price, change, status, open, onToggle }: {
+  title: string; sub: ReactNode; series: MarketSeries | null; price: string | null; change: WatchChange | null;
+  status: RowStatus; open: boolean; onToggle: (() => void) | null;
 }) {
-  const headingId = useId();
+  const content = (
+    <>
+      <span className="dash-row-name">
+        <span className="dash-row-title">{title}</span>
+        <span className="dash-row-sub">
+          {sub}
+          {!open && status !== 'Live' && <span className={`dash-chip dash-chip-${status.toLowerCase()}`}>{status}</span>}
+        </span>
+      </span>
+      {!open && series && series.points.length > 1 && <Sparkline series={series} direction={change?.direction ?? 'up'} />}
+      <span className="dash-row-value">
+        {price !== null && <span className="dash-price">{price}</span>}
+        {change && <span className={`dash-change dash-change-${change.direction}`}>{formatChange(change)}</span>}
+      </span>
+    </>
+  );
+  return (
+    <h3 className="dash-row-heading">
+      {onToggle
+        ? <button type="button" className="dash-row-head" aria-expanded={open} onClick={onToggle}>{content}</button>
+        : <span className="dash-row-head">{content}</span>}
+    </h3>
+  );
+}
+
+/** The opened row: status, provider and fetch times, the inspectable chart, gaps note, source and drill-through. */
+function RowBody({ status, providerTime, fetchedAt, stale, chart, missingIntervals, rangeLabel, provenance, drillthrough, onDrillthrough }: {
+  status: RowStatus; providerTime: string | null; fetchedAt: string | null; stale: boolean; chart: ReactNode;
+  missingIntervals: number; rangeLabel: string | null; provenance: string; drillthrough: { label: string; view: string } | null;
+  onDrillthrough?: ((view: string) => void) | undefined;
+}) {
+  return (
+    <div className="dash-row-body">
+      <p className="dash-row-meta">
+        <span className={`dash-chip dash-chip-${status.toLowerCase()}`}>{status}</span>
+        {rangeLabel && <span className="muted small">Change over {rangeLabel}</span>}
+      </p>
+      {providerTime && (
+        <p className="dash-times muted small">
+          Market time <time dateTime={providerTime}>{formatInstant(providerTime)}</time>
+          {fetchedAt && <> · fetched <time dateTime={fetchedAt}>{formatInstant(fetchedAt)}</time></>}
+        </p>
+      )}
+      {stale && status !== 'Unavailable' && <p className="dash-stale" role="status">This value is not fresh — showing the last one we have.</p>}
+      {chart}
+      {missingIntervals > 0 && <p className="muted small">{missingIntervals} intervals missing — shown as gaps, not filled in.</p>}
+      <p className="muted small">{provenance}</p>
+      {drillthrough && <button type="button" className="link" onClick={() => onDrillthrough?.(drillthrough.view)}>{drillthrough.label}</button>}
+    </div>
+  );
+}
+
+interface RowProps {
+  stale: boolean;
+  open: boolean;
+  onToggle: (() => void) | null;
+  onDrillthrough?: ((view: string) => void) | undefined;
+}
+
+/** The legacy BTC/USD market card as one D1 row (shown only when the response has no watchlist cards). */
+function MarketView({ card, stale, open, onToggle, onDrillthrough }: RowProps & { card: MarketCard }) {
   const [selection, setSelection] = useState<number | null>(null);
   const seriesKey = card.status === 'ok' && card.series ? card.series.range + ':' + card.series.points.length : 'none';
   useEffect(() => setSelection(null), [seriesKey]);
-  const status = card.status === 'unavailable' ? 'Unavailable' : stale ? 'Stale' : 'Live';
+  const status: RowStatus = card.status === 'unavailable' ? 'Unavailable' : stale ? 'Stale' : 'Live';
+  const series = card.status === 'ok' ? card.series : null;
   return (
-    <article className="dash-card dash-market" aria-labelledby={headingId} aria-busy={stale}>
-      <header className="dash-card-head">
-        <h2 id={headingId}>{card.title}</h2>
-        <span className={`dash-chip dash-chip-${status.toLowerCase()}`}>{status}</span>
-      </header>
-
-      {card.status === 'unavailable' ? (
-        <p className="dash-note" role="status">{card.note ?? 'Market data is unavailable.'}</p>
-      ) : (
-        <>
-          <p className="dash-price">{money.format(card.ticker.price)}</p>
-          <p className="dash-times muted small">
-            Market time <time dateTime={card.ticker.providerTime}>{formatInstant(card.ticker.providerTime)}</time>
-            {card.fetchedAt && <> · fetched <time dateTime={card.fetchedAt}>{formatInstant(card.fetchedAt)}</time></>}
-          </p>
-          {stale && <p className="dash-stale" role="status">This value is not fresh — showing the last one we have.</p>}
-          {card.series
-            ? <>
-                <Chart series={card.series} title={card.title} active={selection} onInspect={setSelection} />
-                {card.series.missingIntervals > 0 && <p className="muted small">{card.series.missingIntervals} intervals missing — shown as gaps, not filled in.</p>}
-              </>
+    <article className={`dash-row dash-market${open ? ' dash-row-open' : ''}`} aria-label={card.title} aria-busy={stale}>
+      <RowHead
+        title={card.title}
+        sub={card.status === 'unavailable' ? <span className="dash-note">{card.note ?? 'Market data is unavailable.'}</span> : null}
+        series={series}
+        price={card.status === 'ok' ? money.format(card.ticker.price) : null}
+        change={seriesChange(series)}
+        status={status}
+        open={open}
+        onToggle={onToggle}
+      />
+      {open && (
+        <RowBody
+          status={status}
+          providerTime={card.status === 'ok' ? card.ticker.providerTime : null}
+          fetchedAt={card.status === 'ok' ? card.fetchedAt : null}
+          stale={stale}
+          chart={card.status !== 'ok' ? null : series
+            ? <Chart series={series} title={card.title} active={selection} onInspect={setSelection} />
             : <p className="dash-note" role="status">{card.note ?? 'History is unavailable.'}</p>}
-        </>
+          missingIntervals={series?.missingIntervals ?? 0}
+          rangeLabel={series && seriesChange(series) ? RANGE_LABELS[series.range] : null}
+          provenance={card.provenance}
+          drillthrough={card.drillthrough}
+          onDrillthrough={onDrillthrough}
+        />
       )}
-      <p className="muted small">{card.provenance}</p>
-      {card.drillthrough && <button type="button" className="link" onClick={() => onDrillthrough?.(card.drillthrough!.view)}>{card.drillthrough.label}</button>}
     </article>
   );
 }
 
-/** WL2: one watched item, laid out like the market card. Title and price come from the item/ticker, the change from the
- * series; an unavailable card carries its honest reason note and never a stale number. */
-function WatchView({ card, stale, onDrillthrough }: {
-  card: WatchCard; stale: boolean; onDrillthrough?: ((view: string) => void) | undefined;
-}) {
-  const headingId = useId();
+/** WL2: one watched item as a D1 row. Title and price come from the item/ticker, the change from the series; an
+ * unavailable item shows its honest reason note in place of a number, never a stale value. */
+function WatchView({ card, stale, open, onToggle, onDrillthrough }: RowProps & { card: WatchCard }) {
   const [selection, setSelection] = useState<number | null>(null);
   const seriesKey = card.status === 'ok' && card.series ? card.series.range + ':' + card.series.points.length : 'none';
   useEffect(() => setSelection(null), [seriesKey]);
-  const status = card.status === 'unavailable' ? 'Unavailable' : stale ? 'Stale' : 'Live';
-  const change = card.status === 'ok' ? seriesChange(card.series) : null;
+  const status: RowStatus = card.status === 'unavailable' ? 'Unavailable' : stale ? 'Stale' : 'Live';
+  const series = card.status === 'ok' ? card.series : null;
   const delay = watchDelayLabel(card);
+  const subtitle = watchSubtitle(card);
   return (
-    <article className="dash-card dash-watch" aria-labelledby={headingId} aria-busy={stale}>
-      <header className="dash-card-head">
-        <h2 id={headingId}>{watchTitle(card)}</h2>
-        {delay && <span className="dash-chip dash-chip-delayed">{delay}</span>}
-        <span className={`dash-chip dash-chip-${status.toLowerCase()}`}>{status}</span>
-      </header>
-
-      {card.status === 'unavailable' ? (
-        <p className="dash-note" role="status">{card.note ?? 'Market data is unavailable.'}</p>
-      ) : (
-        <>
-          <p className="dash-price">{formatWatchPrice(card)}</p>
-          {change && (
-            <p className={`dash-change dash-change-${change.direction}`}>
-              {formatChange(change)} <span className="muted">over {RANGE_LABELS[card.series!.range]}</span>
-            </p>
-          )}
-          <p className="dash-times muted small">
-            Market time <time dateTime={card.ticker.providerTime}>{formatInstant(card.ticker.providerTime)}</time>
-            {card.fetchedAt && <> · fetched <time dateTime={card.fetchedAt}>{formatInstant(card.fetchedAt)}</time></>}
-          </p>
-          {stale && <p className="dash-stale" role="status">This value is not fresh — showing the last one we have.</p>}
-          {card.series
-            ? <>
-                <Chart series={card.series} title={watchTitle(card)} formatValue={(value) => formatWatchValue(card, value)} active={selection} onInspect={setSelection} />
-                {card.series.missingIntervals > 0 && <p className="muted small">{card.series.missingIntervals} intervals missing — shown as gaps, not filled in.</p>}
-              </>
+    <article className={`dash-row dash-watch${open ? ' dash-row-open' : ''}`} aria-label={watchTitle(card)} aria-busy={stale}>
+      <RowHead
+        title={watchRowTitle(card)}
+        sub={card.status === 'unavailable'
+          ? <span className="dash-note">{card.note ?? 'Market data is unavailable.'}</span>
+          : <>
+              {subtitle && <span>{subtitle}</span>}
+              {delay && <span className="dash-chip dash-chip-delayed">{delay}</span>}
+            </>}
+        series={series}
+        price={card.status === 'ok' ? formatWatchPrice(card) : null}
+        change={seriesChange(series)}
+        status={status}
+        open={open}
+        onToggle={onToggle}
+      />
+      {open && (
+        <RowBody
+          status={status}
+          providerTime={card.status === 'ok' ? card.ticker.providerTime : null}
+          fetchedAt={card.status === 'ok' ? card.fetchedAt : null}
+          stale={stale}
+          chart={card.status !== 'ok' ? null : series
+            ? <Chart series={series} title={watchTitle(card)} formatValue={(value) => formatWatchValue(card, value)} active={selection} onInspect={setSelection} />
             : <p className="dash-note" role="status">{card.note ?? 'Current value only.'}</p>}
-        </>
+          missingIntervals={series?.missingIntervals ?? 0}
+          rangeLabel={series && seriesChange(series) ? RANGE_LABELS[series.range] : null}
+          provenance={card.provenance}
+          drillthrough={card.drillthrough}
+          onDrillthrough={onDrillthrough}
+        />
       )}
-      <p className="muted small">{card.provenance}</p>
-      {card.drillthrough && <button type="button" className="link" onClick={() => onDrillthrough?.(card.drillthrough!.view)}>{card.drillthrough.label}</button>}
     </article>
   );
 }
@@ -255,9 +343,9 @@ function OverviewCard({ card, onDrillthrough }: { card: DashboardCard; onDrillth
 function PrivateValuationView({ card }: { card: PrivateValuationCard }) {
   const headingId = useId();
   return (
-    <article className="dash-card dash-private" aria-labelledby={headingId}>
-      <header className="dash-card-head">
-        <h2 id={headingId}>{card.title}</h2>
+    <article className="dash-row dash-private" aria-labelledby={headingId}>
+      <header className="dash-row-private-head">
+        <h3 id={headingId} className="dash-row-title">{card.title}</h3>
         <span className="dash-chip dash-chip-private">Private</span>
       </header>
       {card.status === 'unavailable' ? (
@@ -265,10 +353,13 @@ function PrivateValuationView({ card }: { card: PrivateValuationCard }) {
       ) : (
         <>
           <p className="dash-private-value">{formatPrivateValuation(card)}</p>
-          <a className="dash-private-source" href={card.item.source.url} target="_blank" rel="noopener noreferrer">Source: {card.item.source.label}</a>
+          <p className="dash-private-meta muted small">
+            <a className="dash-private-source" href={card.item.source.url} target="_blank" rel="noopener noreferrer">Source: {card.item.source.label}</a>
+            {' · '}{card.provenance}
+          </p>
         </>
       )}
-      <p className="muted small">{card.provenance}</p>
+      {card.status === 'unavailable' && <p className="muted small">{card.provenance}</p>}
     </article>
   );
 }
@@ -348,33 +439,49 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough, aiUsa
   const stale = notLive || (market !== null && tickerFailed) || marketStale || watchesStale;
   const weatherStale = notLive || (weather !== null && weather.status === 'ok' && shown !== null && !weatherFresh(weather.projection, nowMs));
   const tiles = shown ? overviewTiles(shown.cards) : [];
+  const marketsId = useId();
+  // D1: two or more instruments become tappable rows, one open at a time; a lone instrument has nothing to compress.
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  const compact = (market ? 1 : 0) + watches.length > 1;
+  const rowState = (key: string) => ({
+    open: !compact || openRow === key,
+    onToggle: compact ? () => setOpenRow((current) => (current === key ? null : key)) : null,
+  });
   const watchRetry = watches.some((card) => card.status === 'unavailable' || (card.status === 'ok' && !card.series));
 
   return (
     <section className="dash" aria-label="Dashboard">
       <h2 className="dash-heading">Dashboard</h2>
-      <div className="segmented dash-ranges" role="group" aria-label="Chart range">
-        {DASHBOARD_RANGES.map((r) => (
-          <button key={r} type="button" aria-pressed={range === r} onClick={() => onRange(r)}>{r}</button>
-        ))}
-      </div>
       <CopyNote view={view} />
       {!shown && !failed && <p className="muted" role="status">Loading…</p>}
       {!shown && failed && <p className="dash-note" role="status">The dashboard could not be loaded.</p>}
       {(failed || view.failed || market?.status === 'unavailable' || (market?.status === 'ok' && !market.series) || watchRetry) && <button type="button" className="link" onClick={() => setRetryKey((previous) => previous + 1)}>Retry dashboard</button>}
       {shown && stale && !isCopy && <p className="dash-stale" role="status">Not refreshed — the times below are from the last success.</p>}
-      {shown && market && <MarketView card={market} stale={stale} onDrillthrough={onDrillthrough} />}
-      {shown && watches.length > 0 && (
-        <div className="dash-watches">
-          {watches.map((card) => (
-            <WatchView key={card.item.symbol} card={card} stale={notLive || !watchFresh(card, nowMs, MARKET_STALE_MS)} onDrillthrough={onDrillthrough} />
-          ))}
-        </div>
-      )}
+      <section className="dash-card dash-markets" aria-labelledby={marketsId}>
+        <header className="dash-card-head">
+          <h2 id={marketsId}>Markets</h2>
+          <div className="segmented dash-ranges" role="group" aria-label="Chart range">
+            {DASHBOARD_RANGES.map((r) => (
+              <button key={r} type="button" aria-pressed={range === r} onClick={() => onRange(r)}>{r}</button>
+            ))}
+          </div>
+        </header>
+        {shown && (market || watches.length > 0 || privateValuations.length > 0) && (
+          <ul className="dash-market-list">
+            {market && <li><MarketView card={market} stale={stale} {...rowState('market')} onDrillthrough={onDrillthrough} /></li>}
+            {watches.map((card) => (
+              <li key={card.item.symbol}>
+                <WatchView card={card} stale={notLive || !watchFresh(card, nowMs, MARKET_STALE_MS)} {...rowState(card.item.symbol)} onDrillthrough={onDrillthrough} />
+              </li>
+            ))}
+            {privateValuations.map((card) => (
+              <li key={card.status === 'ok' ? card.item.id : `unavailable:${card.reason}`}><PrivateValuationView card={card} /></li>
+            ))}
+          </ul>
+        )}
+        {compact && <p className="dash-markets-hint muted small">Tap a row for its chart, times and source.</p>}
+      </section>
       {shown && weather && <WeatherCardView card={weather} stale={weatherStale} onDrillthrough={onDrillthrough} />}
-      {privateValuations.map((card) => (
-        <PrivateValuationView key={card.status === 'ok' ? card.item.id : `unavailable:${card.reason}`} card={card} />
-      ))}
       {tiles.length > 0 && (
         <div className="dash-tiles">
           {tiles.map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}

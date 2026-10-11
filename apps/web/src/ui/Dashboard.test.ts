@@ -169,13 +169,78 @@ describe('watchlist cards (WL2)', () => {
     await render([nvidia, watch(), ...overviewCards]);
     const cards = [...document.querySelectorAll('.dash-watch')];
     const stockCard = cards.find((card) => card.textContent?.includes('NVIDIA'))!;
-    expect(stockCard.textContent).toContain('NVIDIA (NVDA)');
+    expect(stockCard.getAttribute('aria-label')).toBe('NVIDIA (NVDA)');
+    expect(stockCard.querySelector('.dash-row-title')!.textContent).toBe('NVIDIA');
+    expect(stockCard.querySelector('.dash-row-sub')!.textContent).toContain('NVDA');
     expect(stockCard.querySelector('.dash-chip-delayed')!.textContent).toBe('Delayed');
+    // Two instruments are compact rows: the provider time is one tap away.
+    expect(stockCard.textContent).not.toContain('Market time');
+    await click(stockCard.querySelector('button.dash-row-head')!);
     expect(stockCard.textContent).toContain('Market time');
     expect(stockCard.textContent).toContain('12:00 UTC');
     expect(stockCard.textContent).toContain('$229.28');
     const cryptoCard = cards.find((card) => card.textContent?.includes('BTC / USD'))!;
     expect(cryptoCard.querySelector('.dash-chip-delayed')).toBeNull();
+  });
+});
+
+describe('D1 compact market rows', () => {
+  const eth = () => watch({ item: { symbol: 'ETH-USD', type: 'crypto' }, ticker: { base: 'ETH', quote: 'USD', provider: 'coinbase', price: 2970, providerTime: NOW }, series: watchSeries([3_000, 2_970]) });
+
+  it('shows two or more instruments as closed rows: name, sparkline, price and change, no chart', async () => {
+    await render([watch(), eth(), ...overviewCards]);
+    const rows = [...document.querySelectorAll('.dash-watch')];
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      const head = row.querySelector('button.dash-row-head')!;
+      expect(head.getAttribute('aria-expanded')).toBe('false');
+      expect(row.querySelector('svg.dash-spark')).not.toBeNull();
+      expect(row.querySelector('.dash-price')).not.toBeNull();
+    }
+    expect(document.querySelector('.dash-svg')).toBeNull();
+    expect(document.querySelector('.dash-spark-down')).not.toBeNull(); // ETH fell, its sparkline says so
+    expect(text()).toContain('Tap a row for its chart, times and source.');
+  });
+
+  it('opens one row at a time in place, and closes it again', async () => {
+    await render([watch(), eth(), ...overviewCards]);
+    const [btc, ethRow] = [...document.querySelectorAll('.dash-watch')];
+    await click(btc!.querySelector('button.dash-row-head')!);
+    expect(btc!.querySelector('.dash-svg')).not.toBeNull();
+    expect(btc!.querySelector('svg.dash-spark')).toBeNull(); // the full chart replaces the sparkline
+    expect(btc!.textContent).toContain('Change over 1 week');
+    await click(ethRow!.querySelector('button.dash-row-head')!);
+    expect(btc!.querySelector('.dash-svg')).toBeNull();
+    expect(ethRow!.querySelector('.dash-svg')).not.toBeNull();
+    await click(ethRow!.querySelector('button.dash-row-head')!);
+    expect(document.querySelector('.dash-svg')).toBeNull();
+  });
+
+  it('shows a closed stale row as Stale on the row, and exactly one status chip when open', async () => {
+    const old = new Date(Date.parse(NOW) - MARKET_STALE_MS - 1_000).toISOString();
+    await render([watch({ fetchedAt: old }), eth(), ...overviewCards]);
+    const btc = document.querySelector('.dash-watch')!;
+    expect(btc.querySelector('.dash-row-sub .dash-chip-stale')!.textContent).toBe('Stale');
+    await click(btc.querySelector('button.dash-row-head')!);
+    expect(btc.querySelectorAll('.dash-chip-stale')).toHaveLength(1);
+    expect(btc.textContent).toContain('This value is not fresh');
+  });
+
+  it('keeps a lone instrument open with no toggle: nothing to compress', async () => {
+    await render([watch(), ...overviewCards]);
+    expect(document.querySelector('button.dash-row-head')).toBeNull();
+    expect(document.querySelector('.dash-svg')).not.toBeNull();
+    expect(text()).not.toContain('Tap a row');
+  });
+
+  it('names gold by its metal with a Futures sub line and the Delayed mark', async () => {
+    const gold = watch({ item: { symbol: 'GC=F', type: 'stock' }, title: 'Gold', provenance: 'Yahoo Finance', ticker: { base: 'GC=F', quote: 'USD', provider: 'Yahoo Finance', price: 4216.3, providerTime: NOW }, series: watchSeries([4140.7, 4216.3]) });
+    await render([gold, eth(), ...overviewCards]);
+    const row = [...document.querySelectorAll('.dash-watch')].find((card) => card.getAttribute('aria-label') === 'Gold (GC=F)')!;
+    expect(row.querySelector('.dash-row-title')!.textContent).toBe('Gold');
+    expect(row.querySelector('.dash-row-sub')!.textContent).toBe('FuturesDelayed');
+    expect(row.querySelector('.dash-price')!.textContent).toBe('$4,216.30');
+    expect(row.querySelector('.dash-change-up')!.textContent).toBe('+1.83%');
   });
 });
 

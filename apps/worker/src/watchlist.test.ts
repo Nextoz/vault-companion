@@ -22,7 +22,7 @@ import {
   type WatchItem,
 } from './watchlist.ts';
 
-const yahooFixture = (symbol: 'NVDA' | 'SPCX'): unknown => JSON.parse(readFileSync(new URL(`../test/fixtures/yahoo-${symbol}-1y.json`, import.meta.url), 'utf8'));
+const yahooFixture = (symbol: 'NVDA' | 'SPCX' | 'GCF'): unknown => JSON.parse(readFileSync(new URL(`../test/fixtures/yahoo-${symbol}-1y.json`, import.meta.url), 'utf8'));
 
 const NOW_MS = Date.parse('2026-09-30T12:00:00Z');
 const G = DASHBOARD_RANGE_PLAN['1W'].granularitySeconds;
@@ -147,15 +147,20 @@ describe('fx adapter (Bank of Russia XML)', () => {
 });
 
 describe('watchlist config (WL4a)', () => {
-  it('has unique symbols and every stock has a real Yahoo ticker symbol', () => {
+  it('has unique symbols and every stock has a real Yahoo ticker or futures symbol', () => {
     const symbols = WATCHLIST.map((item) => item.symbol);
     expect(new Set(symbols).size).toBe(symbols.length);
     for (const item of WATCHLIST) {
       if (item.type !== 'stock') continue;
-      expect(item.symbol).toMatch(/^[A-Z.]{1,6}$/);
+      // Yahoo names a futures contract with "=F" (gold: GC=F); anything else is a plain ticker.
+      expect(item.symbol).toMatch(/^[A-Z.]{1,6}(=F)?$/);
       expect(item.base).toBe(item.symbol);
       expect(item.quote).toBe('USD');
     }
+  });
+
+  it('watches gold as a Yahoo futures quote in USD', () => {
+    expect(WATCHLIST).toContainEqual({ symbol: 'GC=F', type: 'stock', name: 'Gold', base: 'GC=F', quote: 'USD' });
   });
 
   it('watches NVIDIA and SpaceX as stocks beside crypto/fx', () => {
@@ -175,6 +180,18 @@ describe('stock adapter (Yahoo Finance)', () => {
     for (const range of ['1W', '1M', '3M', '1Y'] as const) await expect(adapter.series(nvda, range)).resolves.toMatchObject({ status: 'ok', series: { range } });
     expect(urls).toHaveLength(1);
     expect(urls[0]).toContain('query1.finance.yahoo.com/v8/finance/chart/NVDA');
+  });
+
+  it('reads gold futures (GC=F) through the same adapter, and still refuses any other odd symbol before fetching', async () => {
+    const gold: WatchItem = { symbol: 'GC=F', type: 'stock', name: 'Gold', base: 'GC=F', quote: 'USD' };
+    const urls: string[] = [];
+    const adapter = createStockAdapter({ now: () => NOW_MS, fetch: async (url) => { urls.push(String(url)); return json(yahooFixture('GCF')); } });
+    await expect(adapter.ticker(gold)).resolves.toMatchObject({ status: 'ok', ticker: { base: 'GC=F', quote: 'USD', price: 4216.3 } });
+    expect(urls).toEqual(['https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?range=1y&interval=1d']);
+    for (const symbol of ['GC=X', 'gc=f', 'GC=F=F', 'NVDA/../x', 'TOOLONG']) {
+      await expect(adapter.ticker({ ...gold, symbol, base: symbol })).resolves.toEqual({ status: 'unavailable', reason: 'malformed' });
+    }
+    expect(urls).toHaveLength(1);
   });
 
   it.each([429, 403, 500, 503])('treats HTTP %i as an unavailable row, never a value', async (status) => {

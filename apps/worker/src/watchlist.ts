@@ -43,6 +43,8 @@ export const WATCHLIST: readonly WatchItem[] = [
   { symbol: 'SEK/DKK', type: 'fx', name: 'SEK / DKK', base: 'SEK', quote: 'DKK' },
   { symbol: 'NVDA', type: 'stock', name: 'NVIDIA', base: 'NVDA', quote: 'USD' },
   { symbol: 'SPCX', type: 'stock', name: 'SpaceX', base: 'SPCX', quote: 'USD' },
+  // COMEX gold futures (front month) on Yahoo's chart: USD per troy ounce, delayed like the stocks.
+  { symbol: 'GC=F', type: 'stock', name: 'Gold', base: 'GC=F', quote: 'USD' },
 ];
 
 export type WatchTickerOutcome =
@@ -308,8 +310,11 @@ export function createFxAdapter(deps: WatchAdapterDeps): WatchAdapter {
 
 // ---- stock: Yahoo Finance chart (keyless, unofficial). ONE fetch per symbol feeds the ticker and every range ----
 
-/** Yahoo tickers are uppercase letters/dots (BRK.B style); anything else is refused before the provider is called. */
-const STOCK_SYMBOL = /^[A-Z.]{1,6}$/;
+/**
+ * Yahoo tickers are uppercase letters/dots (BRK.B style), optionally a futures contract's "=F" (gold: GC=F); anything
+ * else is refused before the provider is called.
+ */
+const STOCK_SYMBOL = /^[A-Z.]{1,6}(=F)?$/;
 
 type StockLoad = { readonly ok: true; readonly quote: StockQuote } | { readonly ok: false; readonly reason: MarketUnavailableReason };
 
