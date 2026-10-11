@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bindUndoTarget, editTask, exportText, isUndoDraft, logLearning, reportFeedback, undoLogLearning, undoLogLearningDraft, undoReportFeedback, undoReportFeedbackDraft } from './commands.ts';
+import { bindUndoTarget, editTask, exportText, isUndoDraft, logLearning, logReading, reportFeedback, saveReflection, startBook, undoLogLearning, undoLogLearningDraft, undoLogReading, undoLogReadingDraft, undoReportFeedback, undoReportFeedbackDraft, undoSaveReflection, undoSaveReflectionDraft, undoStartBook, undoStartBookDraft } from './commands.ts';
 import { Command, type TaskLocator } from '@vault-companion/contracts';
 
 const task: TaskLocator = { path: 'Tasks/To-Do List.md', blobSha: '2'.repeat(40), lineIndex: 10,
@@ -82,6 +82,74 @@ describe('logLearning (ADR-0053)', () => {
     const token = 'b'.repeat(40);
     const undo = undoLogLearning(ctx, target, token);
     expect(undo).toMatchObject({ type: 'UndoLogLearning', payload: { target, targetCommit: token } });
+    expect(Command.safeParse(undo).success).toBe(true);
+    expect(exportText(undo)).toBe(exportText(target));
+  });
+});
+
+const openBook = () => startBook(ctx, { title: 'Synthetic Book', author: 'A. Author', totalPages: 120 });
+
+describe('startBook / logReading / saveReflection (READ1-A2, ADR-0062)', () => {
+  it('mints validated envelopes and exports their payload', () => {
+    const started = openBook();
+    expect(started).toMatchObject({ type: 'StartBook', operationId: ctx.newId(), baseRevision: ctx.baseRevision, schemaVersion: 1 });
+    expect(started.payload).toEqual({ title: 'Synthetic Book', author: 'A. Author', totalPages: 120 });
+    expect(exportText(started)).toContain('Synthetic Book');
+
+    const logged = logReading(ctx, { title: 'Synthetic Book', page: 40, date: '2026-10-11' });
+    expect(logged).toMatchObject({ type: 'LogReading', operationId: ctx.newId(), baseRevision: ctx.baseRevision, schemaVersion: 1 });
+    expect(logged.payload).toEqual({ title: 'Synthetic Book', page: 40, date: '2026-10-11' });
+
+    // The export-text switch must know SaveReflection: a missing case would fall through to the wrong text.
+    const reflection = saveReflection(ctx, { title: 'Synthetic Book', date: '2026-10-11', text: 'A synthetic thought.' });
+    expect(reflection).toMatchObject({ type: 'SaveReflection', operationId: ctx.newId(), baseRevision: ctx.baseRevision, schemaVersion: 1 });
+    expect(exportText(reflection)).toContain('A synthetic thought.');
+    expect(Command.safeParse(reflection).success).toBe(true);
+  });
+  it('refuses a zero page count, a bad date and a multiline author on the wire', () => {
+    expect(() => startBook(ctx, { title: 'x', author: 'y', totalPages: 0 })).toThrow();
+    expect(() => startBook(ctx, { title: 'x', author: 'two\nlines', totalPages: 10 })).toThrow();
+    expect(() => logReading(ctx, { title: 'x', page: 5, date: '2026-02-30' })).toThrow();
+  });
+});
+
+describe('reading Undos (READ1-A2)', () => {
+  it('Start book: a draft without a token, then a checked, tokenised Undo that exports its target', () => {
+    const target = openBook();
+    const draft = undoStartBookDraft(ctx, target);
+    expect(draft).toMatchObject({ type: 'UndoStartBook', payload: { target } });
+    expect(isUndoDraft(draft)).toBe(true);
+    expect(() => Command.parse(draft)).toThrow();
+    expect(bindUndoTarget(draft, target)).toMatchObject({ type: 'UndoStartBook', payload: { target } });
+    const token = 'c'.repeat(40);
+    const undo = undoStartBook(ctx, target, token);
+    expect(undo).toMatchObject({ type: 'UndoStartBook', payload: { target, targetCommit: token } });
+    expect(Command.safeParse(undo).success).toBe(true);
+    expect(exportText(undo)).toBe(exportText(target));
+  });
+  it('Log reading: a draft without a token, then a checked, tokenised Undo that exports its target', () => {
+    const target = logReading(ctx, { title: 'Synthetic Book', page: 40, date: '2026-10-11' });
+    const draft = undoLogReadingDraft(ctx, target);
+    expect(draft).toMatchObject({ type: 'UndoLogReading', payload: { target } });
+    expect(isUndoDraft(draft)).toBe(true);
+    expect(() => Command.parse(draft)).toThrow();
+    expect(bindUndoTarget(draft, target)).toMatchObject({ type: 'UndoLogReading', payload: { target } });
+    const token = 'd'.repeat(40);
+    const undo = undoLogReading(ctx, target, token);
+    expect(undo).toMatchObject({ type: 'UndoLogReading', payload: { target, targetCommit: token } });
+    expect(Command.safeParse(undo).success).toBe(true);
+    expect(exportText(undo)).toBe(exportText(target));
+  });
+  it('Reflection: a draft without a token, then a checked, tokenised Undo that exports its target', () => {
+    const target = saveReflection(ctx, { title: 'Synthetic Book', date: '2026-10-11', text: 'A synthetic thought.' });
+    const draft = undoSaveReflectionDraft(ctx, target);
+    expect(draft).toMatchObject({ type: 'UndoSaveReflection', payload: { target } });
+    expect(isUndoDraft(draft)).toBe(true);
+    expect(() => Command.parse(draft)).toThrow();
+    expect(bindUndoTarget(draft, target)).toMatchObject({ type: 'UndoSaveReflection', payload: { target } });
+    const token = 'e'.repeat(40);
+    const undo = undoSaveReflection(ctx, target, token);
+    expect(undo).toMatchObject({ type: 'UndoSaveReflection', payload: { target, targetCommit: token } });
     expect(Command.safeParse(undo).success).toBe(true);
     expect(exportText(undo)).toBe(exportText(target));
   });

@@ -1168,7 +1168,22 @@ textarea:focus-visible {
 .learning-trends { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-wrap: wrap; gap: 8px 14px; }
 .learning-trends li { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
 .learning-spark { width: 40px; height: 16px; fill: none; stroke: var(--chart, var(--accent)); stroke-width: 2; }
-.chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+/* READ1-A2: the Reading view - current book card, progress bar, reflections; no streaks or targets. */
+.reading-current { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 8px 0; }
+.reading-current h3 { margin: 0; overflow-wrap: anywhere; }
+.reading-current p { margin: 4px 0; }
+.reading-bar { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 6px 0; }
+.reading-bar span { display: block; height: 100%; background: var(--accent); }
+.reading-finished { font-weight: 600; }
+.reading-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.reading-actions button { min-height: var(--tap); }
+.reading-reflections ul, .reading-books { list-style: none; padding: 0; margin: 0; }
+.reading-reflections li { border-bottom: 1px solid var(--line); padding: 10px 0; overflow-wrap: anywhere; }
+.reading-reflections li:last-child { border-bottom: none; }
+.reading-reflections summary { cursor: pointer; min-height: var(--tap); }
+.reading-books li { border-bottom: 1px solid var(--line); }
+.reading-books button { display: block; width: 100%; text-align: left; padding: 10px 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.reading-sheet input, .reading-sheet textarea { min-width: 0; max-width: 100%; }.chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
 .chip-group button { min-height: var(--tap); padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
 .chip-group button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Progress Wall (ADR-0027) */

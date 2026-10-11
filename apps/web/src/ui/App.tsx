@@ -38,6 +38,7 @@ import { Training } from './Training.tsx';
 import { TrainingSheet } from './TrainingSheet.tsx';
 import { Learning } from './Learning.tsx';
 import { LearningSheet } from './LearningSheet.tsx';
+import { Reading } from './Reading.tsx';
 import { CharacterCard } from './CharacterCard.tsx';
 import { CharacterSheet } from './CharacterSheet.tsx';
 import { Triage } from './Triage.tsx';
@@ -55,7 +56,7 @@ const STALE_REREADS = 3;
 /** Review O6: consecutive stale reads after which the device offers to reset its saved-actions history. */
 export const STALE_BEFORE_RESET = 3;
 
-const ACTION_TABS: ReadonlySet<string> = new Set(['today', 'tasks', 'all', 'notes', 'training', 'learning', 'history']);
+const ACTION_TABS: ReadonlySet<string> = new Set(['today', 'tasks', 'all', 'notes', 'training', 'learning', 'reading', 'history']);
 const prefetcher = createPrefetcher(browserPrefetchDeps);
 
 export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: DraftStore; receipts: EventTarget }) {
@@ -363,7 +364,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   // Calm by default: the actions list sits below the tasks unless something needs the user.
   const needsAttention = snapshot.items.some((i) => i.state === 'attention');
   // GAM1-B: the four Log views share one segmented switch and the Character card above it.
-  const logView = tab === 'training' || tab === 'history' || tab === 'health' || tab === 'learning';
+  const logView = tab === 'training' || tab === 'history' || tab === 'health' || tab === 'learning' || tab === 'reading';
   const selectLogView = (next: Tab) => { setLogFromCharacter(false); setTab(next); };
   // ADR-0037 tokens: red = cannot work, yellow = something to see, green = settled.
   const statusDot = signedOut || readFailed || connection === 'error' || connection === 'offline'
@@ -489,6 +490,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
               <button type="button" aria-pressed={tab === 'history'} onClick={() => selectLogView('history')}>Progress</button>
               <button type="button" aria-pressed={tab === 'health'} onClick={() => selectLogView('health')}>Health</button>
               <button type="button" aria-pressed={tab === 'learning'} onClick={() => selectLogView('learning')}>Learning</button>
+              <button type="button" aria-pressed={tab === 'reading'} onClick={() => selectLogView('reading')}>Reading</button>
             </div>
           </>
         )}
@@ -502,6 +504,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {tab === 'health' && !signedOut && <HealthPanel key={`health:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
 
         {tab === 'learning' && !signedOut && <Learning key={`learning:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
+
+        {tab === 'reading' && !signedOut && <Reading key={`reading:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} open={captureOpen} onClose={() => setCaptureOpen(false)} />}
 
         {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
           accountKey={accountKey} baseRevision={revision} />}
@@ -588,7 +592,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
       <TabBar tab={tab} onSelect={(next) => { setLogFromCharacter(false); setTab(next); }} inert={noteOpen || editing !== null || characterOpen} />
 
-      <button type="button" className="fab" inert={noteOpen || editing !== null || characterOpen} onClick={() => setCaptureOpen(true)} aria-label={tab === 'training' ? 'Add training' : tab === 'learning' ? 'Add session' : 'Capture'}>
+      <button type="button" className="fab" inert={noteOpen || editing !== null || characterOpen} onClick={() => setCaptureOpen(true)} aria-label={tab === 'training' ? 'Add training' : tab === 'learning' ? 'Add session' : tab === 'reading' ? 'Log reading' : 'Capture'}>
         +
       </button>
 
@@ -606,7 +610,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
       {reportOpen && !signedOut && (
         <ReportSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} screen={screenName(tab)} onClose={() => setReportOpen(false)} />
       )}
-      {captureOpen && tab !== 'training' && tab !== 'learning' && (
+      {captureOpen && tab !== 'training' && tab !== 'learning' && tab !== 'reading' && (
         <CaptureSheet
           defaultKind={captureDefaultForTab(tab)}
           queue={queue}

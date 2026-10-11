@@ -10,6 +10,7 @@ import {
   MarketTickerResponse,
   TrainingResponse,
   LearningResponse,
+  BooksResponse,
   encodeLinkedNoteHeader,
   encodeNoteHeader,
   HistoryResponse,
@@ -207,6 +208,9 @@ export const postRadarDecision = (body: string, accountKey: string) =>
 
 export const getTraining = () => getJson('/api/training', z.union(TrainingResponse.options.map((option) => option.strip())));
 export const getLearning = () => getJson('/api/learning', z.union(LearningResponse.options.map((option) => option.strip())));
+
+/** Reading books (READ1-A2, ADR-0062): read-only projection of Books/; never cached by the SW. */
+export const getBooks = () => getJson('/api/books', z.union(BooksResponse.options.map((option) => option.strip())));
 
 /** Character projection (GAM1-B): read-only, `no-store`, never cached by the SW. Carries the live rules too. */
 export const getGame = () => getJson('/api/game', GameResponse.strip());
