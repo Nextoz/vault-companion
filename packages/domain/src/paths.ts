@@ -106,7 +106,9 @@ export function isExplainedNotePath(path: string): boolean {
  * owner's queue note and is never a write target (nor listed).
  */
 export function isBookNotePath(raw: string): boolean {
-  if (raw === READING_QUEUE_PATH || !raw.startsWith(`${BOOKS_DIR}/`) || !raw.endsWith('.md')) return false;
+  // Windows and macOS fold case: `Books/reading queue.md` is the owner's queue note on their desktop, so it must
+  // never be writable either (docs/vault-contract.md §1).
+  if (raw.toLowerCase() === READING_QUEUE_PATH.toLowerCase() || !raw.startsWith(`${BOOKS_DIR}/`) || !raw.endsWith('.md')) return false;
   const segments = raw.split('/');
   if (segments.length !== 2 || parseVaultPath(raw) !== raw) return false;
   const title = segments[1]!.slice(0, -'.md'.length);

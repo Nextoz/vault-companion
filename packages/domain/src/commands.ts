@@ -1,6 +1,6 @@
 // Application services: one WritePlan per command type (docs/commands.md) and the task read model.
 // Pure orchestration over the VaultStore port and the Markdown kernel; no HTTP, no GitHub.
-import { TRAINING_PATH, LEARNING_PATH, ACTIVE_WORK_PATH, MAX_KNOWN, MAX_TASK_LINE, bookNotePath, canonicalBookTitle, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type ResearchRadarDecideCommand, type TasksResponse, type TaskView } from '@vault-companion/contracts';
+import { BOOKS_DIR, TRAINING_PATH, LEARNING_PATH, ACTIVE_WORK_PATH, MAX_KNOWN, MAX_TASK_LINE, bookNotePath, canonicalBookTitle, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type ResearchRadarDecideCommand, type TasksResponse, type TaskView } from '@vault-companion/contracts';
 import * as md from '@vault-companion/vault-markdown';
 import { executeWrite, findInOnePage, replayOnParent, type Planned, type Refused, type WritePlan } from './execute.ts';
 import { MAX_NOTE_BYTES } from '@vault-companion/contracts';
@@ -623,8 +623,18 @@ export function startBookPlan(cmd: StartBookCommand): WritePlan<Receipt['effect'
       const path = bookPath(cmd.payload.title);
       if (!path) return refuse('refused:book-title-invalid', 'Book title cannot be used for a note name');
       if (!canWrite(path, 'create')) return refuse('refused:path', 'book path is not writable');
-      if (await store.readFile(path, at)) return refuse('refused:book-exists', 'That book note already exists');
       const title = canonicalBookTitle(cmd.payload.title)!;
+      // The owner's desktop (Windows) folds case, so a title differing only in case is the same note: list the folder
+      // at this revision and compare names case-insensitively (ADR-0062: an existing path is never overwritten).
+      let names: readonly string[];
+      try {
+        names = await store.listDir(BOOKS_DIR, at);
+      } catch (e) {
+        if (e instanceof FileTooLarge) return refuse('refused:too-large', 'the Books folder is too large to check for name collisions');
+        throw e;
+      }
+      const folded = `${title}.md`.toLowerCase();
+      if (names.some((name) => name.toLowerCase() === folded)) return refuse('refused:book-exists', 'That book note already exists');
       const bytes = encoder.encode(md.createBookNote({ title, author: cmd.payload.author, totalPages: cmd.payload.totalPages }));
       return { ok: true, path, expect: 'absent', bytes, effect: { kind: 'book', op: 'started', path } };
     },

@@ -46,7 +46,7 @@ async function setup(files: Record<string, string> = {}) {
 it('allowlists create and update only for Books/<Title>.md', () => {
   for (const kind of ['create', 'update'] as const) {
     expect(paths.canWrite(paths.parseVaultPath(BOOK)!, kind)).toBe(true);
-    for (const path of [READING_QUEUE_PATH, 'Books/nested/Book.md', 'Books/.hidden.md', 'Books/a|b.md', 'Other/Book.md']) {
+    for (const path of [READING_QUEUE_PATH, 'Books/reading queue.md', 'Books/READING QUEUE.md', 'Books/nested/Book.md', 'Books/.hidden.md', 'Books/a|b.md', 'Other/Book.md']) {
       const parsed = paths.parseVaultPath(path);
       if (parsed) expect(paths.canWrite(parsed, kind)).toBe(false);
     }
@@ -58,6 +58,7 @@ it('never writes Books/Reading Queue.md — the path guard refuses it', async ()
   const head = h.store.headCommit;
   const writes = h.store.writeCalls;
   expect(await h.run(h.command('SaveReflection', { title: 'Reading Queue', date: '2026-10-05', text: 'x' }))).toMatchObject({ code: 'refused:path' });
+  expect(await h.run(h.command('StartBook', { title: 'reading queue', author: '', totalPages: 10 }))).toMatchObject({ code: 'refused:path' });
   expect(paths.canWrite(paths.parseVaultPath(READING_QUEUE_PATH)!, 'update')).toBe(false);
   expect(h.store.writeCalls).toBe(writes);
   expect(h.store.headCommit).toBe(head);
@@ -85,6 +86,7 @@ it('StartBook creates a valid note, refuses the same title again and every inval
   for (const line of ['type: book', 'status: reading', 'author: Synthetic Author', 'totalPages: 100', '# Synthetic Book', '## Progress', '## Reflections']) expect(text).toContain(line);
 
   expect(await h.run(h.command('StartBook', { title: 'Synthetic Book', author: 'A', totalPages: 10 }))).toMatchObject({ code: 'refused:book-exists' });
+  expect(await h.run(h.command('StartBook', { title: 'synthetic book', author: 'A', totalPages: 10 }))).toMatchObject({ code: 'refused:book-exists' });
   for (const title of ['', '   ', 'a/b', 'a:b', '.hidden', 'x'.repeat(81)]) {
     expect(await h.run(h.command('StartBook', { title, author: '', totalPages: 10 }))).toMatchObject({ code: 'refused:book-title-invalid' });
   }
