@@ -6,6 +6,7 @@ import {
   type DashboardRange,
   type MarketSeries,
   type MarketUnavailableReason,
+  type WatchItemKind,
   type WatchTicker,
 } from '@vault-companion/contracts';
 import {
@@ -20,8 +21,10 @@ import {
   readBoundedText,
   tickerUrl,
 } from './market.ts';
+import { YAHOO_HEADERS, buildStockSeries, parseYahooQuote, yahooChartUrl, type StockQuote } from './stock-quote.ts';
 
-export type WatchItemType = 'crypto' | 'fx';
+/** The contract's kinds are exactly the adapter kinds, so a new kind cannot be added without an adapter. */
+export type WatchItemType = WatchItemKind;
 
 /** One watched symbol. `base`/`quote` are optional: when omitted they are read from the symbol separator. */
 export interface WatchItem {
@@ -38,6 +41,8 @@ export const WATCHLIST: readonly WatchItem[] = [
   { symbol: 'ETH-USD', type: 'crypto', name: 'ETH / USD', base: 'ETH', quote: 'USD' },
   { symbol: 'RUB/DKK', type: 'fx', name: 'RUB / DKK', base: 'RUB', quote: 'DKK' },
   { symbol: 'SEK/DKK', type: 'fx', name: 'SEK / DKK', base: 'SEK', quote: 'DKK' },
+  { symbol: 'NVDA', type: 'stock', name: 'NVIDIA', base: 'NVDA', quote: 'USD' },
+  { symbol: 'SPCX', type: 'stock', name: 'SpaceX', base: 'SPCX', quote: 'USD' },
 ];
 
 export type WatchTickerOutcome =
@@ -75,8 +80,11 @@ export interface WatchlistSourceDeps extends WatchAdapterDeps {
 /** fx reference rates move at most once a day, so they are cached well past the 60-second crypto ticker. */
 export const FX_TICKER_TTL_MS = 10 * 60_000;
 export const FX_SERIES_TTL_MS: Record<DashboardRange, number> = { '1W': 60 * 60_000, '1M': 3 * 60 * 60_000, '3M': 6 * 60 * 60_000, '1Y': 12 * 60 * 60_000 };
-export const WATCH_TICKER_TTL_MS: Record<WatchItemType, number> = { crypto: TICKER_TTL_MS, fx: FX_TICKER_TTL_MS };
-export const WATCH_SERIES_TTL_MS: Record<WatchItemType, Record<DashboardRange, number>> = { crypto: SERIES_TTL_MS, fx: FX_SERIES_TTL_MS };
+/** Yahoo's keyless chart is delayed: a 10-minute ticker and a 1-hour series, one fetch per symbol per cache window. */
+export const STOCK_TICKER_TTL_MS = 10 * 60_000;
+export const STOCK_SERIES_TTL_MS: Record<DashboardRange, number> = { '1W': 60 * 60_000, '1M': 60 * 60_000, '3M': 60 * 60_000, '1Y': 60 * 60_000 };
+export const WATCH_TICKER_TTL_MS: Record<WatchItemType, number> = { crypto: TICKER_TTL_MS, fx: FX_TICKER_TTL_MS, stock: STOCK_TICKER_TTL_MS };
+export const WATCH_SERIES_TTL_MS: Record<WatchItemType, Record<DashboardRange, number>> = { crypto: SERIES_TTL_MS, fx: FX_SERIES_TTL_MS, stock: STOCK_SERIES_TTL_MS };
 
 const DAY_SECONDS = 86_400;
 
@@ -298,13 +306,56 @@ export function createFxAdapter(deps: WatchAdapterDeps): WatchAdapter {
   };
 }
 
+// ---- stock: Yahoo Finance chart (keyless, unofficial). ONE fetch per symbol feeds the ticker and every range ----
+
+/** Yahoo tickers are uppercase letters/dots (BRK.B style); anything else is refused before the provider is called. */
+const STOCK_SYMBOL = /^[A-Z.]{1,6}$/;
+
+type StockLoad = { readonly ok: true; readonly quote: StockQuote } | { readonly ok: false; readonly reason: MarketUnavailableReason };
+
+/**
+ * One adapter for every watched stock. `newStockAdapter`'s internal cache holds the parsed 1y chart so the ticker and all
+ * four ranges share a single subrequest inside the cache window (the source adds its own longer series TTL on top). Any
+ * HTTP failure (429/403/5xx), timeout or unparseable/foreign-currency body is a typed refusal, never a value.
+ */
+export function createStockAdapter(deps: WatchAdapterDeps): WatchAdapter {
+  const cache = new Map<string, { readonly at: number; readonly quote: StockQuote }>();
+
+  const load = async (item: WatchItem): Promise<StockLoad> => {
+    if (!STOCK_SYMBOL.test(item.symbol)) return { ok: false, reason: 'malformed' };
+    const cached = cache.get(item.symbol);
+    if (cached && deps.now() - cached.at < STOCK_TICKER_TTL_MS) return { ok: true, quote: cached.quote };
+    const res = await readText(deps, yahooChartUrl(item.symbol), YAHOO_HEADERS);
+    if (!res.ok) return { ok: false, reason: res.reason };
+    const quote = parseYahooQuote(parseJson(res.text), item.symbol);
+    if (!quote) return { ok: false, reason: 'provider-error' };
+    cache.set(item.symbol, { at: deps.now(), quote });
+    return { ok: true, quote };
+  };
+
+  return {
+    async ticker(item) {
+      const loaded = await load(item);
+      return loaded.ok
+        ? { status: 'ok', ticker: loaded.quote.ticker, fetchedAt: deps.now() }
+        : { status: 'unavailable', reason: loaded.reason };
+    },
+    async series(item, range) {
+      const loaded = await load(item);
+      if (!loaded.ok) return { status: 'unavailable', reason: loaded.reason };
+      const series = buildStockSeries(loaded.quote, range, deps.now());
+      return series ? { status: 'ok', series, fetchedAt: deps.now() } : { status: 'unavailable', reason: 'provider-error' };
+    },
+  };
+}
+
 const adapterUnavailableTicker: WatchTickerOutcome = { status: 'unavailable', reason: 'provider-error' };
 const adapterUnavailableSeries: WatchSeriesOutcome = { status: 'unavailable', reason: 'provider-error' };
 
 /** Per-item, per-type TTL caches; a failed refresh falls back to last-known data with its ORIGINAL fetchedAt. */
 export function createWatchlistSource(deps: WatchlistSourceDeps): WatchlistSource {
   const items = deps.items ?? WATCHLIST;
-  const adapters: Record<WatchItemType, WatchAdapter> = { crypto: createCryptoAdapter(deps), fx: createFxAdapter(deps) };
+  const adapters: Record<WatchItemType, WatchAdapter> = { crypto: createCryptoAdapter(deps), fx: createFxAdapter(deps), stock: createStockAdapter(deps) };
   const tickerCache = new Map<string, { fetchedAt: number; outcome: Extract<WatchTickerOutcome, { status: 'ok' }> }>();
   const seriesCache = new Map<string, { fetchedAt: number; outcome: Extract<WatchSeriesOutcome, { status: 'ok' }> }>();
   const tickerInflight = new Map<string, Promise<WatchTickerOutcome>>();

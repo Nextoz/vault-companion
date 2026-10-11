@@ -93,7 +93,7 @@ export type MarketCard = z.infer<typeof MarketCard>;
 // ---- Watchlist (WL1): one card per watched symbol, crypto (Coinbase) or fx (Frankfurter / Bank of Russia) ----
 
 /** The kinds a watch item may be, matching the adapter behind it. Adding an item never adds a kind. */
-export const WatchItemKind = z.enum(['crypto', 'fx']);
+export const WatchItemKind = z.enum(['crypto', 'fx', 'stock']);
 export type WatchItemKind = z.infer<typeof WatchItemKind>;
 
 /** Which watched item a card is about; a client keys by this, never by the human title. */

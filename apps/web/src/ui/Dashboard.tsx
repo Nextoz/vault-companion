@@ -6,7 +6,7 @@ import { getDashboard, getMarketTicker, type Fetched } from '../api.ts';
 import './Dashboard.css';
 import { AiUsagePanel } from './AiUsagePanel.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
-import { formatChange, formatWatchPrice, formatWatchValue, legacyMarketCard, seriesChange, watchCards, watchFresh, watchTitle } from './watchlist.ts';
+import { formatChange, formatWatchPrice, formatWatchValue, legacyMarketCard, seriesChange, watchCards, watchDelayLabel, watchFresh, watchTitle } from './watchlist.ts';
 import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
 
 export const TICKER_POLL_MS = 60_000;
@@ -176,10 +176,12 @@ function WatchView({ card, stale, onDrillthrough }: {
   useEffect(() => setSelection(null), [seriesKey]);
   const status = card.status === 'unavailable' ? 'Unavailable' : stale ? 'Stale' : 'Live';
   const change = card.status === 'ok' ? seriesChange(card.series) : null;
+  const delay = watchDelayLabel(card);
   return (
     <article className="dash-card dash-watch" aria-labelledby={headingId} aria-busy={stale}>
       <header className="dash-card-head">
         <h2 id={headingId}>{watchTitle(card)}</h2>
+        {delay && <span className="dash-chip dash-chip-delayed">{delay}</span>}
         <span className={`dash-chip dash-chip-${status.toLowerCase()}`}>{status}</span>
       </header>
 

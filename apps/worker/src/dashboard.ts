@@ -13,10 +13,12 @@ const WATCH_PROVIDER_LABEL = {
   coinbase: PROVIDER_LABEL,
   frankfurter: 'Frankfurter (ECB reference rates)',
   cbr: 'Bank of Russia',
+  'Yahoo Finance': 'Yahoo Finance',
 } as const;
 const watchProvenance = (item: WatchItem, provider?: string): string => {
-  if (provider === 'coinbase' || provider === 'frankfurter' || provider === 'cbr') return WATCH_PROVIDER_LABEL[provider];
+  if (provider === 'coinbase' || provider === 'frankfurter' || provider === 'cbr' || provider === 'Yahoo Finance') return WATCH_PROVIDER_LABEL[provider];
   if (item.type === 'crypto') return WATCH_PROVIDER_LABEL.coinbase;
+  if (item.type === 'stock') return WATCH_PROVIDER_LABEL['Yahoo Finance'];
   return (item.base ?? item.symbol.split('/')[0]) === 'RUB' ? WATCH_PROVIDER_LABEL.cbr : WATCH_PROVIDER_LABEL.frankfurter;
 };
 

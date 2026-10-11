@@ -1,6 +1,6 @@
 import type { MarketCard, MarketSeries, WatchCard } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
-import { formatChange, formatWatchPrice, formatWatchValue, legacyMarketCard, seriesChange, watchCards, watchDecimals, watchFresh, watchTitle } from './watchlist.ts';
+import { formatChange, formatWatchPrice, formatWatchValue, legacyMarketCard, seriesChange, watchCards, watchDecimals, watchDelayLabel, watchFresh, watchTitle } from './watchlist.ts';
 
 const NOW = '2026-09-30T12:00:00Z';
 const point = (index: number, close: number) => ({
@@ -26,6 +26,17 @@ const unavailable: WatchCard = {
   observedAt: null, fetchedAt: null, note: 'The market provider is unavailable right now.', drillthrough: null,
   item: { symbol: 'RUB/DKK', type: 'fx' }, reason: 'provider-error',
 };
+const stock = (over: Record<string, unknown> = {}): WatchCard => ({
+  id: 'watchlist', status: 'ok', title: 'NVIDIA', provenance: 'Yahoo Finance',
+  observedAt: NOW, fetchedAt: NOW, note: null, drillthrough: null, item: { symbol: 'NVDA', type: 'stock' },
+  ticker: { base: 'NVDA', quote: 'USD', provider: 'Yahoo Finance', price: 229.28, providerTime: NOW },
+  series: series([183.16, 229.28]), ...over,
+} as WatchCard);
+const downStock: WatchCard = {
+  id: 'watchlist', status: 'unavailable', title: 'SpaceX', provenance: 'Yahoo Finance',
+  observedAt: null, fetchedAt: null, note: 'The market provider is unavailable right now.', drillthrough: null,
+  item: { symbol: 'SPCX', type: 'stock' }, reason: 'provider-error',
+};
 const market: MarketCard = {
   id: 'market', status: 'ok', title: 'BTC / USD', provenance: 'Coinbase Exchange (public)',
   observedAt: NOW, fetchedAt: NOW, note: null, drillthrough: null,
@@ -44,14 +55,25 @@ describe('watchlist selection (WL2)', () => {
     expect(watchTitle(fx({ title: 'ignored' }))).toBe('RUB / DKK');
     expect(watchTitle(unavailable)).toBe('RUB / DKK'); // no ticker: the symbol is split on its separator
   });
+
+  it('names a stock by its company and symbol, and marks only stocks delayed (WL4a)', () => {
+    expect(watchTitle(stock())).toBe('NVIDIA (NVDA)');
+    expect(watchTitle(downStock)).toBe('SpaceX (SPCX)');
+    expect(watchDelayLabel(stock())).toBe('Delayed');
+    expect(watchDelayLabel(downStock)).toBe('Delayed');
+    expect(watchDelayLabel(crypto())).toBeNull();
+    expect(watchDelayLabel(fx())).toBeNull();
+  });
 });
 
 describe('watchlist price (WL2)', () => {
   it('quotes fx to four decimals and crypto to two, in the quote currency', () => {
     expect(watchDecimals(fx())).toBe(4);
     expect(watchDecimals(crypto())).toBe(2);
+    expect(watchDecimals(stock())).toBe(2);
     expect(formatWatchPrice(fx())).toBe('DKK 0.0712');
     expect(formatWatchPrice(crypto())).toBe('$3,123.40');
+    expect(formatWatchPrice(stock())).toBe('$229.28');
   });
 
   it('never paints a number for an unavailable card', () => {
