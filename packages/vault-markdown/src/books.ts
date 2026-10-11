@@ -181,6 +181,7 @@ export function appendFollowUp(source: string, entry: { readonly date: string; r
   const answerLines = entry.answer.split(/\r\n|\r|\n/);
   if (!entry.answer.trim()) return refuse('refused:book-reflection-empty', 'Write an answer first');
   if (answerLines.some((line) => /^ {0,3}#{1,3}(\s|$)/.test(line))) return refuse('invalid', 'An answer cannot contain heading lines (#, ## or ###)');
+  if (answerLines.some((line) => /^ {0,3}(`{3,}|~{3,})/.test(line))) return refuse('invalid', 'An answer cannot contain code-fence lines');
   const parsed = parseBookNote(source);
   if (!parsed.ok) return parsed;
   let ordinal = 0;

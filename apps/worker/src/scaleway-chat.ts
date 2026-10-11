@@ -14,6 +14,8 @@ export interface ChatRequest {
   readonly model: string;
   readonly system: string;
   readonly user: string;
+  /** Per-request abort deadline; defaults to the client's. */
+  readonly timeoutMs?: number;
   /** Morning Brief defaults to JSON; ADR-0063 requests plain prose. */
   readonly responseFormat?: 'text' | 'json_object';
 }
@@ -39,9 +41,9 @@ export function createScalewayChat(opts: ScalewayChatOptions): ScalewayChat {
   const base = opts.apiBase ?? DEFAULT_API_BASE;
   const timeoutMs = opts.timeoutMs ?? SCALEWAY_TIMEOUT_MS;
   return {
-    async chat({ model, system, user, responseFormat }): Promise<ChatOutcome> {
+    async chat({ model, system, user, responseFormat, timeoutMs: requestTimeoutMs }): Promise<ChatOutcome> {
       const abort = new AbortController();
-      const timer = setTimeout(() => abort.abort(), timeoutMs);
+      const timer = setTimeout(() => abort.abort(), requestTimeoutMs ?? timeoutMs);
       try {
         const res = await f(`${base}/v1/chat/completions`, {
           method: 'POST',

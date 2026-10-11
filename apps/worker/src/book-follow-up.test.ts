@@ -42,7 +42,7 @@ it('returns a trimmed question, sends ONLY the selected reflection, and never wr
   expect(res.status).toBe(200);
   expect(res.headers.get('Cache-Control')).toBe('no-store');
   expect(BookFollowUpResponse.parse(await res.json())).toEqual({ question: QUESTION });
-  expect(h.chat).toHaveBeenCalledExactlyOnceWith({ model: 'glm-5.2', system: BOOK_FOLLOW_UP_SYSTEM, user: FIRST, responseFormat: 'text' });
+  expect(h.chat).toHaveBeenCalledExactlyOnceWith({ model: 'glm-5.2', system: BOOK_FOLLOW_UP_SYSTEM, user: FIRST, responseFormat: 'text', timeoutMs: BOOK_FOLLOW_UP_TIMEOUT_MS });
   const prompt = JSON.stringify(h.chat.mock.calls);
   expect(prompt).not.toContain(TITLE);
   expect(prompt).not.toContain(OTHER);
@@ -98,14 +98,20 @@ it('caps at five per isolate, returns 429 on sixth, and resets the next day', as
   expect(h.chat).toHaveBeenCalledTimes(6);
 });
 
-it('invalid reflection selections consume the cap and the sixth attempt never reads the vault', async () => {
+it('invalid reflection selections and read failures never consume the cap', async () => {
   const readBooks = vi.fn<ReturnType<typeof createBooksService>['readBooks']>().mockResolvedValue({ status: 'ok', revision: '1'.repeat(40), books: [] });
   const chat = vi.fn<(request: ChatRequest) => Promise<ChatOutcome>>();
   const service = createBookFollowUpService({ readBooks, chat: { chat } });
-  for (let n = 0; n < 5; n++) expect(await service.followUp(request)).toMatchObject({ code: 'reflection-not-found' });
-  expect(await service.followUp(request)).toMatchObject({ code: 'follow-up-rate-limited' });
-  expect(readBooks).toHaveBeenCalledTimes(5);
+  for (let n = 0; n < 8; n++) expect(await service.followUp(request)).toMatchObject({ code: 'reflection-not-found' });
+  readBooks.mockRejectedValue(new Error('down'));
+  for (let n = 0; n < 8; n++) expect(await service.followUp(request)).toMatchObject({ code: 'follow-up-unavailable' });
   expect(chat).not.toHaveBeenCalled();
+});
+
+it('passes the 30 s deadline to the chat client so the request itself is aborted', async () => {
+  const h = await setup();
+  await h.post();
+  expect(h.chat.mock.calls[0]![0]).toMatchObject({ timeoutMs: 30_000 });
 });
 
 it('returns 503 when no key configures chat', async () => {
@@ -135,23 +141,6 @@ it('guards authentication, origin, account, JSON and selection-only body before 
   expect(h.chat).not.toHaveBeenCalled();
 });
 
-it('returns unavailable at exactly 30 seconds for a hanging chat, with no retry', async () => {
-  const h = await setup();
-  h.chat.mockImplementation(() => new Promise(() => {}));
-  vi.useFakeTimers();
-  const result = h.service.followUp(request);
-  await vi.advanceTimersByTimeAsync(0);
-  expect(h.chat).toHaveBeenCalledTimes(1);
-  await vi.advanceTimersByTimeAsync(BOOK_FOLLOW_UP_TIMEOUT_MS - 1);
-  let settled = false;
-  void result.then(() => { settled = true; });
-  await Promise.resolve();
-  expect(settled).toBe(false);
-  await vi.advanceTimersByTimeAsync(1);
-  expect(await result).toMatchObject({ code: 'follow-up-unavailable' });
-  expect(h.chat).toHaveBeenCalledTimes(1);
-});
-
 it('the real Scaleway client sends plain text mode for follow-ups and aborts at 30 seconds', async () => {
   let body: Record<string, unknown> | undefined;
   let aborted = false;
@@ -160,7 +149,7 @@ it('the real Scaleway client sends plain text mode for follow-ups and aborts at 
     return new Promise<Response>((_resolve, reject) => init!.signal!.addEventListener('abort', () => { aborted = true; reject(new Error('timeout')); }));
   });
   const h = await setup();
-  const service = createBookFollowUpService({ readBooks: createBooksService({ store: h.store }).readBooks, chat: createScalewayChat({ apiKey: 'synthetic-key', fetch, timeoutMs: BOOK_FOLLOW_UP_TIMEOUT_MS }) });
+  const service = createBookFollowUpService({ readBooks: createBooksService({ store: h.store }).readBooks, chat: createScalewayChat({ apiKey: 'synthetic-key', fetch, timeoutMs: 60_000 }) });
   vi.useFakeTimers();
   const result = service.followUp(request);
   await vi.advanceTimersByTimeAsync(0);
