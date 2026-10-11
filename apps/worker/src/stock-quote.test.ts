@@ -74,6 +74,7 @@ describe('Yahoo chart parser (WL4a)', () => {
     expect(parseYahooQuote(withMeta({ currency: 'USD', regularMarketPrice: 10, regularMarketTime: 0 }), 'X')).toBeNull();
     expect(parseYahooQuote({ chart: { result: [] } }, 'X')).toBeNull();
     expect(parseYahooQuote(null, 'X')).toBeNull();
+    expect(parseYahooQuote(fixture('yahoo-NVDA-1y.json'), 'SPCX')).toBeNull(); // meta.symbol mismatch
     expect(parseYahooQuote({ chart: {} }, 'X')).toBeNull();
   });
 

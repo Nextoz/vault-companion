@@ -58,6 +58,7 @@ export function parseYahooQuote(body: unknown, symbol: string): StockQuote | nul
   if (!result) return null;
   const meta = record(result.meta);
   if (!meta) return null;
+  if (typeof meta.symbol === 'string' && meta.symbol !== symbol) return null; // a response for another symbol is not this card's quote
   if (meta.currency !== STOCK_QUOTE) return null; // USD guard: a foreign-currency print is not this card's price
   const marketPrice = price(meta.regularMarketPrice);
   const marketTime = meta.regularMarketTime;
