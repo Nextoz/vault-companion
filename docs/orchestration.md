@@ -38,7 +38,8 @@ appending amendments. History: Git and branch `archive/codex-lead-2026-10-01`.
 | Worker | Use for | Cost |
 |---|---|---|
 | **Gemini CLI** (Flash-Lite) | tiny, idempotent: docs, copy, rename, one-file tweak | free tier |
-| **DeepSeek V4.1 Flash** (`flash`, API id `deepseek-flash`), effort high | **default** implementation: UI, tests, bounded features, bug batches | cheap; owner's DeepSeek credit |
+| **OpenCode on Scaleway** (`scw`, `-ScwModel`, default `qwen3.5-397b-a17b`) | **default** implementation while the voucher lasts (expires 31 Oct; tell the owner at EUR 20 left, stop at EUR 5) | ~EUR 0.02 per small task; Scaleway voucher |
+| **DeepSeek V4.1 Flash** (`flash`, API id `deepseek-flash`), effort high | scw failed once, or the voucher is spent: UI, tests, bounded features, bug batches | cheap; owner's DeepSeek credit |
 | **Codex gpt-6.1-sol** (`codex`, `-Effort low|medium`) | when needed: Flash failed once, or design-heavy UI / Morning Brief / data-integrity work | owner's Codex subscription (weekly limit) |
 | **DeepSeek Pro**, effort **medium** | high-risk implementation only (see Review by risk) | ~4x Flash |
 
@@ -47,6 +48,15 @@ same model, same sandbox) for clearly separable parts, e.g. tests beside the imp
 that is worth it; the worker stays responsible for one handoff. Scaleway's `deepseek-v4-flash-0731` is the older V4
 Flash and, like GLM-5.2, has no Responses API (verified 2026-10-10), so it cannot drive Codex.
 
+**`scw` sandbox (owner, 2026-10-10):** OpenCode has no OS sandbox, so its config
+(`C:/Dev/tools/vault-companion-opencode/opencode-worker.json`) fences it: file tools inside the clone only, no web, shell
+only pnpm check/test/lint/e2e/exec tsc|eslint|vitest|playwright and read-only git, no commits. Not watertight: a repo
+test script still runs arbitrary code. With two parallel workers, prefer one `scw` and one other tier.
+
+**Agent shells:** a `pwsh` or `opencode` started from Bash waits for stdin to close before it runs anything (verified
+2026-10-11: a script's first line ran only when its stdin pipe closed). End such calls with `< /dev/null` and bound
+one-shot calls with `timeout <s>`.
+
 **Scaleway GLM-5.2 is not an implementation worker (2026-10-02):** Codex CLI needs the Responses API, which Scaleway
 does not serve for GLM-5.2 (chat completions only), and OpenCode exited silently twice. Use GLM only for one-shot
 public-repo questions over the plain API, not for edits: it is the **second code reviewer** (`tools/glm-review.ps1`, run by `handoff-check.ps1`; benchmark 2026-10-02: at reasoning `low` it found the same major missing-test issue as CodeRabbit in ~30 s / ~9k tokens; it tends to overrate severity).
@@ -54,7 +64,7 @@ public-repo questions over the plain API, not for edits: it is the **second code
 Launch every worker with **one command**, from inside Herdr (it opens a visible pane in the Agents tab):
 
 ```sh
-pwsh -NoProfile -File tools/launch-worker.ps1 -Tier flash|codex [-Effort low|medium]|pro|gemini|glm -Files a,b -Clone <clone> -Task <task> -Base <base> -TestCmd '<touched tests>' [-Reviewer both] [-Intent on|off]
+pwsh -NoProfile -File tools/launch-worker.ps1 -Tier scw [-ScwModel <m>]|flash|codex [-Effort low|medium]|pro|gemini|glm -Files a,b -Clone <clone> -Task <task> -Base <base> -TestCmd '<touched tests>' [-Reviewer both] [-Intent on|off]
 ```
 
 DeepSeek workers run **sandboxed** (Codex `workspace-write` + elevated Windows sandbox, set up by the owner
@@ -102,7 +112,7 @@ question is a typed choice/score/yes-no over **public repo** material. Owner wan
 - **Before every dispatch (required):** choose the worker tier; state the brief's outcome, size and risk in a few
   lines. Follow Jev's pick unless the deterministic floor says otherwise (high-risk ⇒ Pro or Lead review), and say
   which in the STATUS line:
-  `pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,flash,sol-medium,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks? gemini = tiny docs/copy, flash = default implementation incl. UI, sol-medium = Flash already failed once or design-heavy UI / Morning Brief / data integrity" -Json`
+  `timeout 60 pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,scw,flash,sol-medium,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks? gemini = tiny docs/copy, scw = default implementation incl. UI, flash = scw already failed once, sol-medium = Flash already failed once or design-heavy UI / Morning Brief / data integrity" -Json < /dev/null`
 - **Instead of deliberating:** "is this in scope?", "is this handoff claim supported by the test output?", "real
   failure or flaky?", "which backlog item is smallest?" — ask Jev (`-Ask` / `-Choose` / `-Rate`) first.
 - **Test tier (advisory):** `tools/select-tests.ps1 -Paths <paths> [-HighRisk] [-NoJev]` prints `{tier, reason, source}`; the floor decides first.

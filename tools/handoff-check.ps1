@@ -291,8 +291,12 @@ foreach ($f in $findings) {
     if ($useJev) {
         try {
             $state = "Task: $Task. $($f.reviewer) finding (severity $($f.severity)) on $($f.fileName): $text"
-            $r = & $jev -State $state -Choose 'must-fix defect', 'worth fixing, low value', 'not actionable / style only', 'unresolved' `
-                -Instructions 'Should the worker spend its single correction round on this finding?' -Json | Out-String | ConvertFrom-Json
+            # Same bound as the acceptance check, so a stalled Jev cannot hold up the whole check. Options are one
+            # comma-separated string through -File, so no label may contain a comma.
+            $b = Invoke-JevBounded -JevPath $jev -JevArgs @('-State', $state, '-Choose', 'must-fix defect,worth fixing but low value,not actionable / style only,unresolved',
+                '-Instructions', 'Should the worker spend its single correction round on this finding?', '-Json') -TimeoutMs 25000
+            if ($b.timedOut) { throw 'timeout (25s)' }
+            $r = $b.out | ConvertFrom-Json
             $p = $r.answers.answer.probabilities.'must-fix defect'
             $must = $p -ge 0.5
             $why = "Jev $($r.answers.answer.choice) (must-fix p=$([Math]::Round($p, 2)))"
