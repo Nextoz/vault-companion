@@ -1,12 +1,12 @@
 import type { CommandType, TasksResponse } from '@vault-companion/contracts';
 import { useState } from 'react';
-import { exportText, undoEditTraining, undoEditTrainingDraft, undoLogLearning, undoLogLearningDraft, undoLogTraining, undoLogTrainingDraft, undoMoodCheckin, undoMoodCheckinDraft, undoReportFeedback, undoReportFeedbackDraft } from '../commands.ts';
+import { exportText, undoEditTraining, undoEditTrainingDraft, undoLogLearning, undoLogLearningDraft, undoLogReading, undoLogReadingDraft, undoLogTraining, undoLogTrainingDraft, undoMoodCheckin, undoMoodCheckinDraft, undoReportFeedback, undoReportFeedbackDraft, undoSaveReflection, undoSaveReflectionDraft, undoStartBook, undoStartBookDraft } from '../commands.ts';
 import { prefs } from '../prefs.ts';
 import { knownNotApplied } from '../queue/classify.ts';
 import type { PendingQueue, QueueItem, ReadEvidence } from '../queue/queue.ts';
 import { StateChip } from './StateChip.tsx';
 
-const VERB: Record<CommandType, string> = {
+export const VERB: Record<CommandType, string> = {
   LogTraining: 'Training',
   UndoLogTraining: 'Undo training',
   EditTraining: 'Edit training',
@@ -43,13 +43,14 @@ export const UNDO_UNKNOWN_TEXT = 'This Undo may already have been applied. Check
 
 /** The line shown for an action that needs attention: the conflict in plain words, else the server's message. */
 export function attentionText(item: QueueItem): string | null {
-  if ((item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining' || item.type === 'UndoEditTraining' || item.type === 'UndoLogLearning' || item.type === 'UndoMoodCheckin') && item.error && knownNotApplied(item.error)) return 'Cannot restore the exact previous file; undo it in Obsidian.';
+  if ((item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining' || item.type === 'UndoEditTraining' || item.type === 'UndoLogLearning' || item.type === 'UndoMoodCheckin' || item.type === 'UndoStartBook' || item.type === 'UndoLogReading' || item.type === 'UndoSaveReflection') && item.error && knownNotApplied(item.error)) return 'Cannot restore the exact previous file; undo it in Obsidian.';
   if (item.error?.code === 'conflict:task-changed') return 'This task changed on another device.';
   if (item.error?.code === 'conflict:training-changed') return 'That session changed in Obsidian — refresh and edit again.';
+  if (item.error?.code === 'conflict:book-changed') return 'Book changed, refresh and retry.';
   if (item.error?.code === 'conflict:learning-changed') return 'That session changed in Obsidian — refresh and edit again.';
   if (item.error?.code === 'clock-skew') return CLOCK_SKEW_TEXT;
   // Review O5: the outcome is unknown, not refused — never tell the owner to redo something that may have happened.
-  if (item.error?.code === 'dedupe-unknown' && (item.type === 'UndoCompleteTask' || item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining' || item.type === 'UndoEditTraining' || item.type === 'UndoLogLearning' || item.type === 'UndoMoodCheckin')) return UNDO_UNKNOWN_TEXT;
+  if (item.error?.code === 'dedupe-unknown' && (item.type === 'UndoCompleteTask' || item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining' || item.type === 'UndoEditTraining' || item.type === 'UndoLogLearning' || item.type === 'UndoMoodCheckin' || item.type === 'UndoStartBook' || item.type === 'UndoLogReading' || item.type === 'UndoSaveReflection')) return UNDO_UNKNOWN_TEXT;
   return item.error?.message ?? null;
 }
 
@@ -159,6 +160,42 @@ export function ActionsPanel({
                 const ctx = { baseRevision: read?.revision ?? target.baseRevision };
                 const undo = item.receipt ? undoLogLearning(ctx, target, item.receipt.commitSha) : undoLogLearningDraft(ctx, target);
                 void queue.undoCompletion(target, undo, { accountKey: item.accountKey, label: item.label, taskKey: 'learning' })
+                  .catch(() => setUndoError('Could not keep this Undo on the device.'))
+                  .finally(() => setUndoing(null));
+              }}>Undo</button>}
+            {item.envelope.type === 'StartBook' && !item.accountMismatch && item.state !== 'attention' &&
+              !items.some((q) => q.envelope.type === 'UndoStartBook' && q.envelope.payload.target.operationId === item.operationId) &&
+              <button type="button" disabled={undoing !== null} onClick={() => {
+                if (item.envelope.type !== 'StartBook' || undoing !== null) return;
+                setUndoing(item.operationId); setUndoError(null);
+                const target = item.envelope;
+                const ctx = { baseRevision: read?.revision ?? target.baseRevision };
+                const undo = item.receipt ? undoStartBook(ctx, target, item.receipt.commitSha) : undoStartBookDraft(ctx, target);
+                void queue.undoCompletion(target, undo, { accountKey: item.accountKey, label: item.label, taskKey: 'reading' })
+                  .catch(() => setUndoError('Could not keep this Undo on the device.'))
+                  .finally(() => setUndoing(null));
+              }}>Undo</button>}
+            {item.envelope.type === 'LogReading' && !item.accountMismatch && item.state !== 'attention' &&
+              !items.some((q) => q.envelope.type === 'UndoLogReading' && q.envelope.payload.target.operationId === item.operationId) &&
+              <button type="button" disabled={undoing !== null} onClick={() => {
+                if (item.envelope.type !== 'LogReading' || undoing !== null) return;
+                setUndoing(item.operationId); setUndoError(null);
+                const target = item.envelope;
+                const ctx = { baseRevision: read?.revision ?? target.baseRevision };
+                const undo = item.receipt ? undoLogReading(ctx, target, item.receipt.commitSha) : undoLogReadingDraft(ctx, target);
+                void queue.undoCompletion(target, undo, { accountKey: item.accountKey, label: item.label, taskKey: 'reading' })
+                  .catch(() => setUndoError('Could not keep this Undo on the device.'))
+                  .finally(() => setUndoing(null));
+              }}>Undo</button>}
+            {item.envelope.type === 'SaveReflection' && !item.accountMismatch && item.state !== 'attention' &&
+              !items.some((q) => q.envelope.type === 'UndoSaveReflection' && q.envelope.payload.target.operationId === item.operationId) &&
+              <button type="button" disabled={undoing !== null} onClick={() => {
+                if (item.envelope.type !== 'SaveReflection' || undoing !== null) return;
+                setUndoing(item.operationId); setUndoError(null);
+                const target = item.envelope;
+                const ctx = { baseRevision: read?.revision ?? target.baseRevision };
+                const undo = item.receipt ? undoSaveReflection(ctx, target, item.receipt.commitSha) : undoSaveReflectionDraft(ctx, target);
+                void queue.undoCompletion(target, undo, { accountKey: item.accountKey, label: item.label, taskKey: 'reading' })
                   .catch(() => setUndoError('Could not keep this Undo on the device.'))
                   .finally(() => setUndoing(null));
               }}>Undo</button>}

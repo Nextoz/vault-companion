@@ -7,6 +7,7 @@ import {
   AiUsageResponse,
   ApiError,
   AskJevResponse,
+  BooksResponse,
   Command,
   DASHBOARD_RANGE_PLAN,
   DashboardRange,
@@ -18,6 +19,7 @@ import {
   decodeLinkedNoteHeader,
   decodeNoteHeader,
   HistoryResponse,
+  type BookView,
   type HistoryItem,
   LearningResponse,
   type LearningKind,
@@ -300,7 +302,13 @@ export class MockApi {
   gameMode: 'ok' | 'error' = 'ok';
   gameUnavailable: string[] = [];
   gameReads = 0;
+  /** READ1-A2: the Books/ read model (ADR-0062), one row per book note. */
+  books: BookView[] = [];
+  /** `refused` answers /api/books with a typed refusal instead of rows. */
+  booksMode: 'ok' | 'refused' = 'ok';
+  #booksBefore = new Map<string, BookView[]>();
   #learningBefore = new Map<string, LearningRow[]>();
+
   session: 'ok' | 'signed-out' = 'ok';
   /** The account the session reports (switch it to simulate signing in as someone else). */
   account = ACCOUNT;
@@ -527,6 +535,9 @@ export class MockApi {
       : this.trainingMode === 'hang' ? new Promise<void>(() => {})
       : this.trainingMode === 'error' ? this.#json(route, 503, ApiError.parse({ code: 'upstream-unavailable', message: 'GitHub is unavailable.', retryable: true }))
       : this.#json(route, 200, TrainingResponse.parse({ status: 'ok', revision: this.#revision, blobSha: this.blobSha, rows: this.trainingRows, unknownLines: this.trainingUnknownLines })));
+    await on('**/api/books', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
+      : this.booksMode === 'refused' ? this.#json(route, 200, BooksResponse.parse({ status: 'refused', revision: this.#revision, code: 'refused:book-note-shape', message: 'A book note could not be read.' }))
+      : this.#json(route, 200, BooksResponse.parse({ status: 'ok', revision: this.#revision, books: this.books })));
     await on('**/api/learning', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.learningMode === 'absent' ? this.#json(route, 200, LearningResponse.parse({ status: 'absent', revision: this.#revision }))
       : this.learningMode === 'refused' ? this.#json(route, 200, LearningResponse.parse({ status: 'refused', revision: this.#revision, code: 'refused:learning-table-missing', message: 'Learning Gym Log table not found — fix it in Obsidian' }))
@@ -1078,16 +1089,33 @@ export class MockApi {
         this.inboxNotes.set(note.path, { ...n, blobSha: base.blobSha, body: body.endsWith('\n') ? body : body + '\n' });
         return { ...base, path: note.path, effect: { kind: 'note-edited', path: note.path } };
       }
-      case 'StartBook':
-      case 'LogReading':
+      case 'StartBook': {
+        const { title, author, totalPages } = command.payload;
+        this.#booksBefore.set(command.operationId, structuredClone(this.books));
+        this.books = [...this.books, { title, author, totalPages, currentPage: 0, status: 'reading', lastRead: null, reflections: [] }];
+        const path = `Books/${title}.md`;
+        return { ...base, path, effect: { kind: 'book', op: 'started', path } };
+      }
+      case 'LogReading': {
+        const { title, page, date } = command.payload;
+        this.#booksBefore.set(command.operationId, structuredClone(this.books));
+        this.books = this.books.map((book) => (book.title === title ? { ...book, currentPage: page, lastRead: date } : book));
+        const path = `Books/${title}.md`;
+        return { ...base, path, effect: { kind: 'book', op: 'logged', path } };
+      }
       case 'SaveReflection': {
-        const path = `Books/${command.payload.title}.md`;
-        const op = command.type === 'StartBook' ? 'started' : command.type === 'LogReading' ? 'logged' : 'reflected';
-        return { ...base, path, effect: { kind: 'book', op, path } };
+        const { title, date, text } = command.payload;
+        this.#booksBefore.set(command.operationId, structuredClone(this.books));
+        this.books = this.books.map((book) => (book.title === title ? { ...book, reflections: [{ date, text }, ...book.reflections] } : book));
+        const path = `Books/${title}.md`;
+        return { ...base, path, effect: { kind: 'book', op: 'reflected', path } };
       }
       case 'UndoStartBook':
       case 'UndoLogReading':
       case 'UndoSaveReflection': {
+        const before = this.#booksBefore.get(command.payload.target.operationId);
+        if (!before) throw new Error('mock: unknown book undo');
+        this.books = before;
         const path = `Books/${command.payload.target.payload.title}.md`;
         return { ...base, path, effect: { kind: 'book', op: 'undone', path } };
       }

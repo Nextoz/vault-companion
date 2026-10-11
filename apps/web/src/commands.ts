@@ -8,6 +8,12 @@ import {
   type LogLearningCommand,
   type MoodCheckinCommand,
   type ReportFeedbackCommand,
+  type StartBookCommand,
+  type LogReadingCommand,
+  type SaveReflectionCommand,
+  type StartBookPayload,
+  type LogReadingPayload,
+  type SaveReflectionPayload,
   type TrainingSession,
   type LearningSession,
   type ActiveWorkLocator,
@@ -69,7 +75,7 @@ export function undoDraft(ctx: MintContext, target: CompleteTaskCommand): Comman
 
 /** An Undo draft (no token yet), as the queue stores it. */
 export function isUndoDraft(envelope: Command): boolean {
-  return (envelope.type === 'UndoCompleteTask' || envelope.type === 'UndoActiveWork' || envelope.type === 'UndoLogTraining' || envelope.type === 'UndoEditTraining' || envelope.type === 'UndoLogLearning' || envelope.type === 'UndoMoodCheckin' || envelope.type === 'UndoReportFeedback') && !('targetCommit' in envelope.payload);
+  return (envelope.type === 'UndoCompleteTask' || envelope.type === 'UndoActiveWork' || envelope.type === 'UndoLogTraining' || envelope.type === 'UndoEditTraining' || envelope.type === 'UndoLogLearning' || envelope.type === 'UndoMoodCheckin' || envelope.type === 'UndoReportFeedback' || envelope.type === 'UndoStartBook' || envelope.type === 'UndoLogReading' || envelope.type === 'UndoSaveReflection') && !('targetCommit' in envelope.payload);
 }
 
 /** The draft with its token: a checked, sendable Undo whose other fields are unchanged. */
@@ -79,6 +85,9 @@ export function withTargetCommit(draft: Command, targetCommit: string): Command 
   if (draft.type === 'UndoLogLearning') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type === 'UndoMoodCheckin') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type === 'UndoReportFeedback') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
+  if (draft.type === 'UndoStartBook') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
+  if (draft.type === 'UndoLogReading') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
+  if (draft.type === 'UndoSaveReflection') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type === 'UndoActiveWork') return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
   if (draft.type !== 'UndoCompleteTask') throw new TypeError('not an Undo');
   return checked({ ...draft, payload: { target: draft.payload.target, targetCommit } });
@@ -181,6 +190,12 @@ export function bindUndoTarget(undo: Command, target: Command): Command | null {
     return { ...undo, payload: { ...undo.payload, target } };
   if (undo.type === 'UndoReportFeedback' && target.type === 'ReportFeedback')
     return { ...undo, payload: { ...undo.payload, target } };
+  if (undo.type === 'UndoStartBook' && target.type === 'StartBook')
+    return { ...undo, payload: { ...undo.payload, target } };
+  if (undo.type === 'UndoLogReading' && target.type === 'LogReading')
+    return { ...undo, payload: { ...undo.payload, target } };
+  if (undo.type === 'UndoSaveReflection' && target.type === 'SaveReflection')
+    return { ...undo, payload: { ...undo.payload, target } };
   return null;
 }
 
@@ -241,6 +256,43 @@ export function undoReportFeedback(ctx: MintContext, target: ReportFeedbackComma
 }
 export function undoReportFeedbackDraft(ctx: MintContext, target: ReportFeedbackCommand): Command {
   const draft = { ...base(ctx), type: 'UndoReportFeedback' as const, payload: { target } };
+  checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
+  return draft as Command;
+}
+
+export function startBook(ctx: MintContext, payload: StartBookPayload): StartBookCommand {
+  return checked({ ...base(ctx), type: 'StartBook', payload });
+}
+export function undoStartBook(ctx: MintContext, target: StartBookCommand, targetCommit: string): Command {
+  return checked({ ...base(ctx), type: 'UndoStartBook', payload: { target, targetCommit } });
+}
+export function undoStartBookDraft(ctx: MintContext, target: StartBookCommand): Command {
+  const draft = { ...base(ctx), type: 'UndoStartBook' as const, payload: { target } };
+  checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
+  return draft as Command;
+}
+
+export function logReading(ctx: MintContext, payload: LogReadingPayload): LogReadingCommand {
+  return checked({ ...base(ctx), type: 'LogReading', payload });
+}
+export function undoLogReading(ctx: MintContext, target: LogReadingCommand, targetCommit: string): Command {
+  return checked({ ...base(ctx), type: 'UndoLogReading', payload: { target, targetCommit } });
+}
+export function undoLogReadingDraft(ctx: MintContext, target: LogReadingCommand): Command {
+  const draft = { ...base(ctx), type: 'UndoLogReading' as const, payload: { target } };
+  checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
+  return draft as Command;
+}
+
+/** ADR-0062: the reflection text is private vault text; it travels only in the envelope, never in a log or label. */
+export function saveReflection(ctx: MintContext, payload: SaveReflectionPayload): SaveReflectionCommand {
+  return checked({ ...base(ctx), type: 'SaveReflection', payload });
+}
+export function undoSaveReflection(ctx: MintContext, target: SaveReflectionCommand, targetCommit: string): Command {
+  return checked({ ...base(ctx), type: 'UndoSaveReflection', payload: { target, targetCommit } });
+}
+export function undoSaveReflectionDraft(ctx: MintContext, target: SaveReflectionCommand): Command {
+  const draft = { ...base(ctx), type: 'UndoSaveReflection' as const, payload: { target } };
   checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
   return draft as Command;
 }
