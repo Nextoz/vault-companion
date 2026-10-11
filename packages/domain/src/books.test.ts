@@ -189,3 +189,49 @@ it('listBooks projects every book, skips the queue and unmanaged notes, and keep
     }],
   });
 });
+
+const followUpPayload = { title: 'Synthetic Book', date: '2026-10-02', ordinal: 1, question: 'What changed?', answer: 'Synthetic answer' };
+
+it('SaveFollowUp splices ordinal 1, dedupes a lost reply, and exact Undo restores every parent byte', async () => {
+  const source = '\uFEFF' + (fixture + '\n### 2026-10-02\nSecond reflection\n').replaceAll('\n', '\r\n');
+  const h = await setup({ [BOOK]: source });
+  const target = h.command('SaveFollowUp', followUpPayload);
+  h.store.writeFaults.push('apply-then-unknown');
+  const saved = receipt(await h.run(target));
+  expect(saved.status).toBe('already-applied');
+  expect(h.store.text(BOOK)).toBe(source.replace('First reflection\r\n', 'First reflection\r\n\r\n> AI question: What changed?\r\n\r\nSynthetic answer\r\n'));
+  expect(await h.run(target)).toEqual(saved);
+  expect(h.store.writeCalls).toBe(1);
+  expect((await h.store.readCommit(saved.commitSha))?.trailers).toMatchObject({ [TRAILER_OP]: target.operationId, [TRAILER_PAYLOAD]: await payloadHash(target) });
+  const undo = h.command('UndoSaveFollowUp', { target, targetCommit: saved.commitSha });
+  const undone = receipt(await h.run(undo));
+  expect(h.store.text(BOOK)).toBe(source);
+  expect(await h.run(undo)).toEqual({ ...undone, status: 'already-applied' });
+  expect((await h.store.readCommit(undone.commitSha))?.trailers[TRAILER_UNDOES]).toBe(target.operationId);
+});
+
+it('follow-up Undo refuses changed bytes and a forged target', async () => {
+  const h = await setup({ [BOOK]: fixture });
+  const target = h.command('SaveFollowUp', followUpPayload);
+  const saved = receipt(await h.run(target));
+  const forged = Command.parse({ ...target, payload: { ...target.payload, answer: 'Forged answer' } });
+  expect(await h.run(h.command('UndoSaveFollowUp', { target: forged, targetCommit: saved.commitSha }))).toMatchObject({ code: 'invalid' });
+  await h.store.commitFiles({ [BOOK]: h.store.text(BOOK)! + 'Desktop edit\n' });
+  expect(await h.run(h.command('UndoSaveFollowUp', { target, targetCommit: saved.commitSha }))).toMatchObject({ code: 'refused:undo-expired' });
+});
+
+it('SaveFollowUp enforces path guards and refuses missing entries or unsafe text without writing', async () => {
+  const h = await setup({ [BOOK]: fixture, [READING_QUEUE_PATH]: 'queue\n' });
+  for (const [changes, code] of [
+    [{ title: 'Reading Queue' }, 'refused:path'], [{ title: 'a/b' }, 'refused:book-title-invalid'],
+    [{ ordinal: 2 }, 'reflection-not-found'], [{ date: '2026-10-03' }, 'reflection-not-found'],
+    [{ question: '' }, 'invalid'], [{ question: 'Why?\nHow?' }, 'invalid'],
+    [{ answer: '' }, 'refused:book-reflection-empty'], [{ answer: '## Reflections' }, 'invalid'],
+  ] as const) {
+    expect(await h.run(h.command('SaveFollowUp', { ...followUpPayload, ...changes }))).toMatchObject({ code });
+  }
+  vi.mocked(paths.canWrite).mockReturnValue(false);
+  expect(await h.run(h.command('SaveFollowUp', followUpPayload))).toMatchObject({ code: 'refused:path' });
+  expect(h.store.writeCalls).toBe(0);
+  expect(h.store.text(BOOK)).toBe(fixture);
+});

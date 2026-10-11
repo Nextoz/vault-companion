@@ -2,6 +2,8 @@
 // No domain logic lives here (docs/architecture.md).
 import {
   Command,
+  BookFollowUpRequest,
+  type BookFollowUpResponse,
   DashboardRange,
   decodeLinkedNoteHeader,
   decodeNoteHeader,
@@ -73,6 +75,8 @@ export interface Services {
   readLearning?(): Promise<LearningResponse | ApiError>;
   /** ADR-0062 reading books. Read-only. Optional: without it the route answers 404. */
   readBooks?(): Promise<BooksResponse | ApiError>;
+  /** ADR-0063: one optional AI question, no write. */
+  followUp?(request: BookFollowUpRequest): Promise<BookFollowUpResponse | ApiError>;
   readActiveWork?(): Promise<ActiveWorkResponse | ApiError>;
   readTriage?(): Promise<TriageResponse | ApiError>;
   readScouts?(): Promise<ScoutsResponse | ApiError>;
@@ -142,6 +146,10 @@ export function statusFor(code: ErrorCode): number {
   if (code === 'jev-unavailable') return 503;
   if (code === 'jev-bad-answer') return 502;
   if (code === 'jev-rate-limited') return 429;
+  if (code === 'follow-up-unavailable') return 503;
+  if (code === 'follow-up-rate-limited') return 429;
+  if (code === 'follow-up-bad-output') return 502;
+  if (code === 'reflection-not-found') return 404;
   if (code === 'jev-excluded-path' || code === 'note-too-long') return 422;
   if (code.startsWith('refused:')) return 422;
   return 409; // conflict:*, operation-id-reused, dedupe-unknown
@@ -158,7 +166,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | BooksResponse | ScoutsResponse | HistoryResponse | GameResponse | NotesResponse | NoteReadResponse | AskJevResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | BooksResponse | BookFollowUpResponse | ScoutsResponse | HistoryResponse | GameResponse | NotesResponse | NoteReadResponse | AskJevResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -284,6 +292,35 @@ export function createApp(deps: AppDeps) {
     }
     if (result.status === 'refused') meta.errorCode = `books:${result.code}`;
     meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Read-only, but spends money: the same origin/account/JSON guards as Ask Jev.
+  app.post('/api/books/follow-up', async (c) => {
+    const followUp = deps.services.followUp;
+    if (!followUp) return c.json(err('follow-up-unavailable', 'Follow-up questions are not configured.'), 503);
+    if (c.req.header('Origin') !== deps.appOrigin || c.req.header('X-VC-Request') !== '1') {
+      return c.json(err('forbidden', 'request origin not allowed'), 403);
+    }
+    if (!(c.req.header('Content-Type') ?? '').toLowerCase().startsWith('application/json')) {
+      return c.json(err('forbidden', 'JSON required'), 403);
+    }
+    if (c.req.header('X-VC-Account') !== c.get('identity').accountKey) {
+      return c.json(err('account-mismatch', 'this action was saved under a different sign-in'), 409);
+    }
+    const text = await c.req.text();
+    if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return c.json(err('invalid', 'body too large'), 400);
+    let raw: unknown;
+    try { raw = JSON.parse(text); } catch { return c.json(err('invalid', 'body is not JSON'), 400); }
+    const parsed = BookFollowUpRequest.safeParse(raw);
+    if (!parsed.success) return c.json(err('invalid', 'invalid reflection selection'), 400);
+    const meta = c.get('logMeta');
+    meta.operationId = deps.newRequestId?.() ?? crypto.randomUUID();
+    const result = await followUp(parsed.data);
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
     return c.json(result);
   });
 

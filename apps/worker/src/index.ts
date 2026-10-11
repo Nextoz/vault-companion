@@ -18,6 +18,7 @@ import { createAccessVerifier, createServiceTokenVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
 import { createScalewayChat } from './scaleway-chat.ts';
 import { createJevService } from './jev.ts';
+import { BOOK_FOLLOW_UP_TIMEOUT_MS, createBookFollowUpService } from './book-follow-up.ts';
 import { gatherCandidates } from './morning-brief-gather.ts';
 import { createMoodReader } from './mood-reader.ts';
 import { cloudflareMailer, type BriefEmailBinding } from './morning-brief-email.ts';
@@ -150,6 +151,11 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...training,
     ...learning,
     ...books,
+    ...createBookFollowUpService({
+      readBooks: books.readBooks,
+      ...(env.SCALEWAY_API_KEY ? { chat: createScalewayChat({ apiKey: env.SCALEWAY_API_KEY, fetch: fetchImpl, timeoutMs: BOOK_FOLLOW_UP_TIMEOUT_MS }) } : {}),
+      now: () => Date.now(),
+    }),
     ...createTriageService({ store }),
     ...radar,
     ...createScoutService({ store }),

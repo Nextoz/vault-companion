@@ -19,6 +19,8 @@ export const VERB: Record<CommandType, string> = {
   UndoLogReading: 'Undo reading',
   SaveReflection: 'Reflection',
   UndoSaveReflection: 'Undo reflection',
+  SaveFollowUp: 'Follow-up',
+  UndoSaveFollowUp: 'Undo follow-up',
   MoodCheckin: 'Mood check-in',
   UndoMoodCheckin: 'Undo mood check-in',
   ReportFeedback: 'Report',

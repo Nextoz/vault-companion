@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { BooksResponse, Command, bookNotePath, canonicalBookTitle, READING_QUEUE_PATH } from './index.ts';
+import { ApiError, BookFollowUpRequest, BookFollowUpResponse, BooksResponse, Command, bookNotePath, canonicalBookTitle, READING_QUEUE_PATH } from './index.ts';
 
 const envelope = (type: string, payload: unknown) => ({ schemaVersion: 1, operationId: '00000000-0000-4000-8000-000000000001', type, payload, occurredAt: '2026-10-05T10:00:00Z', baseRevision: '1'.repeat(40) });
 
@@ -43,4 +43,26 @@ it('parses a books response', () => {
   });
   expect(r.status).toBe('ok');
   expect(BooksResponse.safeParse({ status: 'ok', revision: '1'.repeat(40), books: [{ title: 'T' }] }).success).toBe(false);
+});
+
+it('accepts SaveFollowUp and its exact Undo, leaving empty text for typed kernel refusals', () => {
+  const save = Command.parse(envelope('SaveFollowUp', { title: 'Synthetic Book', date: '2026-10-05', ordinal: 1, question: 'Why?', answer: 'Synthetic answer' }));
+  expect(Command.safeParse(envelope('UndoSaveFollowUp', { target: save, targetCommit: '2'.repeat(40) })).success).toBe(true);
+  expect(Command.safeParse(envelope('SaveFollowUp', { ...save.payload, question: '', answer: '' })).success).toBe(true);
+  expect(Command.safeParse(envelope('UndoSaveFollowUp', { target: save })).success).toBe(false);
+});
+
+it('validates the selection-only follow-up request and typed reply/errors', () => {
+  const request = { title: 'Synthetic Book', date: '2026-10-05', ordinal: 1 };
+  expect(BookFollowUpRequest.parse(request)).toEqual(request);
+  for (const changes of [{ ordinal: 0 }, { ordinal: 1.5 }, { date: '2026-02-30' }, { text: 'client text' }, { question: 'Why?' }]) {
+    expect(BookFollowUpRequest.safeParse({ ...request, ...changes }).success).toBe(false);
+  }
+  expect(BookFollowUpResponse.parse({ question: 'Why?' })).toEqual({ question: 'Why?' });
+  for (const question of ['', ' Why? ', 'Why?\nHow?', 'No question', 'x'.repeat(300) + '?', '# Why?', 'C#?']) {
+    expect(BookFollowUpResponse.safeParse({ question }).success).toBe(false);
+  }
+  for (const code of ['follow-up-unavailable', 'follow-up-rate-limited', 'follow-up-bad-output', 'reflection-not-found']) {
+    expect(ApiError.safeParse({ code, message: 'Synthetic error', retryable: false }).success).toBe(true);
+  }
 });

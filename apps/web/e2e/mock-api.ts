@@ -1119,6 +1119,9 @@ export class MockApi {
         const path = `Books/${command.payload.target.payload.title}.md`;
         return { ...base, path, effect: { kind: 'book', op: 'undone', path } };
       }
+      case 'SaveFollowUp':
+      case 'UndoSaveFollowUp':
+        throw new Error('mock: follow-up commands are backend-only');
     }
   }
 }

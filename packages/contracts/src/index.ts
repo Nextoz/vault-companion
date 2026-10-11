@@ -418,14 +418,38 @@ export const SaveReflectionPayload = z.strictObject({
 });
 export type SaveReflectionPayload = z.infer<typeof SaveReflectionPayload>;
 
+/** ADR-0063: ordinal is 1-based among reflections with this date, in note order. */
+export const BookFollowUpRequest = z.strictObject({
+  title: bookTitle,
+  date: z.iso.date(),
+  ordinal: z.number().int().min(1).max(1_000_000),
+});
+export type BookFollowUpRequest = z.infer<typeof BookFollowUpRequest>;
+
+/** Empty/structurally unsafe text is refused by the kernel, as for SaveReflection. */
+export const SaveFollowUpPayload = BookFollowUpRequest.extend({
+  question: z.string().max(300),
+  answer: z.string().max(20_000),
+});
+export type SaveFollowUpPayload = z.infer<typeof SaveFollowUpPayload>;
+
+export const BookFollowUpResponse = z.strictObject({
+  question: z.string().min(1).max(300).refine((s) => s === s.trim() && !/[\r\n\u2028\u2029#]/.test(s) && s.endsWith('?'), 'must be one short question'),
+});
+export type BookFollowUpResponse = z.infer<typeof BookFollowUpResponse>;
+
 export const StartBookCommand = envelope('StartBook', StartBookPayload);
 export type StartBookCommand = z.infer<typeof StartBookCommand>;
 export const LogReadingCommand = envelope('LogReading', LogReadingPayload);
 export type LogReadingCommand = z.infer<typeof LogReadingCommand>;
 export const SaveReflectionCommand = envelope('SaveReflection', SaveReflectionPayload);
 export type SaveReflectionCommand = z.infer<typeof SaveReflectionCommand>;
+export const SaveFollowUpCommand = envelope('SaveFollowUp', SaveFollowUpPayload);
+export type SaveFollowUpCommand = z.infer<typeof SaveFollowUpCommand>;
 
 const bookUndo = <T extends z.ZodType>(target: T) => z.strictObject({ target, targetCommit: commitSha });
+export const UndoSaveFollowUpCommand = envelope('UndoSaveFollowUp', bookUndo(SaveFollowUpCommand));
+export type UndoSaveFollowUpCommand = z.infer<typeof UndoSaveFollowUpCommand>;
 
 export const Command = z.discriminatedUnion('type', [
   CompleteTaskCommand,
@@ -445,6 +469,8 @@ export const Command = z.discriminatedUnion('type', [
   envelope('UndoLogReading', bookUndo(LogReadingCommand)),
   SaveReflectionCommand,
   envelope('UndoSaveReflection', bookUndo(SaveReflectionCommand)),
+  SaveFollowUpCommand,
+  UndoSaveFollowUpCommand,
   envelope('UndoCompleteTask', UndoCompleteTaskPayload),
   envelope('CaptureTask', CaptureTaskPayload),
   envelope('CaptureNote', CaptureNotePayload),
@@ -559,6 +585,11 @@ export const ErrorCode = z.enum([
   'jev-rate-limited',
   /** ADR-0057: TypeSafe answered in a shape this app cannot read. */
   'jev-bad-answer',
+  /** ADR-0063: no Scaleway key, failed call or timeout. */
+  'follow-up-unavailable',
+  'follow-up-rate-limited',
+  'follow-up-bad-output',
+  'reflection-not-found',
   'operation-id-reused',
   'dedupe-unknown',
   /** POST's X-VC-Account differs from the authenticated identity (review A7). Not retryable. */

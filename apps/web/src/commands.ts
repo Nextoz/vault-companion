@@ -128,6 +128,8 @@ export function exportText(envelope: Command): string {
     case 'UndoLogReading': return exportText(envelope.payload.target);
     case 'SaveReflection': return JSON.stringify(envelope.payload, null, 2);
     case 'UndoSaveReflection': return exportText(envelope.payload.target);
+    case 'SaveFollowUp': return JSON.stringify(envelope.payload, null, 2);
+    case 'UndoSaveFollowUp': return exportText(envelope.payload.target);
     case 'MoodCheckin': return JSON.stringify(envelope.payload, null, 2);
     case 'UndoMoodCheckin': return exportText(envelope.payload.target);
     case 'ReportFeedback': return JSON.stringify(envelope.payload, null, 2);

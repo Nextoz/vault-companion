@@ -103,3 +103,43 @@ it('undo is the exact inverse and refuses when the file changed since', () => {
   expect(kernel.undoBookEdit(after.text, after.text, fixture, after.effect)).toMatchObject({ ok: true, text: fixture, effect: { kind: 'book', op: 'undone' } });
   expect(kernel.undoBookEdit(after.text + '\n', after.text, fixture, after.effect)).toMatchObject({ code: 'refused:undo-expired' });
 });
+
+const followUp = { date: '2026-10-02', ordinal: 1, question: 'What changed?', answer: 'A synthetic answer\n  With spacing  ' };
+const twoEntries = fixture + '\n### 2026-10-02\nSecond reflection\n\n## Appendix\nUntouched tail\n';
+
+it.each(['lf', 'crlf-bom', 'no-final-newline'])('golden follow-up splice targets ordinal 1 of two same-day entries (%s)', (format) => {
+  const convert = (text: string) => format === 'crlf-bom' ? '\uFEFF' + text.replaceAll('\n', '\r\n') : format === 'no-final-newline' ? text.slice(0, -1) : text;
+  const source = convert(twoEntries);
+  const expected = convert(twoEntries.replace('First reflection\n', 'First reflection\n\n> AI question: What changed?\n\nA synthetic answer\n  With spacing  \n'));
+  const result = kernel.appendFollowUp(source, followUp);
+  if (!result.ok) throw new Error(result.code);
+  expect(result.text).toBe(expected);
+  expect(kernel.undoBookEdit(result.text, result.text, source, result.effect)).toMatchObject({ ok: true, text: source });
+  expect(kernel.undoBookEdit(result.text + 'x', result.text, source, result.effect)).toMatchObject({ code: 'refused:undo-expired' });
+});
+
+it('selects ordinal 2 only among entries of the requested date, including at EOF', () => {
+  const source = fixture + '\n### 2026-10-03\nDifferent date\n\n### 2026-10-02\nSecond reflection';
+  const result = kernel.appendFollowUp(source, { ...followUp, ordinal: 2, answer: 'Answer' });
+  expect(result).toMatchObject({ ok: true, text: source + '\n\n> AI question: What changed?\n\nAnswer' });
+});
+
+it('refuses empty, multiline or hash-containing questions, empty answers and heading lines in answers', () => {
+  for (const question of ['', ' \t ', 'Why?\nHow?', 'Why?\rHow?', 'Why?\u2028How?', 'Why?\u2029How?', '# Why?', '## Why?', 'How about C#?']) {
+    expect(kernel.appendFollowUp(twoEntries, { ...followUp, question })).toMatchObject({ ok: false, code: 'invalid' });
+  }
+  for (const answer of ['', ' \t ', '\r\n']) {
+    expect(kernel.appendFollowUp(twoEntries, { ...followUp, answer })).toMatchObject({ ok: false, code: 'refused:book-reflection-empty' });
+  }
+  for (const answer of ['# Title', 'fine\n## Reflections', 'fine\r\n  ### 2026-10-03']) {
+    expect(kernel.appendFollowUp(twoEntries, { ...followUp, answer })).toMatchObject({ ok: false, code: 'invalid' });
+  }
+});
+
+it('missing reflection is typed and fake dated headings in code/quotes are not selectable', () => {
+  for (const selection of [{ date: '2026-10-03' }, { ordinal: 3 }]) {
+    expect(kernel.appendFollowUp(twoEntries, { ...followUp, ...selection })).toMatchObject({ code: 'reflection-not-found' });
+  }
+  const source = fixture + '\n```\n### 2026-10-03\nCode\n```\n> ### 2026-10-03\n';
+  expect(kernel.appendFollowUp(source, { ...followUp, date: '2026-10-03' })).toMatchObject({ code: 'reflection-not-found' });
+});

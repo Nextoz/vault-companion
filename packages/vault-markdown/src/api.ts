@@ -17,6 +17,7 @@ export type RefusalCode =
   | 'refused:book-page-invalid'
   | 'refused:book-reflection-empty'
   | 'refused:book-note-shape'
+  | 'reflection-not-found'
   | 'refused:recurring'
   | 'refused:on-completion'
   | 'refused:structure'
