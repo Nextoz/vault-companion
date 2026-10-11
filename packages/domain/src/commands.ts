@@ -592,8 +592,9 @@ function undoLearningPlan(cmd: LearningUndoCommand, raw: unknown): WritePlan<Rec
 
 type BookLogCommand = Extract<Command, { type: 'LogReading' }>;
 type BookReflectCommand = Extract<Command, { type: 'SaveReflection' }>;
-type BookWriteCommand = BookLogCommand | BookReflectCommand;
-type BookEditUndoCommand = Extract<Command, { type: 'UndoLogReading' | 'UndoSaveReflection' }>;
+type BookFollowUpCommand = Extract<Command, { type: 'SaveFollowUp' }>;
+type BookWriteCommand = BookLogCommand | BookReflectCommand | BookFollowUpCommand;
+type BookEditUndoCommand = Extract<Command, { type: 'UndoLogReading' | 'UndoSaveReflection' | 'UndoSaveFollowUp' }>;
 type StartBookCommand = Extract<Command, { type: 'StartBook' }>;
 type UndoStartBookCommand = Extract<Command, { type: 'UndoStartBook' }>;
 
@@ -607,6 +608,7 @@ const bookEffect = (path: VaultPath, e: md.BookEffect): Receipt['effect'] => ({ 
 
 /** The kernel write for a book edit, before it is mapped to a receipt effect. */
 function bookKernel(target: BookWriteCommand, text: string): md.MutationOk<md.BookEffect> | md.Refusal {
+  if (target.type === 'SaveFollowUp') return md.appendFollowUp(text, target.payload);
   return target.type === 'LogReading'
     ? md.appendProgress(text, { date: target.payload.date, page: target.payload.page })
     : md.appendReflection(text, { date: target.payload.date, text: target.payload.text });
@@ -653,6 +655,16 @@ export function logReadingPlan(cmd: BookLogCommand): WritePlan<Receipt['effect']
 
 export function saveReflectionPlan(cmd: BookReflectCommand): WritePlan<Receipt['effect']> {
   return { message: 'Vault Companion: save reflection', async compute(store, at) {
+    const path = bookPath(cmd.payload.title);
+    if (!path) return refuse('refused:book-title-invalid', 'Book title cannot be used for a note name');
+    if (!canWrite(path, 'update')) return refuse('refused:path', 'book path is not writable');
+    const f = await readTodo(store, at, path);
+    return f.ok ? bookApply(cmd, path, f.text) : f.planned;
+  } };
+}
+
+export function saveFollowUpPlan(cmd: BookFollowUpCommand): WritePlan<Receipt['effect']> {
+  return { message: 'Vault Companion: save follow-up', async compute(store, at) {
     const path = bookPath(cmd.payload.title);
     if (!path) return refuse('refused:book-title-invalid', 'Book title cannot be used for a note name');
     if (!canWrite(path, 'update')) return refuse('refused:path', 'book path is not writable');
@@ -1098,6 +1110,8 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
     case 'UndoLogReading': return bookEditUndoPlan(cmd, raw);
     case 'SaveReflection': return saveReflectionPlan(cmd);
     case 'UndoSaveReflection': return bookEditUndoPlan(cmd, raw);
+    case 'SaveFollowUp': return saveFollowUpPlan(cmd);
+    case 'UndoSaveFollowUp': return bookEditUndoPlan(cmd, raw);
     case 'MoodCheckin': return moodCheckinPlan(cmd);
     case 'UndoMoodCheckin': return undoMoodCheckinPlan(cmd, raw);
     case 'ReportFeedback': return reportFeedbackPlan(cmd);

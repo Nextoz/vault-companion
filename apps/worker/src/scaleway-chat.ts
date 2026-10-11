@@ -14,6 +14,8 @@ export interface ChatRequest {
   readonly model: string;
   readonly system: string;
   readonly user: string;
+  /** Morning Brief defaults to JSON; ADR-0063 requests plain prose. */
+  readonly responseFormat?: 'text' | 'json_object';
 }
 
 export interface ScalewayChat {
@@ -37,7 +39,7 @@ export function createScalewayChat(opts: ScalewayChatOptions): ScalewayChat {
   const base = opts.apiBase ?? DEFAULT_API_BASE;
   const timeoutMs = opts.timeoutMs ?? SCALEWAY_TIMEOUT_MS;
   return {
-    async chat({ model, system, user }): Promise<ChatOutcome> {
+    async chat({ model, system, user, responseFormat }): Promise<ChatOutcome> {
       const abort = new AbortController();
       const timer = setTimeout(() => abort.abort(), timeoutMs);
       try {
@@ -47,7 +49,7 @@ export function createScalewayChat(opts: ScalewayChatOptions): ScalewayChat {
           body: JSON.stringify({
             model,
             temperature: 0.3,
-            response_format: { type: 'json_object' },
+            ...(responseFormat === 'text' ? {} : { response_format: { type: 'json_object' } }),
             messages: [
               { role: 'system', content: system },
               { role: 'user', content: user },
