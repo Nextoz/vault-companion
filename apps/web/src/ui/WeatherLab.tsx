@@ -17,19 +17,22 @@ import {
   bestRunDay,
   bestRunSummary,
   dayHours,
-  dayDateLabel,
   dayLabel,
+  dayRunSummary,
   dayScale,
+  localDate,
   modelCountLabel,
   modelDayHours,
   rainBar,
   rainLabel,
   rainSummary,
+  rowDayLabel,
   runWindowHours,
   scalePercent,
-  shortDayLabel,
   weekBar,
   weekBarLabel,
+  weekFootnote,
+  weekRainMode,
   weekScale,
   weatherCodeLabel,
   weatherGlyph,
@@ -226,20 +229,23 @@ function WeatherChart({ seriesList, variable, active, onInspect }: ChartProps) {
 
 interface WeekRowsProps {
   week: readonly WeatherWeekDay[];
+  today: string | null;
   onOpen: (day: string) => void;
   registerRow: (day: string, element: HTMLButtonElement | null) => void;
 }
 
 const degrees = (value: number | null): string => (value === null ? '—' : `${Math.round(value)}°`);
 
-/** One tappable row per week day on the shared week temperature scale, plus the best run-window line. */
-function WeatherWeekRows({ week, onOpen, registerRow }: WeekRowsProps) {
+/** W3: one compact tappable row per day on the shared temperature scale, then the best-day box right under the rows. */
+function WeatherWeekRows({ week, today, onOpen, registerRow }: WeekRowsProps) {
   const scale = useMemo(() => weekScale(week), [week]);
   const bestDay = useMemo(() => bestRunDay(week), [week]);
   const best = useMemo(() => bestRunSummary(week), [week]);
+  const rainMode = useMemo(() => weekRainMode(week), [week]);
+  const footnote = weekFootnote(week, today);
   return (
     <section className="weather-week" aria-label="Seven-day forecast">
-      <ul className="weather-week-list">
+      <ul className={`weather-week-list weather-week-rain-${rainMode}`}>
         {week.map((day) => {
           const bar = weekBar(day, scale);
           const isBest = bestDay?.day === day.day;
@@ -250,19 +256,16 @@ function WeatherWeekRows({ week, onOpen, registerRow }: WeekRowsProps) {
                 className={`weather-week-row${isBest ? ' weather-week-row-best' : ''}`}
                 ref={(element) => registerRow(day.day, element)}
                 onClick={() => onOpen(day.day)}
-                aria-label={`${dayLabel(day.day)}: ${weatherCodeLabel(day.weatherCode)}, ${weekBarLabel(day)}, rain ${rainLabel(day)}${day.models === 1 ? ', 1 model' : ''}${day.partial ? ', partial day' : ''}${isBest ? ', best run day' : ''}`}
+                aria-label={`${dayLabel(day.day)}: ${weatherCodeLabel(day.weatherCode)}, ${weekBarLabel(day)}, rain ${rainLabel(day, rainMode)}${day.models === 1 ? `, ${modelCountLabel(day)}` : ''}${day.partial ? ', partial day' : ''}${isBest ? ', best run day' : ''}`}
               >
-                <span className="weather-week-day">
-                  <span>{shortDayLabel(day.day)}</span>
-                  <span className="weather-week-date">{dayDateLabel(day.day)}</span>
-                </span>
+                <span className="weather-week-day">{rowDayLabel(day.day, today)}</span>
                 <span className="weather-week-icon" aria-hidden="true">{weatherGlyph(day.weatherCode)}</span>
                 <span className="weather-week-low">{degrees(day.lowTemperatureC)}</span>
-                <span className="weather-week-track" aria-hidden="true">{bar && <span className="weather-week-fill" style={{ left: `${bar.left}%`, width: `${bar.width}%` }} />}</span>
+                <span className="weather-week-track" aria-hidden="true">
+                  {bar && <span className={`weather-week-fill${day.models === 1 ? ' weather-week-fill-single' : ''}`} style={{ left: `${bar.left}%`, width: `${bar.width}%` }} />}
+                </span>
                 <span className="weather-week-high">{degrees(day.highTemperatureC)}</span>
-                <span className="weather-week-rain">{rainLabel(day)}</span>
-                {day.models === 1 && <span className="weather-week-models">{modelCountLabel(day)}</span>}
-                {day.partial && <span className="weather-week-partial">partial</span>}
+                <span className="weather-week-rain">{rainLabel(day, rainMode)}</span>
               </button>
             </li>
           );
@@ -271,6 +274,7 @@ function WeatherWeekRows({ week, onOpen, registerRow }: WeekRowsProps) {
       {best
         ? <p className="weather-week-best" role="status">{best}</p>
         : <p className="muted small">No complete run window in the next days.</p>}
+      <p className="weather-week-hint">Tap a day for its hourly forecast{footnote ? ` · ${footnote}` : ''}</p>
     </section>
   );
 }
@@ -281,9 +285,22 @@ interface DayProps {
   onBack: () => void;
 }
 
-const AXIS_HOURS = [0, 6, 12, 18, 23] as const;
+/** Waking-day ticks, as in the W1 mockup: the axis labels and the wind row share them. */
+const AXIS_HOURS = [6, 10, 14, 18, 22] as const;
 
-/** The 24-hour day meteogram: layered rain bars, one temperature line per model, a run-window band and a wind strip. */
+/** First model's short name ("DMI", "ECMWF") for the line legend. */
+const shortModel = (series: WeatherModelSeries): string => series.label.split(' ')[0] ?? series.label;
+
+/** The wind sample at a tick hour, or the nearest hour within one either side; null when the provider has none. */
+function windAt(hours: readonly DayHour[], hour: number): DayHour | null {
+  for (const candidate of [hour, hour + 1, hour - 1]) {
+    const found = hours.find((entry) => entry.hour === candidate && entry.windMs !== null && entry.windDirectionDeg !== null);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** W1: the 24-hour day meteogram: rain bars, one temperature line per model, the run-window band and a wind row. */
 function WeatherDayMeteogram({ day, models, onBack }: DayProps) {
   const perModel = useMemo(() => models.map((series) => ({ series, hours: modelDayHours(series, day.day) })), [models, day.day]);
   const merged = useMemo(() => dayHours(models, day.day), [models, day.day]);
@@ -296,24 +313,31 @@ function WeatherDayMeteogram({ day, models, onBack }: DayProps) {
   const windNote = winds.length > 0
     ? `Wind ${Math.min(...winds).toFixed(0)}-${Math.max(...winds).toFixed(0)} m/s`
     : 'Wind unavailable';
-  const runNote = windowHours.length > 0
-    ? `Run window ${String(Math.min(...windowHours)).padStart(2, '0')}:00-${String(Math.max(...windowHours) + 1).padStart(2, '0')}:00`
-    : 'No shared run window';
   // Hourly temperatures from the same merged data the lines are drawn from, so the readout matches the chart.
   const hourTemps = merged
     .filter((hour) => hour.temperatureC !== null)
     .map((hour) => `${String(hour.hour).padStart(2, '0')}:00 ${Math.round(hour.temperatureC as number)}°C`)
     .join(', ');
+  const warmest = merged.reduce<DayHour | null>((top, hour) => (
+    hour.temperatureC !== null && (top === null || hour.temperatureC > (top.temperatureC as number)) ? hour : top
+  ), null);
+  const hourly = merged.map((hour) => hour.temperatureC).filter((value): value is number => value !== null);
+  // The headline comes from the hours the chart draws, so "high" and the peak label never disagree.
+  const high = hourly.length > 0 ? Math.max(...hourly) : day.highTemperatureC;
+  const low = hourly.length > 0 ? Math.min(...hourly) : day.lowTemperatureC;
+  const legend = covered.length > 1
+    ? `Solid ${shortModel(covered[0]!.series)} · dashed ${shortModel(covered[1]!.series)}`
+    : covered.length === 1 ? `${shortModel(covered[0]!.series)} only` : null;
 
   const W = 340;
-  const H = 170;
+  const H = 164;
   const padX = 10;
-  const plotTop = 12;
-  const plotBottom = 120;
-  const rainMax = 34;
-  const axisY = 134;
-  const windTop = 142;
-  const windMid = windTop + 11;
+  const plotTop = 16;
+  const plotBottom = 112;
+  const rainMax = 40;
+  const axisY = 126;
+  const arrowY = 142;
+  const speedY = 158;
   const colW = (W - 2 * padX) / 24;
   const xc = (hour: number): number => padX + (hour + 0.5) * colW;
   const y = (value: number): number => plotBottom - (scalePercent(value, scale) / 100) * (plotBottom - plotTop);
@@ -339,15 +363,18 @@ function WeatherDayMeteogram({ day, models, onBack }: DayProps) {
     <section className="weather-day" aria-label={`${dayLabel(day.day)} forecast`}>
       <div className="weather-day-head">
         <button type="button" className="weather-back" onClick={onBack}>Back</button>
-        <div>
-          <p className="weather-day-eyebrow">{shortDayLabel(day.day)}</p>
-          <h3 className="weather-day-title">{dayLabel(day.day)}</h3>
-        </div>
+        <h3 className="weather-day-title">{dayLabel(day.day)}</h3>
       </div>
-      <p className="weather-day-summary" data-testid="weather-day-summary">{rainSummary(merged)}</p>
-      {day.partial && <p className="weather-note" role="status">Partial day — only the hours forecast so far are shown.</p>}
+      <div className="weather-day-hero">
+        <p className="weather-day-temp">
+          {degrees(high)}
+          <span className="weather-day-low"> / {degrees(low)}</span>
+        </p>
+        <p className="weather-day-summary" data-testid="weather-day-summary">{rainSummary(merged)}</p>
+      </div>
+      {day.partial && <p className="weather-day-note" role="status">Partial day: only the hours forecast so far are shown.</p>}
       {covered.length < models.length && (
-        <p className="weather-note" role="status">One model unavailable — showing {covered.map((model) => model.series.label).join(', ') || 'no model'} only.</p>
+        <p className="weather-day-note" role="status">One model unavailable: showing {covered.map((model) => model.series.label).join(', ') || 'no model'} only.</p>
       )}
       {merged.length === 0
         ? <p className="weather-note" role="status">No hourly detail for this day.</p>
@@ -368,9 +395,10 @@ function WeatherDayMeteogram({ day, models, onBack }: DayProps) {
                   height={plotBottom - plotTop}
                 />
               )}
-              {[0, 6, 12, 18].map((hour) => (
+              {AXIS_HOURS.map((hour) => (
                 <line key={hour} className="weather-day-grid" x1={xc(hour)} y1={plotTop} x2={xc(hour)} y2={plotBottom} />
               ))}
+              <line className="weather-day-baseline" x1={padX} y1={plotBottom} x2={W - padX} y2={plotBottom} />
               {merged.filter((hour) => hour.rainMm !== null && hour.rainMm > 0).map((hour) => {
                 const height = (rainBar(hour, maxRain) / 100) * rainMax;
                 return <rect key={hour.hour} className="weather-day-rain" x={xc(hour.hour) - colW * 0.32} y={plotBottom - height} width={colW * 0.64} height={height} />;
@@ -380,18 +408,34 @@ function WeatherDayMeteogram({ day, models, onBack }: DayProps) {
                   ? <circle key={`${model.series.model}-${segmentIndex}`} className={index === 0 ? 'weather-day-temp-primary' : 'weather-day-temp-comparison'} cx={segment[0]!.x} cy={segment[0]!.y} r={2.5} />
                   : <polyline key={`${model.series.model}-${segmentIndex}`} className={index === 0 ? 'weather-day-temp-primary' : 'weather-day-temp-comparison'} points={segment.map((point) => `${point.x},${point.y}`).join(' ')} />
               )))}
-              {merged.filter((hour) => hour.windMs !== null && hour.windDirectionDeg !== null).map((hour) => (
-                <g key={`wind-${hour.hour}`} className="weather-day-wind" transform={`rotate(${hour.windDirectionDeg! + 180} ${xc(hour.hour)} ${windMid})`}>
-                  <line x1={xc(hour.hour)} y1={windMid - (2 + Math.min(hour.windMs!, 10) * 0.9)} x2={xc(hour.hour)} y2={windMid + (2 + Math.min(hour.windMs!, 10) * 0.9)} />
-                </g>
-              ))}
+              {warmest && (
+                <text className="weather-day-peak" x={xc(warmest.hour)} y={y(warmest.temperatureC as number) - 5} textAnchor="middle">
+                  {degrees(warmest.temperatureC)}
+                </text>
+              )}
               {AXIS_HOURS.map((hour) => (
-                <text key={hour} className="weather-day-axis" x={xc(hour)} y={axisY} textAnchor="middle">{`${String(hour).padStart(2, '0')}:00`}</text>
+                <text key={hour} className="weather-day-axis" x={xc(hour)} y={axisY} textAnchor="middle">{String(hour).padStart(2, '0')}</text>
               ))}
+              {AXIS_HOURS.map((hour) => {
+                const wind = windAt(merged, hour);
+                if (!wind) return null;
+                // Provider direction is where the wind comes FROM; the arrow points where it blows.
+                return (
+                  <g key={`wind-${hour}`} className="weather-day-wind">
+                    <text x={xc(hour)} y={arrowY} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${wind.windDirectionDeg! + 180} ${xc(hour)} ${arrowY})`}>↑</text>
+                    <text className="weather-day-wind-speed" x={xc(hour)} y={speedY} textAnchor="middle">{Math.round(wind.windMs!)}</text>
+                  </g>
+                );
+              })}
             </svg>
+            <p className={`weather-day-run${day.runWindow ? '' : ' weather-day-run-none'}`} role="status">{dayRunSummary(day.runWindow)}</p>
             <figcaption className="weather-readout">
-              <span className="weather-day-temps" data-testid="weather-day-temps">Temperatures: {hourTemps || 'unavailable'}</span>
-              {' · '}{windNote} · {runNote}
+              {legend && <span className="weather-day-legend">{legend} · wind m/s</span>}
+              {/* The numbers behind the lines stay one tap away; the W1 mockup shows only the chart. */}
+              <details className="weather-day-hours">
+                <summary>Hourly temperatures</summary>
+                <span className="weather-day-temps" data-testid="weather-day-temps">Temperatures: {hourTemps || 'unavailable'}</span>
+              </details>
             </figcaption>
           </figure>
         )}
@@ -417,7 +461,35 @@ function WeatherWeekPanel({ projection }: { projection: WeatherProjection }) {
   }, [openDay, returnFocus]);
   const day = openDay ? week.find((entry) => entry.day === openDay) : undefined;
   if (day) return <WeatherDayMeteogram day={day} models={projection.models} onBack={() => { setReturnFocus(day.day); setOpenDay(null); }} />;
-  return <WeatherWeekRows week={week} onOpen={setOpenDay} registerRow={registerRow} />;
+  return <WeatherWeekRows week={week} today={projection.now ? localDate(projection.now) : null} onOpen={setOpenDay} registerRow={registerRow} />;
+}
+
+/** One provenance line per model: resolution, coverage, gaps, retrieval time and source link. */
+function WeatherSourceList({ models }: { models: readonly WeatherModelSeries[] }) {
+  return (
+    <div className="weather-source-list">
+      {models.map((series) => (
+        <p key={series.model} className="muted small">
+          {series.label} ({series.resolutionKm} km) · {series.points.length}/{series.expectedPoints} points · {series.missingIntervals} gaps · retrieved <time dateTime={series.retrievedAt}>{formatWeatherTime(series.retrievedAt)}</time> · <a href={series.sourceUrl} target="_blank" rel="noreferrer">Source</a>
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/** Location, attribution, per-model provenance and the run-window rule: kept complete, but one tap away. */
+function WeatherSources({ projection }: { projection: WeatherProjection }) {
+  return (
+    <details className="weather-sources">
+      <summary>Sources · Open-Meteo, CC-BY 4.0</summary>
+      <p className="muted small">{projection.location.label} · {projection.models.length} {projection.models.length === 1 ? 'model' : 'models'}</p>
+      <p className="muted small">
+        {projection.attribution} <a href={projection.termsUrl} target="_blank" rel="noreferrer">Terms</a>
+      </p>
+      <WeatherSourceList models={projection.models} />
+      {projection.runWindow && <p className="muted small">{runWindowSummary(projection.runWindow)} {projection.runWindow.note}</p>}
+    </details>
+  );
 }
 
 export interface WeatherLabProps {
@@ -442,32 +514,32 @@ export function WeatherLab({ projection, accountKey, onUsePreciseLocation, locat
   // Freshness is measured against the server `now` in the projection, never the phone clock.
   const stale = !weatherFresh(projection, useWeatherNow(projection.now));
   const headingId = useId();
+  const hasWeek = (projection.week?.length ?? 0) > 0;
   return (
     <section className="weather-lab" aria-labelledby={headingId}>
       <h2 id={headingId}>Weather</h2>
-      <p className="muted small">{projection.location.label} · {projection.partialError === 'one-model-unavailable' ? 'one model unavailable' : `${projection.models.length} models`}</p>
-      <p className="muted small">
-        {projection.attribution} <a href={projection.termsUrl} target="_blank" rel="noreferrer">Terms</a>
-      </p>
-      {stale && <p className="weather-stale" role="status">Not refreshed — showing the last successful forecast.</p>}
-      <div className="weather-source-list">
-        {projection.models.map((series) => (
-          <p key={series.model} className="muted small">
-            {series.label} ({series.resolutionKm} km) · {series.points.length}/{series.expectedPoints} points · {series.missingIntervals} gaps · retrieved <time dateTime={series.retrievedAt}>{formatWeatherTime(series.retrievedAt)}</time> · <a href={series.sourceUrl} target="_blank" rel="noreferrer">Source</a>
-          </p>
-        ))}
-      </div>
-      {projection.runWindow && (
-        <div className="weather-window" role="status">
-          <strong>{runWindowSummary(projection.runWindow)}</strong>
-          <p className="muted small">{projection.runWindow.note}</p>
-        </div>
-      )}
-      {!projection.runWindow && <p className="muted small">No two-hour daytime window could be chosen from the forecast.</p>}
-
-      {(projection.week?.length ?? 0) > 0
-        ? <WeatherWeekPanel projection={projection} />
+      {hasWeek
+        // WX1 (W3 mockup): the week starts at the top; provenance sits behind the Sources toggle under it.
+        ? <>
+            {stale && <p className="weather-stale" role="status">Not refreshed — showing the last successful forecast.</p>}
+            {projection.partialError === 'one-model-unavailable' && <p className="weather-stale" role="status">One model unavailable: the week shows one model only.</p>}
+            <WeatherWeekPanel projection={projection} />
+            <WeatherSources projection={projection} />
+          </>
         : <>
+            <p className="muted small">{projection.location.label} · {projection.partialError === 'one-model-unavailable' ? 'one model unavailable' : `${projection.models.length} models`}</p>
+            <p className="muted small">
+              {projection.attribution} <a href={projection.termsUrl} target="_blank" rel="noreferrer">Terms</a>
+            </p>
+            {stale && <p className="weather-stale" role="status">Not refreshed — showing the last successful forecast.</p>}
+            <WeatherSourceList models={projection.models} />
+            {projection.runWindow && (
+              <div className="weather-window" role="status">
+                <strong>{runWindowSummary(projection.runWindow)}</strong>
+                <p className="muted small">{projection.runWindow.note}</p>
+              </div>
+            )}
+            {!projection.runWindow && <p className="muted small">No two-hour daytime window could be chosen from the forecast.</p>}
             <div className="segmented weather-controls" role="group" aria-label="Weather variable">
               {VARIABLES.map((option) => (
                 <button key={option.value} type="button" aria-pressed={variable === option.value} onClick={() => setVariable(option.value)}>{option.label}</button>

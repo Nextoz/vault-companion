@@ -108,6 +108,22 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(panel.locator('.ai-usage-tile')).toHaveCount(5);
   });
 
+  // WX1: the week overview (mockup W3) and one day's meteogram (W1), on the Board's Weather card.
+  const weather = page.getByRole('region', { name: 'Dashboard', exact: true }).getByRole('article', { name: 'Weather', exact: true });
+  // Card top under the sticky status bar (about 90 px), like a person scrolling to it.
+  const scrollCardTop = () => weather.evaluate((card) => window.scrollBy(0, card.getBoundingClientRect().top - 100));
+  await shot('Weather - week', async () => {
+    await scrollCardTop();
+    await expect(weather.locator('.weather-week-row')).toHaveCount(7);
+  });
+
+  await shot('Weather - day meteogram', async () => {
+    await weather.locator('.weather-week-row').first().click();
+    await scrollCardTop();
+    await expect(weather.locator('.weather-day-run')).toBeVisible();
+  });
+  await weather.getByRole('button', { name: 'Back', exact: true }).click();
+
   await shot('Tasks', async () => {
     await goTo(page, 'Tasks');
     await expect(page.getByRole('region', { name: 'Today', exact: true }).getByText('Water the plants')).toBeVisible();

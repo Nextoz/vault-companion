@@ -22,11 +22,15 @@ test('Dashboard week overview: one row per day, the single-model note, best-run 
   await expect(weather).toContainText('ECMWF IFS 9 km');
   await expect(weather).toContainText('CC-BY 4.0');
   await expect(weather.locator('a', { hasText: 'Source' })).toHaveCount(2);
-  await expect(weather).toContainText('lowest-rain window');
   await expect(weather.locator('.weather-week-row')).toHaveCount(7);
-  // Days beyond the DMI horizon carry one model, and are labelled rather than padded to two.
-  await expect(weather.locator('.weather-week-models')).toHaveCount(4);
-  await expect(weather.locator('.weather-week-best')).toContainText('Best run:');
+  await expect(weather.locator('.weather-week-row').first()).toContainText('Today');
+  // Days beyond the DMI horizon carry one model: a faded bar plus one footnote, never padded to two.
+  await expect(weather.locator('.weather-week-fill-single')).toHaveCount(4);
+  await expect(weather.locator('.weather-week-hint')).toContainText('one model only');
+  await expect(weather.locator('.weather-week-best')).toContainText('Best day to run:');
+  // W3: the week starts the panel; provenance and the run-window rule sit behind the Sources toggle.
+  await expect(weather.locator('.weather-sources')).not.toHaveAttribute('open');
+  await expect(weather.locator('.weather-sources')).toContainText('lowest-rain window');
   const readsBeforeInspection = api.weatherReads;
 
   const firstRow = weather.locator('.weather-week-row').first();
@@ -36,6 +40,11 @@ test('Dashboard week overview: one row per day, the single-model note, best-run 
   await expect(weather.locator('.weather-day')).toBeVisible();
   await expect(weather.getByTestId('weather-day-summary')).toContainText('Rain');
   await expect(weather.locator('.weather-day-window')).toBeVisible();
+  // W1: hourly lines across the day (16 forecast hours from 08:00), a wind row and the best-run line.
+  await expect(weather.locator('polyline.weather-day-temp-primary')).toHaveCount(1);
+  // Today's forecast starts at 08:00, so the 06 tick has no wind sample: 4 of the 5 ticks.
+  await expect(weather.locator('.weather-day-wind')).toHaveCount(4);
+  await expect(weather.locator('.weather-day-run')).toContainText('Best run 08:00-10:00');
   await expect(weather.getByRole('img')).toBeVisible();
   await weather.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(weather.locator('.weather-week')).toBeVisible();
@@ -67,7 +76,7 @@ test('partial comparison failure is labelled single-model, not a made-up agreeme
   await page.goto('/');
   await goTo(page, 'Board');
   const weather = page.getByRole('region', { name: 'Dashboard' }).getByRole('article', { name: 'Weather' });
-  await expect(weather).toContainText('one model unavailable');
+  await expect(weather).toContainText(/one model unavailable/i);
   await expect(weather).toContainText('One model covers this window');
   await expect(weather.locator('button', { hasText: 'Compare' })).toHaveCount(0);
 });
