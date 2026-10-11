@@ -26,6 +26,17 @@ export function watchTitle(card: WatchCard): string {
   return card.item.symbol.replace(/[-/]/g, ' / ').trim();
 }
 
+/** A D1 row's visible name: a stock's company ("NVIDIA", "Gold"), else the pair title. The symbol goes on the sub line. */
+export function watchRowTitle(card: WatchCard): string {
+  return card.item.type === 'stock' ? card.title : watchTitle(card);
+}
+
+/** A D1 row's sub line: the stock ticker, "Futures" for a Yahoo futures contract (GC=F), nothing for a pair. */
+export function watchSubtitle(card: WatchCard): string | null {
+  if (card.item.type !== 'stock') return null;
+  return card.item.symbol.endsWith('=F') ? 'Futures' : card.item.symbol;
+}
+
 /**
  * The delay badge a card must show, or null when the source is live. Stocks come from Yahoo's keyless chart, which is
  * delayed; crypto/fx are not. The provider time itself is rendered next to it by the card ("Market time …").

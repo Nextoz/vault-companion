@@ -50,6 +50,7 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
   api.open = [taskView(10, 'Water the plants'), taskView(11, 'Call the bike shop'), taskView(3, CALENDAR_TASK)];
   api.morning = MockApi.SAMPLE_MORNING;
   api.morningBrief = brief(TODAY);
+  api.dashboardWatchlist = true; // D1: the Boards Markets card with every production watchlist row
   api.triage = { ...api.triage, feedState: 'ok', generatedAt: '2026-09-28T06:50:00+02:00',
     cards: [card(1, 'Synthetic event one', '2026-10-01T17:00:00+02:00'), card(2, 'Synthetic event two', '2026-10-02T17:00:00+02:00'),
       card(3, 'Synthetic event three', '2026-10-03T17:00:00+02:00')] };
@@ -96,6 +97,20 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await pane.scrollIntoViewIfNeeded();
     await expect(pane).toBeVisible();
   });
+
+  // D1: Boards opens on the compact Markets card; one tapped row shows its chart, times and source in place.
+  const markets = page.getByRole('region', { name: 'Dashboard', exact: true }).getByRole('region', { name: 'Markets', exact: true });
+  await shot('Boards - Markets', async () => {
+    await goTo(page, 'Board');
+    await markets.evaluate((card) => window.scrollBy(0, card.getBoundingClientRect().top - 100));
+    await expect(markets.locator('.dash-watch')).toHaveCount(7);
+  });
+
+  await shot('Boards - Markets row open', async () => {
+    await markets.getByRole('article', { name: 'Gold (GC=F)', exact: true }).locator('button.dash-row-head').click();
+    await expect(markets.locator('.dash-svg')).toHaveCount(1);
+  });
+  await markets.getByRole('article', { name: 'Gold (GC=F)', exact: true }).locator('button.dash-row-head').click();
 
   await shot('Today - AI usage panel', async () => {
     // UX8: the AI usage panel lives on the Today screen's Boards view (Overview is the default).

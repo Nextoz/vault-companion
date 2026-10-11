@@ -65,6 +65,31 @@ test('Dashboard keeps Today default and supports mobile ranges, touch and keyboa
   await expect(dashboard).toHaveCount(0);
 });
 
+test('D1: the watchlist is a compact Markets list; a tapped row opens its chart in place', async ({ page }) => {
+  const api = new MockApi();
+  api.dashboardWatchlist = true;
+  await api.install(page);
+  await page.goto('/');
+  await goTo(page, 'Board');
+  const markets = page.getByRole('region', { name: 'Dashboard', exact: true }).getByRole('region', { name: 'Markets', exact: true });
+  const rows = markets.locator('.dash-watch');
+  await expect(rows).toHaveCount(7);
+  await expect(markets.locator('button.dash-row-head[aria-expanded="false"]')).toHaveCount(7);
+  await expect(markets.locator('svg.dash-svg')).toHaveCount(0);
+  for (const head of await markets.locator('button.dash-row-head').all()) {
+    expect((await head.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
+  const gold = markets.getByRole('article', { name: 'Gold (GC=F)', exact: true });
+  await expect(gold.locator('.dash-row-sub')).toHaveText('FuturesDelayed');
+  await expect(gold.locator('.dash-price')).toHaveText('$4,216.30');
+  await gold.locator('button.dash-row-head').click();
+  await expect(gold.locator('button.dash-row-head')).toHaveAttribute('aria-expanded', 'true');
+  await expect(gold.getByRole('img')).toBeVisible();
+  await expect(gold.locator('.dash-times')).toContainText('Market time');
+  await expect(markets.locator('svg.dash-svg')).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('Health board shows four formatted tiles with gap-aware sparklines', async ({ page }) => {
   const api = new MockApi();
   await api.install(page);

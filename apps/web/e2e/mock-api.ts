@@ -259,6 +259,8 @@ export class MockApi {
   dashboardMode: 'ok' | 'no-history' | 'unavailable' = 'ok';
   dashboardNow = '2026-09-30T12:00:00Z';
   dashboardFetchedAt = '2026-09-30T12:00:00Z';
+  /** D1: serve the production watchlist shape (synthetic values) instead of the legacy BTC card alone. Off by default. */
+  dashboardWatchlist = false;
   readonly dashboardRanges: DashboardRange[] = [];
   tickerReads = 0;
   marketTicker: MarketTickerResponse = MarketTickerResponse.parse({
@@ -676,7 +678,33 @@ export class MockApi {
           drillthrough: null, projection: this.weather.projection }
       : { id: 'weather', status: 'unavailable', title: 'Weather', provenance: 'Open-Meteo (DMI + ECMWF)',
           observedAt: null, fetchedAt: null, note: 'Weather is unavailable.', drillthrough: null, reason: this.weather.reason };
-    return this.#json(route, 200, DashboardResponse.parse({ now: this.dashboardNow, cards: [market, weather,
+    // D1 tour data: the production watchlist items with synthetic prices on a gentle trend (gold's level from the
+    // captured 11 Oct 2026 Yahoo response), plus one private valuation. The legacy card is dropped, as on the worker.
+    const watchPoints = Math.min(count, 60);
+    const watch = (symbol: string, type: 'crypto' | 'fx' | 'stock', title: string, base: string, quote: string,
+      provider: string, provenance: string, last: number, drift: number) => ({
+      id: 'watchlist', status: 'ok', title, provenance, observedAt: meta.observedAt, fetchedAt: this.dashboardFetchedAt,
+      note: null, drillthrough: null, item: { symbol, type },
+      ticker: { base, quote, provider, price: last, providerTime: meta.observedAt },
+      series: { range, granularitySeconds: plan.granularitySeconds, missingIntervals: 0,
+        points: Array.from({ length: watchPoints }, (_, index) => {
+          const close = last * (1 - drift * (1 - index / (watchPoints - 1))) * (1 + 0.15 * Math.abs(drift) * Math.sin(index / 5));
+          return { time: new Date(Date.parse(this.dashboardNow) - (watchPoints - 1 - index) * plan.granularitySeconds * 1000).toISOString(), open: close, high: close, low: close, close };
+        }) },
+    });
+    const watchlist = this.dashboardWatchlist ? [
+      watch('BTC-USD', 'crypto', 'BTC / USD', 'BTC', 'USD', 'coinbase', 'Coinbase Exchange (public)', 60123.45, -0.023),
+      watch('ETH-USD', 'crypto', 'ETH / USD', 'ETH', 'USD', 'coinbase', 'Coinbase Exchange (public)', 2970.1, 0.031),
+      watch('RUB/DKK', 'fx', 'RUB / DKK', 'RUB', 'DKK', 'frankfurter', 'Bank of Russia', 0.0712, 0.004),
+      watch('SEK/DKK', 'fx', 'SEK / DKK', 'SEK', 'DKK', 'frankfurter', 'Frankfurter (ECB reference rates)', 0.6876, -0.002),
+      watch('NVDA', 'stock', 'NVIDIA', 'NVDA', 'USD', 'Yahoo Finance', 'Yahoo Finance', 229.28, 0.062),
+      watch('SPCX', 'stock', 'SpaceX', 'SPCX', 'USD', 'Yahoo Finance', 'Yahoo Finance', 163.2, 0.041),
+      watch('GC=F', 'stock', 'Gold', 'GC=F', 'USD', 'Yahoo Finance', 'Yahoo Finance', 4216.3, 0.018),
+      { id: 'private-valuation', status: 'ok', title: 'OpenAI', provenance: 'Hand-maintained (vault)', observedAt: null,
+        fetchedAt: null, note: null, drillthrough: null,
+        item: { id: 'openai', name: 'OpenAI', valueUsdBillions: 500, asOf: '2026-03-12', source: { label: 'Synthetic source', url: 'https://example.test/openai' } } },
+    ] : [];
+    return this.#json(route, 200, DashboardResponse.parse({ now: this.dashboardNow, cards: [...(this.dashboardWatchlist ? [] : [market]), ...watchlist, weather,
       { id: 'ai-usage', status: 'not-configured', title: 'AI usage', provenance: 'Not configured',
         observedAt: null, fetchedAt: null, drillthrough: null, note: 'No approved usage source is connected yet.' },
     ] }));
