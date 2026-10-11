@@ -242,6 +242,8 @@ export const sampleGame = (unavailable: string[] = []): GameResponse => GameResp
       { id: 'a1', name: 'Founding Steps', category: 'General', type: 'one-off', points: 10, earned: true, earnedDate: '2026-09-02', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
       { id: 'a2', name: 'Ten Sessions', category: 'Training', type: 'counter', points: 15, earned: true, earnedDate: '2026-09-12', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: { current: 10, target: 10 } },
       { id: 'a3', name: 'Renaissance', category: 'General', type: 'meta', points: 25, earned: true, earnedDate: '2026-09-20', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
+      { id: 'a4', name: 'Twenty-five Sessions', category: 'Training', type: 'counter', points: 20, earned: false, earnedDate: null, visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: { current: 18, target: 25 } },
+      { id: 'a5', name: 'Scholar: 7-day run', category: 'Learning', type: 'chain', points: 10, earned: false, earnedDate: null, visible: true, locked: false, lockedReason: null, chain: 'scholar-run', tier: 2, progress: { current: 4, target: 7 } },
     ],
     feats: [],
     points: { total: 50, byCategory: { General: 35, Training: 15 } },

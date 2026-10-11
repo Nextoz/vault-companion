@@ -17,7 +17,10 @@ test('card -> Character screen -> ring -> its Log view -> Back returns to Charac
   const dialog = page.getByRole('dialog', { name: 'Character' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId('character-profession')).toHaveCount(4);
-  await expect(dialog).toContainText('Expert · 145/300');
+  // Plan screen 2: each ring names its rank and skill against the live cap; in-progress achievements are tracked.
+  await expect(dialog.getByRole('button', { name: 'Athletics: Expert, skill 145 of 300, 1200 XP' })).toBeVisible();
+  await expect(dialog.getByTestId('character-tracked')).toHaveCount(2);
+  await expect(dialog.getByTestId('character-tracked').first()).toContainText('18 / 25');
   await expect(dialog.getByTestId('character-achievement')).toHaveCount(3);
   // No XP is implied for health and there is no streak counter; the step milestones of GAM1-C are not on this screen.
   await expect(dialog).not.toContainText(/streak/i);
@@ -69,4 +72,32 @@ test('a failed Character read is honest and Retry re-reads', async ({ page }) =>
   api.gameMode = 'ok';
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open Character' })).toContainText('Level 12');
+});
+
+test('the sheet header covers nothing at rest and stays flush with the top when scrolled', async ({ page }) => {
+  // 2026-10-11: the sticky header sat 22px low in WebKit, hiding the first line and letting text show above it.
+  const api = new MockApi();
+  await api.install(page);
+  await page.goto('/');
+  await goTo(page, 'Log');
+  await page.getByRole('button', { name: 'Open Character' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Character' });
+  await expect(dialog.locator('.character-hero')).toBeVisible();
+  const edges = () => dialog.evaluate((sheet) => {
+    const header = sheet.querySelector('.sheet-header')!.getBoundingClientRect();
+    const hero = sheet.querySelector('.character-hero')!.getBoundingClientRect();
+    return { sheetTop: sheet.getBoundingClientRect().top, headerTop: header.top, headerBottom: header.bottom, heroTop: hero.top };
+  });
+  const header = dialog.locator('.sheet-header');
+  const rest = await edges();
+  expect(rest.headerTop).toBeCloseTo(rest.sheetTop, 0);
+  expect(rest.heroTop).toBeGreaterThanOrEqual(rest.headerBottom);
+  await expect(header).not.toHaveAttribute('data-scrolled');
+  await dialog.evaluate((sheet) => { sheet.scrollTop = 90; });
+  // The hairline marks the edge only while content is under the header.
+  await expect(header).toHaveAttribute('data-scrolled');
+  const scrolled = await edges();
+  expect(scrolled.headerTop).toBeCloseTo(scrolled.sheetTop, 0);
+  await dialog.evaluate((sheet) => { sheet.scrollTop = 0; });
+  await expect(header).not.toHaveAttribute('data-scrolled');
 });

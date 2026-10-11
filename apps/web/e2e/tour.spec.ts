@@ -138,6 +138,26 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(page.getByRole('region', { name: 'Learning sessions' })).toBeVisible();
   });
 
+  // GAM1-B plan screens 1-2: the card, then the Character sheet at rest and scrolled (header must cover nothing).
+  const character = page.getByRole('dialog', { name: 'Character' });
+  await shot('Log - Character card', async () => {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(page.getByRole('button', { name: 'Open Character' })).toBeVisible();
+  });
+  await shot('Character sheet', async () => {
+    await page.getByRole('button', { name: 'Open Character' }).click();
+    await expect(character.locator('.character-hero')).toBeVisible();
+  });
+  await shot('Character sheet - scrolled', async () => {
+    await character.evaluate((sheet) => { sheet.scrollTop = sheet.scrollHeight; });
+    await expect(character.locator('.sheet-header')).toHaveAttribute('data-scrolled');
+  });
+  await shot('Character - How XP works', async () => {
+    await character.getByRole('button', { name: 'How XP works' }).click();
+    await expect(character.getByRole('button', { name: /Back/ })).toBeVisible();
+  });
+  await character.getByRole('button', { name: 'Close' }).click();
+
   await shot('Status sheet', async () => {
     await goTo(page, 'Status');
     await expect(page.getByRole('list', { name: 'AI budget' })).toContainText('Claude weekly');

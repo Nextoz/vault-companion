@@ -1,36 +1,55 @@
-import type { GameAchievement, GameProfession, GameRules } from '@vault-companion/contracts';
+import type { GameAchievement, GameCharacter, GameProfession, GameRules } from '@vault-companion/contracts';
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   howXpWorks, levelLabel, PROFESSION_DESTINATION, professionUnavailable, recentlyEarned,
-  professionLine, restedSegment, skillPercent, unavailableLines, xpBar,
+  restedSegment, shortDate, skillPercent, trackedAchievements, unavailableLines, xpBar,
 } from '../character.ts';
 import { CharacterRead } from './CharacterRead.tsx';
 import { SheetHeader } from './SheetHeader.tsx';
 import { CopyNote } from './useLastCopy.tsx';
 
-const RADIUS = 20;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
-/** A profession ring: skill / cap as an arc. No animation, so reduced-motion is safe by construction. */
-function SkillRing({ percent }: { percent: number }) {
-  return <svg className="skill-ring" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-    <circle className="skill-ring-track" cx="24" cy="24" r={RADIUS} />
-    <circle className="skill-ring-fill" cx="24" cy="24" r={RADIUS}
-      strokeDasharray={CIRCUMFERENCE} strokeDashoffset={CIRCUMFERENCE * (1 - percent / 100)}
-      transform="rotate(-90 24 24)" />
+/**
+ * An arc ring: `percent` of the circle from 12 o'clock, plus an optional second arc (the rested reserve) starting
+ * where the fill ends. Static, so reduced motion is safe by construction. pathLength=100 keeps the dash maths in %.
+ */
+function Ring({ size, stroke, percent, extra = null, className }: {
+  size: number;
+  stroke: number;
+  percent: number;
+  extra?: { start: number; width: number } | null;
+  className: string;
+}) {
+  const r = (size - stroke) / 2;
+  const c = size / 2;
+  return <svg className={className} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" focusable="false">
+    <circle className="ring-track" cx={c} cy={c} r={r} strokeWidth={stroke} />
+    {extra !== null && extra.width > 0 && <circle className="ring-rested" cx={c} cy={c} r={r} strokeWidth={stroke}
+      pathLength={100} strokeDasharray={`${extra.width} 100`} strokeDashoffset={-extra.start} transform={`rotate(-90 ${c} ${c})`} />}
+    {percent > 0 && <circle className="ring-fill" cx={c} cy={c} r={r} strokeWidth={stroke}
+      pathLength={100} strokeDasharray={`${percent} 100`} transform={`rotate(-90 ${c} ${c})`} />}
   </svg>;
 }
 
-function bar(levelXp: number, levelCost: number, restedXp: number) {
-  const fill = xpBar(levelXp, levelCost);
-  const rested = restedSegment(levelXp, levelCost, restedXp);
-  return <span className="xp-bar" role="img" aria-label={levelLabel(levelXp, levelCost)}>
-    <span className="xp-fill" style={{ width: `${fill.percent}%` }} />
-    {rested.width > 0 && <span className="xp-rested" style={{ left: `${rested.start}%`, width: `${rested.width}%` }} />}
-  </span>;
+function LevelHero({ character }: { character: GameCharacter }) {
+  const fill = xpBar(character.levelXp, character.levelCost);
+  const rested = restedSegment(character.levelXp, character.levelCost, character.restedXp);
+  return <div className="character-hero">
+    <div className="character-level" role="img"
+      aria-label={`Level ${character.level}, ${levelLabel(character.levelXp, character.levelCost)}${character.restedXp > 0 ? `, ${character.restedXp} rested` : ''}`}>
+      <Ring className="level-ring" size={136} stroke={10} percent={fill.percent} extra={rested} />
+      <span className="character-level-number">{character.level}</span>
+      <span className="character-level-word">Level</span>
+    </div>
+    <p className="character-title">{character.title}</p>
+    <p className="character-xp-line">
+      <span>{levelLabel(character.levelXp, character.levelCost)}</span>
+      {character.restedXp > 0 && <span className="character-rested">+{character.restedXp} rested</span>}
+      <span>{character.points.total} points</span>
+    </p>
+  </div>;
 }
 
-function ProfessionRow({ profession, rules, unavailable, onOpen }: {
+function ProfessionRing({ profession, rules, unavailable, onOpen }: {
   profession: GameProfession;
   rules: GameRules;
   unavailable: readonly string[];
@@ -38,33 +57,54 @@ function ProfessionRow({ profession, rules, unavailable, onOpen }: {
 }) {
   const note = professionUnavailable(profession.id, unavailable);
   const destination = PROFESSION_DESTINATION[profession.id];
-  return <li className="character-profession" data-testid="character-profession">
-    <button type="button" className="character-ring-button" aria-label={profession.name}
+  const label = note === null
+    ? `${profession.name}: ${profession.rank}, skill ${profession.skill} of ${rules.skill.max}, ${profession.xp} XP`
+    : `${profession.name}: ${note}`;
+  return <li className="character-profession" data-testid="character-profession" data-profession={profession.id}>
+    <button type="button" className="character-ring-button" aria-label={label}
       onClick={() => destination !== undefined && onOpen(destination)}>
-      <SkillRing percent={note === null ? skillPercent(profession.skill, rules.skill.max) : 0} />
+      <span className="character-ring">
+        <Ring className="skill-ring" size={64} stroke={6} percent={note === null ? skillPercent(profession.skill, rules.skill.max) : 0} />
+        <span className="character-ring-value" aria-hidden="true">{note === null ? profession.skill : '–'}</span>
+      </span>
+      <span className="character-profession-name" aria-hidden="true">{profession.name}</span>
+      <span className="character-profession-rank" aria-hidden="true">{note ?? profession.rank}</span>
     </button>
-    <div className="character-profession-body">
-      <p className="character-profession-name">{profession.name}</p>
-      {note !== null
-        ? <p className="muted small">{note}</p>
-        : <p className="muted small">{professionLine(profession, rules)}</p>}
-    </div>
   </li>;
 }
 
-function RecentAchievements({ achievements }: { achievements: readonly GameAchievement[] }) {
+function Tracked({ achievements }: { achievements: readonly GameAchievement[] }) {
+  const tracked = trackedAchievements(achievements);
+  if (tracked.length === 0) return null;
+  return <section className="character-section">
+    <h3>Tracked</h3>
+    <ul className="character-rows">
+      {tracked.map((t) => <li key={t.id} className="character-tracked" data-testid="character-tracked">
+        <span className="character-row-line"><span>{t.name}</span><span className="character-row-meta">{t.current} / {t.target}</span></span>
+        <span className="character-progress" aria-hidden="true"><span style={{ width: `${t.percent}%` }} /></span>
+      </li>)}
+    </ul>
+  </section>;
+}
+
+function RecentAchievements({ achievements, today }: { achievements: readonly GameAchievement[]; today: string }) {
   const recent = recentlyEarned(achievements);
-  if (recent.length === 0) return <p className="muted small">No achievements yet.</p>;
-  return <ul className="character-achievements">
-    {recent.map((a) => <li key={a.id} data-testid="character-achievement">
-      <span>{a.name}</span> <span className="muted small">{a.earnedDate}</span>
-    </li>)}
-  </ul>;
+  return <section className="character-section">
+    <h3>Recent achievements</h3>
+    {recent.length === 0
+      ? <p className="muted small">No achievements yet.</p>
+      : <ul className="character-rows">
+        {recent.map((a) => <li key={a.id} className="character-row-line" data-testid="character-achievement">
+          <span>{a.name}</span>
+          <span className="character-row-meta">{a.points} pts · {shortDate(a.earnedDate ?? '', today)}</span>
+        </li>)}
+      </ul>}
+  </section>;
 }
 
 function HowXpWorks({ rules }: { rules: GameRules }) {
   return <div className="character-how-xp">
-    {howXpWorks(rules).map((section) => <section key={section.id}>
+    {howXpWorks(rules).map((section) => <section key={section.id} className="character-section">
       <h3>{section.heading}</h3>
       <ul>{section.lines.map((line, i) => <li key={i}>{line}</li>)}</ul>
     </section>)}
@@ -72,8 +112,9 @@ function HowXpWorks({ rules }: { rules: GameRules }) {
 }
 
 /**
- * GAM1-B Character screen: an overlay dialog (the card stays mounted behind it) so focus returns to the opener on
- * Close. Tapping a profession ring hands the destination to the App, which closes this and opens the Log view.
+ * GAM1-B Character screen (plan screen 2, mockup 2026-10-10): the level ring, the four profession rings in their own
+ * colours, tracked progress and recent achievements. An overlay dialog (the card stays mounted behind it) so focus
+ * returns to the opener on Close. Tapping a ring hands the destination to the App, which opens that Log view.
  */
 export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfession }: {
   refreshKey: number | null;
@@ -88,9 +129,11 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
     const invoker = document.activeElement;
     return () => { if (invoker instanceof HTMLElement && invoker.isConnected) invoker.focus(); };
   }, []);
-  // Move focus into the dialog on open and again on every overview <-> how-xp toggle, where the controls differ.
+  // Move focus into the dialog on open and again on every overview <-> how-xp toggle, where the controls differ;
+  // each page starts at the top.
   useEffect(() => {
-    dialog.current?.querySelector<HTMLElement>('button:not(:disabled), a[href]')?.focus();
+    dialog.current?.scrollTo({ top: 0 });
+    dialog.current?.querySelector<HTMLElement>('button:not(:disabled), a[href]')?.focus({ preventScroll: true });
   }, [page]);
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -110,8 +153,7 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
         {({ view, data, retry }) => {
           if (page === 'how-xp') {
             return <>
-              <button type="button" className="link back" onClick={() => setPage('overview')}>‹ Back</button>
-              <h2>How XP works</h2>
+              <SheetHeader title="How XP works" onClose={onClose} onBack={() => setPage('overview')} backLabel="Character" />
               {data ? <HowXpWorks rules={data.rules} /> : <p className="muted">{view.res === null ? 'Loading…' : 'The rules could not be loaded.'}</p>}
             </>;
           }
@@ -123,26 +165,20 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
               {view.res !== null && <button type="button" onClick={retry}>Retry</button>}
             </div>}
             {data && <>
-              <div className="character-overall">
-                <p className="character-overall-title">{data.character.title} · Level {data.character.level}</p>
-                {bar(data.character.levelXp, data.character.levelCost, data.character.restedXp)}
-                <p className="muted small">
-                  {levelLabel(data.character.levelXp, data.character.levelCost)} · {data.character.points.total} points
-                  {data.character.restedXp > 0 ? ` · ${data.character.restedXp} rested` : ''}
-                </p>
-              </div>
-              {data.unavailable.length > 0 && <ul className="character-unavailable muted small">
+              <LevelHero character={data.character} />
+              {data.unavailable.length > 0 && <ul className="character-unavailable">
                 {unavailableLines(data.unavailable).map((line) => <li key={line}>{line}</li>)}
               </ul>}
-              <ul className="character-professions">
-                {data.character.professions.map((profession) => <ProfessionRow key={profession.id} profession={profession}
+              <ul className="character-professions" aria-label="Professions">
+                {data.character.professions.map((profession) => <ProfessionRing key={profession.id} profession={profession}
                   rules={data.rules} unavailable={data.unavailable} onOpen={onOpenProfession} />)}
               </ul>
-              <section className="character-recent">
-                <h3>Recent achievements</h3>
-                <RecentAchievements achievements={data.character.achievements} />
-              </section>
-              <button type="button" className="character-how-link" onClick={() => setPage('how-xp')}>How XP works</button>
+              <p className="character-hint">Tap a ring to open its log</p>
+              <Tracked achievements={data.character.achievements} />
+              <RecentAchievements achievements={data.character.achievements} today={data.now.slice(0, 10)} />
+              <button type="button" className="character-link-row" onClick={() => setPage('how-xp')}>
+                How XP works<span className="character-chevron" aria-hidden="true">›</span>
+              </button>
             </>}
           </>;
         }}

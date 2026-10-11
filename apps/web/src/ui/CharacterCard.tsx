@@ -2,7 +2,10 @@ import { emptyCharacterLine, levelLabel, restedSegment, xpBar } from '../charact
 import { CharacterRead } from './CharacterRead.tsx';
 import { CopyNote } from './useLastCopy.tsx';
 
-/** GAM1-B: the Log area's Character card. A plain card (not a fifth Log tab) so the 390px segmented switch stays roomy. */
+/**
+ * GAM1-B: the Log area's Character card (plan screen 1). A card (not a fifth Log tab) so the 390px segmented switch
+ * stays roomy; the gold edge marks it as the way into the Character screen.
+ */
 export function CharacterCard({ refreshKey, accountKey, onOpen }: {
   refreshKey: number | null;
   accountKey: string | null;
@@ -24,16 +27,14 @@ export function CharacterCard({ refreshKey, accountKey, onOpen }: {
           {data && <button type="button" className="character-card-button" onClick={onOpen} aria-label={`Open Character: ${data.character.title}, level ${data.character.level}, ${label}, ${data.character.points.total} points`}>
             <span className="character-card-head">
               <strong className="character-card-title">{data.character.title}</strong>
-              <span className="muted small">Level {data.character.level}</span>
+              <span className="character-card-points">{data.character.points.total} pts</span>
             </span>
+            <span className="character-card-level">Level {data.character.level} · {label}</span>
             <span className="xp-bar" role="img" aria-label={label}>
               <span className="xp-fill" style={{ width: `${bar!.percent}%` }} />
               {rested!.width > 0 && <span className="xp-rested" style={{ left: `${rested!.start}%`, width: `${rested!.width}%` }} />}
             </span>
-            <span className="character-card-foot">
-              <span className="small">{label}</span>
-              <span className="muted small">{data.character.points.total} points</span>
-            </span>
+            <span className="character-card-open" aria-hidden="true">Tap for Character ›</span>
             {empty !== null && <span className="muted small">{empty}</span>}
           </button>}
         </>;
