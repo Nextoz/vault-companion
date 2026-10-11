@@ -7,6 +7,7 @@ import {
 } from '@vault-companion/contracts';
 import {
   characterConfig,
+  createBooksService,
   createCommandService,
   createHealthService,
   createHistoryService,
@@ -34,6 +35,25 @@ const DECISION_AT = '2026-09-30T12:00:00+02:00';
 const TRAINING = `## Sessions\n| Date | Time | Type | Distance | Duration | Weight | Split | Note |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n| 2026-09-20 | | Group workout | | 30 min | | | ${SENTINEL} |\n`;
 const LEARNING = `---\nprivate: synthetic\n---\n## Kinds\n\n| id | Name | Score means | Status |\n| --- | --- | --- | --- |\n| dictation | Dictation | accuracy | active |\n\n## Log\n| Date | Kind | Min | Score | Detail | Topic or source | Note |\n| --- | --- | --- | --- | --- | --- | --- |\n| 2026-09-22 | dictation | 15 | 7 | | weather | ${SENTINEL} |\n`;
 const TODO_CONTENT = `## Open\n## Done\n- [x] Water the plants ${SENTINEL} #todo ✅ 2026-09-25\n`;
+const BOOK = 'Books/Synthetic Book.md';
+const BOOK_SENTINEL = 'SENTINEL-r3fl';
+/** One book with three same-day reflections: the day cap awards two, but First Reflection lands. */
+const BOOK_FIXTURE =
+  '---\n' +
+  'type: book\n' +
+  'status: reading\n' +
+  'author: Synthetic Author\n' +
+  'totalPages: 100\n' +
+  '---\n' +
+  '# Synthetic Book\n' +
+  '\n' +
+  '## Progress\n' +
+  '- 2026-09-21: p. 10\n' +
+  '\n' +
+  '## Reflections\n' +
+  `### 2026-09-21\n${BOOK_SENTINEL} one\n` +
+  `### 2026-09-21\n${BOOK_SENTINEL} two\n` +
+  `### 2026-09-21\n${BOOK_SENTINEL} three\n`;
 
 /** Ten days at 10k steps each cross the 100k lifetime rung exactly on 2024-01-10. */
 const healthCsv = (steps: string): string =>
@@ -68,6 +88,7 @@ function makeApp(store: VaultStore, override: Partial<GameDeps> = {}, wired = tr
       store,
       readTraining: () => createTrainingService({ store }).readTraining(),
       readLearning: () => createLearningService({ store }).readLearning(),
+      readBooks: () => createBooksService({ store }).readBooks(),
       readHistory: () => createHistoryService({ store, now: () => NOW, timeZone: TIME_ZONE }).readHistory(),
       readRadar: () => createResearchRadarService({ store, now: () => NOW, timeZone: TIME_ZONE }).readResearchRadar(),
       readHealthHistory: () => createHealthService({ store, now: () => NOW, timeZone: TIME_ZONE }).readHealthHistory(),
@@ -151,6 +172,22 @@ describe('GET /api/game', () => {
     expect(a.stepMilestones!.earned.length).toBeGreaterThan(0);
     expect(b.stepMilestones!.earned).toEqual([]);
     expect(b.stepMilestones!.next.current).toBe(0);
+  });
+
+  it('turns saved book reflections into Lorekeeper records and names the source when the read fails', async () => {
+    const store = await InMemoryStore.create({ ...(await baseFiles()), [BOOK]: BOOK_FIXTURE });
+    const withReflections = (await get(store)).body!;
+    expect(withReflections.unavailable).toEqual([]);
+    // Three same-day reflections: the daily cap awards two (50 XP); First Reflection unlocks, its text never logs.
+    expect(withReflections.character.achievements.find((a) => a.id === 'first-reflection')).toMatchObject({ earned: true, locked: false });
+    const failed = await get(store, { readBooks: async () => ({ code: 'upstream-unavailable', message: 'reader unavailable', retryable: true }) });
+    expect(failed.body!.unavailable).toEqual(['reflections']);
+    // Dropping the adapter loses the records, so First Reflection and the Lorekeeper XP would vanish: this fails then.
+    const lorekeeper = (body: GameResponse) => body.character.professions.find((p) => p.id === 'lorekeeper')!;
+    expect(failed.body!.character.achievements.find((a) => a.id === 'first-reflection')!.earned).toBe(false);
+    expect(withReflections.character.xp).toBeGreaterThan(failed.body!.character.xp);
+    expect(lorekeeper(withReflections).xp).toBeGreaterThan(lorekeeper(failed.body!).xp);
+    expect((JSON.stringify(logs) + JSON.stringify(printed)).includes(BOOK_SENTINEL)).toBe(false);
   });
 
   it('is deterministic across identical reads', async () => {
