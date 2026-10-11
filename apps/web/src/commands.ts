@@ -11,9 +11,11 @@ import {
   type StartBookCommand,
   type LogReadingCommand,
   type SaveReflectionCommand,
+  type SaveFollowUpCommand,
   type StartBookPayload,
   type LogReadingPayload,
   type SaveReflectionPayload,
+  type SaveFollowUpPayload,
   type TrainingSession,
   type LearningSession,
   type ActiveWorkLocator,
@@ -297,4 +299,9 @@ export function undoSaveReflectionDraft(ctx: MintContext, target: SaveReflection
   const draft = { ...base(ctx), type: 'UndoSaveReflection' as const, payload: { target } };
   checked({ ...draft, payload: { target, targetCommit: '0'.repeat(40) } });
   return draft as Command;
+}
+
+/** READ1-B (ADR-0063): the owner's answer rides in the envelope; the AI question never enters a log or a label. */
+export function saveFollowUp(ctx: MintContext, payload: SaveFollowUpPayload): SaveFollowUpCommand {
+  return checked({ ...base(ctx), type: 'SaveFollowUp', payload });
 }

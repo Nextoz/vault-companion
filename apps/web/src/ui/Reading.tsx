@@ -2,11 +2,15 @@ import type { BookView, BooksResponse } from '@vault-companion/contracts';
 import { useState } from 'react';
 import { getBooks } from '../api.ts';
 import type { PendingQueue } from '../queue/queue.ts';
-import { currentBook, isFinishedBook, progressPercent, reflectionsNewestFirst } from '../reading.ts';
+import { currentBook, isFinishedBook, progressPercent, reflectionOrdinals, reflectionsNewestFirst } from '../reading.ts';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
+import { ChallengeSheet } from './ChallengeSheet.tsx';
 import { ReadingSheet, type ReadingSheetKind } from './ReadingSheet.tsx';
 
-/** READ1-A2: the Log tab's Reading view (ADR-0062). No streaks, targets or AI text — books, progress and reflections. */
+/**
+ * READ1-A2 / READ1-B: the Log tab's Reading view (ADR-0062, ADR-0063). No streaks, targets or standing AI text —
+ * books, progress and reflections; a saved reflection can ask for one AI question on demand (marked as AI).
+ */
 export function Reading({ refreshKey, accountKey, queue, baseRevision, open, onClose }: {
   refreshKey: number | null; accountKey: string | null; queue: PendingQueue; baseRevision: string | null;
   /** The bottom-bar + is pressed: the log sheet for the current book, or the start sheet when there is none. */
@@ -22,9 +26,14 @@ export function Reading({ refreshKey, accountKey, queue, baseRevision, open, onC
   const [requested, setRequested] = useState<ReadingSheetKind | null>(null);
   // The Reflect draft lives here, so closing the sheet never loses what was typed.
   const [reflection, setReflection] = useState('');
+  // READ1-B: the one reflection being challenged, with its book and ADR-0063 ordinal, so a refresh that repicks the
+  // current book never retargets an open sheet.
+  const [challenge, setChallenge] = useState<{ title: string; date: string; ordinal: number; text: string } | null>(null);
   const sheet: ReadingSheetKind | null = requested ?? (open && read?.status === 'ok' ? (current ? 'log' : 'start') : null);
   const close = () => { setRequested(null); onClose(); };
   const percent = current ? progressPercent(current.currentPage, current.totalPages) : 0;
+  const shownReflections = current ? reflectionsNewestFirst(current.reflections) : [];
+  const ordinals = reflectionOrdinals(shownReflections);
   return <section className="group reading" aria-label="Reading">
     <h2>Reading</h2>
     <CopyNote view={view} />
@@ -56,11 +65,15 @@ export function Reading({ refreshKey, accountKey, queue, baseRevision, open, onC
       <section className="reading-reflections" aria-label="Reflections">
         <h3>Reflections</h3>
         {current.reflections.length === 0 && <p className="muted">No reflections yet.</p>}
-        <ul>{reflectionsNewestFirst(current.reflections).map((reflection, index) => (
+        <ul>{shownReflections.map((reflection, index) => (
           <li key={`${reflection.date}#${index}`} data-testid="reading-reflection">
             {reflection.text.length > 160
-              ? <details><summary>{reflection.date}</summary><p>{reflection.text}</p></details>
-              : <p><span className="muted small">{reflection.date}</span> {reflection.text}</p>}
+              ? <details><summary>{reflection.date}</summary><p>{reflection.text}</p>
+                  <button type="button" className="reading-challenge"
+                    onClick={() => setChallenge({ title: current.title, date: reflection.date, ordinal: ordinals[index]!, text: reflection.text })}>Challenge me</button></details>
+              : <><p><span className="muted small">{reflection.date}</span> {reflection.text}</p>
+                  <button type="button" className="reading-challenge"
+                    onClick={() => setChallenge({ title: current.title, date: reflection.date, ordinal: ordinals[index]!, text: reflection.text })}>Challenge me</button></>}
           </li>))}
         </ul>
       </section>
@@ -78,5 +91,7 @@ export function Reading({ refreshKey, accountKey, queue, baseRevision, open, onC
     {sheet === 'start' && <ReadingSheet kind="start" queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={close} />}
     {sheet === 'log' && current && <ReadingSheet kind="log" book={current} queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={close} />}
     {sheet === 'reflect' && current && <ReadingSheet kind="reflect" book={current} draft={reflection} onDraftChange={setReflection} queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={close} />}
+    {challenge && <ChallengeSheet title={challenge.title} date={challenge.date} ordinal={challenge.ordinal} text={challenge.text}
+      queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={() => setChallenge(null)} />}
   </section>;
 }

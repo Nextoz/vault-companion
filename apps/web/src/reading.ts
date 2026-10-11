@@ -51,3 +51,17 @@ export function reflectionsNewestFirst(reflections: readonly BookReflection[]): 
     .sort((a, b) => (a.reflection.date === b.reflection.date ? a.index - b.index : a.reflection.date < b.reflection.date ? 1 : -1))
     .map(({ reflection }) => reflection);
 }
+
+/**
+ * READ1-B (ADR-0063): the 1-based ordinal of each reflection among the entries sharing its date, in the order given.
+ * The screen shows reflections newest first, but the stable sort keeps same-date entries in note order, so the running
+ * count per date over the displayed list is exactly the note-order ordinal the follow-up endpoint expects.
+ */
+export function reflectionOrdinals(reflections: readonly BookReflection[]): number[] {
+  const seen = new Map<string, number>();
+  return reflections.map((reflection) => {
+    const ordinal = (seen.get(reflection.date) ?? 0) + 1;
+    seen.set(reflection.date, ordinal);
+    return ordinal;
+  });
+}

@@ -162,6 +162,27 @@ test('a refused read is reported honestly, never as books, and no streak or AI t
   api.books = [book({ title: 'Reading One', reflections: [{ date: '2026-10-10', text: 'A synthetic reflection.' }] })];
   await page.reload();
   const refreshed = await openReading(page);
-  await expect(refreshed).not.toContainText(/streak|target|goal|missed|challenge me/i);
+  await expect(refreshed).not.toContainText(/streak|target|goal|missed/i);
   await expect(refreshed.getByTestId('reading-reflection')).toHaveCount(1);
+});
+
+test('Challenge me shows an AI question and saves only an answered follow-up', async ({ page }) => {
+  const api = new MockApi();
+  api.books = [book({ reflections: [{ date: '2026-10-05', text: 'A synthetic reflection.' }] })];
+  await api.install(page);
+  await page.goto('/');
+  const region = await openReading(page);
+
+  await region.getByRole('button', { name: 'Challenge me', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Challenge me', exact: true });
+  await expect(sheet.getByText('AI question', { exact: true })).toBeVisible();
+  await expect(sheet.getByText('What did that change for you?')).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Save answer', exact: true })).toBeDisabled();
+
+  await sheet.getByLabel('Your answer').fill('A synthetic answer.');
+  await sheet.getByRole('button', { name: 'Save answer', exact: true }).click();
+  await expect(page.getByTestId('action').filter({ hasText: 'Follow-up' })).toBeVisible();
+  await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['SaveFollowUp']);
+  expect(api.followUps).toEqual([{ title: 'Synthetic Book', date: '2026-10-05', ordinal: 1,
+    question: 'What did that change for you?', answer: 'A synthetic answer.' }]);
 });
