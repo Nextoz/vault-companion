@@ -32,3 +32,43 @@
 .weather-window strong { font-size: .95rem; line-height: 1.35; }
 .weather-controls { display: flex; gap: 6px; background: var(--bg); border-radius: 10px; padding: 2px; }
 .weather-controls button { flex: 1 1 auto; min-width: max-content; min-height: var(--tap); padding: 0 8px; }
+/* Week overview (WX1b): one tappable row per day, all bars on one shared temperature scale. */
+.weather-week { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.weather-week-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.weather-week-row {
+  display: grid; align-items: center; gap: 6px; width: 100%;
+  grid-template-columns: 2.8rem 1.3rem 1.8rem minmax(22px, 1fr) 1.8rem 2.4rem auto auto;
+  min-height: var(--tap); padding: 6px 8px; text-align: left; font-size: .85rem;
+  color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+}
+.weather-week-row:hover { border-color: var(--ios-orange); }
+.weather-week-row:focus-visible { outline: 2px solid var(--ios-orange); outline-offset: 1px; }
+.weather-week-day { display: flex; flex-direction: column; line-height: 1.1; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+.weather-week-date { color: var(--muted); font-weight: 400; }
+.weather-week-icon { font-size: 1.05rem; text-align: center; }
+.weather-week-low, .weather-week-high { font-variant-numeric: tabular-nums; text-align: right; }
+.weather-week-high { font-weight: 600; }
+.weather-week-track { position: relative; height: 6px; min-width: 26px; border-radius: 3px; background: var(--line); }
+.weather-week-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: var(--ios-orange); }
+.weather-week-rain { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.weather-week-models { color: var(--muted); font-size: .72rem; border: 1px solid var(--line); border-radius: 6px; padding: 0 4px; white-space: nowrap; }
+.weather-week-partial { color: var(--warn); font-size: .72rem; white-space: nowrap; }
+.weather-week-best { margin: 0; color: var(--done); font-size: .85rem; font-weight: 600; overflow-wrap: anywhere; }
+/* Day meteogram (WX1b): solid DMI line, dashed ECMWF line, layered rain bars, a shaded run window and a wind strip. */
+.weather-day { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.weather-day-head { display: flex; align-items: center; gap: 8px; }
+.weather-back { min-height: var(--tap); }
+.weather-day-eyebrow { margin: 0; color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .02em; }
+.weather-day-title { margin: 0; font-size: 1rem; }
+.weather-day-summary { margin: 0; font-weight: 600; }
+.weather-day-chart { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.weather-day-svg { width: 100%; height: auto; background: var(--bg); border-radius: 8px; touch-action: pan-y; }
+.weather-day-window { fill: var(--done); opacity: .16; }
+.weather-day-grid { stroke: var(--line); stroke-width: 1; }
+.weather-day-rain { fill: var(--ios-blue); opacity: .7; }
+polyline.weather-day-temp-primary { fill: none; stroke: var(--ios-orange); stroke-width: 2; stroke-linejoin: round; }
+polyline.weather-day-temp-comparison { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 5 4; stroke-linejoin: round; }
+circle.weather-day-temp-primary { fill: var(--ios-orange); }
+circle.weather-day-temp-comparison { fill: var(--muted); }
+.weather-day-wind line { stroke: var(--ios-cyan); stroke-width: 1.5; stroke-linecap: round; }
+.weather-day-axis { fill: var(--muted); font-size: 8px; }

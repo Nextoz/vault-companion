@@ -8,10 +8,32 @@ import {
   type WeatherProjection,
   type WeatherResponse,
   type WeatherRunWindow,
+  type WeatherWeekDay,
   type WeatherVariable,
 } from '@vault-companion/contracts';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { getWeather, postWeatherLocation, type Fetched } from '../api.ts';
+import {
+  bestRunSummary,
+  dayHours,
+  dayDateLabel,
+  dayLabel,
+  dayScale,
+  modelCountLabel,
+  modelDayHours,
+  rainBar,
+  rainLabel,
+  rainSummary,
+  runWindowHours,
+  scalePercent,
+  shortDayLabel,
+  weekBar,
+  weekBarLabel,
+  weekScale,
+  weatherCodeLabel,
+  weatherGlyph,
+  type DayHour,
+} from './weather-week.ts';
 import './WeatherLab.css';
 
 /** Matches the provider's bounded 15-minute cache: a projection older than this is labelled stale, never repainted fresh. */
@@ -201,6 +223,192 @@ function WeatherChart({ seriesList, variable, active, onInspect }: ChartProps) {
   );
 }
 
+interface WeekRowsProps {
+  week: readonly WeatherWeekDay[];
+  onOpen: (day: string) => void;
+  registerRow: (day: string, element: HTMLButtonElement | null) => void;
+}
+
+const degrees = (value: number | null): string => (value === null ? '—' : `${Math.round(value)}°`);
+
+/** One tappable row per week day on the shared week temperature scale, plus the best run-window line. */
+function WeatherWeekRows({ week, onOpen, registerRow }: WeekRowsProps) {
+  const scale = useMemo(() => weekScale(week), [week]);
+  const best = useMemo(() => bestRunSummary(week), [week]);
+  return (
+    <section className="weather-week" aria-label="Seven-day forecast">
+      <ul className="weather-week-list">
+        {week.map((day) => {
+          const bar = weekBar(day, scale);
+          return (
+            <li key={day.day}>
+              <button
+                type="button"
+                className="weather-week-row"
+                ref={(element) => registerRow(day.day, element)}
+                onClick={() => onOpen(day.day)}
+                aria-label={`${dayLabel(day.day)}: ${weatherCodeLabel(day.weatherCode)}, ${weekBarLabel(day)}, rain ${rainLabel(day)}${day.models === 1 ? ', 1 model' : ''}${day.partial ? ', partial day' : ''}`}
+              >
+                <span className="weather-week-day">
+                  <span>{shortDayLabel(day.day)}</span>
+                  <span className="weather-week-date">{dayDateLabel(day.day)}</span>
+                </span>
+                <span className="weather-week-icon" aria-hidden="true">{weatherGlyph(day.weatherCode)}</span>
+                <span className="weather-week-low">{degrees(day.lowTemperatureC)}</span>
+                <span className="weather-week-track" aria-hidden="true">{bar && <span className="weather-week-fill" style={{ left: `${bar.left}%`, width: `${bar.width}%` }} />}</span>
+                <span className="weather-week-high">{degrees(day.highTemperatureC)}</span>
+                <span className="weather-week-rain">{rainLabel(day)}</span>
+                {day.models === 1 && <span className="weather-week-models">{modelCountLabel(day)}</span>}
+                {day.partial && <span className="weather-week-partial">partial</span>}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {best
+        ? <p className="weather-week-best" role="status">{best}</p>
+        : <p className="muted small">No complete run window in the next days.</p>}
+    </section>
+  );
+}
+
+interface DayProps {
+  day: WeatherWeekDay;
+  models: readonly WeatherModelSeries[];
+  onBack: () => void;
+}
+
+const AXIS_HOURS = [0, 6, 12, 18, 23] as const;
+
+/** The 24-hour day meteogram: layered rain bars, one temperature line per model, a run-window band and a wind strip. */
+function WeatherDayMeteogram({ day, models, onBack }: DayProps) {
+  const perModel = useMemo(() => models.map((series) => ({ series, hours: modelDayHours(series, day.day) })), [models, day.day]);
+  const merged = useMemo(() => dayHours(models, day.day), [models, day.day]);
+  const scale = useMemo(() => dayScale(perModel.map((model) => model.hours)), [perModel]);
+  const maxRain = useMemo(() => Math.max(0, ...merged.map((hour) => hour.rainMm ?? 0)), [merged]);
+  const windowHours = useMemo(() => runWindowHours(day.runWindow), [day.runWindow]);
+  const covered = perModel.filter((model) => model.hours.length > 0);
+  const winds = merged.map((hour) => hour.windMs).filter((value): value is number => value !== null);
+  const directions = merged.map((hour) => hour.windDirectionDeg).filter((value): value is number => value !== null);
+  const windNote = winds.length > 0
+    ? `Wind ${Math.min(...winds).toFixed(0)}-${Math.max(...winds).toFixed(0)} m/s`
+    : 'Wind unavailable';
+  const runNote = windowHours.length > 0
+    ? `Run window ${String(Math.min(...windowHours)).padStart(2, '0')}:00-${String(Math.max(...windowHours) + 1).padStart(2, '0')}:00`
+    : 'No shared run window';
+
+  const W = 340;
+  const H = 170;
+  const padX = 10;
+  const plotTop = 12;
+  const plotBottom = 120;
+  const rainMax = 34;
+  const axisY = 134;
+  const windTop = 142;
+  const windMid = windTop + 11;
+  const colW = (W - 2 * padX) / 24;
+  const xc = (hour: number): number => padX + (hour + 0.5) * colW;
+  const y = (value: number): number => plotBottom - (scalePercent(value, scale) / 100) * (plotBottom - plotTop);
+
+  const segments = (hours: readonly DayHour[]): { x: number; y: number }[][] => {
+    const points = new Map(hours.filter((hour) => hour.temperatureC !== null).map((hour) => [hour.hour, hour] as const));
+    const groups: { x: number; y: number }[][] = [];
+    let current: { x: number; y: number }[] = [];
+    for (let hour = 0; hour < 24; hour += 1) {
+      const point = points.get(hour);
+      if (!point) {
+        if (current.length > 0) groups.push(current);
+        current = [];
+        continue;
+      }
+      current.push({ x: xc(hour), y: y(point.temperatureC as number) });
+    }
+    if (current.length > 0) groups.push(current);
+    return groups;
+  };
+
+  return (
+    <section className="weather-day" aria-label={`${dayLabel(day.day)} forecast`}>
+      <div className="weather-day-head">
+        <button type="button" className="weather-back" onClick={onBack}>Back</button>
+        <div>
+          <p className="weather-day-eyebrow">{shortDayLabel(day.day)}</p>
+          <h3 className="weather-day-title">{dayLabel(day.day)}</h3>
+        </div>
+      </div>
+      <p className="weather-day-summary" data-testid="weather-day-summary">{rainSummary(merged)}</p>
+      {day.partial && <p className="weather-note" role="status">Partial day — only the hours forecast so far are shown.</p>}
+      {covered.length < models.length && (
+        <p className="weather-note" role="status">One model unavailable — showing {covered.map((model) => model.series.label).join(', ') || 'no model'} only.</p>
+      )}
+      {merged.length === 0
+        ? <p className="weather-note" role="status">No hourly detail for this day.</p>
+        : (
+          <figure className="weather-day-chart">
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              className="weather-day-svg"
+              role="img"
+              aria-label={`${dayLabel(day.day)} hourly forecast: ${rainSummary(merged)}; ${windNote}${directions.length > 0 ? `, directions ${Math.min(...directions)}-${Math.max(...directions)} degrees` : ''}`}
+            >
+              {windowHours.length > 0 && (
+                <rect
+                  className="weather-day-window"
+                  x={padX + Math.min(...windowHours) * colW}
+                  y={plotTop}
+                  width={(Math.max(...windowHours) - Math.min(...windowHours) + 1) * colW}
+                  height={plotBottom - plotTop}
+                />
+              )}
+              {[0, 6, 12, 18].map((hour) => (
+                <line key={hour} className="weather-day-grid" x1={xc(hour)} y1={plotTop} x2={xc(hour)} y2={plotBottom} />
+              ))}
+              {merged.filter((hour) => hour.rainMm !== null && hour.rainMm > 0).map((hour) => {
+                const height = (rainBar(hour, maxRain) / 100) * rainMax;
+                return <rect key={hour.hour} className="weather-day-rain" x={xc(hour.hour) - colW * 0.32} y={plotBottom - height} width={colW * 0.64} height={height} />;
+              })}
+              {perModel.map((model, index) => segments(model.hours).map((segment, segmentIndex) => (
+                segment.length < 2
+                  ? <circle key={`${model.series.model}-${segmentIndex}`} className={index === 0 ? 'weather-day-temp-primary' : 'weather-day-temp-comparison'} cx={segment[0]!.x} cy={segment[0]!.y} r={2.5} />
+                  : <polyline key={`${model.series.model}-${segmentIndex}`} className={index === 0 ? 'weather-day-temp-primary' : 'weather-day-temp-comparison'} points={segment.map((point) => `${point.x},${point.y}`).join(' ')} />
+              )))}
+              {merged.filter((hour) => hour.windMs !== null && hour.windDirectionDeg !== null).map((hour) => (
+                <g key={`wind-${hour.hour}`} className="weather-day-wind" transform={`rotate(${hour.windDirectionDeg! + 180} ${xc(hour.hour)} ${windMid})`}>
+                  <line x1={xc(hour.hour)} y1={windMid - (2 + Math.min(hour.windMs!, 10) * 0.9)} x2={xc(hour.hour)} y2={windMid + (2 + Math.min(hour.windMs!, 10) * 0.9)} />
+                </g>
+              ))}
+              {AXIS_HOURS.map((hour) => (
+                <text key={hour} className="weather-day-axis" x={xc(hour)} y={axisY} textAnchor="middle">{`${String(hour).padStart(2, '0')}:00`}</text>
+              ))}
+            </svg>
+            <figcaption className="weather-readout">{windNote} · {runNote}</figcaption>
+          </figure>
+        )}
+    </section>
+  );
+}
+
+/** Swap between the week rows and one day's meteogram, returning focus to the tapped row after Back. */
+function WeatherWeekPanel({ projection }: { projection: WeatherProjection }) {
+  const week = projection.week ?? [];
+  const [openDay, setOpenDay] = useState<string | null>(null);
+  const [returnFocus, setReturnFocus] = useState<string | null>(null);
+  const rows = useRef(new Map<string, HTMLButtonElement>());
+  const registerRow = useCallback((day: string, element: HTMLButtonElement | null) => {
+    if (element) rows.current.set(day, element);
+    else rows.current.delete(day);
+  }, []);
+  useEffect(() => {
+    if (openDay === null && returnFocus) {
+      rows.current.get(returnFocus)?.focus();
+      setReturnFocus(null);
+    }
+  }, [openDay, returnFocus]);
+  const day = openDay ? week.find((entry) => entry.day === openDay) : undefined;
+  if (day) return <WeatherDayMeteogram day={day} models={projection.models} onBack={() => { setReturnFocus(day.day); setOpenDay(null); }} />;
+  return <WeatherWeekRows week={week} onOpen={setOpenDay} registerRow={registerRow} />;
+}
+
 export interface WeatherLabProps {
   projection: WeatherProjection;
   accountKey?: string | null;
@@ -246,19 +454,23 @@ export function WeatherLab({ projection, accountKey, onUsePreciseLocation, locat
       )}
       {!projection.runWindow && <p className="muted small">No two-hour daytime window could be chosen from the forecast.</p>}
 
-      <div className="segmented weather-controls" role="group" aria-label="Weather variable">
-        {VARIABLES.map((option) => (
-          <button key={option.value} type="button" aria-pressed={variable === option.value} onClick={() => setVariable(option.value)}>{option.label}</button>
-        ))}
-      </div>
-      {projection.models[1] && (
-        <button type="button" className="weather-compare" aria-pressed={showComparison} onClick={() => setShowComparison((value) => !value)}>
-          {showComparison ? `Hide ${projection.models[1].label}` : `Compare ${projection.models[1].label}`}
-        </button>
-      )}
-      {visible.length > 0
-        ? <WeatherChart seriesList={visible} variable={variable} active={active} onInspect={setActive} />
-        : <p className="weather-note" role="status">No model series to chart.</p>}
+      {(projection.week?.length ?? 0) > 0
+        ? <WeatherWeekPanel projection={projection} />
+        : <>
+            <div className="segmented weather-controls" role="group" aria-label="Weather variable">
+              {VARIABLES.map((option) => (
+                <button key={option.value} type="button" aria-pressed={variable === option.value} onClick={() => setVariable(option.value)}>{option.label}</button>
+              ))}
+            </div>
+            {projection.models[1] && (
+              <button type="button" className="weather-compare" aria-pressed={showComparison} onClick={() => setShowComparison((value) => !value)}>
+                {showComparison ? `Hide ${projection.models[1].label}` : `Compare ${projection.models[1].label}`}
+              </button>
+            )}
+            {visible.length > 0
+              ? <WeatherChart seriesList={visible} variable={variable} active={active} onInspect={setActive} />
+              : <p className="weather-note" role="status">No model series to chart.</p>}
+          </>}
       {onUsePreciseLocation && accountKey && (
         <div className="weather-location">
           <button type="button" onClick={onUsePreciseLocation} disabled={locationBusy}>

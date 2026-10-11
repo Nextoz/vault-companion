@@ -226,3 +226,77 @@ describe('WeatherMorning Today projection and fences', () => {
     expect(document.getElementById('root')!.textContent).not.toContain('permission denied');
   });
 });
+
+const dayWindow = {
+  day: '2026-09-30', daytimeStart: '08:00', daytimeEnd: '20:00',
+  start: '2026-09-30T06:00:00Z', end: '2026-09-30T08:00:00Z',
+  agreement: 'two-models', models: ['dmi_harmonie_arome_europe', 'ecmwf_ifs'], rainMm: 0.3,
+  rainRangeMm: { min: 0.3, max: 0.5 }, temperatureRangeC: { min: 14, max: 15 }, windRangeMs: { min: 4, max: 5 },
+  note: 'Lowest-rain two-hour window.',
+} as const;
+
+const weekProjection = () => WeatherProjection.parse({
+  ...projection(),
+  week: [
+    { day: '2026-09-30', lowTemperatureC: 12, highTemperatureC: 18, rainMm: 0.4, precipitationProbabilityPct: 60, weatherCode: 61, models: 2, partial: false, runWindow: dayWindow },
+    { day: '2026-10-01', lowTemperatureC: 9, highTemperatureC: 14, rainMm: 0.2, precipitationProbabilityPct: null, weatherCode: 3, models: 1, partial: true, runWindow: null },
+  ],
+});
+
+describe('WeatherLab week overview', () => {
+  let dom: JSDOM;
+  let root: Root | null = null;
+
+  beforeEach(() => {
+    dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'https://example.test/', pretendToBeVisual: true });
+    Object.defineProperty(globalThis, 'window', { value: dom.window, configurable: true });
+    Object.defineProperty(globalThis, 'document', { value: dom.window.document, configurable: true });
+    Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
+    Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { value: true, configurable: true });
+  });
+  afterEach(async () => {
+    if (root) await act(async () => root!.unmount());
+    root = null;
+    dom.window.close();
+    vi.clearAllMocks();
+  });
+
+  const render = async (value: WeatherProjectionType) => {
+    root = createRoot(document.getElementById('root')!);
+    await act(async () => { root!.render(createElement(WeatherLab, { projection: value })); });
+  };
+
+  it('renders one row per week day, marks a single-model day, and names the shared best run window', async () => {
+    await render(weekProjection());
+    const rows = document.querySelectorAll('.weather-week-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.getAttribute('aria-label')).toContain('Rain');
+    const text = document.getElementById('root')!.textContent ?? '';
+    expect(text).toContain('1 model');
+    expect(text).toContain('partial');
+    expect(text).toContain('Best run: Wed 30 Sep');
+    expect(text).toContain('08:00-10:00');
+    expect(document.querySelector('.weather-week-fill')).not.toBeNull();
+  });
+
+  it('opens a day meteogram on tap and returns focus to the row after Back', async () => {
+    await render(weekProjection());
+    const firstRow = document.querySelector('.weather-week-row') as HTMLButtonElement;
+    await act(async () => { firstRow.click(); });
+    expect(document.querySelector('.weather-week')).toBeNull();
+    expect(document.querySelector('.weather-day')).not.toBeNull();
+    expect(document.querySelector('[data-testid="weather-day-summary"]')!.textContent).toContain('Rain');
+    expect(document.querySelector('.weather-day-window')).not.toBeNull();
+    const back = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Back')!;
+    await act(async () => { back.click(); });
+    expect(document.querySelector('.weather-week')).not.toBeNull();
+    expect(document.activeElement).toBe(document.querySelector('.weather-week-row'));
+  });
+
+  it('keeps the old chart when a response has no week field', async () => {
+    await render(projection());
+    expect(document.querySelector('.weather-week')).toBeNull();
+    expect(document.querySelector('.weather-chart')).not.toBeNull();
+    expect(document.getElementById('root')!.textContent).toContain('Temperature');
+  });
+});

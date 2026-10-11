@@ -114,14 +114,35 @@ const lines = (...rows: string[]): string => `${rows.join(String.fromCharCode(10
 const weatherStart = Date.parse('2026-09-30T06:00:00Z') / 1000;
 const weatherPoint = (hour: number, over: Record<string, unknown> = {}) => ({
   time: new Date((weatherStart + hour) * 1000).toISOString(),
-  temperatureC: 14 + hour * 0.5,
-  rainMm: 0.1 + hour * 0.1,
-  windMs: 3 + hour * 0.4,
+  // Synthetic diurnal shape: daytime peaks at 17°C and stays breezy, so the morning glance wording is stable.
+  temperatureC: 14 + 3 * Math.sin((hour / 24) * 2 * Math.PI),
+  rainMm: 0.1 + (hour % 6) * 0.1,
+  windMs: 3 + (hour % 6) * 0.4,
   windDirectionDeg: (hour * 45) % 360,
   precipitationProbabilityPct: (hour * 20) % 100,
   weatherCode: hour % 3 === 0 ? 61 : hour % 2 === 0 ? 3 : 1,
   ...over,
 });
+
+const sampleWeekDays = (partial: boolean) => ['2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06']
+  .map((day, index) => ({
+    day,
+    lowTemperatureC: 9 + index,
+    highTemperatureC: 15 + index,
+    rainMm: 0.4 - index * 0.05,
+    precipitationProbabilityPct: index === 0 || index === 2 ? 55 : null,
+    weatherCode: index % 3 === 0 ? 61 : index % 2 === 0 ? 3 : 1,
+    models: partial || index >= 3 ? 1 : 2,
+    partial: index === 0 || index === 6,
+    runWindow: index === 6 ? null : {
+      day, daytimeStart: '08:00', daytimeEnd: '20:00', start: `${day}T06:00:00Z`, end: `${day}T08:00:00Z`,
+      agreement: partial || index >= 3 ? 'single-model' : 'two-models',
+      models: partial || index >= 3 ? ['dmi_harmonie_arome_europe'] : ['dmi_harmonie_arome_europe', 'ecmwf_ifs'],
+      rainMm: 0.6 - index * 0.05, rainRangeMm: { min: 0.2, max: 0.6 },
+      temperatureRangeC: { min: 14, max: 16 }, windRangeMs: { min: 3, max: 5 },
+      note: 'Lowest-rain two-hour window inside Copenhagen daytime 08:00-20:00. Not a guarantee of dry or daylight weather.',
+    },
+  }));
 
 const healthSeries = (base: number, spread: number) => Array.from({ length: 30 }, (_, index) =>
   index === 12 ? null : base + ((index * 13) % 7) - 3 + Math.round(spread * Math.sin(index)));
@@ -147,19 +168,19 @@ export const sampleWeather = (partial = false): WeatherResponse => WeatherRespon
     models: [
       {
         model: 'dmi_harmonie_arome_europe', label: 'DMI HARMONIE AROME Europe', resolutionKm: 2,
-        sourceUrl: 'https://open-meteo.com/en/docs/dmi-api', retrievedAt: '2026-09-30T11:55:00Z', expectedPoints: 48,
-        points: [0, 1, 2, 3, 4, 5].map((hour) => weatherPoint(hour, { rainMm: 0.1 + hour * 0.1, precipitationProbabilityPct: null })),
-        missingIntervals: 42,
+        sourceUrl: 'https://open-meteo.com/en/docs/dmi-api', retrievedAt: '2026-09-30T11:55:00Z', expectedPoints: 72,
+        points: Array.from({ length: 24 }, (_, hour) => weatherPoint(hour, { precipitationProbabilityPct: null })),
+        missingIntervals: 48,
       },
       ...(partial ? [] : [{
         model: 'ecmwf_ifs', label: 'ECMWF IFS 9 km', resolutionKm: 9,
-        sourceUrl: 'https://open-meteo.com/en/docs/ecmwf-api', retrievedAt: '2026-09-30T11:55:00Z', expectedPoints: 48,
-        points: [0, 1, 2, 3, 4, 5].map((hour) => weatherPoint(hour, { rainMm: 0.2 + hour * 0.1 })),
-        missingIntervals: 42,
+        sourceUrl: 'https://open-meteo.com/en/docs/ecmwf-api', retrievedAt: '2026-09-30T11:55:00Z', expectedPoints: 168,
+        points: Array.from({ length: 48 }, (_, hour) => weatherPoint(hour)),
+        missingIntervals: 120,
       }]),
     ],
     agreement: partial ? 'single-model' : 'two-models',
-    coverage: { expectedPoints: 48, primaryReturned: 6, comparisonReturned: partial ? 0 : 6, primaryMissingIntervals: 42, comparisonMissingIntervals: partial ? 0 : 42 },
+    coverage: { expectedPoints: 168, primaryReturned: 24, comparisonReturned: partial ? 0 : 48, primaryMissingIntervals: 48, comparisonMissingIntervals: partial ? 0 : 120 },
     runWindow: {
       day: '2026-09-30', daytimeStart: '08:00', daytimeEnd: '20:00',
       start: '2026-09-30T06:00:00Z', end: '2026-09-30T08:00:00Z',
@@ -172,6 +193,7 @@ export const sampleWeather = (partial = false): WeatherResponse => WeatherRespon
     partialError: partial ? 'one-model-unavailable' : 'none',
     attribution: 'Forecast data by DMI and ECMWF via Open-Meteo, CC-BY 4.0.',
     termsUrl: 'https://open-meteo.com/en/terms',
+    week: sampleWeekDays(partial),
   },
 });
 

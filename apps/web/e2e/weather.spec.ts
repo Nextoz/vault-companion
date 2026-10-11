@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('Dashboard mounts Weather with attribution, model comparison and touch/keyboard inspection', async ({ page }) => {
+test('Dashboard week overview: one row per day, the single-model note, best-run line and tap-through meteogram', async ({ page }) => {
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
@@ -23,17 +23,25 @@ test('Dashboard mounts Weather with attribution, model comparison and touch/keyb
   await expect(weather).toContainText('CC-BY 4.0');
   await expect(weather.locator('a', { hasText: 'Source' })).toHaveCount(2);
   await expect(weather).toContainText('lowest-rain window');
+  await expect(weather.locator('.weather-week-row')).toHaveCount(7);
+  // Days beyond the DMI horizon carry one model, and are labelled rather than padded to two.
+  await expect(weather.locator('.weather-week-models')).toHaveCount(4);
+  await expect(weather.locator('.weather-week-best')).toContainText('Best run:');
   const readsBeforeInspection = api.weatherReads;
 
-  await weather.getByRole('button', { name: 'Temperature', exact: true }).click();
-  await expect(weather.getByRole('button', { name: 'Temperature', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(weather.getByRole('img').first()).toBeVisible();
-  const slider = weather.getByRole('slider', { name: 'Inspect forecast time', exact: true });
-  await slider.focus();
-  await slider.press('ArrowLeft');
-  await expect(weather.locator('figcaption')).toContainText('°C');
+  const firstRow = weather.locator('.weather-week-row').first();
+  expect((await firstRow.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await firstRow.click();
+  await expect(weather.locator('.weather-week')).toHaveCount(0);
+  await expect(weather.locator('.weather-day')).toBeVisible();
+  await expect(weather.getByTestId('weather-day-summary')).toContainText('Rain');
+  await expect(weather.locator('.weather-day-window')).toBeVisible();
+  await expect(weather.getByRole('img')).toBeVisible();
+  await weather.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(weather.locator('.weather-week')).toBeVisible();
+  await expect(firstRow).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  expect(api.weatherReads).toBe(readsBeforeInspection); // chart interaction uses the Dashboard projection; initial Today reads are separate
+  expect(api.weatherReads).toBe(readsBeforeInspection); // week/meteogram interaction uses the Dashboard projection; initial Today reads are separate
 });
 
 test('Today shows the compact weather morning projection and opens the same shared read model', async ({ page }) => {

@@ -123,6 +123,8 @@ describe('createWeatherService', () => {
     expect(response.projection.agreement).toBe('two-models');
     expect(response.projection.partialError).toBe('none');
     expect(response.projection.runWindow).not.toBeNull();
+    // WX1b: the same projection carries the derived week overview.
+    expect(response.projection.week?.map((day) => day.day)).toEqual(['2026-09-30']);
   });
 
   it('serves one model honestly as single-model when the other fails', async () => {
@@ -237,5 +239,8 @@ describe('createWeatherService with the longer series', () => {
     expect(response.projection.models[0]!.points).toHaveLength(168);
     expect(response.projection.partialError).toBe('one-model-unavailable');
     expect(response.projection.coverage.expectedPoints).toBe(168);
+    // WX1b: every week day beyond the DMI horizon honestly reports one model, never padded to two.
+    expect(response.projection.week?.map((day) => day.day)).toEqual(['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']);
+    expect(response.projection.week?.every((day) => day.models === 1)).toBe(true);
   });
 });
