@@ -213,6 +213,13 @@ textarea:focus-visible {
   margin: 12px 0;
 }
 
+/* Five segments: let each shrink below its label width (Linux fonts overflowed 390 px at 400). */
+.log-view button {
+  min-width: 0;
+  padding-inline: 4px;
+  font-size: 0.9rem;
+}
+
 /* GAM1-B: the Log Character card above the segmented switch, and the ring/achievement rows on the screen. */
 .character-card { margin: 12px 0; }
 
@@ -1183,7 +1190,8 @@ textarea:focus-visible {
 .reading-reflections summary { cursor: pointer; min-height: var(--tap); }
 .reading-books li { border-bottom: 1px solid var(--line); }
 .reading-books button { display: block; width: 100%; text-align: left; padding: 10px 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
-.reading-sheet input, .reading-sheet textarea { min-width: 0; max-width: 100%; }.chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+.reading-sheet input, .reading-sheet textarea { min-width: 0; max-width: 100%; }
+.chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
 .chip-group button { min-height: var(--tap); padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
 .chip-group button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Progress Wall (ADR-0027) */
