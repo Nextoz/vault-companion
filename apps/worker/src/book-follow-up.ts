@@ -38,6 +38,7 @@ export function createBookFollowUpService(deps: BookFollowUpDeps) {
       if (!deps.chat) return error('follow-up-unavailable', 'Follow-up questions are not configured for this vault yet.');
       const title = canonicalBookTitle(request.title);
       if (title === null) return error('refused:book-title-invalid', 'Book title cannot be used for a note name');
+      if (!rateLimit.allow()) return error('follow-up-rate-limited', 'You have used today’s five follow-up questions. Try again tomorrow.');
       let books: BooksResponse | ApiError;
       try { books = await deps.readBooks(); } catch {
         return error('follow-up-unavailable', 'The saved reflection is not available right now.', true);
@@ -47,7 +48,6 @@ export function createBookFollowUpService(deps: BookFollowUpDeps) {
       const reflection = books.books.find((book) => book.title === title)?.reflections
         .filter((entry) => entry.date === request.date)[request.ordinal - 1];
       if (!reflection) return error('reflection-not-found', 'That saved reflection was not found.');
-      if (!rateLimit.allow()) return error('follow-up-rate-limited', 'You have used today’s five follow-up questions. Try again tomorrow.');
 
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {

@@ -124,8 +124,8 @@ it('selects ordinal 2 only among entries of the requested date, including at EOF
   expect(result).toMatchObject({ ok: true, text: source + '\n\n> AI question: What changed?\n\nAnswer' });
 });
 
-it('refuses empty or multiline questions, empty answers and heading lines in answers', () => {
-  for (const question of ['', ' \t ', 'Why?\nHow?', 'Why?\rHow?', 'Why?\u2028How?', 'Why?\u2029How?']) {
+it('refuses empty, multiline or hash-containing questions, empty answers and heading lines in answers', () => {
+  for (const question of ['', ' \t ', 'Why?\nHow?', 'Why?\rHow?', 'Why?\u2028How?', 'Why?\u2029How?', '# Why?', '## Why?', 'How about C#?']) {
     expect(kernel.appendFollowUp(twoEntries, { ...followUp, question })).toMatchObject({ ok: false, code: 'invalid' });
   }
   for (const answer of ['', ' \t ', '\r\n']) {

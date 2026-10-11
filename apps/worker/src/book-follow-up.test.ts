@@ -98,6 +98,16 @@ it('caps at five per isolate, returns 429 on sixth, and resets the next day', as
   expect(h.chat).toHaveBeenCalledTimes(6);
 });
 
+it('invalid reflection selections consume the cap and the sixth attempt never reads the vault', async () => {
+  const readBooks = vi.fn<ReturnType<typeof createBooksService>['readBooks']>().mockResolvedValue({ status: 'ok', revision: '1'.repeat(40), books: [] });
+  const chat = vi.fn<(request: ChatRequest) => Promise<ChatOutcome>>();
+  const service = createBookFollowUpService({ readBooks, chat: { chat } });
+  for (let n = 0; n < 5; n++) expect(await service.followUp(request)).toMatchObject({ code: 'reflection-not-found' });
+  expect(await service.followUp(request)).toMatchObject({ code: 'follow-up-rate-limited' });
+  expect(readBooks).toHaveBeenCalledTimes(5);
+  expect(chat).not.toHaveBeenCalled();
+});
+
 it('returns 503 when no key configures chat', async () => {
   const h = await setup(undefined, false);
   const res = await h.post();

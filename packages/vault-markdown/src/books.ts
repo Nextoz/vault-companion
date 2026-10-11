@@ -177,7 +177,7 @@ export function appendReflection(source: string, entry: { readonly date: string;
 /** ADR-0063: append only within the selected dated reflection; ordinal is 1-based for that date. */
 export function appendFollowUp(source: string, entry: { readonly date: string; readonly ordinal: number; readonly question: string; readonly answer: string }): MutationOk<BookEffect> | Refusal {
   if (!isDate(entry.date) || !Number.isInteger(entry.ordinal) || entry.ordinal < 1) return refuse('invalid', 'SaveFollowUp needs a date and a positive whole ordinal');
-  if (!entry.question.trim() || /[\r\n\u2028\u2029]/.test(entry.question)) return refuse('invalid', 'The AI question must be one nonempty line');
+  if (!entry.question.trim() || /[\r\n\u2028\u2029#]/.test(entry.question)) return refuse('invalid', 'The AI question must be one nonempty line without #');
   const answerLines = entry.answer.split(/\r\n|\r|\n/);
   if (!entry.answer.trim()) return refuse('refused:book-reflection-empty', 'Write an answer first');
   if (answerLines.some((line) => /^ {0,3}#{1,3}(\s|$)/.test(line))) return refuse('invalid', 'An answer cannot contain heading lines (#, ## or ###)');
