@@ -390,6 +390,42 @@ describe('inspection and account edges (DASH1)', () => {
   });
 });
 
+describe('private-valuation card (WL4b)', () => {
+  const privateOk: DashboardCard = {
+    id: 'private-valuation', status: 'ok', title: 'OpenAI', provenance: 'Vault: Automation/Watchlist/private-valuations.json',
+    observedAt: null, fetchedAt: NOW, note: null, drillthrough: null,
+    item: { id: 'openai', name: 'OpenAI', valueUsdBillions: 500, asOf: '2026-03-12', source: { label: 'Synthetic round report', url: 'https://example.test/openai-round' } },
+  };
+
+  it('renders the labelled private line and an https source link, with no chart, price or delayed chip', async () => {
+    await render([privateOk, ...overviewCards]);
+    const card = document.querySelector('.dash-private')!;
+    expect(card).not.toBeNull();
+    expect(card.textContent).toContain('OpenAI');
+    expect(card.textContent).toContain('private · last round ~USD 500 B · 12 Mar 2026');
+    const link = card.querySelector('.dash-private-source') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('https://example.test/openai-round');
+    expect(link.getAttribute('rel')).toContain('noopener');
+    expect(card.querySelector('.dash-svg')).toBeNull();
+    expect(card.querySelector('.dash-price')).toBeNull();
+    expect(card.querySelector('.dash-chip-delayed')).toBeNull();
+    expect(document.querySelector('.dash-tiles')).toBeNull(); // shown as its own card, never a generic tile
+  });
+
+  it('shows the plain unavailable reason and never a figure', async () => {
+    const down: DashboardCard = {
+      id: 'private-valuation', status: 'unavailable', title: 'Private valuations', provenance: 'Vault: Automation/Watchlist/private-valuations.json',
+      observedAt: null, fetchedAt: null, note: 'No private-valuation file exists yet.', drillthrough: null, reason: 'not-found',
+    };
+    await render([down, ...overviewCards]);
+    const card = document.querySelector('.dash-private')!;
+    expect(card.textContent).toContain('No private-valuation file exists yet.');
+    expect(card.textContent).not.toContain('USD');
+    expect(card.querySelector('.dash-private-value')).toBeNull();
+    expect(card.querySelector('.dash-svg')).toBeNull();
+  });
+});
+
 describe('pure helpers (DASH1)', () => {
   it('splits segments only where a bucket is missing', () => {
     const series = { range: '1W' as const, granularitySeconds: 3_600, points: [point(0), point(1), point(5)], missingIntervals: 3 };

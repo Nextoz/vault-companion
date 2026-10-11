@@ -1,12 +1,12 @@
 // Dashboard (DASH1): read-only overview. One card per watched item (WL2) with a 1W/1M/3M/1Y series, honest overview
 // cards, and the AB3b AI usage panel (fed from App). No writes, no provider calls from the browser.
-import type { AiBudgetResponse, AiUsageResponse, DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketSeries, MarketTickerResponse, WatchCard, WeatherCard } from '@vault-companion/contracts';
+import type { AiBudgetResponse, AiUsageResponse, DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketSeries, MarketTickerResponse, PrivateValuationCard, WatchCard, WeatherCard } from '@vault-companion/contracts';
 import { useCallback, useEffect, useId, useMemo, useState, type PointerEvent } from 'react';
 import { getDashboard, getMarketTicker, type Fetched } from '../api.ts';
 import './Dashboard.css';
 import { AiUsagePanel } from './AiUsagePanel.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
-import { formatChange, formatWatchPrice, formatWatchValue, legacyMarketCard, seriesChange, watchCards, watchDelayLabel, watchFresh, watchTitle } from './watchlist.ts';
+import { formatChange, formatPrivateValuation, formatWatchPrice, formatWatchValue, legacyMarketCard, privateValuationCards, seriesChange, watchCards, watchDelayLabel, watchFresh, watchTitle } from './watchlist.ts';
 import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
 
 export const TICKER_POLL_MS = 60_000;
@@ -250,13 +250,36 @@ function OverviewCard({ card, onDrillthrough }: { card: DashboardCard; onDrillth
   );
 }
 
+/** WL4b: a hand-edited private valuation, clearly labelled "private". No chart, no price: a name, the labelled
+ * last-round line, and an https source link. An unavailable card shows its plain reason, never a figure. */
+function PrivateValuationView({ card }: { card: PrivateValuationCard }) {
+  const headingId = useId();
+  return (
+    <article className="dash-card dash-private" aria-labelledby={headingId}>
+      <header className="dash-card-head">
+        <h2 id={headingId}>{card.title}</h2>
+        <span className="dash-chip dash-chip-private">Private</span>
+      </header>
+      {card.status === 'unavailable' ? (
+        <p className="dash-note" role="status">{card.note ?? 'Private valuation is unavailable.'}</p>
+      ) : (
+        <>
+          <p className="dash-private-value">{formatPrivateValuation(card)}</p>
+          <a className="dash-private-source" href={card.item.source.url} target="_blank" rel="noopener noreferrer">Source: {card.item.source.label}</a>
+        </>
+      )}
+      <p className="muted small">{card.provenance}</p>
+    </article>
+  );
+}
+
 /**
  * UX4: the small overview tiles, minus the ones that only exist to say "Not configured". A placeholder that carries no
  * fact is hidden here (the Status sheet still lists the source); a card that honestly failed stays, so "Unavailable" is
  * never lost. Market, watchlist, weather and the health card have their own spots. Pure.
  */
 export function overviewTiles(cards: readonly DashboardCard[]): DashboardCard[] {
-  return cards.filter((card) => card.id !== 'market' && card.id !== 'watchlist' && card.id !== 'weather' && card.id !== 'health' && card.status !== 'not-configured');
+  return cards.filter((card) => card.id !== 'market' && card.id !== 'watchlist' && card.id !== 'weather' && card.id !== 'health' && card.id !== 'private-valuation' && card.status !== 'not-configured');
 }
 
 export function Dashboard({ refreshKey, accountKey = null, onDrillthrough, aiUsage = null, aiBudget = null }: {
@@ -317,6 +340,7 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough, aiUsa
   const market = legacyMarketCard(shown?.cards ?? []);
   const watches = shown ? watchCards(shown.cards) : [];
   const weather = shown?.cards.find((card): card is WeatherCard => card.id === 'weather') ?? null;
+  const privateValuations = shown ? privateValuationCards(shown.cards) : [];
   const nowMs = shown ? at(shown.now) : 0;
   const notLive = failed || isCopy;
   const marketStale = market !== null && market.status === 'ok' && shown !== null && !marketFresh(market, nowMs);
@@ -348,6 +372,9 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough, aiUsa
         </div>
       )}
       {shown && weather && <WeatherCardView card={weather} stale={weatherStale} onDrillthrough={onDrillthrough} />}
+      {privateValuations.map((card) => (
+        <PrivateValuationView key={card.status === 'ok' ? card.item.id : `unavailable:${card.reason}`} card={card} />
+      ))}
       {tiles.length > 0 && (
         <div className="dash-tiles">
           {tiles.map((card) => <OverviewCard key={card.id} card={card} onDrillthrough={onDrillthrough} />)}

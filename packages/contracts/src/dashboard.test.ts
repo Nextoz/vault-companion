@@ -73,6 +73,33 @@ describe('MarketTickerResponse (DASH1 ticker poll)', () => {
   });
 });
 
+describe('private-valuation card (WL4b)', () => {
+  const item = { id: 'openai', name: 'OpenAI', valueUsdBillions: 500, asOf: '2026-03-12', source: { label: 'Synthetic round report', url: 'https://example.test/openai-round' } };
+  const okCard = { id: 'private-valuation', status: 'ok', title: 'OpenAI', provenance: 'Vault: Automation/Watchlist/private-valuations.json', observedAt: null, fetchedAt: NOW, note: null, drillthrough: null, item };
+  const wrap = (card: unknown) => DashboardResponse.safeParse({ now: NOW, cards: [card] });
+
+  it('accepts an ok card with an https source, and both fixed unavailable reasons', () => {
+    expect(wrap(okCard).success).toBe(true);
+    for (const reason of ['not-found', 'invalid']) {
+      expect(wrap({ id: 'private-valuation', status: 'unavailable', title: 'Private valuations', provenance: 'Vault: Automation/Watchlist/private-valuations.json', observedAt: null, fetchedAt: null, note: 'x', drillthrough: null, reason }).success).toBe(true);
+    }
+  });
+
+  // Production guard-negative: the https-only rule, the positive-finite value and the calendar date are real.
+  it('rejects a cleartext source url, a non-positive value and an impossible date', () => {
+    expect(wrap({ ...okCard, item: { ...item, source: { ...item.source, url: 'http://example.test/x' } } }).success).toBe(false);
+    expect(wrap({ ...okCard, item: { ...item, valueUsdBillions: 0 } }).success).toBe(false);
+    expect(wrap({ ...okCard, item: { ...item, valueUsdBillions: -5 } }).success).toBe(false);
+    expect(wrap({ ...okCard, item: { ...item, asOf: '2026-13-40' } }).success).toBe(false);
+    expect(wrap({ ...okCard, item: { ...item, asOf: '12 Mar 2026' } }).success).toBe(false);
+  });
+
+  it('rejects a wrong card id and an unknown unavailable reason', () => {
+    expect(wrap({ ...okCard, id: 'private-value' }).success).toBe(false);
+    expect(wrap({ ...okCard, status: 'unavailable', reason: 'upstream' }).success).toBe(false);
+  });
+});
+
 describe('DASHBOARD_RANGE_PLAN', () => {
   it('keeps every range inside the series point cap', () => {
     for (const plan of Object.values(DASHBOARD_RANGE_PLAN)) {

@@ -1,6 +1,6 @@
 // WL2 (watchlist UI): pure formatting and selection for the Dashboard watchlist cards, so the React component stays
 // thin. Given a card, return the strings the card shows; nothing here fetches or holds state.
-import type { DashboardCard, MarketCard, MarketSeries, WatchCard } from '@vault-companion/contracts';
+import type { DashboardCard, MarketCard, MarketSeries, PrivateValuationCard, PrivateValuationUnavailableReason, WatchCard } from '@vault-companion/contracts';
 
 /** Every watchlist card in the response, in arrival order. Pure. */
 export function watchCards(cards: readonly DashboardCard[]): WatchCard[] {
@@ -79,4 +79,27 @@ export function formatChange(change: WatchChange): string {
 /** A fetched value may stand this long before its card calls itself stale; the same window as the market card. */
 export function watchFresh(card: WatchCard, nowMs: number, staleMs: number): boolean {
   return card.status === 'ok' && card.fetchedAt !== null && nowMs - Date.parse(card.fetchedAt) <= staleMs;
+}
+
+/** Every private-valuation card in the response, in arrival order. Pure (WL4b). */
+export function privateValuationCards(cards: readonly DashboardCard[]): PrivateValuationCard[] {
+  return cards.filter((card): card is PrivateValuationCard => card.id === 'private-valuation');
+}
+
+const usdBillions = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+const valuationDate = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+/**
+ * The one labelled line a private-valuation card shows: "private · last round ~USD 500 B · 12 Mar 2026". The "private"
+ * label is the point: this is a hand-maintained figure, never a market price, and it must never come off. `unavailable`
+ * has no figure, so it returns an empty string and the card shows its plain reason instead.
+ */
+export function formatPrivateValuation(card: PrivateValuationCard): string {
+  if (card.status !== 'ok') return '';
+  return `private · last round ~USD ${usdBillions.format(card.item.valueUsdBillions)} B · ${valuationDate.format(Date.parse(card.item.asOf))}`;
+}
+
+/** The plain, fixed reason an unavailable private-valuation card shows; null while the card is ok. Pure. */
+export function privateValuationUnavailableReason(card: PrivateValuationCard): PrivateValuationUnavailableReason | null {
+  return card.status === 'unavailable' ? card.reason : null;
 }

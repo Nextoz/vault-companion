@@ -1,8 +1,9 @@
 // Dashboard composition (DASH1): the read-only card list the phone renders. Market data comes from the public
 // Coinbase source; Weather uses the same projection as the Today morning view; AI usage and Health have no approved
 // source yet and say so honestly.
-import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketTickerResponse, MarketUnavailableReason, WatchCard, WeatherCard, WeatherFailureReason, WeatherResponse } from '@vault-companion/contracts';
+import type { DashboardCard, DashboardRange, DashboardResponse, MarketCard, MarketTickerResponse, MarketUnavailableReason, PrivateValuationCard, PrivateValuationUnavailableReason, WatchCard, WeatherCard, WeatherFailureReason, WeatherResponse } from '@vault-companion/contracts';
 import type { MarketSource } from './market.ts';
+import type { PrivateValuationsReader } from './private-valuations.ts';
 import type { WatchItem, WatchlistSource } from './watchlist.ts';
 
 const PROVIDER_LABEL = 'Coinbase Exchange (public)';
@@ -35,6 +36,13 @@ const WEATHER_REASON_NOTE: Record<WeatherFailureReason, string> = {
   'no-data': 'No weather model returned usable forecast points.',
 };
 
+/** The hand-edited vault file is the source; the card never carries a market price. */
+const PRIVATE_VALUATIONS_PROVENANCE = 'Vault: Automation/Watchlist/private-valuations.json';
+const PRIVATE_REASON_NOTE: Record<PrivateValuationUnavailableReason, string> = {
+  'not-found': 'No private-valuation file exists yet.',
+  invalid: 'The private-valuation file could not be read.',
+};
+
 export interface WeatherReadService {
   readWeather(): Promise<WeatherResponse>;
 }
@@ -55,6 +63,7 @@ export interface DashboardDeps {
   readonly market: MarketSource;
   readonly watchlist: WatchlistSource;
   readonly weather: WeatherReadService;
+  readonly privateValuations: PrivateValuationsReader;
   readonly now: () => Date;
 }
 
@@ -117,14 +126,33 @@ export function createDashboardService(deps: DashboardDeps) {
     };
   };
 
+  /** WL4b: one card per hand-edited entry; a missing or unreadable file is one honest `unavailable` card. */
+  const privateValuationCards = async (): Promise<PrivateValuationCard[]> => {
+    const result = await deps.privateValuations.readPrivateValuations();
+    if (result.status === 'ok') {
+      return result.items.map((item) => ({
+        id: 'private-valuation', status: 'ok', title: item.name,
+        provenance: PRIVATE_VALUATIONS_PROVENANCE, observedAt: null, fetchedAt: iso(deps.now().getTime()),
+        note: null, drillthrough: null, item,
+      }));
+    }
+    const reason: PrivateValuationUnavailableReason = result.status === 'not-found' ? 'not-found' : 'invalid';
+    return [{
+      id: 'private-valuation', status: 'unavailable', title: 'Private valuations',
+      provenance: PRIVATE_VALUATIONS_PROVENANCE, observedAt: null, fetchedAt: null,
+      note: PRIVATE_REASON_NOTE[reason], drillthrough: null, reason,
+    }];
+  };
+
   return {
     async readDashboard(range: DashboardRange): Promise<DashboardResponse> {
-      const [market, watches, weather] = await Promise.all([
+      const [market, watches, weather, privateValuations] = await Promise.all([
         marketCard(range),
         Promise.all(deps.watchlist.items.map((item) => watchCard(item, range))),
         weatherCard(),
+        privateValuationCards(),
       ]);
-      return { now: deps.now().toISOString(), cards: [market, ...watches, weather, ...overviewCards()] };
+      return { now: deps.now().toISOString(), cards: [market, ...watches, weather, ...privateValuations, ...overviewCards()] };
     },
     async readMarketTicker(): Promise<MarketTickerResponse> {
       const now = deps.now().toISOString();

@@ -9,6 +9,7 @@ import { createDashboardService } from './dashboard.ts';
 import { createGameService } from './game.ts';
 import { createMarketSource } from './market.ts';
 import { createWatchlistSource } from './watchlist.ts';
+import { createPrivateValuationsReader } from './private-valuations.ts';
 import { createWeatherProvider } from './weather-provider.ts';
 import { createGoogleReader } from './google-reader.ts';
 import { createCalendarWriter } from './calendar-writer.ts';
@@ -173,6 +174,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
       market: createMarketSource({ fetch: fetchImpl, now: () => Date.now() }),
       watchlist: createWatchlistSource({ fetch: fetchImpl, now: () => Date.now() }),
       weather: weatherService,
+      privateValuations: createPrivateValuationsReader({ store }),
       now: () => new Date(),
     }),
     ...weatherService,

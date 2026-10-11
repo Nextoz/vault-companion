@@ -1,6 +1,6 @@
-import type { MarketCard, MarketSeries, WatchCard } from '@vault-companion/contracts';
+import type { MarketCard, MarketSeries, PrivateValuationCard, WatchCard } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
-import { formatChange, formatWatchPrice, formatWatchValue, legacyMarketCard, seriesChange, watchCards, watchDecimals, watchDelayLabel, watchFresh, watchTitle } from './watchlist.ts';
+import { formatChange, formatPrivateValuation, formatWatchPrice, formatWatchValue, legacyMarketCard, privateValuationCards, privateValuationUnavailableReason, seriesChange, watchCards, watchDecimals, watchDelayLabel, watchFresh, watchTitle } from './watchlist.ts';
 
 const NOW = '2026-09-30T12:00:00Z';
 const point = (index: number, close: number) => ({
@@ -112,5 +112,37 @@ describe('watchlist freshness (WL2)', () => {
     expect(watchFresh(fx(), Date.parse(NOW) + 1_000, 120_000)).toBe(true);
     expect(watchFresh(fx(), Date.parse(NOW) + 200_000, 120_000)).toBe(false);
     expect(watchFresh(unavailable, Date.parse(NOW), 120_000)).toBe(false); // nothing was fetched
+  });
+});
+
+describe('private valuations (WL4b)', () => {
+  const privateOk = (over: Record<string, unknown> = {}): PrivateValuationCard => ({
+    id: 'private-valuation', status: 'ok', title: 'OpenAI', provenance: 'Vault: Automation/Watchlist/private-valuations.json',
+    observedAt: null, fetchedAt: NOW, note: null, drillthrough: null,
+    item: { id: 'openai', name: 'OpenAI', valueUsdBillions: 500, asOf: '2026-03-12', source: { label: 'Synthetic round report', url: 'https://example.test/openai-round' } },
+    ...over,
+  } as PrivateValuationCard);
+  const privateDown: PrivateValuationCard = {
+    id: 'private-valuation', status: 'unavailable', title: 'Private valuations', provenance: 'Vault: Automation/Watchlist/private-valuations.json',
+    observedAt: null, fetchedAt: null, note: 'No private-valuation file exists yet.', drillthrough: null, reason: 'not-found',
+  };
+
+  it('labels the line "private", with the ~USD figure and the date, and never a market price', () => {
+    expect(formatPrivateValuation(privateOk())).toBe('private · last round ~USD 500 B · 12 Mar 2026');
+    expect(formatPrivateValuation(privateOk())).toContain('private');
+    expect(formatPrivateValuation(privateOk({ item: { id: 'x', name: 'x', valueUsdBillions: 12.5, asOf: '2025-11-01', source: { label: 'x', url: 'https://example.test/x' } } }))).toBe('private · last round ~USD 12.5 B · 01 Nov 2025');
+    expect(formatPrivateValuation(privateOk())).not.toMatch(/\$|Delayed/);
+  });
+
+  it('selects only private-valuation cards, in arrival order', () => {
+    expect(privateValuationCards([market, privateOk(), privateDown, fx()])).toEqual([privateOk(), privateDown]);
+    expect(privateValuationCards([market, fx()])).toEqual([]);
+  });
+
+  it('has no figure for an unavailable card, only its fixed plain reason', () => {
+    expect(formatPrivateValuation(privateDown)).toBe('');
+    expect(privateValuationUnavailableReason(privateDown)).toBe('not-found');
+    expect(privateValuationUnavailableReason(privateOk())).toBeNull();
+    expect(privateValuationUnavailableReason({ ...privateDown, reason: 'invalid' })).toBe('invalid');
   });
 });
