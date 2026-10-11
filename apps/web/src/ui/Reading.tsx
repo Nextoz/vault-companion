@@ -26,8 +26,9 @@ export function Reading({ refreshKey, accountKey, queue, baseRevision, open, onC
   const [requested, setRequested] = useState<ReadingSheetKind | null>(null);
   // The Reflect draft lives here, so closing the sheet never loses what was typed.
   const [reflection, setReflection] = useState('');
-  // READ1-B: the one reflection being challenged, with its ADR-0063 ordinal among same-date entries.
-  const [challenge, setChallenge] = useState<{ date: string; ordinal: number; text: string } | null>(null);
+  // READ1-B: the one reflection being challenged, with its book and ADR-0063 ordinal, so a refresh that repicks the
+  // current book never retargets an open sheet.
+  const [challenge, setChallenge] = useState<{ title: string; date: string; ordinal: number; text: string } | null>(null);
   const sheet: ReadingSheetKind | null = requested ?? (open && read?.status === 'ok' ? (current ? 'log' : 'start') : null);
   const close = () => { setRequested(null); onClose(); };
   const percent = current ? progressPercent(current.currentPage, current.totalPages) : 0;
@@ -69,10 +70,10 @@ export function Reading({ refreshKey, accountKey, queue, baseRevision, open, onC
             {reflection.text.length > 160
               ? <details><summary>{reflection.date}</summary><p>{reflection.text}</p>
                   <button type="button" className="reading-challenge"
-                    onClick={() => setChallenge({ date: reflection.date, ordinal: ordinals[index]!, text: reflection.text })}>Challenge me</button></details>
+                    onClick={() => setChallenge({ title: current.title, date: reflection.date, ordinal: ordinals[index]!, text: reflection.text })}>Challenge me</button></details>
               : <><p><span className="muted small">{reflection.date}</span> {reflection.text}</p>
                   <button type="button" className="reading-challenge"
-                    onClick={() => setChallenge({ date: reflection.date, ordinal: ordinals[index]!, text: reflection.text })}>Challenge me</button></>}
+                    onClick={() => setChallenge({ title: current.title, date: reflection.date, ordinal: ordinals[index]!, text: reflection.text })}>Challenge me</button></>}
           </li>))}
         </ul>
       </section>
@@ -90,7 +91,7 @@ export function Reading({ refreshKey, accountKey, queue, baseRevision, open, onC
     {sheet === 'start' && <ReadingSheet kind="start" queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={close} />}
     {sheet === 'log' && current && <ReadingSheet kind="log" book={current} queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={close} />}
     {sheet === 'reflect' && current && <ReadingSheet kind="reflect" book={current} draft={reflection} onDraftChange={setReflection} queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={close} />}
-    {challenge && current && <ChallengeSheet title={current.title} date={challenge.date} ordinal={challenge.ordinal} text={challenge.text}
+    {challenge && <ChallengeSheet title={challenge.title} date={challenge.date} ordinal={challenge.ordinal} text={challenge.text}
       queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={() => setChallenge(null)} />}
   </section>;
 }

@@ -79,6 +79,7 @@ export function ChallengeSheet({ title, date, ordinal, text, accountKey, queue, 
     {phase === 'error' && <>
       <p className="error" role="alert">{message}</p>
       <div className="sheet-buttons">
+        <button type="button" onClick={onClose}>Close</button>
         <button type="button" disabled={!accountKey} onClick={() => void ask()}>Retry</button>
       </div>
     </>}
