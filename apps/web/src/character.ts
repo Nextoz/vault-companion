@@ -96,6 +96,41 @@ export function recentlyEarned(achievements: readonly GameAchievement[], limit =
     .slice(0, limit);
 }
 
+export interface TrackedAchievement {
+  readonly id: string;
+  readonly name: string;
+  readonly current: number;
+  readonly target: number;
+  /** current / target as 0..100%. */
+  readonly percent: number;
+}
+
+/**
+ * The "Tracked" list: visible, unlocked, unearned achievements that report progress, closest to done first (ties by
+ * name). Hidden and locked ones never appear, and a non-positive target is skipped rather than divided by.
+ */
+export function trackedAchievements(achievements: readonly GameAchievement[], limit = 3): TrackedAchievement[] {
+  return achievements
+    .filter((a) => !a.earned && a.visible && !a.locked && a.progress !== null && a.progress.target > 0)
+    .map((a) => {
+      const { current, target } = a.progress!;
+      return { id: a.id, name: a.name, current, target, percent: clamp((current / target) * 100, 0, 100) };
+    })
+    .sort((a, b) => b.percent - a.percent || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "2026-09-20" -> "20 Sep" (year added when it differs from `today`'s). A calendar date, so no time zone applies. */
+export function shortDate(date: string, today: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return date;
+  const [, year, month, day] = match;
+  const label = `${Number(day)} ${MONTHS[Number(month) - 1]}`;
+  return year === today.slice(0, 4) ? label : `${label} ${year}`;
+}
+
 /** XP needed to advance from `level`, straight from the config's base cost, step and minimum level. */
 export function levelCostAt(level: number, rules: GameRules): number {
   const { baseCost, costStep, min } = rules.level;

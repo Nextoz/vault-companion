@@ -2,7 +2,7 @@ import type { GameAchievement, GameRules } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   emptyCharacterLine, howXpWorks, levelCostAt, levelExamples, levelLabel, professionUnavailable, recentlyEarned,
-  professionLine, restedSegment, skillLabel, skillPercent, sourceLabel, unavailableLines, xpBar,
+  professionLine, restedSegment, shortDate, skillLabel, skillPercent, sourceLabel, trackedAchievements, unavailableLines, xpBar,
 } from './character.ts';
 
 /** Distinctive synthetic values so a hard-coded page (the real config) would fail every assertion below. */
@@ -147,5 +147,43 @@ describe('howXpWorks', () => {
     const after = JSON.stringify(howXpWorks(rules({ level: { min: 1, max: 11, baseCost: 222, costStep: 13 } })));
     expect(after).not.toBe(before);
     expect(after).toContain('222');
+  });
+});
+
+/** An achievement still in progress (the fixture default is earned). */
+const pending = (over: Partial<GameAchievement>): GameAchievement => achievement({ earned: false, earnedDate: null, ...over });
+
+describe('trackedAchievements', () => {
+  it('keeps visible, unlocked, unearned achievements with progress, closest to done first', () => {
+    const list = [
+      pending({ id: 'far', name: 'Far', progress: { current: 1, target: 10 } }),
+      pending({ id: 'near', name: 'Near', progress: { current: 9, target: 10 } }),
+      achievement({ id: 'done', name: 'Done', earned: true, earnedDate: '2026-09-01', progress: { current: 10, target: 10 } }),
+      pending({ id: 'hidden', name: 'Hidden', visible: false, progress: { current: 5, target: 10 } }),
+      pending({ id: 'locked', name: 'Locked', locked: true, progress: { current: 5, target: 10 } }),
+      pending({ id: 'plain', name: 'Plain', progress: null }),
+      pending({ id: 'zero', name: 'Zero', progress: { current: 3, target: 0 } }),
+    ];
+    expect(trackedAchievements(list).map((t) => t.id)).toEqual(['near', 'far']);
+    expect(trackedAchievements(list)[0]).toMatchObject({ current: 9, target: 10, percent: 90 });
+  });
+
+  it('clamps overshoot, breaks ties by name and caps the list', () => {
+    const list = ['C', 'A', 'B', 'D'].map((name) => pending({ id: name, name, progress: { current: 3, target: 6 } }));
+    list.push(pending({ id: 'over', name: 'Over', progress: { current: 12, target: 6 } }));
+    expect(trackedAchievements(list).map((t) => t.id)).toEqual(['over', 'A', 'B']);
+    expect(trackedAchievements(list)[0]!.percent).toBe(100);
+  });
+});
+
+describe('shortDate', () => {
+  it('drops the year in the current year and keeps it otherwise', () => {
+    expect(shortDate('2026-09-02', '2026-10-11')).toBe('2 Sep');
+    expect(shortDate('2025-12-31', '2026-10-11')).toBe('31 Dec 2025');
+  });
+
+  it('returns anything that is not a calendar date unchanged', () => {
+    expect(shortDate('', '2026-10-11')).toBe('');
+    expect(shortDate('soon', '2026-10-11')).toBe('soon');
   });
 });

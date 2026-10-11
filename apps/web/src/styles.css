@@ -220,24 +220,31 @@ textarea:focus-visible {
   font-size: 0.9rem;
 }
 
-/* GAM1-B: the Log Character card above the segmented switch, and the ring/achievement rows on the screen. */
+/* GAM1-B: the Log Character card (plan screen 1) and the Character screen (plan screen 2, mockup 2026-10-10).
+   The game keeps its own palette inside these classes: gold for points and the card edge, one hue per profession. */
+.character-card,
+.character-sheet {
+  --game-gold: #f2c86b;
+  --game-well: rgb(255 255 255 / 0.05);
+  --game-track: rgb(255 255 255 / 0.09);
+}
+
 .character-card { margin: 12px 0; }
 
 .character-card-button {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   min-height: var(--tap);
   padding: 12px 14px;
   text-align: left;
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid rgb(242 200 107 / 0.42);
   border-radius: 14px;
 }
 
 .character-card-head,
-.character-card-foot,
 .character-card-empty {
   display: flex;
   align-items: baseline;
@@ -245,78 +252,155 @@ textarea:focus-visible {
   gap: 12px;
 }
 
-.character-card-title { font-weight: 600; }
+.character-card-title { font-size: 1.06rem; font-weight: 600; }
+.character-card-points { color: var(--game-gold); font-size: 0.9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.character-card-level { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.character-card-open { margin-top: 2px; color: var(--accent); font-size: 0.85rem; }
 .character-card-empty p { margin: 0; }
 
-/* The shared level and profession bar: a track, the fill, and the rested reserve laid over it. */
+/* The level bar on the card: a track, the fill, and the rested reserve as a fainter run of the same colour. */
 .xp-bar {
   position: relative;
   display: block;
-  height: 12px;
-  border-radius: 6px;
-  background: var(--raised);
+  height: 8px;
+  border-radius: 4px;
+  background: var(--game-track);
   overflow: hidden;
 }
 
-.xp-fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
-.xp-rested { position: absolute; inset: 0 auto 0 0; background: var(--maybe); opacity: 0.85; }
+.xp-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--accent); }
+.xp-rested { position: absolute; inset: 0 auto 0 0; background: var(--accent); opacity: 0.35; }
 
-.character-sheet { max-height: 92dvh; overflow-y: auto; }
-.character-overall { display: flex; flex-direction: column; gap: 8px; }
-.character-overall-title { margin: 0; font-weight: 600; }
-.character-unavailable { margin: 0; padding-left: 18px; }
+/* Rings: SVG arcs drawn with pathLength=100, so the dash values are percentages. */
+.ring-track { fill: none; stroke: var(--game-track); }
+.ring-fill,
+.ring-rested { fill: none; stroke: var(--ring-colour, var(--accent)); stroke-linecap: round; }
+.ring-rested { opacity: 0.35; }
 
-.character-professions { list-style: none; margin: 0; padding: 0; }
-.character-profession {
+.character-hero {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  min-height: var(--tap);
-  padding: 8px 0;
-  border-top: 1px solid var(--line);
+  padding: 6px 0 4px;
+  text-align: center;
 }
 
-.character-profession:first-child { border-top: none; }
-
-.character-ring-button {
-  display: inline-flex;
+.character-level {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: var(--tap);
-  height: var(--tap);
-  min-width: var(--tap);
-  min-height: var(--tap);
+  width: 136px;
+  height: 136px;
+}
+
+.level-ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+.character-level-number { font-size: 2.6rem; font-weight: 700; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.character-level-word { margin-top: 4px; color: var(--muted); font-size: 0.78rem; }
+.character-title { margin: 12px 0 2px; font-size: 1.18rem; font-weight: 600; letter-spacing: -0.01em; }
+.character-xp-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.character-rested { color: rgb(100 170 255); }
+.character-unavailable {
+  list-style: none;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 0.85rem;
+}
+
+.character-professions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  list-style: none;
+  margin: 10px 0 0;
   padding: 0;
-  border: none;
+}
+
+.character-profession { --ring-colour: var(--accent); min-width: 0; }
+.character-profession[data-profession='athletics'] { --ring-colour: #ff6b4a; }
+.character-profession[data-profession='scholar'] { --ring-colour: #5fd18c; }
+.character-profession[data-profession='lorekeeper'] { --ring-colour: #a98bff; }
+.character-profession[data-profession='quartermaster'] { --ring-colour: #ffb547; }
+
+.character-ring-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 12px;
   background: transparent;
 }
 
-.skill-ring { width: 40px; height: 40px; }
-.skill-ring-track { fill: none; stroke: var(--raised); stroke-width: 6; }
-.skill-ring-fill { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; }
-
-.character-profession-body { min-width: 0; }
-.character-profession-name { margin: 0; font-weight: 600; }
-.character-profession-body p { margin: 0; }
-
-.character-recent h3,
-.character-how-xp h3 { margin: 8px 0 4px; font-size: 0.95rem; }
-
-.character-achievements { list-style: none; margin: 0; padding: 0; }
-.character-achievements li {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 36px;
-  padding: 4px 0;
-  border-top: 1px solid var(--line);
+.character-ring-button:active { background: var(--game-well); }
+.character-ring { position: relative; display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 4px; }
+.skill-ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+.character-ring-value { font-size: 1.06rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.character-profession-name,
+.character-profession-rank {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.character-achievements li:first-child { border-top: none; }
-.character-how-link { align-self: flex-start; }
-.character-how-xp ul { margin: 0; padding-left: 18px; }
-.character-how-xp section { margin-bottom: 12px; }
+.character-profession-name { font-size: 0.72rem; font-weight: 600; letter-spacing: -0.01em; }
+.character-profession-rank { color: var(--muted); font-size: 0.68rem; }
+.character-hint { margin: 0; color: var(--muted); font-size: 0.78rem; text-align: center; }
+
+.character-section h3 { margin: 6px 0 8px; font-size: 0.95rem; font-weight: 600; }
+.character-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--game-well);
+}
+
+.character-rows > li { min-height: var(--tap); padding: 11px 0; border-top: 1px solid rgb(255 255 255 / 0.08); }
+.character-rows > li:first-child { border-top: none; }
+.character-row-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.character-row-meta { flex-shrink: 0; color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.character-tracked { display: flex; flex-direction: column; gap: 8px; }
+.character-progress { display: block; height: 4px; border-radius: 2px; background: var(--game-track); overflow: hidden; }
+.character-progress > span { display: block; height: 100%; border-radius: 2px; background: var(--game-gold); }
+
+.character-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 4px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--game-well);
+  text-align: left;
+}
+
+.character-chevron { color: var(--muted); font-size: 1.3rem; line-height: 1; }
+.character-how-xp ul { margin: 0; padding-left: 18px; font-size: 0.92rem; line-height: 1.45; }
+.character-how-xp li + li { margin-top: 4px; }
+.character-how-xp .character-section + .character-section { margin-top: 12px; }
 
 /* UX5: the Mood check-in history at the top of the Log's Progress view. Read-only evidence rows. */
 .log-mood {
@@ -1610,21 +1694,55 @@ textarea:focus-visible {
 .ask-jev-sheet .jev-bar-fill { display: block; height: 100%; border-radius: 999px; background: var(--accent); opacity: 0.55; }
 
 /* UX9: every shared sheet scrolls within the viewport; its dismissal stays at the top. */
+/* The header carries the grab handle and sticks flush to the top of the scrolling sheet on the sheet's own colour.
+   A sheet with a header drops its own top padding, so sticky never depends on how an engine treats the scroller's
+   padding (2026-10-11: WebKit pinned it 22px low, covering the first line at rest and leaking text above it). */
 .sheet { max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain; }
 .sheet > * { flex-shrink: 0; }
+.sheet:has(> .sheet-header) { padding-top: 0; }
+.sheet:has(> .sheet-header)::before { content: none; }
 .sheet-header {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: -22px -16px 0;
-  padding: 12px 16px;
+  margin: 0 calc(-16px - env(safe-area-inset-right)) 0 calc(-16px - env(safe-area-inset-left));
+  padding: 20px calc(16px + env(safe-area-inset-right)) 6px calc(16px + env(safe-area-inset-left));
+  border-radius: 16px 16px 0 0;
   background: var(--raised);
 }
-.sheet-header button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+.sheet-header::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 36px;
+  height: 5px;
+  margin-left: -18px;
+  border-radius: 3px;
+  background: var(--ios-secondary);
+  opacity: 0.6;
+}
+.sheet-header h2 { font-size: 1.06rem; font-weight: 600; letter-spacing: -0.01em; }
+/* Dismissal reads as a native bar button: tinted text, no box. */
+.sheet-header button {
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+  margin-right: -8px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+}
+/* A hairline appears only once content scrolls beneath the header (SheetHeader sets data-scrolled). Not a scroll
+   timeline: that animation never finishes, and WebKit then holds every click's stability check (2026-10-11, review O1). */
+.sheet-header { transition: box-shadow 0.15s; }
+.sheet-header[data-scrolled] { box-shadow: 0 1px 0 var(--line); }
 
 /* Prose stays compact; only actionable to-dos retain the button treatment. */
 .morning-brief-sheet :is(p, div).morning-brief-line {
@@ -1666,3 +1784,4 @@ textarea:focus-visible {
 .morning-brief-todos h3 { margin: 4px 0; }
 .morning-brief-todos ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .morning-brief-todo { margin: 0; }
+.sheet-header .sheet-back { margin: 0 0 0 -8px; font-weight: 400; }
