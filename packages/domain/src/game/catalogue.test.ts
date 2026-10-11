@@ -2,8 +2,8 @@ import { expect, it } from 'vitest';
 import { catalogueErrors, stepMilestoneCatalogue, STEP_MILESTONE_CATEGORY } from './catalogue.ts';
 import { characterConfig } from './config.ts';
 
-it('has unique ids and reachable thresholds with rulesVersion 1', () => {
-  expect(characterConfig.rulesVersion).toBe(1);
+it('has unique ids and reachable thresholds with rulesVersion 2', () => {
+  expect(characterConfig.rulesVersion).toBe(2);
   expect(catalogueErrors(characterConfig)).toEqual([]);
   expect(new Set(characterConfig.achievements.map(a => a.id)).size).toBe(characterConfig.achievements.length);
   expect(characterConfig.achievements.length).toBeGreaterThanOrEqual(45);

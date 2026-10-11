@@ -41,7 +41,7 @@ import { LearningSheet } from './LearningSheet.tsx';
 import { Reading } from './Reading.tsx';
 import { CharacterCard } from './CharacterCard.tsx';
 import { CharacterSheet } from './CharacterSheet.tsx';
-import { AchievementToasts } from './AchievementToast.tsx';
+import { RewardLayer } from './RewardLayer.tsx';
 import { Triage } from './Triage.tsx';
 import { TaskList } from './TaskList.tsx';
 import { TabBar, type Tab } from './TabBar.tsx';
@@ -632,7 +632,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
       {noteOpen && <NoteView link={openLink} onClose={closeNote} />}
 
       {/* GAM1-C: a quiet achievements toast on any tab; it reads /api/game once per open and never takes focus. */}
-      <AchievementToasts accountKey={accountKey} signedOut={signedOut} />
+      <RewardLayer accountKey={accountKey} signedOut={signedOut} items={snapshot.items} onOpenCharacter={() => setCharacterOpen(true)} />
       {toast && (
         <div className="toast" role="status">
           <span>Done</span>

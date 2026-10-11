@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { computeCharacter } from './engine.ts';
-import { characterConfig as config } from './config.ts';
+import { computeCharacter, isCritical } from './engine.ts';
+import { characterConfig } from './config.ts';
+import { earnedByPhrase } from './describe.ts';
 import type { Character, CharacterConfig, GameRecord } from './types.ts';
 
+// Arithmetic tests run with criticals off (ADR-0064); the 'critical awards' block covers them with the real config.
+const config: CharacterConfig = { ...characterConfig, critical: { ...characterConfig.critical, every: 0 } };
 const training = (date = '2026-01-01', type = 'Run', duration = '20'): GameRecord => ({ source: 'training', date, type, duration, time: '10:00', distance: '', weight: '', split: '', note: 'Synthetic' });
 const learning = (date = '2026-01-01', minutes = '20'): GameRecord => ({ source: 'learning', date, kind: 'Reading', minutes, score: '0', detail: '', topic: '', note: '' });
 const task = (id: string, overdueDays = 7, date = '2026-01-01'): GameRecord => ({ source: 'task', date, id, overdueDays });
@@ -178,5 +181,47 @@ describe('Character projection', () => {
     expect(c.level).toBe(60);
     expect(get(c, 'athletics-sessions-250').earnedDate).toBe(date(249));
     expect(get(run(rows.slice(0, 9), date(1999)), 'athletics-sessions-10').earned).toBe(false);
+  });
+});
+
+describe('critical awards (ADR-0064)', () => {
+  const tasks = (day: string, n: number): GameRecord[] => Array.from({ length: n }, (_, i) => task(`t-${day}-${i}`, 0, day));
+  const days = Array.from({ length: 40 }, (_, i) => date(i));
+
+  it('doubles base XP for the day ordinals the hash picks and counts them', () => {
+    const records = days.flatMap(day => tasks(day, 5));
+    const expected = days.flatMap(day => [1, 2, 3, 4, 5].filter(n => isCritical(day, 'task', n, 8))).length;
+    const c = computeCharacter(records, characterConfig, days.at(-1)!);
+    expect(expected).toBeGreaterThan(0);
+    expect(c.criticals).toBe(expected);
+    expect(c.xp).toBe(days.length * 5 * 3 + expected * 3);
+  });
+
+  it('never moves a past critical when a later record is added or identities change', () => {
+    const before = computeCharacter(days.flatMap(day => tasks(day, 3)), characterConfig, days.at(-1)!);
+    const renamed = days.flatMap(day => tasks(day, 3).map(r => ({ ...r, id: `moved-${(r as { id: string }).id}` })));
+    expect(computeCharacter(renamed, characterConfig, days.at(-1)!).criticals).toBe(before.criticals);
+    const later = computeCharacter([...days.flatMap(day => tasks(day, 3)), ...tasks(date(41), 1)], characterConfig, date(41));
+    expect(later.criticals).toBeGreaterThanOrEqual(before.criticals);
+  });
+
+  it('never criticals an award beyond the daily cap', () => {
+    const capped = computeCharacter(days.flatMap(day => tasks(day, 9)), characterConfig, days.at(-1)!);
+    const atCap = computeCharacter(days.flatMap(day => tasks(day, 5)), characterConfig, days.at(-1)!);
+    expect(capped.criticals).toBe(atCap.criticals);
+    expect(capped.xp).toBe(atCap.xp);
+  });
+
+  it('is off when every is 0', () => {
+    expect(computeCharacter(days.flatMap(day => tasks(day, 5)), config, days.at(-1)!).criticals).toBe(0);
+  });
+
+  it('records which source earned each achievement', () => {
+    const c = computeCharacter([training('2026-01-01'), task('a', 0, '2026-01-02')], config, '2026-01-02');
+    expect(get(c, 'athletics-first')).toMatchObject({ earned: true, earnedBy: 'training' });
+    expect(get(c, 'first-steps').earnedBy).toBe('training');
+    expect(get(c, 'quartermaster-tasks-10')).toMatchObject({ earned: false, earnedBy: null });
+    expect(earnedByPhrase('task')).toBe('Completing a task');
+    expect(earnedByPhrase(null)).toBeNull();
   });
 });

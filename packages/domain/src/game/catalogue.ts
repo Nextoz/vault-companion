@@ -6,7 +6,7 @@ const chain = (id: string, name: string, category: string, thresholds: readonly 
 }));
 const ranks = (profession: string): AchievementDefinition[] => [
   ['Journeyman', 75, 10], ['Expert', 150, 10], ['Artisan', 225, 25], ['Master', 300, 50],
-].map(([name, target, points]) => single(`${profession}-rank-${target}`, `${name} ${profession}`, profession, Number(points), { kind: 'skill', profession, target: Number(target) }));
+].map(([name, target, points]) => single(`${profession}-rank-${target}`, `${name} ${profession.charAt(0).toUpperCase()}${profession.slice(1)}`, profession, Number(points), { kind: 'skill', profession, target: Number(target) }));
 
 /** Catalogue data is part of characterConfig; the evaluator has no named achievements. */
 export const achievementCatalogue: readonly AchievementDefinition[] = [

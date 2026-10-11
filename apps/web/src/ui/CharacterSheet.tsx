@@ -1,10 +1,11 @@
-import type { GameAchievement, GameCharacter, GameProfession, GameRules } from '@vault-companion/contracts';
+import type { GameAchievement, GameCharacter, GameProfession, GameResponse, GameRules } from '@vault-companion/contracts';
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   howXpWorks, levelLabel, PROFESSION_DESTINATION, professionUnavailable, recentlyEarned,
   restedSegment, shortDate, skillPercent, trackedAchievements, unavailableLines, xpBar,
 } from '../character.ts';
 import { displayName, displayPoints, PIN_LIMIT, pinnedKey, resolveTracked } from '../achievements.ts';
+import { setSoundEnabled, soundEnabled } from '../sound.ts';
 import { AchievementsPage } from './Achievements.tsx';
 import { CharacterRead } from './CharacterRead.tsx';
 import { SheetHeader } from './SheetHeader.tsx';
@@ -138,13 +139,26 @@ function RecentAchievements({ achievements, today }: { achievements: readonly Ga
   </section>;
 }
 
-function HowXpWorks({ rules }: { rules: GameRules }) {
+function HowXpWorks({ rules, critical }: { rules: GameRules; critical: NonNullable<GameResponse['feedback']>['critical'] | null }) {
   return <div className="character-how-xp">
     {howXpWorks(rules).map((section) => <section key={section.id} className="character-section">
       <h3>{section.heading}</h3>
       <ul>{section.lines.map((line, i) => <li key={i}>{line}</li>)}</ul>
     </section>)}
+    {critical !== null && critical.every > 0 && <section className="character-section" data-testid="how-xp-critical">
+      <h3>Critical!</h3>
+      <ul><li>About 1 in {critical.every} rewarded actions is a Critical!: {critical.multiplier}× its base XP. Daily caps still apply.</li></ul>
+    </section>}
   </div>;
+}
+
+/** ADR-0064: the reward sound switch. Device-held, on by default; the iPhone silent switch also silences it. */
+function SoundToggle() {
+  const [on, setOn] = useState(soundEnabled);
+  return <button type="button" className="character-link-row" role="switch" aria-checked={on}
+    onClick={() => { const next = !on; setSoundEnabled(next); setOn(next); }}>
+    Reward sounds<span className="character-row-meta">{on ? 'On' : 'Off'}</span>
+  </button>;
 }
 
 /**
@@ -196,7 +210,7 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
           if (page === 'how-xp') {
             return <>
               <SheetHeader title="How XP works" onClose={onClose} onBack={() => setPage('overview')} backLabel="Character" />
-              {data ? <HowXpWorks rules={data.rules} /> : <p className="muted">{view.res === null ? 'Loading…' : 'The rules could not be loaded.'}</p>}
+              {data ? <HowXpWorks rules={data.rules} critical={data.feedback?.critical ?? null} /> : <p className="muted">{view.res === null ? 'Loading…' : 'The rules could not be loaded.'}</p>}
             </>;
           }
           return <>
@@ -224,6 +238,7 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
               <button type="button" className="character-link-row" onClick={() => setPage('how-xp')}>
                 How XP works<span className="character-chevron" aria-hidden="true">›</span>
               </button>
+              <SoundToggle />
             </>}
           </>;
         }}

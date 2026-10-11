@@ -1,4 +1,4 @@
-// GAM1-C: the Achievements page (plan screens 3-4) and the toast (screen 6). Synthetic mock data only.
+// GAM1-C: the Achievements page (plan screens 3-4) and, since ADR-0064, the on-open banners. Synthetic mock data only.
 import { expect, test, type Page } from '@playwright/test';
 import { ACCOUNT, MockApi } from './mock-api.ts';
 import { goTo } from './nav.ts';
@@ -122,16 +122,29 @@ test('the first open shows one summary toast, and a reload shows nothing', async
   await expect(page.getByRole('status').filter({ hasText: 'step milestones earned' })).toHaveCount(0);
 });
 
-test('with a seen record, up to three individual toasts announce the newest earned achievements', async ({ page }) => {
+test('with a seen record, the newest unseen achievements arrive as banners, one at a time', async ({ page }) => {
   const api = new MockApi();
   api.gameAchievements = true;
   await page.addInitScript((key) => { window.localStorage.setItem(key, JSON.stringify(['r1'])); }, seenKey(ACCOUNT));
   await api.install(page);
   await page.goto('/');
-  await expect(page.getByRole('status').filter({ hasText: 'Achievement earned · Renaissance · 25 pts' })).toBeVisible();
-  await expect(page.getByRole('status').filter({ hasText: 'Achievement earned · Ten Sessions · 15 pts' })).toBeVisible();
-  await expect(page.getByRole('status').filter({ hasText: 'Achievement earned · Scholar run I · 5 pts' })).toBeVisible();
-  await expect(page.locator('.achievement-toast')).toHaveCount(3);
-  await page.locator('.achievement-toast-dismiss').first().click();
-  await expect(page.locator('.achievement-toast')).toHaveCount(2);
+  const banner = page.locator('.reward-banner');
+  const names: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    await expect(banner).toHaveCount(1);
+    await expect(banner).toContainText('Achievement earned');
+    names.push((await banner.locator('.reward-banner-name').textContent()) ?? '');
+    await banner.getByRole('button', { name: 'Dismiss' }).click();
+  }
+  expect(names.sort()).toEqual(['Renaissance', 'Scholar run I', 'Ten Sessions']);
+  await expect(banner).toHaveCount(0);
+});
+
+test('the badge detail says what the achievement asks and what earned it', async ({ page }) => {
+  const api = new MockApi();
+  const dialog = await openAchievements(page, api);
+  await dialog.locator('.achievement-tile', { hasText: 'Ten Sessions' }).click();
+  const detail = page.getByRole('dialog', { name: 'Ten Sessions' });
+  await expect(detail.getByText('Log 10 training sessions.')).toBeVisible();
+  await expect(detail.getByTestId('achievement-earned-line')).toContainText('Earned by logging a training session');
 });

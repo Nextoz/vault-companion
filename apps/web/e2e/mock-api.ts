@@ -282,6 +282,13 @@ export const sampleGame = (unavailable: string[] = [], rich = false): GameRespon
   },
   stepMilestones: rich ? RICH_STEP_MILESTONES : null,
   unavailable,
+  // ADR-0064 reward feedback: synthetic descriptions for the badge detail and the banners.
+  feedback: {
+    criticals: 0, critical: { every: 8, multiplier: 2 },
+    achievements: rich
+      ? { r2: { description: 'Log 10 training sessions.', earnedBy: 'Logging a training session' } }
+      : { a4: { description: 'Log 25 training sessions.', earnedBy: null } },
+  },
 });
 
 export class MockApi {
@@ -339,6 +346,8 @@ export class MockApi {
   /** GAM1-C: serve the richer Character (every achievement type + step milestones) for the Achievements specs. */
   gameAchievements = false;
   gameReads = 0;
+  /** ADR-0064: once any command was applied, /api/game answers this instead (the "after" read of a reward). */
+  gameAfterCommand: GameResponse | null = null;
   /** READ1-A2: the Books/ read model (ADR-0062), one row per book note. */
   books: BookView[] = [];
   /** `refused` answers /api/books with a typed refusal instead of rows. */
@@ -762,6 +771,7 @@ export class MockApi {
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     this.gameReads++;
     if (this.gameMode === 'error') return this.#json(route, 503, ApiError.parse({ code: 'upstream-unavailable', message: 'reader unavailable', retryable: true }));
+    if (this.gameAfterCommand !== null && this.applied.length > 0) return this.#json(route, 200, this.gameAfterCommand);
     return this.#json(route, 200, sampleGame(this.gameUnavailable, this.gameAchievements));
   }
 

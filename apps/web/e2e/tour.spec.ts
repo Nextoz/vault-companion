@@ -196,9 +196,10 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
   await page.getByRole('dialog', { name: 'First Flag' }).getByRole('button', { name: 'Close' }).click();
   await page.keyboard.press('Escape');
   await character.getByRole('button', { name: 'Close' }).click();
-  await shot('Achievement toast', async () => {
+  await shot('Achievement banner', async () => {
     await page.reload();
-    await expect(page.locator('.achievement-toast')).toHaveCount(3);
+    await expect(page.locator('.reward-banner')).toHaveCount(1);
+    await page.waitForTimeout(900); // let the drop-in animation settle for the photo
   });
   await page.reload();
 

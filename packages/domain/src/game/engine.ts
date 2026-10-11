@@ -26,6 +26,19 @@ function minutes(value: unknown, format: 'minutes' | 'duration'): number {
   }
   return 0;
 }
+/** FNV-1a (32-bit): a stable, dependency-free hash. Not cryptographic; it only spreads criticals evenly. */
+function fnv1a(text: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193) >>> 0;
+  return hash;
+}
+/**
+ * ADR-0064: whether the `ordinal`-th capped award of `source` on `date` is critical. Keyed by the day's ordinal, not the
+ * record identity (task ids carry a line index that shifts), so a recompute never moves a past critical.
+ */
+export function isCritical(date: string, source: string, ordinal: number, every: number): boolean {
+  return every > 0 && fnv1a(`${date}|${source}|${ordinal}`) % every === 0;
+}
 interface Row { date: string; day: number; source: string; identity: string; minutes: number; overdue: number; key: string; rule: SourceRule }
 interface SourceState { count: number; varieties: Set<string>; minutes: number; overdue: number; week: number | null; consecutive: number; bestWeeks: number }
 const initialSource = (): SourceState => ({ count: 0, varieties: new Set(), minutes: 0, overdue: 0, week: null, consecutive: 0, bestWeeks: 0 });
@@ -57,6 +70,8 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
   const skillRemainders = new Map(config.professions.map(p => [p.id, 0]));
   const sources = new Map<string, SourceState>();
   const earned = new Map<string, string>();
+  const earnedBy = new Map<string, string>();
+  let criticals = 0;
   const daily = new Map<string, { count: number; overdue: number }>();
   let xp = 0;
   let level: number = config.level.min;
@@ -101,7 +116,7 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
     }
   };
   const target = (criterion: Criterion): number => criterion.kind === 'meta' ? criterion.requires.length : criterion.target;
-  const evaluate = (date: string): void => {
+  const evaluate = (date: string, source: string): void => {
     // Fixed point makes nested metas independent of catalogue ordering.
     let changed = true;
     while (changed) {
@@ -109,6 +124,7 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
       for (const achievement of config.achievements) {
         if (!achievement.locked && !earned.has(achievement.id) && progress(achievement.criterion) >= target(achievement.criterion)) {
           earned.set(achievement.id, date);
+          earnedBy.set(achievement.id, source);
           changed = true;
         }
       }
@@ -140,6 +156,7 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
       if (bonus) base += Math.min(bonus.maxBonus, Math.max(0, Math.floor((row.minutes - bonus.after) / bonus.step)) * bonus.xp);
       const overdue = row.rule.overdue;
       if (overdue && row.overdue >= overdue.days && cap.overdue < overdue.dailyCap) { base += overdue.xp; cap.overdue++; }
+      if (base > 0 && isCritical(row.date, row.source, cap.count, config.critical.every)) { base *= config.critical.multiplier; criticals++; }
     }
     const rested = Math.min(reserve, base * config.rested.multiplier);
     reserve -= rested;
@@ -164,7 +181,7 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
       balanced = Math.max(balanced, weekProfessions.size);
       if (row.day - firstDay < config.dayOneDays) earlyProfessions.add(profession);
     }
-    evaluate(row.date);
+    evaluate(row.date, row.source);
   }
   if (rows.length) advance(endDay);
   const results = config.achievements.map((a): AchievementResult => {
@@ -172,14 +189,14 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
     const visible = !a.chain || !config.achievements.some(prior => prior.chain === a.chain && prior.tier! < a.tier! && !earned.has(prior.id));
     return {
       id: a.id, name: a.type === 'hidden' && !earnedDate ? '???' : a.name, category: a.category, type: a.type, points: a.points,
-      earned: earnedDate !== null, earnedDate, visible, locked: a.locked ?? false, lockedReason: a.lockedReason ?? null, chain: a.chain ?? null, tier: a.tier ?? null,
+      earned: earnedDate !== null, earnedDate, earnedBy: earnedBy.get(a.id) ?? null, visible, locked: a.locked ?? false, lockedReason: a.lockedReason ?? null, chain: a.chain ?? null, tier: a.tier ?? null,
       progress: a.criterion.kind === 'weeks' || a.type === 'hidden' || a.type === 'feat' ? null : { current: a.locked || !rows.length ? 0 : Math.min(target(a.criterion), progress(a.criterion)), target: target(a.criterion) },
     };
   });
   const byCategory: Record<string, number> = {};
   for (const a of results.filter(a => a.type !== 'feat')) byCategory[a.category] = (byCategory[a.category] ?? 0) + (a.earned ? a.points : 0);
   return {
-    rulesVersion: config.rulesVersion, xp, level, levelXp, levelCost: levelCost(), restedXp: reserve,
+    rulesVersion: config.rulesVersion, xp, level, levelXp, levelCost: levelCost(), restedXp: reserve, criticals,
     title: config.titles.filter(t => t.level <= level).at(-1)?.title ?? '',
     professions: config.professions.map(p => {
       const skill = skills.get(p.id)!;

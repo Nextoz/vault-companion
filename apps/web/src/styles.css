@@ -268,7 +268,8 @@ textarea:focus-visible {
   overflow: hidden;
 }
 
-.xp-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--accent); }
+/* ADR-0064: the bar fills visibly when a refresh brings new XP. */
+.xp-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--accent); transition: width 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .xp-rested { position: absolute; inset: 0 auto 0 0; background: var(--accent); opacity: 0.35; }
 
 /* Rings: SVG arcs drawn with pathLength=100, so the dash values are percentages. */

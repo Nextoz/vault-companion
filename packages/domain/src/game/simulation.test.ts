@@ -25,5 +25,5 @@ it('simulates twelve weeks of a synthetic default profile', () => {
   expect(table.at(-1)!.level).toBeLessThanOrEqual(16);
   expect(journeymanWeek).toBeGreaterThanOrEqual(4);
   expect(journeymanWeek).toBeLessThanOrEqual(6);
-  expect(table.at(-1)!.XP).toBe(2916);
+  expect(table.at(-1)!.XP).toBe(3296); // ADR-0064 criticals add about 13 % (2916 without)
 });
