@@ -67,7 +67,7 @@
 .achievement-toasts {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--tabbar-h) + 32px + env(safe-area-inset-bottom));
+  bottom: calc(var(--tabbar-h) + 88px + env(safe-area-inset-bottom)); /* clears the 56px capture button */
   z-index: 5;
   display: flex;
   flex-direction: column;
