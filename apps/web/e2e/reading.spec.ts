@@ -122,7 +122,7 @@ test('Reflect waits for text, keeps its draft on close, and two same-day reflect
   await expect(sheet).toHaveCount(0);
   await region.getByRole('button', { name: 'Reflect', exact: true }).click();
   sheet = page.getByRole('dialog', { name: 'Reflect', exact: true });
-  await expect(sheet.getByLabel('What stayed with me?', { exact: true })).toHaveValue('Kept while I close.');
+  await expect(sheet.getByRole('textbox', { name: /What stayed with me/ }).first()).toHaveValue('Kept while I close.');
   await sheet.getByRole('button', { name: 'Save', exact: true }).click();
 
   await expect(region.getByTestId('reading-reflection')).toHaveCount(1);
