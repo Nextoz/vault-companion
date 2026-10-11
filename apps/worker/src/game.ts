@@ -116,7 +116,7 @@ export function createGameService(deps: GameDeps) {
             const n = seen.get(reflection.date) ?? 0;
             seen.set(reflection.date, n + 1);
             // Only the synthetic id leaves here: reflection text is private vault text and is never logged or sent.
-            records.push({ source: 'reflection', date: reflection.date, id: `${book.title}|${reflection.date}|${n}` });
+            records.push({ source: 'reflection', date: reflection.date, id: JSON.stringify([book.title, reflection.date, n]) });
           }
         }
 
