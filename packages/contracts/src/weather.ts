@@ -189,6 +189,11 @@ export const WeatherProjection = z.strictObject({
   partialError: WeatherPartialError,
   attribution: z.string().min(1).max(200),
   termsUrl: z.string().min(1).max(200),
+  /**
+   * Optional 7-day overview (max 8 Copenhagen days), computed once by the domain from this same projection. Older
+   * responses omit it, so the UI keeps working when `week` is absent.
+   */
+  week: z.array(WeatherWeekDay).max(8).optional(),
 });
 export type WeatherProjection = z.infer<typeof WeatherProjection>;
 

@@ -282,19 +282,21 @@ export function createWeatherService(deps: WeatherServiceDeps) {
     }
     const partialError: WeatherPartialError = models.length < WEATHER_MODELS.length ? 'one-model-unavailable' : 'none';
     const day = userDate(deps.now(), timeZone);
+    const base: WeatherProjection = {
+      location: rounded,
+      now: deps.now().toISOString(),
+      models,
+      agreement: agreementFor(models),
+      coverage: coverageFor(models),
+      runWindow: chooseRunWindow(models, day, timeZone),
+      partialError,
+      attribution: WEATHER_ATTRIBUTION,
+      termsUrl: WEATHER_TERMS_URL,
+    };
     return {
       status: 'ok',
-      projection: {
-        location: rounded,
-        now: deps.now().toISOString(),
-        models,
-        agreement: agreementFor(models),
-        coverage: coverageFor(models),
-        runWindow: chooseRunWindow(models, day, timeZone),
-        partialError,
-        attribution: WEATHER_ATTRIBUTION,
-        termsUrl: WEATHER_TERMS_URL,
-      },
+      // The week overview is derived from the same projection and its shared per-day run windows (never recomputed).
+      projection: { ...base, week: weekDays(base) },
     };
   }
 
