@@ -277,6 +277,10 @@ describe('WeatherLab week overview', () => {
     expect(text).toContain('Best run: Wed 30 Sep');
     expect(text).toContain('08:00-10:00');
     expect(document.querySelector('.weather-week-fill')).not.toBeNull();
+    // The best day's row is highlighted, not only named in the summary line.
+    const bestRow = document.querySelector('.weather-week-row-best');
+    expect(bestRow).not.toBeNull();
+    expect(bestRow!.getAttribute('aria-label')).toContain('best run day');
   });
 
   it('opens a day meteogram on tap and returns focus to the row after Back', async () => {
@@ -287,6 +291,9 @@ describe('WeatherLab week overview', () => {
     expect(document.querySelector('.weather-day')).not.toBeNull();
     expect(document.querySelector('[data-testid="weather-day-summary"]')!.textContent).toContain('Rain');
     expect(document.querySelector('.weather-day-window')).not.toBeNull();
+    // Numeric hourly temperatures appear in the visible readout and the accessible chart text.
+    expect(document.querySelector('[data-testid="weather-day-temps"]')!.textContent).toContain('08:00 14°C');
+    expect(document.querySelector('.weather-day-svg')!.getAttribute('aria-label')).toContain('hourly temperature');
     const back = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Back')!;
     await act(async () => { back.click(); });
     expect(document.querySelector('.weather-week')).not.toBeNull();

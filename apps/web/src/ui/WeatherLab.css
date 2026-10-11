@@ -43,6 +43,7 @@
 }
 .weather-week-row:hover { border-color: var(--ios-orange); }
 .weather-week-row:focus-visible { outline: 2px solid var(--ios-orange); outline-offset: 1px; }
+.weather-week-row-best { border-color: var(--done); background: rgb(48 209 88 / 10%); box-shadow: inset 3px 0 0 var(--done); }
 .weather-week-day { display: flex; flex-direction: column; line-height: 1.1; font-size: .78rem; font-weight: 600; white-space: nowrap; }
 .weather-week-date { color: var(--muted); font-weight: 400; }
 .weather-week-icon { font-size: 1.05rem; text-align: center; }

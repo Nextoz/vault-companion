@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { getWeather, postWeatherLocation, type Fetched } from '../api.ts';
 import {
+  bestRunDay,
   bestRunSummary,
   dayHours,
   dayDateLabel,
@@ -234,20 +235,22 @@ const degrees = (value: number | null): string => (value === null ? '—' : `${M
 /** One tappable row per week day on the shared week temperature scale, plus the best run-window line. */
 function WeatherWeekRows({ week, onOpen, registerRow }: WeekRowsProps) {
   const scale = useMemo(() => weekScale(week), [week]);
+  const bestDay = useMemo(() => bestRunDay(week), [week]);
   const best = useMemo(() => bestRunSummary(week), [week]);
   return (
     <section className="weather-week" aria-label="Seven-day forecast">
       <ul className="weather-week-list">
         {week.map((day) => {
           const bar = weekBar(day, scale);
+          const isBest = bestDay?.day === day.day;
           return (
             <li key={day.day}>
               <button
                 type="button"
-                className="weather-week-row"
+                className={`weather-week-row${isBest ? ' weather-week-row-best' : ''}`}
                 ref={(element) => registerRow(day.day, element)}
                 onClick={() => onOpen(day.day)}
-                aria-label={`${dayLabel(day.day)}: ${weatherCodeLabel(day.weatherCode)}, ${weekBarLabel(day)}, rain ${rainLabel(day)}${day.models === 1 ? ', 1 model' : ''}${day.partial ? ', partial day' : ''}`}
+                aria-label={`${dayLabel(day.day)}: ${weatherCodeLabel(day.weatherCode)}, ${weekBarLabel(day)}, rain ${rainLabel(day)}${day.models === 1 ? ', 1 model' : ''}${day.partial ? ', partial day' : ''}${isBest ? ', best run day' : ''}`}
               >
                 <span className="weather-week-day">
                   <span>{shortDayLabel(day.day)}</span>
@@ -296,6 +299,11 @@ function WeatherDayMeteogram({ day, models, onBack }: DayProps) {
   const runNote = windowHours.length > 0
     ? `Run window ${String(Math.min(...windowHours)).padStart(2, '0')}:00-${String(Math.max(...windowHours) + 1).padStart(2, '0')}:00`
     : 'No shared run window';
+  // Hourly temperatures from the same merged data the lines are drawn from, so the readout matches the chart.
+  const hourTemps = merged
+    .filter((hour) => hour.temperatureC !== null)
+    .map((hour) => `${String(hour.hour).padStart(2, '0')}:00 ${Math.round(hour.temperatureC as number)}°C`)
+    .join(', ');
 
   const W = 340;
   const H = 170;
@@ -349,7 +357,7 @@ function WeatherDayMeteogram({ day, models, onBack }: DayProps) {
               viewBox={`0 0 ${W} ${H}`}
               className="weather-day-svg"
               role="img"
-              aria-label={`${dayLabel(day.day)} hourly forecast: ${rainSummary(merged)}; ${windNote}${directions.length > 0 ? `, directions ${Math.min(...directions)}-${Math.max(...directions)} degrees` : ''}`}
+              aria-label={`${dayLabel(day.day)} hourly forecast: ${rainSummary(merged)}; ${windNote}${directions.length > 0 ? `, directions ${Math.min(...directions)}-${Math.max(...directions)} degrees` : ''}${hourTemps ? `; hourly temperature ${hourTemps}` : '; hourly temperature unavailable'}`}
             >
               {windowHours.length > 0 && (
                 <rect
@@ -381,7 +389,10 @@ function WeatherDayMeteogram({ day, models, onBack }: DayProps) {
                 <text key={hour} className="weather-day-axis" x={xc(hour)} y={axisY} textAnchor="middle">{`${String(hour).padStart(2, '0')}:00`}</text>
               ))}
             </svg>
-            <figcaption className="weather-readout">{windNote} · {runNote}</figcaption>
+            <figcaption className="weather-readout">
+              <span className="weather-day-temps" data-testid="weather-day-temps">Temperatures: {hourTemps || 'unavailable'}</span>
+              {' · '}{windNote} · {runNote}
+            </figcaption>
           </figure>
         )}
     </section>
