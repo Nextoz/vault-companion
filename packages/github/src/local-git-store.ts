@@ -15,6 +15,8 @@ import {
   TRAILER_PAYLOAD,
   type CommitInfo,
   type CommitsSinceResult,
+  type DeleteRequest,
+  type DeleteResult,
   type FindOperationResult,
   type ListedFile,
   type MultiWriteRequest,
@@ -174,6 +176,30 @@ export class LocalGitStore implements VaultStore {
   async writeFile(req: WriteRequest): Promise<WriteResult> {
     const r = await this.writeFiles({ baseCommit: req.baseCommit, files: [req], message: req.message, trailers: req.trailers });
     return r.ok ? { ok: true, commitSha: r.commitSha, blobSha: r.blobShas[0]! } : r;
+  }
+
+  /** ADR-0062: remove one regular file in a commit parented on the pinned base (same head-CAS as a write). */
+  async deleteFile(req: DeleteRequest): Promise<DeleteResult> {
+    guardPath(req.path);
+    const entry = await this.entryAt(req.baseCommit, req.path);
+    if (!(entry?.type === 'blob' && entry.mode === '100644')) return { ok: false, reason: 'precondition-failed' };
+    const blobSha = await this.blobAt(req.baseCommit, req.path);
+    if (blobSha === null) return { ok: false, reason: 'precondition-failed' };
+    const trailers = Object.entries(req.trailers).map(([k, v]) => `${k}: ${v}`).join('\n');
+    const message = `${req.message}\n\n${trailers}\n`;
+    const indexFile = join(tmpdir(), `vc-index-${randomUUID()}`);
+    const env = { GIT_INDEX_FILE: indexFile };
+    try {
+      await this.ok(['read-tree', req.baseCommit], undefined, env);
+      // `--index-info` with mode 0 removes the path without needing a work tree (the store may be bare).
+      await this.ok(['update-index', '--index-info'], new TextEncoder().encode(`0 ${'0'.repeat(40)}\t${req.path}\n`), env);
+      const tree = (await this.ok(['write-tree'], undefined, env)).toString('utf8').trim();
+      const commit = (await this.ok(['commit-tree', tree, '-p', req.baseCommit, '-F', '-'], new TextEncoder().encode(message))).toString('utf8').trim();
+      const upd = await this.run(['update-ref', this.ref, commit, req.baseCommit]);
+      return upd.code === 0 ? { ok: true, commitSha: commit, blobSha } : { ok: false, reason: 'head-moved' };
+    } finally {
+      await rm(indexFile, { force: true });
+    }
   }
 
   async writeFiles(req: MultiWriteRequest): Promise<MultiWriteResult> {

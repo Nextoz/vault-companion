@@ -1,6 +1,6 @@
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
-import { createTrainingService, createLearningService, createActiveWorkService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, morningDigestPath, slotForCron, type VaultStore } from '@vault-companion/domain';
+import { createTrainingService, createLearningService, createBooksService, createActiveWorkService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createWeatherService, DEFAULT_USER_TIME_ZONE, morningDigestPath, slotForCron, type VaultStore } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
 import { WEATHER_TIME_ZONE, type ApiError } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
@@ -139,6 +139,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
   const timeZone = env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE;
   const training = createTrainingService({ store });
   const learning = createLearningService({ store });
+  const books = createBooksService({ store });
   const radar = createResearchRadarService({ store, now: () => new Date(), timeZone });
   const health = createHealthService({ store, now: () => new Date(), timeZone });
   const history = createHistoryService({ store, now: () => new Date(), timeZone });
@@ -148,6 +149,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...createActiveWorkService({ store }),
     ...training,
     ...learning,
+    ...books,
     ...createTriageService({ store }),
     ...radar,
     ...createScoutService({ store }),

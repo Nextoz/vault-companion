@@ -1,5 +1,5 @@
 // Path policy: docs/vault-contract.md §1. Every path passes here before an adapter sees it.
-import { LEARNING_PATH, RADAR_APPLIED_PATH, RADAR_DECISIONS_DIR, SCOUT_STATUS_DIR, TRAINING_PATH } from '@vault-companion/contracts';
+import { BOOKS_DIR, canonicalBookTitle, LEARNING_PATH, RADAR_APPLIED_PATH, RADAR_DECISIONS_DIR, READING_QUEUE_PATH, SCOUT_STATUS_DIR, TRAINING_PATH } from '@vault-companion/contracts';
 import type { VaultPath } from './store.ts';
 
 export const TODO_LIST_PATH = 'Tasks/To-Do List.md';
@@ -101,7 +101,22 @@ export function isExplainedNotePath(path: string): boolean {
     path.endsWith('.md') && !segments[2]!.startsWith('.');
 }
 
+/**
+ * ADR-0062: a book note is exactly `Books/<Title>.md` for a canonical `<Title>`. `Books/Reading Queue.md` is the
+ * owner's queue note and is never a write target (nor listed).
+ */
+export function isBookNotePath(raw: string): boolean {
+  // Windows and macOS fold case: `Books/reading queue.md` is the owner's queue note on their desktop, so it must
+  // never be writable either (docs/vault-contract.md §1).
+  if (raw.toLowerCase() === READING_QUEUE_PATH.toLowerCase() || !raw.startsWith(`${BOOKS_DIR}/`) || !raw.endsWith('.md')) return false;
+  const segments = raw.split('/');
+  if (segments.length !== 2 || parseVaultPath(raw) !== raw) return false;
+  const title = segments[1]!.slice(0, -'.md'.length);
+  return canonicalBookTitle(title) === title;
+}
+
 export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
+  if (isBookNotePath(path)) return true;
   if (path === FEEDBACK_BACKLOG_PATH) return kind === 'update';
   if (isTriageDecisionPath(path)) return true;
   if (isRadarDecisionPath(path)) return true;

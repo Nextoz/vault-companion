@@ -1,7 +1,7 @@
 // Write executor: docs/commands.md "Execution algorithm". Generic over a per-command plan so the
 // retry/dedupe/CAS logic is independent of what the mutation does.
 import type { ErrorCode } from '@vault-companion/contracts';
-import { StoreUnavailable, StoreUnknownOutcome, TRAILER_OP, TRAILER_PAYLOAD, type FindOperationResult, type VaultPath, type VaultStore } from './store.ts';
+import { StoreUnavailable, StoreUnknownOutcome, TRAILER_OP, TRAILER_PAYLOAD, type DeleteResult, type FindOperationResult, type VaultPath, type VaultStore, type WriteResult } from './store.ts';
 
 /**
  * Head-moved re-plans per command (ADR-0015): three attempts keep every write command within Workers Free's 50
@@ -14,7 +14,16 @@ export const MAY_BE_APPLIED = 'this may already be applied — check Obsidian';
 
 /** A computed change against the vault at one commit. */
 export type Planned<E> =
-  | { readonly ok: true; readonly path: VaultPath; readonly expect: 'absent' | 'regular-file'; readonly bytes: Uint8Array; readonly effect: E }
+  | {
+      readonly ok: true;
+      readonly path: VaultPath;
+      readonly expect: 'absent' | 'regular-file';
+      readonly bytes: Uint8Array;
+      /** ADR-0062: remove `path` (the exact inverse of a creation) instead of writing `bytes`; `blobSha` names it. */
+      readonly delete?: true;
+      readonly blobSha?: string;
+      readonly effect: E;
+    }
   | { readonly ok: false; readonly code: ErrorCode; readonly message: string };
 
 export interface WritePlan<E> {
@@ -40,7 +49,7 @@ export interface WritePlan<E> {
 
 export type Refused = { readonly kind: 'refused'; readonly code: ErrorCode; readonly message: string };
 
-export type Derived<E> = { readonly ok: true; readonly path: string; readonly effect: E } | { readonly ok: false; readonly reason: string };
+export type Derived<E> = { readonly ok: true; readonly path: string; readonly effect: E; readonly blobSha?: string } | { readonly ok: false; readonly reason: string };
 
 export interface ExecuteInput {
   readonly operationId: string;
@@ -100,23 +109,21 @@ export async function executeWrite<E>(store: VaultStore, input: ExecuteInput, pl
         if (found.op.payloadHash !== input.payloadHash) return fail('operation-id-reused', 'operation ID was already used for a different payload');
         const derived = await (plan.deriveApplied ?? ((s, c, p) => replayOnParent(plan, s, c, p)))(store, found.op.commitSha, found.op.paths);
         if (!derived.ok) return fail('dedupe-unknown', `applied commit found but its effect cannot be verified (${derived.reason})`);
-        const file = await store.readFile(derived.path as VaultPath, found.op.commitSha);
-        return { ok: true, status: 'already-applied', path: derived.path, commitSha: found.op.commitSha, blobSha: file!.blobSha, effect: derived.effect };
+        const file = derived.blobSha === undefined ? await store.readFile(derived.path as VaultPath, found.op.commitSha) : null;
+        const blobSha = derived.blobSha ?? file?.blobSha;
+        if (blobSha === undefined) return fail('dedupe-unknown', 'applied commit found but it has no verifiable blob');
+        return { ok: true, status: 'already-applied', path: derived.path, commitSha: found.op.commitSha, blobSha, effect: derived.effect };
       }
 
       const planned = await plan.compute(store, x);
       if (!planned.ok) return fail(planned.code, planned.message);
 
-      let written;
+      let written: WriteResult | DeleteResult;
       try {
-        written = await store.writeFile({
-          path: planned.path,
-          baseCommit: x,
-          expect: planned.expect,
-          bytes: planned.bytes,
-          message: plan.message,
-          trailers: { ...plan.trailers, [TRAILER_OP]: input.operationId, [TRAILER_PAYLOAD]: input.payloadHash },
-        });
+        const trailers = { ...plan.trailers, [TRAILER_OP]: input.operationId, [TRAILER_PAYLOAD]: input.payloadHash };
+        written = planned.delete === true
+          ? await store.deleteFile({ path: planned.path, baseCommit: x, message: plan.message, trailers })
+          : await store.writeFile({ path: planned.path, baseCommit: x, expect: planned.expect, bytes: planned.bytes, message: plan.message, trailers });
       } catch (err) {
         // Unknown outcome: never re-send blindly; the next attempt's dedupe decides.
         if (err instanceof StoreUnknownOutcome) {
