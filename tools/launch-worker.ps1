@@ -43,7 +43,9 @@ param(
     [string]$Base,
     [string]$TestCmd,
     [ValidateSet('auto', 'coderabbit', 'glm', 'both', 'all')][string]$Reviewer = 'auto',
-    [ValidateSet('auto', 'on', 'off')][string]$Intent = 'auto'
+    [ValidateSet('auto', 'on', 'off')][string]$Intent = 'auto',
+    # What the slice changes, for tools/rework-report.ps1 (owner 2026-10-11): ui = what a screen shows.
+    [ValidateSet('ui', 'backend', 'tooling', 'docs', 'unknown')][string]$Kind = 'unknown'
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
@@ -66,10 +68,15 @@ if (-not (Test-Path -LiteralPath $bash)) { throw "Git Bash not found at $bash" }
 function Register-Worker {
 $workers = Join-Path $repo '.agent/workers'
 New-Item -ItemType Directory -Force $workers | Out-Null
-$state = [ordered]@{ task = $Task; clone = $Clone; tier = $Tier; state = 'running'; round = $(if ($Fix) { 'fix' } else { 'first' })
+$state = [ordered]@{ task = $Task; clone = $Clone; tier = $Tier; kind = $Kind; state = 'running'; round = $(if ($Fix) { 'fix' } else { 'first' })
     started = (Get-Date -Format 'o'); updated = (Get-Date -Format 'o'); log = $log; autoCheck = [bool]$Base }
 $prev = Join-Path $workers "$Task.json"
-if ($Fix -and (Test-Path -LiteralPath $prev)) { $old = Get-Content -LiteralPath $prev -Raw | ConvertFrom-Json; if ($old.firstCheck) { $state.firstCheck = $old.firstCheck } }
+if ($Fix -and (Test-Path -LiteralPath $prev)) {
+    # The fix round keeps the first round's start, verdict and kind, so the rework report sees one slice.
+    $old = Get-Content -LiteralPath $prev -Raw | ConvertFrom-Json
+    foreach ($k in 'started', 'firstCheck', 'firstExit') { if ($old.$k) { $state.$k = $old.$k } }
+    if ($Kind -eq 'unknown' -and $old.kind) { $state.kind = $old.kind }
+}
 $state | ConvertTo-Json | Set-Content -LiteralPath $prev -Encoding utf8
 if ($Base) {
     $spec = Join-Path $agent "after-$Task.json"

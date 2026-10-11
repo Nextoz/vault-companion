@@ -1,0 +1,11 @@
+{
+  "task": "read1b2",
+  "clone": "C:\\Dev\\vault-companion-clones\\read1b2",
+  "tier": "flash",
+  "state": "running",
+  "round": "first",
+  "started": "2026-10-11T12:21:12.1103596+02:00",
+  "updated": "2026-10-11T12:21:12.1106783+02:00",
+  "log": "C:\\Dev\\vault-companion-clones\\read1b2\\.agent\\run-read1b2.log",
+  "autoCheck": true
+}
