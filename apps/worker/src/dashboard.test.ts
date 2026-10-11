@@ -1,9 +1,10 @@
-import { DASHBOARD_RANGE_PLAN, DashboardResponse, MarketTickerResponse, WeatherResponse, type DashboardCard } from '@vault-companion/contracts';
+import { DASHBOARD_RANGE_PLAN, DashboardResponse, MarketTickerResponse, WeatherResponse, type DashboardCard, type PrivateValuationCard } from '@vault-companion/contracts';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp, type Services } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
 import { createMarketSource } from './market.ts';
+import type { PrivateValuationsReadResult, PrivateValuationsReader } from './private-valuations.ts';
 import { WATCHLIST, createWatchlistSource, type WatchItem } from './watchlist.ts';
 
 const ORIGIN = 'https://vc.example.com';
@@ -85,17 +86,22 @@ describe('real Dashboard composition (no live provider)', () => {
     return new Response('x', { status: 404 });
   };
 
-  const service = (fetchImpl: typeof fetch, items?: readonly WatchItem[]) =>
+  const valuations = (result: PrivateValuationsReadResult = { status: 'not-found' }): PrivateValuationsReader => ({
+    readPrivateValuations: async () => result,
+  });
+
+  const service = (fetchImpl: typeof fetch, items?: readonly WatchItem[], privateValuations = valuations()) =>
     createDashboardService({
       market: createMarketSource({ fetch: fetchImpl, now: () => NOW_MS }),
       watchlist: createWatchlistSource({ fetch: fetchImpl, now: () => NOW_MS, ...(items ? { items } : {}) }),
       weather: weatherUnavailable(),
+      privateValuations,
       now: () => new Date(NOW_MS),
     });
 
   it('builds the legacy BTC/USD market card, one card per watched item, and honest non-ok overview cards', async () => {
     const parsed = DashboardResponse.parse(await service(providerStub()).readDashboard('1W')); // the shipped contract accepts what the worker writes
-    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
+    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'private-valuation', 'ai-usage', 'health']);
     // The old market card is unchanged, so the existing web Dashboard keeps working.
     expect(parsed.cards[0]).toMatchObject({ id: 'market', status: 'ok', title: 'BTC / USD', ticker: { base: 'BTC', quote: 'USD', provider: 'coinbase', price: 60000 }, series: { range: '1W' } });
     const watches = parsed.cards.slice(1, 7) as Extract<DashboardCard, { id: 'watchlist' }>[];
@@ -106,7 +112,8 @@ describe('real Dashboard composition (no live provider)', () => {
     expect(watches[3]).toMatchObject({ status: 'ok', title: 'SEK / DKK', provenance: 'Frankfurter (ECB reference rates)', ticker: { base: 'SEK', quote: 'DKK', price: 0.6876 } });
     expect(watches[4]).toMatchObject({ status: 'ok', title: 'NVIDIA', provenance: 'Yahoo Finance', ticker: { base: 'NVDA', quote: 'USD', provider: 'Yahoo Finance', price: 229.28 } });
     expect(parsed.cards[7]).toMatchObject({ id: 'weather', status: 'unavailable', reason: 'provider-error' });
-    for (const overview of parsed.cards.slice(8)) {
+    expect(parsed.cards[8]).toMatchObject({ id: 'private-valuation', status: 'unavailable', reason: 'not-found' });
+    for (const overview of parsed.cards.slice(9)) {
       expect(overview.status).toBe('not-configured');
       expect(JSON.stringify(overview)).not.toMatch(/[0-9]+ ?(quota|spend|reset|bpm|kcal)/i);
     }
@@ -118,20 +125,43 @@ describe('real Dashboard composition (no live provider)', () => {
     expect(watches[1]).toMatchObject({ status: 'unavailable', item: { symbol: 'ETH-USD' }, reason: 'provider-error', observedAt: null, fetchedAt: null });
     expect(watches[0]).toMatchObject({ status: 'ok', item: { symbol: 'BTC-USD' } });
     expect(parsed.cards[0]).toMatchObject({ id: 'market', status: 'ok' });
-    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
+    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'private-valuation', 'ai-usage', 'health']);
   });
 
   it('adding one config line yields one more card, and the contract accepts it', async () => {
     const items = [...WATCHLIST, { symbol: 'ADA-USD', type: 'crypto' as const, name: 'ADA / USD', base: 'ADA', quote: 'USD' }];
     const parsed = DashboardResponse.parse(await service(providerStub(), items).readDashboard('1W'));
-    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
+    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'private-valuation', 'ai-usage', 'health']);
     expect(parsed.cards[7]).toMatchObject({ id: 'watchlist', status: 'ok', item: { symbol: 'ADA-USD' } });
+  });
+
+  it('renders one card per hand-edited private-valuation entry, with no price and no series (WL4b)', async () => {
+    const openai = { id: 'openai', name: 'OpenAI', valueUsdBillions: 500, asOf: '2026-03-12', source: { label: 'Synthetic round report', url: 'https://example.test/openai-round' } };
+    const injected = valuations({ status: 'ok', revision: 'a'.repeat(40), items: [openai], skipped: 0 });
+    const parsed = DashboardResponse.parse(await service(providerStub(), undefined, injected).readDashboard('1W'));
+    const cards = parsed.cards.filter((c): c is PrivateValuationCard => c.id === 'private-valuation');
+    expect(cards).toEqual([{
+      id: 'private-valuation', status: 'ok', title: 'OpenAI', provenance: 'Vault: Automation/Watchlist/private-valuations.json',
+      observedAt: null, fetchedAt: new Date(NOW_MS).toISOString(), note: null, drillthrough: null, item: openai,
+    }]);
+    expect(cards[0]).not.toHaveProperty('ticker');
+    expect(JSON.stringify(cards[0])).not.toMatch(/"price"|Delayed/i);
+    expect(parsed.cards[0]).toMatchObject({ id: 'market', status: 'ok' }); // other cards unaffected
+  });
+
+  it('a missing or unreadable private-valuations file is one honest unavailable card, never a break', async () => {
+    for (const result of [{ status: 'not-found' as const }, { status: 'invalid' as const }]) {
+      const parsed = DashboardResponse.parse(await service(providerStub(), undefined, valuations(result)).readDashboard('1W'));
+      expect(parsed.cards.find((c) => c.id === 'private-valuation')).toMatchObject({ status: 'unavailable', reason: result.status, observedAt: null, fetchedAt: null });
+      expect(parsed.cards[0]).toMatchObject({ id: 'market', status: 'ok' });
+      expect(parsed.cards.at(-1)).toMatchObject({ id: 'health', status: 'not-configured' });
+    }
   });
 
   it('keeps the other cards when the market provider is down', async () => {
     const parsed = DashboardResponse.parse(await service(async () => new Response('x', { status: 503 })).readDashboard('1M'));
     expect(parsed.cards[0]).toMatchObject({ id: 'market', status: 'unavailable', reason: 'provider-error', observedAt: null });
-    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
+    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'private-valuation', 'ai-usage', 'health']);
     expect(parsed.cards[1]).toMatchObject({ id: 'watchlist', status: 'unavailable' });
     expect(parsed.cards[7]).toMatchObject({ id: 'weather', status: 'unavailable' });
   });

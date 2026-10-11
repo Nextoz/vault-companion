@@ -127,6 +127,42 @@ export const WatchCard = z.union([
 ]);
 export type WatchCard = z.infer<typeof WatchCard>;
 
+// ---- Private valuations (WL4b): a hand-edited vault file names private companies with no market price ----
+
+/** Why a private-valuation read has nothing to show. Never carries vault or note text. */
+export const PrivateValuationUnavailableReason = z.enum(['not-found', 'invalid']);
+export type PrivateValuationUnavailableReason = z.infer<typeof PrivateValuationUnavailableReason>;
+
+/** A source link for one private valuation: https only, so the card can never open a cleartext or injected scheme. */
+export const PrivateValuationSource = z.strictObject({
+  label: z.string().min(1).max(120),
+  url: z.string().max(500).regex(/^https:\/\/\S+$/),
+});
+export type PrivateValuationSource = z.infer<typeof PrivateValuationSource>;
+
+/**
+ * One hand-edited private-valuation entry: a company with a last-round USD figure (billions) as of a date. This is a
+ * human-maintained figure, never a market value, so it can not reuse WatchTicker (which requires a positive price).
+ */
+export const PrivateValuationItem = z.strictObject({
+  id: z.string().min(1).max(60),
+  name: z.string().min(1).max(80),
+  valueUsdBillions: z.number().finite().positive(),
+  asOf: z.iso.date(),
+  source: PrivateValuationSource,
+});
+export type PrivateValuationItem = z.infer<typeof PrivateValuationItem>;
+
+/**
+ * WL4b: the private-valuation card. `ok` carries one hand-edited entry; `unavailable` means the vault file is missing
+ * (`not-found`) or unreadable (`invalid`). There is no price and no series: this is never a market quote.
+ */
+export const PrivateValuationCard = z.union([
+  z.strictObject({ id: z.literal('private-valuation'), status: z.literal('ok'), ...cardMeta, item: PrivateValuationItem }),
+  z.strictObject({ id: z.literal('private-valuation'), status: z.literal('unavailable'), ...cardMeta, reason: PrivateValuationUnavailableReason }),
+]);
+export type PrivateValuationCard = z.infer<typeof PrivateValuationCard>;
+
 /**
  * AI usage / Health overviews: no approved source is wired in DASH1, so these are honest non-ok cards. The `ok` variant is
  * intentionally absent rather than faked; a later approved DTO (HealthDTO / operational telemetry) widens `status` and
@@ -147,7 +183,7 @@ export const WeatherCard = z.union([
 ]);
 export type WeatherCard = z.infer<typeof WeatherCard>;
 
-export const DashboardCard = z.union([MarketCard, WatchCard, WeatherCard, AiUsageCard, HealthCard]);
+export const DashboardCard = z.union([MarketCard, WatchCard, WeatherCard, PrivateValuationCard, AiUsageCard, HealthCard]);
 export type DashboardCard = z.infer<typeof DashboardCard>;
 
 /** A bounded list, but one that grows with the watchlist config: four fixed cards plus one per watched item. */

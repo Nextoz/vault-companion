@@ -64,3 +64,10 @@
 .ai-usage-note { margin: 0; overflow-wrap: anywhere; }
 .ai-usage-updated { margin: 0; font-variant-numeric: tabular-nums; }
 .ai-usage-failure { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* WL4b: the private-valuation card. No chart/price: the labelled last-round line and an https source link, with a
+   44 px link target so the phone can tap it. */
+.dash-private { border-left: 3px solid var(--ios-indigo); }
+.dash-chip-private { color: var(--ios-indigo); }
+.dash-private-value { margin: 0; font-size: 1.05rem; font-weight: 600; overflow-wrap: anywhere; }
+.dash-private-source { display: inline-flex; align-items: center; min-height: var(--tap); color: var(--ios-indigo); overflow-wrap: anywhere; }
