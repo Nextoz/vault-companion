@@ -1,11 +1,17 @@
 import { DASHBOARD_RANGE_PLAN, MARKET_BASE_URL } from '@vault-companion/contracts';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TICKER_TTL_MS } from './market.ts';
 import {
   FX_SERIES_TTL_MS,
+  STOCK_SERIES_TTL_MS,
+  STOCK_TICKER_TTL_MS,
   WATCHLIST,
+  WATCH_SERIES_TTL_MS,
+  WATCH_TICKER_TTL_MS,
   createCryptoAdapter,
   createFxAdapter,
+  createStockAdapter,
   createWatchlistSource,
   cbrTicker,
   decodeCbr,
@@ -15,6 +21,8 @@ import {
   parseFrankfurterSeries,
   type WatchItem,
 } from './watchlist.ts';
+
+const yahooFixture = (symbol: 'NVDA' | 'SPCX'): unknown => JSON.parse(readFileSync(new URL(`../test/fixtures/yahoo-${symbol}-1y.json`, import.meta.url), 'utf8'));
 
 const NOW_MS = Date.parse('2026-09-30T12:00:00Z');
 const G = DASHBOARD_RANGE_PLAN['1W'].granularitySeconds;
@@ -135,6 +143,83 @@ describe('fx adapter (Bank of Russia XML)', () => {
     if (series.status === 'ok') expect(series.series.points.at(-1)?.close).toBeCloseTo(1 / 13.4547, 10);
     const empty = createFxAdapter({ now: () => NOW_MS, fetch: async () => new Response(cbrBody(''), { status: 200 }) });
     await expect(empty.ticker(RUB)).resolves.toEqual({ status: 'unavailable', reason: 'malformed' });
+  });
+});
+
+describe('watchlist config (WL4a)', () => {
+  it('has unique symbols and every stock has a real Yahoo ticker symbol', () => {
+    const symbols = WATCHLIST.map((item) => item.symbol);
+    expect(new Set(symbols).size).toBe(symbols.length);
+    for (const item of WATCHLIST) {
+      if (item.type !== 'stock') continue;
+      expect(item.symbol).toMatch(/^[A-Z.]{1,6}$/);
+      expect(item.base).toBe(item.symbol);
+      expect(item.quote).toBe('USD');
+    }
+  });
+
+  it('watches NVIDIA and SpaceX as stocks beside crypto/fx', () => {
+    expect(WATCHLIST).toContainEqual({ symbol: 'NVDA', type: 'stock', name: 'NVIDIA', base: 'NVDA', quote: 'USD' });
+    expect(WATCHLIST).toContainEqual({ symbol: 'SPCX', type: 'stock', name: 'SpaceX', base: 'SPCX', quote: 'USD' });
+  });
+});
+
+describe('stock adapter (Yahoo Finance)', () => {
+  const nvda: WatchItem = { symbol: 'NVDA', type: 'stock', name: 'NVIDIA', base: 'NVDA', quote: 'USD' };
+  const spcx: WatchItem = { symbol: 'SPCX', type: 'stock', name: 'SpaceX', base: 'SPCX', quote: 'USD' };
+
+  it('serves the delayed ticker and every range from ONE fetch per symbol', async () => {
+    const urls: string[] = [];
+    const adapter = createStockAdapter({ now: () => NOW_MS, fetch: async (url) => { urls.push(String(url)); return json(yahooFixture('NVDA')); } });
+    await expect(adapter.ticker(nvda)).resolves.toMatchObject({ status: 'ok', ticker: { base: 'NVDA', quote: 'USD', provider: 'Yahoo Finance', price: 229.28 } });
+    for (const range of ['1W', '1M', '3M', '1Y'] as const) await expect(adapter.series(nvda, range)).resolves.toMatchObject({ status: 'ok', series: { range } });
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain('query1.finance.yahoo.com/v8/finance/chart/NVDA');
+  });
+
+  it.each([429, 403, 500, 503])('treats HTTP %i as an unavailable row, never a value', async (status) => {
+    const adapter = createStockAdapter({ now: () => NOW_MS, fetch: async () => new Response('x', { status }) });
+    await expect(adapter.ticker(nvda)).resolves.toEqual({ status: 'unavailable', reason: 'provider-error' });
+    await expect(adapter.series(nvda, '1M')).resolves.toEqual({ status: 'unavailable', reason: 'provider-error' });
+  });
+
+  it('treats bad JSON, a non-USD body and a stall as unavailable', async () => {
+    const badJson = createStockAdapter({ now: () => NOW_MS, fetch: async () => new Response('<html>', { status: 200 }) });
+    await expect(badJson.ticker(nvda)).resolves.toEqual({ status: 'unavailable', reason: 'provider-error' });
+    const eur = { chart: { result: [{ meta: { currency: 'EUR', regularMarketPrice: 10, regularMarketTime: 1_700_000_000 }, timestamp: [], indicators: { quote: [{ close: [] }] } }] } };
+    const foreign = createStockAdapter({ now: () => NOW_MS, fetch: async () => json(eur) });
+    await expect(foreign.ticker(nvda)).resolves.toEqual({ status: 'unavailable', reason: 'provider-error' });
+    vi.useFakeTimers();
+    const stalled = createStockAdapter({ now: () => NOW_MS, fetch: () => new Promise<Response>(() => {}), timeoutMs: 1_000 });
+    const pending = stalled.ticker(nvda);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expect(pending).resolves.toEqual({ status: 'unavailable', reason: 'timeout' });
+  });
+
+  it('keeps reading the other symbol when one row fails', async () => {
+    const source = createWatchlistSource({ now: () => NOW_MS, items: [nvda, spcx], fetch: async (url) => (String(url).includes('SPCX') ? new Response('x', { status: 500 }) : json(yahooFixture('NVDA'))) });
+    await expect(source.ticker(nvda)).resolves.toMatchObject({ status: 'ok' });
+    await expect(source.series(nvda, '1W')).resolves.toMatchObject({ status: 'ok' });
+    await expect(source.ticker(spcx)).resolves.toEqual({ status: 'unavailable', reason: 'provider-error' });
+  });
+
+  it('shares the parsed chart inside the ticker TTL and refetches after it', async () => {
+    let nowMs = NOW_MS;
+    let fetches = 0;
+    const adapter = createStockAdapter({ now: () => nowMs, fetch: async () => { fetches += 1; return json(yahooFixture('NVDA')); } });
+    await adapter.ticker(nvda);
+    await adapter.series(nvda, '1Y');
+    expect(fetches).toBe(1);
+    nowMs += STOCK_TICKER_TTL_MS + 1;
+    await adapter.ticker(nvda);
+    expect(fetches).toBe(2);
+  });
+
+  it('keys the type TTLs to a 10-minute ticker and a 1-hour series', () => {
+    expect(STOCK_TICKER_TTL_MS).toBe(10 * 60_000);
+    expect(STOCK_SERIES_TTL_MS['1Y']).toBe(60 * 60_000);
+    expect(WATCH_TICKER_TTL_MS.stock).toBe(STOCK_TICKER_TTL_MS);
+    expect(WATCH_SERIES_TTL_MS.stock).toBe(STOCK_SERIES_TTL_MS);
   });
 });
 

@@ -1,4 +1,5 @@
 import { DASHBOARD_RANGE_PLAN, DashboardResponse, MarketTickerResponse, WeatherResponse, type DashboardCard } from '@vault-companion/contracts';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp, type Services } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
@@ -13,6 +14,7 @@ const endSec = Math.floor(NOW_MS / 1000 / G) * G;
 const startSec = endSec - DASHBOARD_RANGE_PLAN['1W'].spanSeconds;
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 const bucket = (time: number) => [time, '60000', '60200', '60100', '60150', '12'];
+const yahooFixture = (symbol: string): unknown => JSON.parse(readFileSync(new URL(`../test/fixtures/yahoo-${symbol}-1y.json`, import.meta.url), 'utf8'));
 
 const services = (over: Partial<Services> = {}): Services => ({
   async readTasks() { return { code: 'upstream-unavailable', message: 'x', retryable: true }; },
@@ -79,6 +81,7 @@ describe('real Dashboard composition (no live provider)', () => {
         : json({ amount: 1, base: 'SEK', rates: { '2026-09-29': { DKK: 0.6874 }, '2026-09-30': { DKK: 0.6876 } } });
     }
     if (u.includes('cbr.ru')) return new Response(cbrBody, { status: 200 });
+    if (u.includes('query1.finance.yahoo.com')) return json(yahooFixture(u.includes('SPCX') ? 'SPCX' : 'NVDA'));
     return new Response('x', { status: 404 });
   };
 
@@ -92,16 +95,18 @@ describe('real Dashboard composition (no live provider)', () => {
 
   it('builds the legacy BTC/USD market card, one card per watched item, and honest non-ok overview cards', async () => {
     const parsed = DashboardResponse.parse(await service(providerStub()).readDashboard('1W')); // the shipped contract accepts what the worker writes
-    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
+    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
     // The old market card is unchanged, so the existing web Dashboard keeps working.
     expect(parsed.cards[0]).toMatchObject({ id: 'market', status: 'ok', title: 'BTC / USD', ticker: { base: 'BTC', quote: 'USD', provider: 'coinbase', price: 60000 }, series: { range: '1W' } });
-    const watches = parsed.cards.slice(1, 5) as Extract<DashboardCard, { id: 'watchlist' }>[];
+    const watches = parsed.cards.slice(1, 7) as Extract<DashboardCard, { id: 'watchlist' }>[];
     expect(watches.map((c) => c.item)).toEqual([
       { symbol: 'BTC-USD', type: 'crypto' }, { symbol: 'ETH-USD', type: 'crypto' }, { symbol: 'RUB/DKK', type: 'fx' }, { symbol: 'SEK/DKK', type: 'fx' },
+      { symbol: 'NVDA', type: 'stock' }, { symbol: 'SPCX', type: 'stock' },
     ]);
     expect(watches[3]).toMatchObject({ status: 'ok', title: 'SEK / DKK', provenance: 'Frankfurter (ECB reference rates)', ticker: { base: 'SEK', quote: 'DKK', price: 0.6876 } });
-    expect(parsed.cards[5]).toMatchObject({ id: 'weather', status: 'unavailable', reason: 'provider-error' });
-    for (const overview of parsed.cards.slice(6)) {
+    expect(watches[4]).toMatchObject({ status: 'ok', title: 'NVIDIA', provenance: 'Yahoo Finance', ticker: { base: 'NVDA', quote: 'USD', provider: 'Yahoo Finance', price: 229.28 } });
+    expect(parsed.cards[7]).toMatchObject({ id: 'weather', status: 'unavailable', reason: 'provider-error' });
+    for (const overview of parsed.cards.slice(8)) {
       expect(overview.status).toBe('not-configured');
       expect(JSON.stringify(overview)).not.toMatch(/[0-9]+ ?(quota|spend|reset|bpm|kcal)/i);
     }
@@ -113,22 +118,22 @@ describe('real Dashboard composition (no live provider)', () => {
     expect(watches[1]).toMatchObject({ status: 'unavailable', item: { symbol: 'ETH-USD' }, reason: 'provider-error', observedAt: null, fetchedAt: null });
     expect(watches[0]).toMatchObject({ status: 'ok', item: { symbol: 'BTC-USD' } });
     expect(parsed.cards[0]).toMatchObject({ id: 'market', status: 'ok' });
-    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
+    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
   });
 
   it('adding one config line yields one more card, and the contract accepts it', async () => {
     const items = [...WATCHLIST, { symbol: 'ADA-USD', type: 'crypto' as const, name: 'ADA / USD', base: 'ADA', quote: 'USD' }];
     const parsed = DashboardResponse.parse(await service(providerStub(), items).readDashboard('1W'));
-    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
-    expect(parsed.cards[5]).toMatchObject({ id: 'watchlist', status: 'ok', item: { symbol: 'ADA-USD' } });
+    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
+    expect(parsed.cards[7]).toMatchObject({ id: 'watchlist', status: 'ok', item: { symbol: 'ADA-USD' } });
   });
 
   it('keeps the other cards when the market provider is down', async () => {
     const parsed = DashboardResponse.parse(await service(async () => new Response('x', { status: 503 })).readDashboard('1M'));
     expect(parsed.cards[0]).toMatchObject({ id: 'market', status: 'unavailable', reason: 'provider-error', observedAt: null });
-    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
+    expect(parsed.cards.map((c) => c.id)).toEqual(['market', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'watchlist', 'weather', 'ai-usage', 'health']);
     expect(parsed.cards[1]).toMatchObject({ id: 'watchlist', status: 'unavailable' });
-    expect(parsed.cards[5]).toMatchObject({ id: 'weather', status: 'unavailable' });
+    expect(parsed.cards[7]).toMatchObject({ id: 'weather', status: 'unavailable' });
   });
 
   it('serves the ticker-only poll response', async () => {

@@ -12,6 +12,7 @@
 .dash-chip-stale { color: var(--warn); }
 .dash-chip-not-configured { color: var(--muted); }
 .dash-chip-unavailable { color: var(--danger); }
+.dash-chip-delayed { color: var(--warn); }
 .dash-market .dash-price, .dash-watch .dash-price { color: var(--ios-indigo); }
 .dash-watches { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
 .dash-change { margin: 0; font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; }

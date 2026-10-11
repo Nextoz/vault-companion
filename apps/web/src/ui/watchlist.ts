@@ -16,10 +16,22 @@ export function legacyMarketCard(cards: readonly DashboardCard[]): MarketCard | 
   return cards.find((card): card is MarketCard => card.id === 'market') ?? null;
 }
 
-/** The title from item/ticker base/quote, e.g. "RUB / DKK". Without a ticker the symbol is split on its separator. */
+/**
+ * The title from item/ticker base/quote, e.g. "RUB / DKK". Without a ticker the symbol is split on its separator. A
+ * stock names its company (e.g. "NVIDIA (NVDA)"): a bare ticker reads worse than a pair, and the card carries the name.
+ */
 export function watchTitle(card: WatchCard): string {
+  if (card.item.type === 'stock') return `${card.title} (${card.item.symbol})`;
   if (card.status === 'ok') return `${card.ticker.base} / ${card.ticker.quote}`;
   return card.item.symbol.replace(/[-/]/g, ' / ').trim();
+}
+
+/**
+ * The delay badge a card must show, or null when the source is live. Stocks come from Yahoo's keyless chart, which is
+ * delayed; crypto/fx are not. The provider time itself is rendered next to it by the card ("Market time …").
+ */
+export function watchDelayLabel(card: WatchCard): string | null {
+  return card.item.type === 'stock' ? 'Delayed' : null;
 }
 
 /** fx reference rates are quoted to four decimals; crypto to two, like the legacy BTC market card. */

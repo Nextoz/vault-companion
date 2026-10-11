@@ -163,6 +163,20 @@ describe('watchlist cards (WL2)', () => {
     expect(document.querySelector('.dash-readout')!.textContent).toContain('DKK 0.0900');
     expect(document.querySelector('.dash-readout')!.textContent).not.toContain('$');
   });
+
+  it('shows a stock as "Delayed" with its provider time, while crypto/fx stay unlabelled', async () => {
+    const nvidia = watch({ item: { symbol: 'NVDA', type: 'stock' }, title: 'NVIDIA', provenance: 'Yahoo Finance', ticker: { base: 'NVDA', quote: 'USD', provider: 'Yahoo Finance', price: 229.28, providerTime: NOW }, series: watchSeries([183.16, 229.28]) });
+    await render([nvidia, watch(), ...overviewCards]);
+    const cards = [...document.querySelectorAll('.dash-watch')];
+    const stockCard = cards.find((card) => card.textContent?.includes('NVIDIA'))!;
+    expect(stockCard.textContent).toContain('NVIDIA (NVDA)');
+    expect(stockCard.querySelector('.dash-chip-delayed')!.textContent).toBe('Delayed');
+    expect(stockCard.textContent).toContain('Market time');
+    expect(stockCard.textContent).toContain('12:00 UTC');
+    expect(stockCard.textContent).toContain('$229.28');
+    const cryptoCard = cards.find((card) => card.textContent?.includes('BTC / USD'))!;
+    expect(cryptoCard.querySelector('.dash-chip-delayed')).toBeNull();
+  });
 });
 
 describe('range and freshness (DASH1)', () => {
