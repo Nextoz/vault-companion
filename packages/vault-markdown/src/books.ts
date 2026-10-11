@@ -159,6 +159,7 @@ export function appendReflection(source: string, entry: { readonly date: string;
   if (!isDate(entry.date)) return refuse('invalid', 'SaveReflection needs a YYYY-MM-DD date');
   const textLines = entry.text.split(/\r\n|\r|\n/);
   if (textLines.every((line) => isBlank(line))) return refuse('refused:book-reflection-empty', 'Write something in the reflection first');
+  if (textLines.some((line) => /^ {0,3}#{1,3}(\s|$)/.test(line))) return refuse('invalid', 'A reflection cannot contain heading lines (#, ## or ###)');
   const parsed = parseBookNote(source);
   if (!parsed.ok) return parsed;
   const heading = `### ${entry.date}`;

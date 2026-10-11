@@ -80,6 +80,13 @@ it('appends dated reflections verbatim and keeps same-day entries separate', () 
   ] });
 });
 
+it('refuses reflection text that contains heading lines', () => {
+  for (const text of ['## Reflections', 'fine'+String.fromCharCode(10)+'### 2026-10-06', '# Title']) {
+    expect(kernel.appendReflection(fixture, { date: '2026-10-05', text })).toMatchObject({ ok: false, code: 'invalid' });
+  }
+  expect(kernel.appendReflection(fixture, { date: '2026-10-05', text: 'a #hashtag and C# are fine' })).toMatchObject({ ok: true });
+});
+
 it('refuses empty reflections and a malformed note shape', () => {
   for (const text of ['', '   ', '\n', '\r\n\r\n']) {
     expect(kernel.appendReflection(fixture, { date: '2026-10-05', text })).toMatchObject({ code: 'refused:book-reflection-empty' });
