@@ -8,7 +8,7 @@ export const characterConfig: CharacterConfig = {
     training: { profession: 'athletics', enabled: true, identityField: 'type', baseXp: 30, dailyCap: 2, minutes: { field: 'duration', format: 'duration', after: 20, step: 5, xp: 1, maxBonus: 20 } },
     learning: { profession: 'scholar', enabled: true, identityField: 'kind', baseXp: 15, dailyCap: 3, minutes: { field: 'minutes', format: 'minutes', after: 0, step: 2, xp: 1, maxBonus: 15 } },
     library: { profession: 'lorekeeper', enabled: true, identityField: 'id', baseXp: 5, dailyCap: 5 },
-    reflection: { profession: 'lorekeeper', enabled: false, identityField: 'id', baseXp: 25, dailyCap: 2 },
+    reflection: { profession: 'lorekeeper', enabled: true, identityField: 'id', baseXp: 25, dailyCap: 2 },
     task: { profession: 'quartermaster', enabled: true, identityField: 'id', baseXp: 3, dailyCap: 5, overdue: { field: 'overdueDays', days: 7, xp: 2, dailyCap: 3 } },
   },
   // Journey step milestones (owner decision 10 Oct 2026): achievements with points, never XP. Thresholds only here.

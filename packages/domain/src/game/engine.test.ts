@@ -126,16 +126,20 @@ describe('Character projection', () => {
     expect(get(run([task('a', 29), task('b', 30, date(1))], date(1)), 'clean-slate').earnedDate).toBe(date(1));
   });
 
-  it('does not award disabled reflections or locked achievements', () => {
-    const rows = Array.from({ length: 10 }, (_, i) => ({ source: 'reflection', date: date(i), id: `reflection-${i}` }));
-    const c = run(rows, date(10));
-    expect(c.xp).toBe(0);
-    for (const id of ['first-reflection', 'lorekeeper-reflections-10']) expect(get(c, id)).toMatchObject({ locked: true, earned: false, progress: { current: 0 } });
-    const enabled = { ...config, sources: { ...config.sources, reflection: { ...config.sources['reflection']!, enabled: true } } };
-    const unlockedSource = run(rows, date(10), enabled);
-    expect(unlockedSource.xp).toBe(250);
-    expect(get(unlockedSource, 'first-reflection').earned).toBe(false);
-    expect(run([rows[0], rows[0], rows[0]], date(0), enabled).xp).toBe(50);
+  it('awards saved reflections and unlocks the reflection achievements', () => {
+    const reflection = (i: number, offset = i): GameRecord => ({ source: 'reflection', date: date(offset), id: `reflection-${i}` });
+    // Three reflections on one day earn only the daily cap of two, but unlock First Reflection.
+    const sameDay = run([reflection(0, 0), reflection(1, 0), reflection(2, 0)], date(0));
+    expect(sameDay.xp).toBe(50);
+    expect(get(sameDay, 'first-reflection')).toMatchObject({ locked: false, earned: true });
+    expect(get(sameDay, 'lorekeeper-reflections-10').earned).toBe(false);
+    // Ten reflections across ten days reach the chain tier.
+    const across = run(Array.from({ length: 10 }, (_, i) => reflection(i)), date(10));
+    expect(across.xp).toBe(250);
+    expect(get(across, 'lorekeeper-reflections-10')).toMatchObject({ locked: false, earned: true });
+    // Guard: a disabled source is skipped, so this test fails if the config flips back to false.
+    const disabled = { ...config, sources: { ...config.sources, reflection: { ...config.sources['reflection']!, enabled: false } } };
+    expect(run([reflection(0, 0)], date(0), disabled).xp).toBe(0);
   });
 
   it('skips malformed and future records, retaining valid base XP for invalid minutes', () => {

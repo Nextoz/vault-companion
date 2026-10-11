@@ -13,6 +13,7 @@ import {
 import {
   effectiveRadarDecisions,
   type ApiError,
+  type BooksResponse,
   type GameResponse,
   type GameRules,
   type HealthHistoryResponse,
@@ -26,6 +27,7 @@ export interface GameDeps {
   readonly store: VaultStore;
   readonly readTraining: () => Promise<TrainingResponse | ApiError>;
   readonly readLearning: () => Promise<LearningResponse | ApiError>;
+  readonly readBooks: () => Promise<BooksResponse | ApiError>;
   readonly readHistory: () => Promise<HistoryResponse | ApiError>;
   readonly readRadar: () => Promise<RadarResponse | ApiError>;
   readonly readHealthHistory: () => Promise<HealthHistoryResponse | ApiError>;
@@ -80,9 +82,10 @@ export function createGameService(deps: GameDeps) {
     async readGame(): Promise<GameResponse | ApiError> {
       try {
         const { commitSha } = await deps.store.head();
-        const [training, learning, history, radar, health] = await Promise.all([
+        const [training, learning, books, history, radar, health] = await Promise.all([
           settle(deps.readTraining),
           settle(deps.readLearning),
+          settle(deps.readBooks),
           settle(deps.readHistory),
           settle(deps.readRadar),
           settle(deps.readHealthHistory),
@@ -104,6 +107,18 @@ export function createGameService(deps: GameDeps) {
           source: 'learning', date: row.date, kind: row.kind, minutes: row.minutes,
           score: row.score, detail: row.detail, topic: row.topic, note: row.note,
         });
+
+        if (isError(books)) unavailable.push('reflections');
+        else if (books.status === 'refused') unavailable.push('reflections');
+        else if (books.status === 'ok') for (const book of books.books) {
+          const seen = new Map<string, number>();
+          for (const reflection of book.reflections) {
+            const n = seen.get(reflection.date) ?? 0;
+            seen.set(reflection.date, n + 1);
+            // Only the synthetic id leaves here: reflection text is private vault text and is never logged or sent.
+            records.push({ source: 'reflection', date: reflection.date, id: `${book.title}|${reflection.date}|${n}` });
+          }
+        }
 
         if (isError(radar)) unavailable.push('library');
         else records.push(...keptLibraryRecords(radar, deps.timeZone));

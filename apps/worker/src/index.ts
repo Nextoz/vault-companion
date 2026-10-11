@@ -164,6 +164,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
       store,
       readTraining: () => training.readTraining(),
       readLearning: () => learning.readLearning(),
+      readBooks: () => books.readBooks(),
       readHistory: () => history.readHistory(),
       readRadar: () => radar.readResearchRadar(),
       readHealthHistory: () => health.readHealthHistory(),
