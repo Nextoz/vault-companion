@@ -17,3 +17,6 @@ export { parseTraining, insertTrainingRow, editTrainingRow, formatTrainingRow, u
 export type { TrainingRow, TrainingSession, TrainingEffect } from './training.ts';
 export { parseLearning, insertLearningRow, formatLearningRow, undoLearning, parseLearningPasteLine, LEARNING_KINDS_HEADER, LEARNING_LOG_HEADER } from './learning.ts';
 export type { LearningKind, LearningRow, LearningSession, LearningEffect, LearningPaste } from './learning.ts';
+
+export { parseBookNote, createBookNote, appendProgress, appendReflection, undoBookEdit, PROGRESS_HEADING, REFLECTIONS_HEADING } from './books.ts';
+export type { ParsedBook, BookEffect, BookFrontmatter, BookProgressEntry, BookReflectionEntry } from './books.ts';

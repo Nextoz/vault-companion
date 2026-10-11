@@ -42,6 +42,22 @@ export type WriteResult =
   | { readonly ok: false; readonly reason: 'head-moved' | 'precondition-failed' };
 
 /**
+ * Remove one regular file in a single commit parented on `baseCommit` (ADR-0062: the exact inverse of a creation).
+ * The adapter proves a regular 100644 file is there at `baseCommit`; else the write refuses with
+ * `precondition-failed`. Head-CAS and trailers are identical to `WriteRequest`.
+ */
+export interface DeleteRequest {
+  readonly path: VaultPath;
+  readonly baseCommit: string;
+  readonly message: string;
+  readonly trailers: Readonly<Record<string, string>>;
+}
+
+export type DeleteResult =
+  | { readonly ok: true; readonly commitSha: string; readonly blobSha: string }
+  | { readonly ok: false; readonly reason: 'head-moved' | 'precondition-failed' };
+
+/**
  * Several files in ONE commit parented on `baseCommit` (ADR-0029: a research-explainer run commits all new notes plus its
  * status record together). Same head-CAS and per-file preconditions as `WriteRequest`; any unmet precondition refuses
  * the whole commit. Paths must be distinct.
@@ -127,6 +143,8 @@ export interface VaultStore {
   listFiles(dir: string, atCommit: string): Promise<readonly ListedFile[]>;
   /** Single-file commit parented on `baseCommit`; publishes only as a fast-forward from it (head-CAS, ADR-0011). */
   writeFile(req: WriteRequest): Promise<WriteResult>;
+  /** Remove one regular file in a single commit (head-CAS); the exact inverse of a creation (ADR-0062). */
+  deleteFile(req: DeleteRequest): Promise<DeleteResult>;
   /** Multi-file commit with the same head-CAS as `writeFile` (ADR-0029). */
   writeFiles(req: MultiWriteRequest): Promise<MultiWriteResult>;
   /** Find a commit in `baseCommitSha..untilCommit` whose trailer `key` (default `Vault-Companion-Op`) equals `value`. */

@@ -17,6 +17,7 @@ export * from './weather.ts';
 
 export * from './training.ts';
 export * from './learning.ts';
+export * from './books.ts';
 export * from './health.ts';
 export * from './health-ingest.ts';
 export * from './research-explainer.ts';

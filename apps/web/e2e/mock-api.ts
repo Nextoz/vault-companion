@@ -1078,6 +1078,19 @@ export class MockApi {
         this.inboxNotes.set(note.path, { ...n, blobSha: base.blobSha, body: body.endsWith('\n') ? body : body + '\n' });
         return { ...base, path: note.path, effect: { kind: 'note-edited', path: note.path } };
       }
+      case 'StartBook':
+      case 'LogReading':
+      case 'SaveReflection': {
+        const path = `Books/${command.payload.title}.md`;
+        const op = command.type === 'StartBook' ? 'started' : command.type === 'LogReading' ? 'logged' : 'reflected';
+        return { ...base, path, effect: { kind: 'book', op, path } };
+      }
+      case 'UndoStartBook':
+      case 'UndoLogReading':
+      case 'UndoSaveReflection': {
+        const path = `Books/${command.payload.target.payload.title}.md`;
+        return { ...base, path, effect: { kind: 'book', op: 'undone', path } };
+      }
     }
   }
 }

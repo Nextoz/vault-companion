@@ -113,6 +113,12 @@ export function exportText(envelope: Command): string {
     case 'UndoEditTraining': return exportText(envelope.payload.target);
     case 'LogLearning': return JSON.stringify(envelope.payload.session, null, 2);
     case 'UndoLogLearning': return exportText(envelope.payload.target);
+    case 'StartBook': return JSON.stringify(envelope.payload, null, 2);
+    case 'UndoStartBook': return exportText(envelope.payload.target);
+    case 'LogReading': return JSON.stringify(envelope.payload, null, 2);
+    case 'UndoLogReading': return exportText(envelope.payload.target);
+    case 'SaveReflection': return JSON.stringify(envelope.payload, null, 2);
+    case 'UndoSaveReflection': return exportText(envelope.payload.target);
     case 'MoodCheckin': return JSON.stringify(envelope.payload, null, 2);
     case 'UndoMoodCheckin': return exportText(envelope.payload.target);
     case 'ReportFeedback': return JSON.stringify(envelope.payload, null, 2);

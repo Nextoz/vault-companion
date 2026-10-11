@@ -260,6 +260,20 @@ describe.each(Object.keys(harnesses))('VaultStore contract: %s', { timeout: 30_0
     for (let i = 0; i < 3; i++) await external({ 'Inbox/x.md': `v${i}\n` });
     expect((await store.findOperation(base, (await store.head()).commitSha, 'op')).kind).toBe('unknown');
   });
+
+  it('deleteFile removes a regular file under the same head-CAS (ADR-0062)', async () => {
+    const { store } = await make();
+    const base = (await store.head()).commitSha;
+    expect(await store.deleteFile({ path: 'Inbox/missing.md' as VaultPath, baseCommit: base, message: 'm', trailers: {} })).toEqual({ ok: false, reason: 'precondition-failed' });
+    const del = await store.deleteFile({ path: TODO, baseCommit: base, message: 'Vault Companion: test', trailers: { [TRAILER_OP]: 'op-del', [TRAILER_PAYLOAD]: 'sha256:x' } });
+    expect(del.ok).toBe(true);
+    if (!del.ok) throw new Error(del.reason);
+    expect(del.blobSha).toMatch(/^[0-9a-f]{40}$/);
+    expect(await store.readFile(TODO, del.commitSha)).toBeNull();
+    // The old base is no longer the head; nothing is left to delete at the new one.
+    expect(await store.deleteFile({ path: TODO, baseCommit: base, message: 'm', trailers: {} })).toEqual({ ok: false, reason: 'head-moved' });
+    expect(await store.deleteFile({ path: TODO, baseCommit: del.commitSha, message: 'm', trailers: {} })).toEqual({ ok: false, reason: 'precondition-failed' });
+  });
 });
 
 describe('LocalGitStore mode precondition (gate-3 F2, mutant M13)', { timeout: 30_000 }, () => {

@@ -1,12 +1,12 @@
 // Application services: one WritePlan per command type (docs/commands.md) and the task read model.
 // Pure orchestration over the VaultStore port and the Markdown kernel; no HTTP, no GitHub.
-import { TRAINING_PATH, LEARNING_PATH, ACTIVE_WORK_PATH, MAX_KNOWN, MAX_TASK_LINE, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type ResearchRadarDecideCommand, type TasksResponse, type TaskView } from '@vault-companion/contracts';
+import { TRAINING_PATH, LEARNING_PATH, ACTIVE_WORK_PATH, MAX_KNOWN, MAX_TASK_LINE, bookNotePath, canonicalBookTitle, type ApiError, type Command, type CompleteTaskCommand, type ErrorCode, type Receipt, type ResearchRadarDecideCommand, type TasksResponse, type TaskView } from '@vault-companion/contracts';
 import * as md from '@vault-companion/vault-markdown';
 import { executeWrite, findInOnePage, replayOnParent, type Planned, type Refused, type WritePlan } from './execute.ts';
 import { MAX_NOTE_BYTES } from '@vault-companion/contracts';
 import { appendDecisionLine, hasDecisionId, parseDecisionLines, type DecisionLine } from './triage-format.ts';
 import { readTriageText, TRIAGE_DIR, triageDecisionPath } from './triage.ts';
-import { canWrite, DAILY_JOURNAL_TEMPLATE_PATH, dailyJournalPath, FEEDBACK_BACKLOG_PATH, INBOX_DIR, isDailyJournalPath, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
+import { canWrite, DAILY_JOURNAL_TEMPLATE_PATH, dailyJournalPath, FEEDBACK_BACKLOG_PATH, INBOX_DIR, isBookNotePath, isDailyJournalPath, isInboxNotePath, parseVaultPath, TODO_LIST_PATH } from './paths.ts';
 import { payloadHash } from './payload-hash.ts';
 import { researchRadarDecidePlan } from './research-radar-command.ts';
 import { FileTooLarge, gitBlobSha, TRAILER_OP, TRAILER_PAYLOAD, TRAILER_UNDOES, type CommitInfo, type VaultPath, type VaultStore } from './store.ts';
@@ -590,6 +590,149 @@ function undoLearningPlan(cmd: LearningUndoCommand, raw: unknown): WritePlan<Rec
   };
 }
 
+type BookLogCommand = Extract<Command, { type: 'LogReading' }>;
+type BookReflectCommand = Extract<Command, { type: 'SaveReflection' }>;
+type BookWriteCommand = BookLogCommand | BookReflectCommand;
+type BookEditUndoCommand = Extract<Command, { type: 'UndoLogReading' | 'UndoSaveReflection' }>;
+type StartBookCommand = Extract<Command, { type: 'StartBook' }>;
+type UndoStartBookCommand = Extract<Command, { type: 'UndoStartBook' }>;
+
+/** ADR-0062: the one note path a title names, or `null` when the title cannot name a note. */
+function bookPath(title: string): VaultPath | null {
+  const path = bookNotePath(title);
+  return path === null ? null : parseVaultPath(path);
+}
+
+const bookEffect = (path: VaultPath, e: md.BookEffect): Receipt['effect'] => ({ kind: 'book', op: e.op, path });
+
+/** The kernel write for a book edit, before it is mapped to a receipt effect. */
+function bookKernel(target: BookWriteCommand, text: string): md.MutationOk<md.BookEffect> | md.Refusal {
+  return target.type === 'LogReading'
+    ? md.appendProgress(text, { date: target.payload.date, page: target.payload.page })
+    : md.appendReflection(text, { date: target.payload.date, text: target.payload.text });
+}
+
+function bookApply(target: BookWriteCommand, path: VaultPath, text: string): Planned<Receipt['effect']> {
+  return fromKernel(bookKernel(target, text), path, (e) => bookEffect(path, e));
+}
+
+export function startBookPlan(cmd: StartBookCommand): WritePlan<Receipt['effect']> {
+  return {
+    message: 'Vault Companion: start book',
+    async compute(store, at) {
+      const path = bookPath(cmd.payload.title);
+      if (!path) return refuse('refused:book-title-invalid', 'Book title cannot be used for a note name');
+      if (!canWrite(path, 'create')) return refuse('refused:path', 'book path is not writable');
+      if (await store.readFile(path, at)) return refuse('refused:book-exists', 'That book note already exists');
+      const title = canonicalBookTitle(cmd.payload.title)!;
+      const bytes = encoder.encode(md.createBookNote({ title, author: cmd.payload.author, totalPages: cmd.payload.totalPages }));
+      return { ok: true, path, expect: 'absent', bytes, effect: { kind: 'book', op: 'started', path } };
+    },
+  };
+}
+
+export function logReadingPlan(cmd: BookLogCommand): WritePlan<Receipt['effect']> {
+  return { message: 'Vault Companion: log reading', async compute(store, at) {
+    const path = bookPath(cmd.payload.title);
+    if (!path) return refuse('refused:book-title-invalid', 'Book title cannot be used for a note name');
+    if (!canWrite(path, 'update')) return refuse('refused:path', 'book path is not writable');
+    const f = await readTodo(store, at, path);
+    return f.ok ? bookApply(cmd, path, f.text) : f.planned;
+  } };
+}
+
+export function saveReflectionPlan(cmd: BookReflectCommand): WritePlan<Receipt['effect']> {
+  return { message: 'Vault Companion: save reflection', async compute(store, at) {
+    const path = bookPath(cmd.payload.title);
+    if (!path) return refuse('refused:book-title-invalid', 'Book title cannot be used for a note name');
+    if (!canWrite(path, 'update')) return refuse('refused:path', 'book path is not writable');
+    const f = await readTodo(store, at, path);
+    return f.ok ? bookApply(cmd, path, f.text) : f.planned;
+  } };
+}
+
+type VerifiedBook = { readonly ok: true; readonly before: TodoFile; readonly afterBytes: Uint8Array; readonly effect: md.BookEffect } | { readonly ok: false; readonly planned: Planned<never> };
+
+/** Replay the recorded write on C^ and require it to equal C's blob: the entry is otherwise unusable. */
+async function verifiedBook(store: VaultStore, c: CommitInfo, target: BookWriteCommand, path: VaultPath): Promise<VerifiedBook> {
+  const changed = c.files.length === 1 ? c.files[0] : undefined;
+  if (c.parent === null || changed?.path !== path || changed.blobSha === null) {
+    return { ok: false as const, planned: refuse('invalid', 'undo target does not match the recorded book entry') };
+  }
+  const before = await readTodo(store, c.parent, path);
+  if (!before.ok) return { ok: false as const, planned: refuse('dedupe-unknown', 'the book entry cannot be verified') };
+  const replay = bookKernel(target, before.text);
+  const afterBytes = replay.ok ? encoder.encode(replay.text) : new Uint8Array();
+  if (!replay.ok || (await gitBlobSha(afterBytes)) !== changed.blobSha) {
+    return { ok: false as const, planned: refuse('dedupe-unknown', 'the book entry cannot be verified') };
+  }
+  return { ok: true as const, before, afterBytes, effect: replay.effect };
+}
+
+/** Read and verify the token commit; never trust it beyond its trailers (ADR-0013). */
+async function readBookToken(store: VaultStore, token: string, target: { operationId: string }, rawTarget: unknown): Promise<CommitInfo | Refused> {
+  const c = await store.readCommit(token);
+  if (!c) return refused('conflict:book-changed', 'that book entry is not in the vault');
+  if (c.trailers[TRAILER_OP] !== target.operationId || c.trailers[TRAILER_PAYLOAD] !== (await payloadHash(rawTarget))) {
+    return refused('invalid', 'undo target does not match the recorded book entry');
+  }
+  return c;
+}
+
+function bookEditUndoPlan(cmd: BookEditUndoCommand, raw: unknown): WritePlan<Receipt['effect']> {
+  const target = cmd.payload.target;
+  const rawTarget = (raw as { payload: { target: unknown } }).payload.target;
+  return {
+    message: 'Vault Companion: undo book entry',
+    trailers: { [TRAILER_UNDOES]: target.operationId },
+    async compute(store, at) {
+      const path = bookPath(target.payload.title);
+      if (!path) return refuse('refused:book-title-invalid', 'Book title cannot be used for a note name');
+      if (!canWrite(path, 'update')) return refuse('refused:path', 'book path is not writable');
+      const c = await readBookToken(store, cmd.payload.targetCommit, target, rawTarget);
+      if ('kind' in c) return refuse(c.code, c.message);
+      const v = await verifiedBook(store, c, target, path);
+      if (!v.ok) return v.planned;
+      const f = await readTodo(store, at, path);
+      if (!f.ok) return f.planned;
+      return fromKernel(md.undoBookEdit(f.text, decodeUtf8(v.afterBytes)!, v.before.text, v.effect), path, (e) => bookEffect(path, e));
+    },
+  };
+}
+
+function undoStartBookPlan(cmd: UndoStartBookCommand, raw: unknown): WritePlan<Receipt['effect']> {
+  const target = cmd.payload.target;
+  const rawTarget = (raw as { payload: { target: unknown } }).payload.target;
+  return {
+    message: 'Vault Companion: undo start book',
+    trailers: { [TRAILER_UNDOES]: target.operationId },
+    async compute(store, at) {
+      const path = bookPath(target.payload.title);
+      if (!path) return refuse('refused:book-title-invalid', 'Book title cannot be used for a note name');
+      if (!canWrite(path, 'update')) return refuse('refused:path', 'book path is not writable');
+      const c = await readBookToken(store, cmd.payload.targetCommit, target, rawTarget);
+      if ('kind' in c) return refuse(c.code, c.message);
+      const changed = c.files.length === 1 ? c.files[0] : undefined;
+      if (c.parent === null || changed?.path !== path || changed.blobSha === null) return refuse('invalid', 'undo target does not match the recorded book entry');
+      if (await store.readFile(path, c.parent)) return refuse('dedupe-unknown', 'the book note was not created by this entry');
+      const bytes = encoder.encode(md.createBookNote({ title: canonicalBookTitle(target.payload.title)!, author: target.payload.author, totalPages: target.payload.totalPages }));
+      if ((await gitBlobSha(bytes)) !== changed.blobSha) return refuse('dedupe-unknown', 'the book entry cannot be verified');
+      const f = await readTodo(store, at, path);
+      if (!f.ok) return f.planned;
+      if (f.text !== decodeUtf8(bytes)!) return refuse('refused:undo-expired', 'Cannot restore the exact previous file; undo it in Obsidian');
+      return { ok: true, path, expect: 'regular-file', bytes: new Uint8Array(), delete: true, blobSha: f.blobSha, effect: { kind: 'book', op: 'undone', path } };
+    },
+    async deriveApplied(store, commitSha, paths) {
+      const path = paths.length === 1 ? parseVaultPath(paths[0]!) : null;
+      if (!path || !isBookNotePath(path)) return { ok: false, reason: 'unexpected paths' };
+      if (await store.readFile(path, commitSha)) return { ok: false, reason: 'the undo commit did not remove the note' };
+      const created = await store.readFile(path, await store.parentOf(commitSha));
+      if (!created) return { ok: false, reason: 'the created note is missing' };
+      return { ok: true, path, effect: { kind: 'book', op: 'undone', path }, blobSha: created.blobSha };
+    },
+  };
+}
+
 type MoodCheckinCommand = Extract<Command, { type: 'MoodCheckin' }>;
 type MoodWriteEffect = { readonly kind: 'mood'; readonly op: 'checked-in' | 'undone' };
 const DAILY_TEMPLATE = DAILY_JOURNAL_TEMPLATE_PATH as VaultPath;
@@ -939,6 +1082,12 @@ function planFor(cmd: Command, raw: unknown, deps: CommandServiceDeps): WritePla
     case 'UndoEditTraining': return undoTrainingPlan(cmd, raw);
     case 'LogLearning': return learningPlan(cmd);
     case 'UndoLogLearning': return undoLearningPlan(cmd, raw);
+    case 'StartBook': return startBookPlan(cmd);
+    case 'UndoStartBook': return undoStartBookPlan(cmd, raw);
+    case 'LogReading': return logReadingPlan(cmd);
+    case 'UndoLogReading': return bookEditUndoPlan(cmd, raw);
+    case 'SaveReflection': return saveReflectionPlan(cmd);
+    case 'UndoSaveReflection': return bookEditUndoPlan(cmd, raw);
     case 'MoodCheckin': return moodCheckinPlan(cmd);
     case 'UndoMoodCheckin': return undoMoodCheckinPlan(cmd, raw);
     case 'ReportFeedback': return reportFeedbackPlan(cmd);

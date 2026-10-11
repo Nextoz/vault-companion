@@ -12,6 +12,8 @@ import {
   TRAILER_PAYLOAD,
   type CommitInfo,
   type CommitsSinceResult,
+  type DeleteRequest,
+  type DeleteResult,
   type FindOperationResult,
   type ListedFile,
   type MultiWriteRequest,
@@ -281,6 +283,36 @@ export class GitHubContentsStore implements VaultStore {
   async writeFile(req: WriteRequest): Promise<WriteResult> {
     const r = await this.writeFiles({ baseCommit: req.baseCommit, files: [req], message: req.message, trailers: req.trailers });
     return r.ok ? { ok: true, commitSha: r.commitSha, blobSha: r.blobShas[0]! } : r;
+  }
+
+  /** ADR-0062: remove one regular file via a tree entry with `sha: null` (Git Data deletes that path). */
+  async deleteFile(req: DeleteRequest): Promise<DeleteResult> {
+    guardPath(req.path);
+    const cut = req.path.lastIndexOf('/');
+    const siblings = await this.treeEntries(req.baseCommit, cut < 0 ? '' : req.path.slice(0, cut));
+    const entry = siblings?.find((e) => e.path === req.path.slice(cut + 1));
+    if (!(entry?.type === 'blob' && entry.mode === '100644')) return { ok: false, reason: 'precondition-failed' };
+    let baseTree = this.trees.get(req.baseCommit);
+    if (baseTree === undefined) {
+      const base = await this.getJson<{ tree: { sha: string } }>(`/git/commits/${req.baseCommit}`);
+      if (!base) throw new StoreUnavailable('base commit not found');
+      baseTree = base.tree.sha;
+    }
+    const tree = await this.createObject<{ sha: string }>('/git/trees', {
+      base_tree: baseTree,
+      tree: [{ path: req.path, mode: '100644', type: 'blob', sha: null }],
+    });
+    const trailers = Object.entries(req.trailers).map(([k, v]) => `${k}: ${v}`).join('\n');
+    const commit = await this.createObject<{ sha: string }>('/git/commits', {
+      message: `${req.message}\n\n${trailers}\n`,
+      tree: tree.sha,
+      parents: [req.baseCommit],
+    });
+    const res = await this.call('PATCH', `/git/refs/heads/${encodeURIComponent(this.branch)}`, { sha: commit.sha, force: false });
+    if (res.status === 200) return { ok: true, commitSha: commit.sha, blobSha: entry.sha };
+    if (res.status === 422 || res.status === 409) return { ok: false, reason: 'head-moved' };
+    if (res.status >= 500) throw new StoreUnknownOutcome(`GitHub ref update status ${res.status}`);
+    throw new StoreUnavailable(`GitHub ref update status ${res.status}`);
   }
 
   /** One file costs exactly what the single-file write always did; each extra file adds one blob (+ one listing per new folder). */

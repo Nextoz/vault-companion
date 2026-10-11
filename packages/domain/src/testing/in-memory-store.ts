@@ -13,6 +13,8 @@ import {
   TRAILER_PAYLOAD,
   type CommitInfo,
   type CommitsSinceResult,
+  type DeleteRequest,
+  type DeleteResult,
   type FindOperationResult,
   type ListedFile,
   type MultiWriteRequest,
@@ -176,6 +178,24 @@ export class InMemoryStore implements VaultStore {
     this.calls.push('writeFile');
     const r = await this.commitWrite({ baseCommit: req.baseCommit, files: [req], message: req.message, trailers: req.trailers });
     return r.ok ? { ok: true, commitSha: r.commitSha, blobSha: r.blobShas[0]! } : r;
+  }
+
+  async deleteFile(req: DeleteRequest): Promise<DeleteResult> {
+    this.calls.push('deleteFile');
+    guard(req.path);
+    this.writeCalls++;
+    const fault = this.writeFaults.shift() ?? 'normal';
+    if (fault === 'unavailable') throw new StoreUnavailable('simulated outage');
+    if (fault === 'drop-then-unknown') throw new StoreUnknownOutcome('simulated timeout (not applied)');
+    if (this.headSha !== req.baseCommit) return { ok: false, reason: 'head-moved' };
+    const head = this.commits.get(this.headSha)!;
+    const blobSha = head.tree.get(req.path);
+    if (blobSha === undefined) return { ok: false, reason: 'precondition-failed' };
+    const tree = new Map(head.tree);
+    tree.delete(req.path);
+    const commitSha = this.pushCommit(tree, { ...req.trailers }, [req.path], req.message);
+    if (fault === 'apply-then-unknown') throw new StoreUnknownOutcome('simulated lost response (applied)');
+    return { ok: true, commitSha, blobSha };
   }
 
   async writeFiles(req: MultiWriteRequest): Promise<MultiWriteResult> {

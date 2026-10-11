@@ -366,6 +366,67 @@ export type ReportFeedbackPayload = z.infer<typeof ReportFeedbackPayload>;
 export const ReportFeedbackCommand = envelope('ReportFeedback', ReportFeedbackPayload);
 export type ReportFeedbackCommand = z.infer<typeof ReportFeedbackCommand>;
 
+/** ADR-0062: reading book notes live only at `Books/<Title>.md`; the reading queue note is never a write target. */
+export const BOOKS_DIR = 'Books';
+export const READING_QUEUE_PATH = 'Books/Reading Queue.md';
+export const MAX_BOOK_TITLE = 80;
+
+const BOOK_TITLE_FORBIDDEN = /[/\\:*?"<>|]/;
+
+/**
+ * ADR-0062 `<Title>` rule: trimmed, 1-80 characters, no `/ \ : * ? " < > |`, no leading dot, already NFC.
+ * Returns the canonical title, or `null` when the title cannot be used for a note path.
+ */
+export function canonicalBookTitle(raw: string): string | null {
+  const title = raw.trim();
+  if (title.length < 1 || title.length > MAX_BOOK_TITLE) return null;
+  if (BOOK_TITLE_FORBIDDEN.test(title) || title.startsWith('.')) return null;
+  if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(title)) return null;
+  return title === title.normalize('NFC') ? title : null;
+}
+
+/** `Books/<canonical title>.md`, or `null` for a title that cannot become a path (ADR-0062). */
+export function bookNotePath(raw: string): string | null {
+  const title = canonicalBookTitle(raw);
+  return title === null ? null : `${BOOKS_DIR}/${title}.md`;
+}
+
+/** Title text is validated by the domain, so the wire type is deliberately permissive (bounded for safety). */
+const bookTitle = z.string().max(1000);
+const bookAuthor = z.string().max(200).refine((s) => !/[\r\n\u2028\u2029]/.test(s), 'must be a single line');
+
+export const StartBookPayload = z.strictObject({
+  title: bookTitle,
+  author: bookAuthor,
+  totalPages: z.number().int().min(1).max(100_000),
+});
+export type StartBookPayload = z.infer<typeof StartBookPayload>;
+
+/** `page` is validated against the note's current page and `totalPages` by the domain, not by the wire schema. */
+export const LogReadingPayload = z.strictObject({
+  title: bookTitle,
+  page: z.number().int().min(-1_000_000).max(1_000_000),
+  date: z.iso.date(),
+});
+export type LogReadingPayload = z.infer<typeof LogReadingPayload>;
+
+/** `text` may be empty on the wire so the domain can answer the typed `refused:book-reflection-empty`. */
+export const SaveReflectionPayload = z.strictObject({
+  title: bookTitle,
+  date: z.iso.date(),
+  text: z.string().max(20_000),
+});
+export type SaveReflectionPayload = z.infer<typeof SaveReflectionPayload>;
+
+export const StartBookCommand = envelope('StartBook', StartBookPayload);
+export type StartBookCommand = z.infer<typeof StartBookCommand>;
+export const LogReadingCommand = envelope('LogReading', LogReadingPayload);
+export type LogReadingCommand = z.infer<typeof LogReadingCommand>;
+export const SaveReflectionCommand = envelope('SaveReflection', SaveReflectionPayload);
+export type SaveReflectionCommand = z.infer<typeof SaveReflectionCommand>;
+
+const bookUndo = <T extends z.ZodType>(target: T) => z.strictObject({ target, targetCommit: commitSha });
+
 export const Command = z.discriminatedUnion('type', [
   CompleteTaskCommand,
   LogTrainingCommand,
@@ -378,6 +439,12 @@ export const Command = z.discriminatedUnion('type', [
   envelope('UndoMoodCheckin', z.strictObject({ target: MoodCheckinCommand, targetCommit: commitSha })),
   ReportFeedbackCommand,
   envelope('UndoReportFeedback', z.strictObject({ target: ReportFeedbackCommand, targetCommit: commitSha })),
+  StartBookCommand,
+  envelope('UndoStartBook', bookUndo(StartBookCommand)),
+  LogReadingCommand,
+  envelope('UndoLogReading', bookUndo(LogReadingCommand)),
+  SaveReflectionCommand,
+  envelope('UndoSaveReflection', bookUndo(SaveReflectionCommand)),
   envelope('UndoCompleteTask', UndoCompleteTaskPayload),
   envelope('CaptureTask', CaptureTaskPayload),
   envelope('CaptureNote', CaptureNotePayload),
@@ -419,7 +486,10 @@ export const ReportEffect = z.strictObject({ kind: z.literal('report'), op: z.en
 export type ReportEffect = z.infer<typeof ReportEffect>;
 export const LearningEffect = z.strictObject({ kind: z.literal('learning'), op: z.enum(['logged', 'undone']), lineText: singleLine });
 export type LearningEffect = z.infer<typeof LearningEffect>;
-export const Effect = z.discriminatedUnion('kind', [ReportEffect, MoodEffect, TrainingEffect, LearningEffect, CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect, ResearchRadarDecidedEffect]);
+/** ADR-0062: `path` names the book note; never carries reflection text (private vault text). */
+export const BookEffect = z.strictObject({ kind: z.literal('book'), op: z.enum(['started', 'logged', 'reflected', 'undone']), path: z.string() });
+export type BookEffect = z.infer<typeof BookEffect>;
+export const Effect = z.discriminatedUnion('kind', [ReportEffect, MoodEffect, TrainingEffect, LearningEffect, BookEffect, CompleteEffect, ReopenEffect, CaptureTaskEffect, CaptureNoteEffect, EditEffect, ActiveWorkEffect, NoteEditedEffect, TriageDecidedEffect, ResearchRadarDecidedEffect]);
 export type Effect = z.infer<typeof Effect>;
 
 export const Receipt = z.strictObject({
@@ -438,6 +508,16 @@ export const ErrorCode = z.enum([
   'refused:learning-table-missing',
   'refused:learning-kind-unknown',
   'refused:learning-paste-invalid',
+  /** ADR-0062: a book note already exists at `Books/<Title>.md`. */
+  'refused:book-exists',
+  /** ADR-0062: the title is empty, too long, or contains path/format characters. */
+  'refused:book-title-invalid',
+  /** ADR-0062: the page is not greater than the current page and at most `totalPages`. */
+  'refused:book-page-invalid',
+  /** ADR-0062: reflection text is empty after trimming. */
+  'refused:book-reflection-empty',
+  /** ADR-0062: the note does not have exactly one `## Progress` and one `## Reflections` heading. */
+  'refused:book-note-shape',
   'refused:recurring',
   'refused:on-completion',
   'refused:structure',
@@ -455,6 +535,8 @@ export const ErrorCode = z.enum([
   'conflict:mood-changed',
   'conflict:training-changed',
   'conflict:learning-changed',
+  /** ADR-0062: the book note changed since the recorded entry; undo it in Obsidian. */
+  'conflict:book-changed',
   'conflict:report-changed',
   'conflict:ambiguous',
   'conflict:stale',
@@ -1224,6 +1306,32 @@ export const LearningResponse = z.discriminatedUnion('status', [
   z.strictObject({ status: z.literal('refused'), revision: commitSha, code: ErrorCode, message: z.string() }),
 ]);
 export type LearningResponse = z.infer<typeof LearningResponse>;
+
+/** ADR-0062: one reflection entry; `text` is private vault text and is never logged. */
+export const BookReflection = z.strictObject({ date: z.iso.date(), text: z.string() });
+export type BookReflection = z.infer<typeof BookReflection>;
+
+/**
+ * ADR-0062 read model of one `Books/<Title>.md`: frontmatter fields, the latest progress line's page, and the note's
+ * reflections (`[]` for a note whose shape cannot be parsed). Reflection text never leaves the reader except here.
+ */
+export const BookView = z.strictObject({
+  title: z.string(),
+  author: z.string(),
+  totalPages: z.number().int(),
+  currentPage: z.number().int(),
+  status: z.string(),
+  lastRead: z.iso.date().nullable(),
+  reflections: z.array(BookReflection),
+});
+export type BookView = z.infer<typeof BookView>;
+
+/** ADR-0062: every book under `Books/` (the reading queue note is never listed). */
+export const BooksResponse = z.discriminatedUnion('status', [
+  z.strictObject({ status: z.literal('ok'), revision: commitSha, books: z.array(BookView) }),
+  z.strictObject({ status: z.literal('refused'), revision: commitSha, code: ErrorCode, message: z.string() }),
+]);
+export type BooksResponse = z.infer<typeof BooksResponse>;
 
 // ---- Health daily card (HC1): read-only projection of ONE fixed Apple Health export ----
 

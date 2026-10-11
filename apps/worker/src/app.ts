@@ -25,6 +25,7 @@ import {
   type ActiveWorkResponse,
   type TrainingResponse,
   type LearningResponse,
+  type BooksResponse,
   type ApiError,
   type DashboardResponse,
   type ErrorCode,
@@ -70,6 +71,8 @@ export interface Services {
   /** Active Work Now card. Optional: without it the route answers 404. */
   readTraining?(): Promise<TrainingResponse | ApiError>;
   readLearning?(): Promise<LearningResponse | ApiError>;
+  /** ADR-0062 reading books. Read-only. Optional: without it the route answers 404. */
+  readBooks?(): Promise<BooksResponse | ApiError>;
   readActiveWork?(): Promise<ActiveWorkResponse | ApiError>;
   readTriage?(): Promise<TriageResponse | ApiError>;
   readScouts?(): Promise<ScoutsResponse | ApiError>;
@@ -155,7 +158,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | ScoutsResponse | HistoryResponse | GameResponse | NotesResponse | NoteReadResponse | AskJevResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | BooksResponse | ScoutsResponse | HistoryResponse | GameResponse | NotesResponse | NoteReadResponse | AskJevResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -266,6 +269,20 @@ export function createApp(deps: AppDeps) {
       return c.json(result, statusFor(result.code) as 400);
     }
     if (result.status === 'refused') meta.errorCode = `learning:${result.code}`;
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  app.get('/api/books', async (c) => {
+    const read = deps.services.readBooks;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const meta = c.get('logMeta');
+    const result = await read();
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    if (result.status === 'refused') meta.errorCode = `books:${result.code}`;
     meta.commitSha = result.revision;
     return c.json(result);
   });
