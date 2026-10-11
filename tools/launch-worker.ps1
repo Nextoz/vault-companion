@@ -5,7 +5,13 @@
 
 .DESCRIPTION
   Tiers: flash (DeepSeek V4.1 Flash `deepseek-flash`, default worker since 2026-10-10), pro (DeepSeek Pro medium, high-risk),
-  codex (gpt-6.1-sol, when needed), glm (Scaleway single-shot patch), gemini (free, tiny tasks).
+  codex (gpt-6.1-sol, when needed), scw (OpenCode agent on Scaleway, voucher credit), glm (Scaleway single-shot patch),
+  gemini (free, tiny tasks).
+  scw (owner, 2026-10-10): OpenCode `run --standalone --auto` with a Scaleway model (-ScwModel, default qwen3.5-397b-a17b).
+  OpenCode has no OS sandbox, so C:/Dev/tools/vault-companion-opencode/opencode-worker.json fences it instead: file tools
+  inside the clone only (external_directory deny), no web, shell denied except pnpm check/test/lint/exec tsc|eslint|vitest|
+  playwright and read-only git (verified 2026-10-10: cat outside the clone, node -e and `git status; cat ...` chains refused).
+  Not watertight: a repo test script still runs arbitrary code. The session id is fixed per task, so -Fix continues it.
   Codex-driven tiers (flash, pro, codex) may spawn up to 2 sub-agents (Codex multi_agent, depth 1, same sandbox and model;
   verified 2026-10-10 with deepseek-flash).
   With -Base, the worker is reviewed before the Lead sees it (owner, 2026-10-10): after the worker exits, its pane runs
@@ -23,13 +29,16 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('glm', 'codex', 'gemini', 'flash', 'pro')][string]$Tier,
+    [Parameter(Mandatory)][ValidateSet('glm', 'codex', 'gemini', 'flash', 'pro', 'scw')][string]$Tier,
     [Parameter(Mandatory)][string]$Clone,
     [Parameter(Mandatory)][ValidatePattern('^[a-z0-9][a-z0-9-]*$')][string]$Task,
     [switch]$Fix,
     [string[]]$Files = @(),
     # codex tier only: gpt-6.1-sol effort. low for ordinary work, medium for UI/data/features (owner 2026-10-06).
     [ValidateSet('low', 'medium')][string]$Effort = 'low',
+    # scw tier only: the Scaleway model OpenCode drives.
+    [ValidateSet('qwen3.5-397b-a17b', 'glm-5.2', 'deepseek-v4-flash-0731', 'mistral-medium-3.5-128b', 'qwen3-coder-30b-a3b-instruct')]
+    [string]$ScwModel = 'qwen3.5-397b-a17b',
     # Automatic pre-handoff review (tools/worker-after.ps1). -Base is the clone's base commit; -TestCmd the brief's touched tests.
     [string]$Base,
     [string]$TestCmd,
@@ -49,6 +58,7 @@ $fwd = { param($p) $p -replace '\\', '/' }
 # Git Bash explicitly: on this machine the first `bash` on PATH is WSL (C:\Windows\System32\bash.exe), which cannot run
 # tools/agent-pane.sh (seen 2026-10-02). Derive it from git's install folder.
 $bash = Join-Path (Split-Path (Split-Path (Get-Command git -ErrorAction Stop).Source)) 'bin\bash.exe'
+if (-not (Test-Path -LiteralPath $bash)) { $bash = Join-Path (Split-Path (Split-Path (Split-Path (Get-Command git -ErrorAction Stop).Source))) 'bin\bash.exe' }
 if (-not (Test-Path -LiteralPath $bash)) { throw "Git Bash not found at $bash" }
 
 # Worker registry for tools/lead-watch.ps1 (wakes the Lead when a worker is ready, stays quiet while one runs).
@@ -64,7 +74,7 @@ $state | ConvertTo-Json | Set-Content -LiteralPath $prev -Encoding utf8
 if ($Base) {
     $spec = Join-Path $agent "after-$Task.json"
     [ordered]@{ task = $Task; clone = $Clone; tier = $Tier; base = $Base; testCmd = $TestCmd; reviewer = $Reviewer; intent = $Intent
-        effort = $Effort; fix = [bool]$Fix } | ConvertTo-Json | Set-Content -LiteralPath $spec -Encoding utf8
+        effort = $Effort; scwModel = $ScwModel; fix = [bool]$Fix } | ConvertTo-Json | Set-Content -LiteralPath $spec -Encoding utf8
     $env:AGENT_AFTER = "pwsh -NoProfile -File '$(& $fwd (Join-Path $PSScriptRoot 'worker-after.ps1'))' -Spec '$(& $fwd $spec)'"
 } else { $env:AGENT_AFTER = '' }
 }
@@ -88,6 +98,17 @@ if ($Tier -eq 'gemini') {
 if (-not (Test-Path -LiteralPath (Join-Path $Clone 'node_modules'))) {
     Write-Host 'pnpm install (worker commands have no network)...'
     Push-Location -LiteralPath $Clone; try { pnpm install --frozen-lockfile 2>&1 | Select-Object -Last 2 } finally { Pop-Location }
+}
+if ($Tier -eq 'scw') {
+    # The pane is a separate shell, so OPENCODE_CONFIG goes through `env`; the key and project id are read at run time.
+    $env:AGENT_USER_ENV = 'SCW_SECRET_KEY SCW_PROJECT_ID'
+    # `opencode run` waits for piped stdin when stdin is not a terminal (hung 300 s, 2026-10-10): always close it.
+    $env:AGENT_STDIN = '/dev/null'
+    $prompt = if ($Fix) { ".agent/fix-$Task.md holds the review findings for your work in this session. Read it and fix them (the single correction round), then update your handoff." }
+    else { 'Read .agent/brief.md in this repo and do exactly what it says, including the handoff it asks for. Do not commit: the check after you does.' }
+    Register-Worker
+    & $bash (& $fwd (Join-Path $repo 'tools/agent-pane.sh')) "scw · $Task$(if ($Fix) { ' · fix' })" (& $fwd $Clone) (& $fwd $log) env 'OPENCODE_CONFIG=C:/Dev/tools/vault-companion-opencode/opencode-worker.json' opencode run --standalone --auto --session "ses_vc_$($Task -replace '-', '_')" -m "scaleway/$ScwModel" $prompt
+    exit $LASTEXITCODE
 }
 # Not $effort: PowerShell names are case-insensitive, so that would assign to the validated -Effort parameter (broke flash/pro).
 $model, $reasoning = if ($Tier -eq 'pro') { 'deepseek-v4-pro', 'medium' } elseif ($Tier -eq 'codex') { 'gpt-6.1-sol', $Effort } else { 'deepseek-flash', 'high' }

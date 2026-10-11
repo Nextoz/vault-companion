@@ -29,12 +29,13 @@ $code = $LASTEXITCODE
 $check = Join-Path $s.clone ".agent/check-$($s.task).md"
 $verdict = try { ((Get-Content -LiteralPath $check -TotalCount 1) -replace '^# Handoff check \S+ - ', '') } catch { "exit $code" }
 
-if ($code -eq 10 -and -not $s.fix -and $s.tier -in 'codex', 'flash', 'pro') {
+if ($code -eq 10 -and -not $s.fix -and $s.tier -in 'codex', 'flash', 'pro', 'scw') {
     Write-Host "Fixes needed: starting the single correction round of the same worker session."
     Set-State 'fixing' @{ firstCheck = $verdict; firstExit = $code }
     $fixArgs = @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'launch-worker.ps1'), '-Tier', $s.tier, '-Clone', $s.clone, '-Task', $s.task,
         '-Fix', '-Base', $s.base, '-Reviewer', $s.reviewer, '-Intent', $s.intent, '-Effort', $s.effort)
     if ($s.testCmd) { $fixArgs += @('-TestCmd', $s.testCmd) }
+    if ($s.tier -eq 'scw' -and $s.scwModel) { $fixArgs += @('-ScwModel', $s.scwModel) }
     & pwsh @fixArgs
     if ($LASTEXITCODE -eq 0) { exit 0 }
     Write-Host "Could not start the correction round (exit $LASTEXITCODE): handing over to the Lead as is."
