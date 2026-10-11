@@ -41,6 +41,12 @@ describe('attention next steps (P4-B)', () => {
     expect(canRetry(item)).toBe(false);
     expect(canRetry(attention('refused:training-table-missing', { type: 'LogTraining' }))).toBe(false);
   });
+  it('reading exact-inverse refusals direct the owner to Obsidian too', () => {
+    for (const type of ['UndoStartBook', 'UndoLogReading', 'UndoSaveReflection'] as const) {
+      expect(attentionText(attention('refused:undo-expired', { type })), type).toBe('Cannot restore the exact previous file; undo it in Obsidian.');
+      expect(attentionText(attention('dedupe-unknown', { type })), type).toBe(UNDO_UNKNOWN_TEXT);
+    }
+  });
   it('Training unknown-outcome Undo stays retryable without claiming it failed', () => {
     const item = attention('dedupe-unknown', { type: 'UndoLogTraining' });
     expect(attentionText(item)).toBe(UNDO_UNKNOWN_TEXT);

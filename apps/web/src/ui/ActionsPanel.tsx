@@ -43,14 +43,14 @@ export const UNDO_UNKNOWN_TEXT = 'This Undo may already have been applied. Check
 
 /** The line shown for an action that needs attention: the conflict in plain words, else the server's message. */
 export function attentionText(item: QueueItem): string | null {
-  if ((item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining' || item.type === 'UndoEditTraining' || item.type === 'UndoLogLearning' || item.type === 'UndoMoodCheckin') && item.error && knownNotApplied(item.error)) return 'Cannot restore the exact previous file; undo it in Obsidian.';
+  if ((item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining' || item.type === 'UndoEditTraining' || item.type === 'UndoLogLearning' || item.type === 'UndoMoodCheckin' || item.type === 'UndoStartBook' || item.type === 'UndoLogReading' || item.type === 'UndoSaveReflection') && item.error && knownNotApplied(item.error)) return 'Cannot restore the exact previous file; undo it in Obsidian.';
   if (item.error?.code === 'conflict:task-changed') return 'This task changed on another device.';
   if (item.error?.code === 'conflict:training-changed') return 'That session changed in Obsidian — refresh and edit again.';
   if (item.error?.code === 'conflict:book-changed') return 'Book changed, refresh and retry.';
   if (item.error?.code === 'conflict:learning-changed') return 'That session changed in Obsidian — refresh and edit again.';
   if (item.error?.code === 'clock-skew') return CLOCK_SKEW_TEXT;
   // Review O5: the outcome is unknown, not refused — never tell the owner to redo something that may have happened.
-  if (item.error?.code === 'dedupe-unknown' && (item.type === 'UndoCompleteTask' || item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining' || item.type === 'UndoEditTraining' || item.type === 'UndoLogLearning' || item.type === 'UndoMoodCheckin')) return UNDO_UNKNOWN_TEXT;
+  if (item.error?.code === 'dedupe-unknown' && (item.type === 'UndoCompleteTask' || item.type === 'UndoActiveWork' || item.type === 'UndoLogTraining' || item.type === 'UndoEditTraining' || item.type === 'UndoLogLearning' || item.type === 'UndoMoodCheckin' || item.type === 'UndoStartBook' || item.type === 'UndoLogReading' || item.type === 'UndoSaveReflection')) return UNDO_UNKNOWN_TEXT;
   return item.error?.message ?? null;
 }
 
