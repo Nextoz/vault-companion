@@ -117,7 +117,8 @@ const lines = (...rows: string[]): string => `${rows.join(String.fromCharCode(10
 
 const weatherStart = Date.parse('2026-09-30T06:00:00Z') / 1000;
 const weatherPoint = (hour: number, over: Record<string, unknown> = {}) => ({
-  time: new Date((weatherStart + hour) * 1000).toISOString(),
+  // `weatherStart` is in seconds: one point per hour (08:00 local onwards), not one per second.
+  time: new Date((weatherStart + hour * 3600) * 1000).toISOString(),
   // Synthetic diurnal shape: daytime peaks at 17°C and stays breezy, so the morning glance wording is stable.
   temperatureC: 14 + 3 * Math.sin((hour / 24) * 2 * Math.PI),
   rainMm: 0.1 + (hour % 6) * 0.1,

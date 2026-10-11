@@ -9,6 +9,7 @@ import {
   bestRunDay,
   bestRunSummary,
   dayDateLabel,
+  dayRunSummary,
   dayScale,
   dayHours,
   modelCountLabel,
@@ -16,9 +17,12 @@ import {
   rainBar,
   rainLabel,
   rainSummary,
+  rowDayLabel,
   runWindowHours,
   scalePercent,
   weekBar,
+  weekFootnote,
+  weekRainMode,
   weekScale,
   weatherCodeLabel,
   weatherGlyph,
@@ -92,6 +96,26 @@ describe('rain and model labels', () => {
     expect(rainLabel(weekDay({ precipitationProbabilityPct: null, rainMm: null }))).toBe('—');
   });
 
+  it('uses one rain unit for the whole week: chance only when every day has one', () => {
+    const withChance = weekDay({ precipitationProbabilityPct: 63, rainMm: 1.24 });
+    const withoutChance = weekDay({ day: '2026-10-16', precipitationProbabilityPct: null, rainMm: 0.2 });
+    expect(weekRainMode([withChance])).toBe('chance');
+    expect(weekRainMode([withChance, withoutChance])).toBe('amount');
+    expect(weekRainMode([])).toBe('amount');
+    expect(rainLabel(withChance, 'amount')).toBe('1.2 mm');
+    expect(rainLabel(withChance, 'chance')).toBe('63%');
+  });
+
+  it('names today and folds single-model and partial days into one footnote', () => {
+    expect(rowDayLabel('2026-10-15', '2026-10-15')).toBe('Today');
+    expect(rowDayLabel('2026-10-16', '2026-10-15')).toBe('Fri');
+    const today = weekDay({ partial: true });
+    const last = weekDay({ day: '2026-10-21', models: 1, partial: true });
+    // Today is always partial, so it is not called out; a later partial day is.
+    expect(weekFootnote([today, last], '2026-10-15')).toBe('Faded bar: one model only · Wed: partial day');
+    expect(weekFootnote([weekDay({})], '2026-10-15')).toBeNull();
+  });
+
   it('labels a single-model day explicitly so it is never read as two', () => {
     expect(modelCountLabel(weekDay({ models: 1 }))).toBe('1 model');
     expect(modelCountLabel(weekDay({ models: 2 }))).toBe('2 models');
@@ -112,8 +136,14 @@ describe('best run day', () => {
   });
 
   it('names the best day and the shared run window, and is empty when every day lacks one', () => {
-    expect(bestRunSummary([weekDay({})])).toBe('Best run: Thu 15 Oct · 08:00-10:00 (rain 0.3 mm)');
+    expect(bestRunSummary([weekDay({})])).toBe('Best day to run: Thu 15 Oct · 08:00-10:00 · 0.3 mm rain');
+    expect(bestRunSummary([weekDay({ runWindow: runWindow({ rainMm: 0 }) })])).toBe('Best day to run: Thu 15 Oct · 08:00-10:00 · dry');
     expect(bestRunSummary([weekDay({ runWindow: null })])).toBeNull();
+  });
+
+  it('summarises a day run window for the meteogram, or says there is none', () => {
+    expect(dayRunSummary(runWindow())).toBe('Best run 08:00-10:00 · 0.3 mm rain · 8-10° · wind 2-4 m/s');
+    expect(dayRunSummary(null)).toBe('No two-hour run window this day');
   });
 });
 

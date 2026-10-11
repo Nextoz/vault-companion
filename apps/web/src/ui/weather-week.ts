@@ -23,6 +23,14 @@ function localDateHour(iso: string): { date: string; hour: number } {
   return { date: `${get('year')}-${get('month')}-${get('day')}`, hour: Number(get('hour')) };
 }
 
+/** The Copenhagen `YYYY-MM-DD` date of an instant, e.g. the projection's server `now`. */
+export const localDate = (iso: string): string => localDateHour(iso).date;
+
+/** A week row's day name: "Today" for the server's current Copenhagen date, else "Thu". */
+export function rowDayLabel(day: string, today: string | null): string {
+  return day === today ? 'Today' : shortDayLabel(day);
+}
+
 /** A `YYYY-MM-DD` Copenhagen date, labelled "Thu 15 Oct" (UTC date math on the plain date string). */
 export function dayLabel(day: string): string {
   const date = new Date(`${day}T00:00:00Z`);
@@ -74,11 +82,27 @@ export function weekBarLabel(day: WeatherWeekDay): string {
   return `${Math.round(day.lowTemperatureC)}-${Math.round(day.highTemperatureC)}°`;
 }
 
-/** Rain chance when the provider gives one (ECMWF only), else the rain total, else a gap. */
-export function rainLabel(day: WeatherWeekDay): string {
-  if (day.precipitationProbabilityPct !== null) return `${Math.round(day.precipitationProbabilityPct)}%`;
+export type RainMode = 'chance' | 'amount';
+
+/** One rain unit for the whole week column: chance only when every day has one (ECMWF covers the week), else mm. */
+export function weekRainMode(days: readonly WeatherWeekDay[]): RainMode {
+  return days.length > 0 && days.every((day) => day.precipitationProbabilityPct !== null) ? 'chance' : 'amount';
+}
+
+/** Rain as the week's unit; without a mode, chance when the provider gives one (ECMWF only), else the total. */
+export function rainLabel(day: WeatherWeekDay, mode?: RainMode): string {
+  if (mode !== 'amount' && day.precipitationProbabilityPct !== null) return `${Math.round(day.precipitationProbabilityPct)}%`;
   if (day.rainMm === null) return '—';
   return day.rainMm === 0 ? 'dry' : `${day.rainMm.toFixed(1)} mm`;
+}
+
+/** The one small line under the rows that replaces per-row chips: which bars are single-model, which days partial. */
+export function weekFootnote(days: readonly WeatherWeekDay[], today: string | null): string | null {
+  const notes: string[] = [];
+  if (days.some((day) => day.models === 1)) notes.push('Faded bar: one model only');
+  const partial = days.filter((day) => day.partial && day.day !== today).map((day) => shortDayLabel(day.day));
+  if (partial.length > 0) notes.push(`${partial.join(', ')}: partial day`);
+  return notes.length > 0 ? notes.join(' · ') : null;
 }
 
 /** The honest per-day model count: a day beyond the DMI horizon is labelled, never padded to two. */
@@ -103,12 +127,22 @@ function windowClock(window: WeatherRunWindow): string {
   return `${clock(start.hour)}-${clock(end.hour)}`;
 }
 
+const windowRainText = (window: WeatherRunWindow): string =>
+  (window.rainMm === null ? 'rain unknown' : window.rainMm === 0 ? 'dry' : `${window.rainMm.toFixed(1)} mm rain`);
+
 /** One line naming the best day and its shared run window, or null when no day has one. */
 export function bestRunSummary(days: readonly WeatherWeekDay[]): string | null {
   const day = bestRunDay(days);
   if (!day || !day.runWindow) return null;
-  const rain = day.runWindow.rainMm === null ? 'rain unknown' : `rain ${day.runWindow.rainMm.toFixed(1)} mm`;
-  return `Best run: ${dayLabel(day.day)} · ${windowClock(day.runWindow)} (${rain})`;
+  return `Best day to run: ${dayLabel(day.day)} · ${windowClock(day.runWindow)} · ${windowRainText(day.runWindow)}`;
+}
+
+/** The meteogram's run line: "Best run 08:00-10:00 · 0.3 mm rain · 14-15° · wind 4-5 m/s". */
+export function dayRunSummary(window: WeatherRunWindow | null): string {
+  if (!window) return 'No two-hour run window this day';
+  const temp = `${Math.round(window.temperatureRangeC.min)}-${Math.round(window.temperatureRangeC.max)}°`;
+  const wind = `wind ${Math.round(window.windRangeMs.min)}-${Math.round(window.windRangeMs.max)} m/s`;
+  return `Best run ${windowClock(window)} · ${windowRainText(window)} · ${temp} · ${wind}`;
 }
 
 export interface DayHour {

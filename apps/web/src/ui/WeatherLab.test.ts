@@ -272,11 +272,17 @@ describe('WeatherLab week overview', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]!.getAttribute('aria-label')).toContain('Rain');
     const text = document.getElementById('root')!.textContent ?? '';
-    expect(text).toContain('1 model');
-    expect(text).toContain('partial');
-    expect(text).toContain('Best run: Wed 30 Sep');
+    expect(rows[1]!.getAttribute('aria-label')).toContain('1 model');
+    expect(rows[1]!.getAttribute('aria-label')).toContain('partial day');
+    expect(rows[0]!.textContent).toContain('Today');
+    expect(text).toContain('one model only');
+    expect(text).toContain('Thu: partial day');
+    expect(text).toContain('Best day to run: Wed 30 Sep');
     expect(text).toContain('08:00-10:00');
     expect(document.querySelector('.weather-week-fill')).not.toBeNull();
+    expect(document.querySelector('.weather-week-fill-single')).not.toBeNull();
+    // One rain unit for the week: Thursday has no chance, so every row shows mm.
+    expect([...rows].map((row) => row.querySelector('.weather-week-rain')!.textContent)).toEqual(['0.4 mm', '0.2 mm']);
     // The best day's row is highlighted, not only named in the summary line.
     const bestRow = document.querySelector('.weather-week-row-best');
     expect(bestRow).not.toBeNull();
@@ -293,6 +299,10 @@ describe('WeatherLab week overview', () => {
     expect(document.querySelector('.weather-day-window')).not.toBeNull();
     // Numeric hourly temperatures appear in the visible readout and the accessible chart text.
     expect(document.querySelector('[data-testid="weather-day-temps"]')!.textContent).toContain('08:00 14°C');
+    // The headline high is read from the same hours as the chart, so it matches the peak label.
+    const peak = document.querySelector('.weather-day-peak')!.textContent!;
+    expect(document.querySelector('.weather-day-temp')!.textContent!.startsWith(peak)).toBe(true);
+    expect(document.querySelector('.weather-day-run')!.textContent).toBe('Best run 08:00-10:00 · 0.3 mm rain · 14-15° · wind 4-5 m/s');
     expect(document.querySelector('.weather-day-svg')!.getAttribute('aria-label')).toContain('hourly temperature');
     const back = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Back')!;
     await act(async () => { back.click(); });
