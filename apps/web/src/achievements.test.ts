@@ -1,20 +1,33 @@
-import type { GameAchievement, GameStepMilestones } from '@vault-companion/contracts';
+import type { GameAchievement, GameResponse } from '@vault-companion/contracts';
+
+type GameStepMilestones = NonNullable<GameResponse['stepMilestones']>;
 import { describe, expect, it } from 'vitest';
 import {
-  categoryPoints,
-  createPinState,
-  createToastState,
+  addPin,
+  chainLabel,
+  chainLength,
+  detailProgress,
   displayName,
   displayPoints,
+  featPoints,
   formatStepMilestones,
   groupByCategory,
-  isEarnedTile,
   isHiddenUnearned,
-  progressText,
+  isPinned,
+  pinLimitNote,
+  planToasts,
+  removePin,
+  resolveTracked,
+  seenKey,
+  pinnedKey,
+  stepNumber,
+  summaryText,
+  tileProgress,
+  toastText,
   totalPoints,
 } from './achievements.ts';
 
-const achievement = (over: Partial<GameAchievement>): GameAchievement => ({
+const achievement = (over: Partial<GameAchievement> = {}): GameAchievement => ({
   id: 'a',
   name: 'Test Achievement',
   category: 'General',
@@ -31,281 +44,221 @@ const achievement = (over: Partial<GameAchievement>): GameAchievement => ({
   ...over,
 });
 
+const milestones = (over: Partial<GameStepMilestones> = {}): GameStepMilestones => ({
+  earned: [],
+  next: { id: 'n1', name: 'Next Goal', current: 12_000_000, target: 12_500_000 },
+  retroactiveSummary: null,
+  ...over,
+});
+
+describe('device keys', () => {
+  it('scopes the seen and pinned keys by account, and has a fallback for a null account', () => {
+    expect(seenKey('abc')).toBe('vc.achievements.seen.abc');
+    expect(pinnedKey('abc')).toBe('vc.achievements.pinned.abc');
+    expect(seenKey(null)).toBe('vc.achievements.seen.none');
+  });
+});
+
 describe('groupByCategory', () => {
-  it('groups achievements by category with earned/total counts', () => {
-    const list = [
-      achievement({ id: 'a1', name: 'A1', category: 'General', earned: true }),
-      achievement({ id: 'a2', name: 'A2', category: 'General', earned: false }),
-      achievement({ id: 'a3', name: 'A3', category: 'Training', earned: true }),
-    ];
-    const groups = groupByCategory(list);
-    expect(groups).toHaveLength(2);
-    expect(groups[0]).toMatchObject({ category: 'General', earned: 1, total: 2 });
-    expect(groups[1]).toMatchObject({ category: 'Training', earned: 1, total: 1 });
-  });
-
-  it('excludes feats from grouping', () => {
-    const list = [
-      achievement({ id: 'a1', category: 'General', type: 'one-off' }),
+  it('counts earned / total per category, A-Z, and leaves feats out', () => {
+    const groups = groupByCategory([
+      achievement({ id: 'a1', category: 'General', earned: true }),
+      achievement({ id: 'a2', category: 'General', earned: false }),
+      achievement({ id: 'a3', category: 'Training', earned: true }),
       achievement({ id: 'f1', category: 'Feats', type: 'feat' }),
-    ];
-    const groups = groupByCategory(list);
-    expect(groups).toHaveLength(1);
-    expect(groups[0].category).toBe('General');
-  });
-
-  it('sorts categories alphabetically', () => {
-    const list = [
-      achievement({ id: 'a1', category: 'Zebra' }),
-      achievement({ id: 'a2', category: 'Alpha' }),
-      achievement({ id: 'a3', category: 'Beta' }),
-    ];
-    const groups = groupByCategory(list);
-    expect(groups.map((g) => g.category)).toEqual(['Alpha', 'Beta', 'Zebra']);
+    ]);
+    expect(groups.map((g) => [g.category, g.earned, g.total])).toEqual([['General', 1, 2], ['Training', 1, 1]]);
   });
 });
 
-describe('progressText', () => {
-  it('returns null for earned achievements', () => {
-    expect(progressText(achievement({ earned: true, progress: { current: 10, target: 10 } }))).toBeNull();
-  });
-
-  it('returns null for achievements without progress', () => {
-    expect(progressText(achievement({ progress: null }))).toBeNull();
-  });
-
-  it('formats counter progress as current/target (percent%)', () => {
-    const text = progressText(achievement({ type: 'counter', progress: { current: 18, target: 25 } }));
-    expect(text).toBe('18/25 (72%)');
-  });
-
-  it('formats chain tier as tier/maxTier', () => {
-    const text = progressText(achievement({ type: 'chain', tier: 2, progress: { current: 4, target: 7 } }));
-    expect(text).toBe('2/3');
-  });
-
-  it('handles zero target without division', () => {
-    const text = progressText(achievement({ progress: { current: 3, target: 0 } }));
-    expect(text).toBe('3/0');
-  });
-});
-
-describe('isHiddenUnearned', () => {
-  it('is true when visible:false and not earned', () => {
+describe('hidden mask', () => {
+  it('is hidden only while unearned', () => {
     expect(isHiddenUnearned(achievement({ visible: false, earned: false }))).toBe(true);
-  });
-
-  it('is false when earned', () => {
     expect(isHiddenUnearned(achievement({ visible: false, earned: true }))).toBe(false);
-  });
-
-  it('is false when visible', () => {
     expect(isHiddenUnearned(achievement({ visible: true, earned: false }))).toBe(false);
   });
+
+  it('shows ??? for a hidden unearned name, and the real name once earned', () => {
+    expect(displayName(achievement({ visible: false, earned: false, name: 'Secret' }))).toBe('???');
+    expect(displayName(achievement({ visible: false, earned: true, name: 'Revealed' }))).toBe('Revealed');
+  });
+
+  it('hides the points of a hidden unearned achievement', () => {
+    expect(displayPoints(achievement({ visible: false, earned: false, points: 50 }))).toBe(0);
+    expect(displayPoints(achievement({ points: 25 }))).toBe(25);
+  });
 });
 
-describe('featPoints', () => {
-  it('always returns 0 for feats', () => {
+describe('feat points', () => {
+  it('is always zero, whatever the payload holds', () => {
+    expect(featPoints()).toBe(0);
     expect(displayPoints(achievement({ type: 'feat', points: 100 }))).toBe(0);
   });
 });
 
 describe('totalPoints', () => {
-  it('sums points excluding feats', () => {
+  it('adds only earned, non-feat points', () => {
+    expect(totalPoints([
+      achievement({ id: 'a1', points: 10, earned: true }),
+      achievement({ id: 'a2', points: 20, earned: false }),
+      achievement({ id: 'f1', points: 100, earned: true, type: 'feat' }),
+    ])).toBe(10);
+  });
+});
+
+describe('chains', () => {
+  const chain = [
+    achievement({ id: 'c1', type: 'chain', chain: 'run', tier: 1, earned: true }),
+    achievement({ id: 'c2', type: 'chain', chain: 'run', tier: 2, progress: { current: 4, target: 7 } }),
+    achievement({ id: 'c3', type: 'chain', chain: 'run', tier: 3, visible: false }),
+    achievement({ id: 'c4', type: 'chain', chain: 'run', tier: 4, visible: false }),
+  ];
+
+  it('measures a chain by the achievements sharing its id', () => {
+    expect(chainLength(chain, 'run')).toBe(4);
+  });
+
+  it('labels the chain tier for the detail sheet', () => {
+    expect(chainLabel(chain[1]!, chain)).toBe('chain 2 of 4');
+    expect(chainLabel(chain[0]!, chain)).toBe('chain 1 of 4');
+    expect(chainLabel(achievement(), chain)).toBeNull();
+  });
+
+  it('shows the tier as 2/4 on the tile, and nothing for masked or earned ones', () => {
+    expect(tileProgress(chain[1]!, chain)).toBe('2/4');
+    expect(tileProgress(chain[2]!, chain)).toBeNull();
+    expect(tileProgress(chain[0]!, chain)).toBeNull();
+  });
+});
+
+describe('tile progress', () => {
+  it('shows a counter as a percent', () => {
+    expect(tileProgress(achievement({ type: 'counter', progress: { current: 20, target: 25 } }), [])).toBe('80%');
+  });
+
+  it('never divides by a zero target', () => {
+    expect(tileProgress(achievement({ progress: { current: 3, target: 0 } }), [])).toBe('3/0');
+  });
+
+  it('is null without progress', () => {
+    expect(tileProgress(achievement(), [])).toBeNull();
+  });
+});
+
+describe('detailProgress', () => {
+  it('gives the bar fill and a current / target label', () => {
+    expect(detailProgress(achievement({ progress: { current: 18, target: 25 } }))).toMatchObject({ percent: 72, label: '18 / 25' });
+  });
+
+  it('is null when earned or masked', () => {
+    expect(detailProgress(achievement({ earned: true, progress: { current: 25, target: 25 } }))).toBeNull();
+    expect(detailProgress(achievement({ visible: false, progress: { current: 1, target: 25 } }))).toBeNull();
+  });
+});
+
+describe('pins', () => {
+  it('adds in order and is idempotent for an existing pin', () => {
+    expect(addPin([], 'a').pinnedIds).toEqual(['a']);
+    expect(addPin(['a'], 'a').pinnedIds).toEqual(['a']);
+    expect(isPinned(['a'], 'a')).toBe(true);
+  });
+
+  it('refuses a pin past the limit with a short note, keeping the existing pins', () => {
+    const result = addPin(['a', 'b', 'c'], 'd', 3);
+    if (result.ok) throw new Error('a fourth pin should be refused');
+    expect(result.reason).toBe(pinLimitNote(3));
+    expect(result.pinnedIds).toEqual(['a', 'b', 'c']);
+  });
+
+  it('removes exactly one pin', () => {
+    expect(removePin(['a', 'b'], 'a')).toEqual(['b']);
+  });
+
+  it('resolves pins in pin order, dropping missing or earned ones and capping the list', () => {
     const list = [
-      achievement({ id: 'a1', points: 10, type: 'one-off' }),
-      achievement({ id: 'a2', points: 20, type: 'counter' }),
-      achievement({ id: 'f1', points: 100, type: 'feat' }),
+      achievement({ id: 'a', name: 'A' }),
+      achievement({ id: 'b', name: 'B', earned: true, earnedDate: '2026-01-01' }),
+      achievement({ id: 'c', name: 'C' }),
+      achievement({ id: 'd', name: 'D' }),
+      achievement({ id: 'e', name: 'E' }),
     ];
-    expect(totalPoints(list)).toBe(30);
-  });
-
-  it('returns 0 for empty list', () => {
-    expect(totalPoints([])).toBe(0);
+    expect(resolveTracked(['a', 'missing', 'b', 'c', 'd', 'e'], list, 3).map((a) => a.id)).toEqual(['a', 'c', 'd']);
+    expect(resolveTracked([], list)).toEqual([]);
   });
 });
 
-describe('categoryPoints', () => {
-  it('sums points for a specific category, excluding feats', () => {
-    const list = [
-      achievement({ id: 'a1', category: 'General', points: 10, type: 'one-off' }),
-      achievement({ id: 'a2', category: 'General', points: 20, type: 'counter' }),
-      achievement({ id: 'a3', category: 'Training', points: 15, type: 'one-off' }),
-      achievement({ id: 'f1', category: 'General', points: 100, type: 'feat' }),
-    ];
-    expect(categoryPoints(list, 'General')).toBe(30);
-    expect(categoryPoints(list, 'Training')).toBe(15);
+describe('planToasts', () => {
+  const earned = [
+    achievement({ id: 'a1', earned: true, earnedDate: '2024-05-15' }),
+    achievement({ id: 'a2', earned: true, earnedDate: '2025-06-20' }),
+    achievement({ id: 'a3', earned: true, earnedDate: '2026-01-10' }),
+  ];
+
+  it('is silent when nothing is unseen', () => {
+    expect(planToasts(earned, null, ['a1', 'a2', 'a3'])).toEqual({ kind: 'none' });
+    expect(planToasts([achievement()], null, null)).toEqual({ kind: 'none' });
+  });
+
+  it('summarises a whole history on the first sighting and marks every earned id seen', () => {
+    const plan = planToasts(earned, null, null);
+    if (plan.kind !== 'summary') throw new Error('expected a summary plan');
+    expect(plan.summary).toMatchObject({ count: 3, firstYear: 2024 });
+    expect(plan.seenIds).toEqual(['a1', 'a2', 'a3']);
+  });
+
+  it('prefers retroactiveSummary for the first-run count and year', () => {
+    const plan = planToasts(earned, milestones({ retroactiveSummary: { count: 7, firstYear: 2024 } }), null);
+    if (plan.kind !== 'summary') throw new Error('expected a summary plan');
+    expect(plan.summary).toMatchObject({ count: 7, firstYear: 2024 });
+    expect(summaryText(plan.summary)).toBe('7 step milestones earned since 2024');
+  });
+
+  it('shows at most three individual toasts, newest first, and marks just those seen', () => {
+    const many = [...earned, achievement({ id: 'a4', earned: true, earnedDate: '2026-06-20' }), achievement({ id: 'a5', earned: true, earnedDate: '2026-07-01' })];
+    const plan = planToasts(many, null, ['a1']);
+    if (plan.kind !== 'individual') throw new Error('expected individual toasts');
+    expect(plan.items.map((item) => item.id)).toEqual(['a5', 'a4', 'a3']);
+    expect(plan.seenIds).toEqual(['a5', 'a4', 'a3']);
   });
 });
 
-describe('createPinState', () => {
-  it('adds pins up to the limit', () => {
-    const state = createPinState([]);
-    expect(state.addPin('a1', 3)).toEqual({ ok: true });
-    expect(state.addPin('a2', 3)).toEqual({ ok: true });
-    expect(state.addPin('a3', 3)).toEqual({ ok: true });
-    expect(state.addPin('a4', 3)).toEqual({ ok: false, reason: 'You can pin up to 3 achievements.' });
+describe('toast text', () => {
+  it('names the achievement and its points, and drops the points when masked', () => {
+    expect(toastText({ id: 'a', name: 'First Flag', points: 10, hidden: false })).toBe('Achievement earned · First Flag · 10 pts');
+    expect(toastText({ id: 'a', name: '???', points: 0, hidden: true })).toBe('Achievement earned · ???');
   });
 
-  it('allows re-adding existing pins', () => {
-    const state = createPinState(['a1']);
-    expect(state.addPin('a1', 3)).toEqual({ ok: true });
-  });
-
-  it('removes pins', () => {
-    const state = createPinState(['a1', 'a2', 'a3']);
-    expect(state.removePin('a2')).toEqual(['a1', 'a3']);
-  });
-
-  it('gets tracked achievements in pin order, filtering invalid ones', () => {
-    const achievements = [
-      achievement({ id: 'a1', name: 'A1', earned: false, visible: true, locked: false }),
-      achievement({ id: 'a2', name: 'A2', earned: true, visible: true, locked: false }), // earned
-      achievement({ id: 'a3', name: 'A3', earned: false, visible: false, locked: false }), // hidden
-      achievement({ id: 'a4', name: 'A4', earned: false, visible: true, locked: false }),
-    ];
-    const state = createPinState(['a1', 'a2', 'a3', 'a4']);
-    const tracked = state.getTracked(achievements, 3);
-    expect(tracked.map((a) => a.id)).toEqual(['a1', 'a4']);
-  });
-
-  it('caps tracked at limit', () => {
-    const achievements = [
-      achievement({ id: 'a1', name: 'A1' }),
-      achievement({ id: 'a2', name: 'A2' }),
-      achievement({ id: 'a3', name: 'A3' }),
-    ];
-    const state = createPinState(['a1', 'a2', 'a3']);
-    expect(state.getTracked(achievements, 2).map((a) => a.id)).toEqual(['a1', 'a2']);
+  it('reads the summary with and without a year, singular and plural', () => {
+    expect(summaryText({ count: 1, firstYear: 2024 })).toBe('1 step milestone earned since 2024');
+    expect(summaryText({ count: 4, firstYear: null })).toBe('4 step milestones earned');
   });
 });
 
-describe('createToastState', () => {
-  it('returns null when no new achievements', () => {
-    const state = createToastState([]);
-    const achievements = [achievement({ id: 'a1', earned: true, earnedDate: '2026-01-01' })];
-    expect(state.getToasts(achievements, true)).toBeNull();
+describe('step milestones', () => {
+  it('formats a step count with k / M suffixes', () => {
+    expect(stepNumber(900)).toBe('900');
+    expect(stepNumber(12_000)).toBe('12.0k');
+    expect(stepNumber(12_500_000)).toBe('12.5M');
   });
 
-  it('shows summary toast on first run', () => {
-    const state = createToastState(['a1', 'a2', 'a3']);
-    const achievements = [
-      achievement({ id: 'a1', earned: true, earnedDate: '2024-05-15' }),
-      achievement({ id: 'a2', earned: true, earnedDate: '2025-06-20' }),
-      achievement({ id: 'a3', earned: true, earnedDate: '2026-01-10' }),
-    ];
-    const result = state.getToasts(achievements, false);
-    expect(result).toMatchObject({ kind: 'summary', count: 3, firstYear: '2024' });
+  it('reads null milestones as unavailable', () => {
+    expect(formatStepMilestones(null)).toMatchObject({ available: false, earned: [], next: null });
   });
 
-  it('shows individual toasts (capped at 3) on subsequent runs', () => {
-    const state = createToastState(['a1', 'a2', 'a3', 'a4', 'a5']);
-    const achievements = Array.from({ length: 5 }, (_, i) =>
-      achievement({ id: `a${i + 1}`, earned: true, earnedDate: '2026-01-01' }),
-    );
-    const result = state.getToasts(achievements, true);
-    expect(result?.kind).toBe('individual');
-    expect(result?.achievements).toHaveLength(3);
-    expect(result?.achievements.map((a) => a.id)).toEqual(['a1', 'a2', 'a3']);
+  it('gives NEXT a clamped percent and a current / target label', () => {
+    const view = formatStepMilestones(milestones());
+    expect(view.next).toMatchObject({ percent: 96, label: '12.0M / 12.5M' });
   });
 
-  it('marks achievements as seen', () => {
-    const state = createToastState(['a1', 'a2', 'a3']);
-    expect(state.markSeen(['a1', 'a3'])).toEqual(['a2']);
-  });
-});
-
-describe('formatStepMilestones', () => {
-  it('returns unavailable when milestones is null', () => {
-    const view = formatStepMilestones(null);
-    expect(view).toMatchObject({ available: false, earned: [], next: null });
-  });
-
-  it('formats next milestone with progress bar', () => {
-    const milestones: GameStepMilestones = {
-      earned: [],
-      next: { id: 'n1', name: 'Next Goal', current: 12000, target: 12500 },
-      retroactiveSummary: null,
-    };
-    const view = formatStepMilestones(milestones);
-    expect(view.next).toMatchObject({
-      id: 'n1',
-      name: 'Next Goal',
-      current: 12000,
-      target: 12500,
-      label: '12.0k / 12.5k',
-      percent: 96,
-    });
-  });
-
-  it('formats large targets with M suffix', () => {
-    const milestones: GameStepMilestones = {
-      earned: [],
-      next: { id: 'n1', name: 'Marathon', current: 12000000, target: 12500000 },
-      retroactiveSummary: null,
-    };
-    const view = formatStepMilestones(milestones);
-    expect(view.next?.label).toBe('12.0M / 12.5M');
-  });
-
-  it('sorts earned milestones newest first', () => {
-    const milestones: GameStepMilestones = {
+  it('sorts EARNED newest first and passes the retroactive summary through', () => {
+    const view = formatStepMilestones(milestones({
       earned: [
-        { id: 'e1', name: 'Old', category: 'Walking', points: 5, ladder: 'lifetime', target: 1000, earnedDate: '2024-01-01', year: 2024 },
-        { id: 'e2', name: 'New', category: 'Walking', points: 10, ladder: 'lifetime', target: 2000, earnedDate: '2025-06-15', year: 2025 },
+        { id: 'e1', name: 'Old', category: 'Walking', points: 5, ladder: 'lifetime', target: 1000, earnedDate: '2024-01-01', year: null },
+        { id: 'e2', name: 'New', category: 'Walking', points: 10, ladder: 'lifetime', target: 2000, earnedDate: '2025-06-15', year: null },
       ],
-      next: null,
-      retroactiveSummary: null,
-    };
-    const view = formatStepMilestones(milestones);
-    expect(view.earned.map((e) => e.id)).toEqual(['e2', 'e1']);
-  });
-
-  it('includes retroactive summary', () => {
-    const milestones: GameStepMilestones = {
-      earned: [],
-      next: null,
-      retroactiveSummary: { count: 7, firstYear: 2024 },
-    };
-    const view = formatStepMilestones(milestones);
-    expect(view.retroactiveSummary).toEqual({ count: 7, firstYear: 2024 });
-  });
-});
-
-describe('displayName', () => {
-  it('returns ??? for hidden unearned achievements', () => {
-    expect(displayName(achievement({ visible: false, earned: false, name: 'Secret' }))).toBe('???');
-  });
-
-  it('returns the name for visible achievements', () => {
-    expect(displayName(achievement({ name: 'Visible' }))).toBe('Visible');
-  });
-
-  it('returns the name for earned hidden achievements', () => {
-    expect(displayName(achievement({ visible: false, earned: true, name: 'Revealed' }))).toBe('Revealed');
-  });
-});
-
-describe('displayPoints', () => {
-  it('returns 0 for hidden unearned achievements', () => {
-    expect(displayPoints(achievement({ visible: false, earned: false, points: 50 }))).toBe(0);
-  });
-
-  it('returns 0 for feats', () => {
-    expect(displayPoints(achievement({ type: 'feat', points: 100 }))).toBe(0);
-  });
-
-  it('returns actual points for normal achievements', () => {
-    expect(displayPoints(achievement({ points: 25 }))).toBe(25);
-  });
-});
-
-describe('isEarnedTile', () => {
-  it('is true for earned achievements', () => {
-    expect(isEarnedTile(achievement({ earned: true }))).toBe(true);
-  });
-
-  it('is false for unearned achievements', () => {
-    expect(isEarnedTile(achievement({ earned: false }))).toBe(false);
+      retroactiveSummary: { count: 2, firstYear: 2024 },
+    }));
+    expect(view.earned.map((milestone) => milestone.id)).toEqual(['e2', 'e1']);
+    expect(view.retroactiveSummary).toEqual({ count: 2, firstYear: 2024 });
   });
 });

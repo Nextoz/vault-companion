@@ -1,10 +1,21 @@
-// GAM1-C: pure presentation helpers for Achievements. No React and no storage access.
-// Every number is derived from the /api/game payload (contracts only).
-import type { GameAchievement, GameStepMilestones } from '@vault-companion/contracts';
+// GAM1-C: pure presentation helpers for the Achievements page, the badge detail and the toast. No React and
+// no storage access: every value is derived from the /api/game payload (contracts only), so a screen cannot drift.
+import type { GameAchievement, GameResponse } from '@vault-companion/contracts';
+
+/** The step-milestone shapes live in the game payload; derive them here so the module adds no runtime import. */
+type GameStepMilestones = NonNullable<GameResponse['stepMilestones']>;
+type GameStepMilestone = GameStepMilestones['earned'][number];
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
-/** Grouped achievements with earned/total counts per category. */
+/** Device keys, scoped by account so two accounts on one device never share pins or seen ids. */
+export const seenKey = (account: string | null): string => `vc.achievements.seen.${account ?? 'none'}`;
+export const pinnedKey = (account: string | null): string => `vc.achievements.pinned.${account ?? 'none'}`;
+
+export const PIN_LIMIT = 3;
+export const pinLimitNote = (limit: number): string => `You can pin up to ${limit} achievements.`;
+
+// ---- grouping and counters ----------------------------------------------------------------------------------
 export interface AchievementGroup {
   readonly category: string;
   readonly earned: number;
@@ -12,236 +23,203 @@ export interface AchievementGroup {
   readonly achievements: readonly GameAchievement[];
 }
 
-/**
- * Group achievements by category, sorted alphabetically. Each group tracks earned/total counts.
- * Feats are excluded (they have their own section).
- */
+/** Group the achievements by category (feats have their own section) with earned/total counters, A-Z. */
 export function groupByCategory(achievements: readonly GameAchievement[]): AchievementGroup[] {
   const groups = new Map<string, GameAchievement[]>();
   for (const a of achievements) {
     if (a.type === 'feat') continue;
-    const list = groups.get(a.category) ?? [];
-    list.push(a);
-    groups.set(a.category, list);
+    const list = groups.get(a.category);
+    if (list) list.push(a);
+    else groups.set(a.category, [a]);
   }
-  const result: AchievementGroup[] = [];
-  for (const [category, list] of groups) {
-    const earned = list.filter((a) => a.earned).length;
-    result.push({ category, earned, total: list.length, achievements: [...list] });
-  }
-  return result.sort((a, b) => a.category.localeCompare(b.category));
+  return [...groups.entries()]
+    .map(([category, list]) => ({ category, earned: list.filter((a) => a.earned).length, total: list.length, achievements: [...list] }))
+    .sort((a, b) => a.category.localeCompare(b.category));
 }
 
-/**
- * Format progress text for an unearned achievement.
- * - counter/chain: "current/target" or "current/target (percent%)"
- * - chain with tier: "tier/M" where M is the chain length (inferred from tier max)
- */
-export function progressText(achievement: GameAchievement): string | null {
-  if (achievement.earned || !achievement.progress) return null;
-  const { current, target } = achievement.progress;
-  if (achievement.type === 'chain' && achievement.tier !== null) {
-    // Chain tier display: find max tier from the chain (use tier + 1 as fallback)
-    const maxTier = achievement.tier + 1;
-    return `${achievement.tier}/${maxTier}`;
-  }
-  if (target > 0) {
-    const percent = Math.round((current / target) * 100);
-    return `${current}/${target} (${percent}%)`;
-  }
-  return `${current}/${target}`;
-}
-
-/** True if the achievement is hidden (visible:false) and unearned. */
+// ---- hidden mask, feats and points --------------------------------------------------------------------------
+/** A hidden, unearned achievement: its name, points and progress are all masked. */
 export function isHiddenUnearned(achievement: GameAchievement): boolean {
   return !achievement.visible && !achievement.earned;
 }
 
-/**
- * Feats of Strength: always show 0 points regardless of the points field.
- * They never count toward any total.
- */
-export function featPoints(feat: GameAchievement): number {
-  return 0;
-}
-
-/** Total points from achievements (excludes feats). */
-export function totalPoints(achievements: readonly GameAchievement[]): number {
-  return achievements.filter((a) => a.type !== 'feat').reduce((sum, a) => sum + a.points, 0);
-}
-
-/** Category points (excludes feats). */
-export function categoryPoints(achievements: readonly GameAchievement[], category: string): number {
-  return achievements
-    .filter((a) => a.type !== 'feat' && a.category === category)
-    .reduce((sum, a) => sum + a.points, 0);
-}
-
-/** Pinned achievement management. */
-export interface PinState {
-  readonly pinnedIds: readonly string[];
-  readonly addPin: (id: string, limit: number) => { ok: true } | { ok: false; reason: string };
-  readonly removePin: (id: string) => readonly string[];
-  readonly getTracked: (achievements: readonly GameAchievement[], limit: number) => readonly GameAchievement[];
-}
-
-/**
- * Create pin state management. Returns functions for add/remove/get.
- * Storage access is handled by the caller; this is pure logic.
- */
-export function createPinState(pinnedIds: readonly string[]): PinState {
-  const addPin = (id: string, limit: number): { ok: true } | { ok: false; reason: string } => {
-    if (pinnedIds.includes(id)) {
-      return { ok: true };
-    }
-    if (pinnedIds.length >= limit) {
-      return { ok: false, reason: `You can pin up to ${limit} achievements.` };
-    }
-    return { ok: true };
-  };
-
-  const removePin = (id: string): readonly string[] => {
-    return pinnedIds.filter((pid) => pid !== id);
-  };
-
-  const getTracked = (achievements: readonly GameAchievement[], limit: number): readonly GameAchievement[] => {
-    // Filter to valid pins (exist and not earned), maintain order
-    const achievementMap = new Map(achievements.map((a) => [a.id, a]));
-    const valid = pinnedIds
-      .map((id) => achievementMap.get(id))
-      .filter((a): a is GameAchievement => a !== undefined && !a.earned && a.visible && !a.locked);
-    return valid.slice(0, limit);
-  };
-
-  return { pinnedIds, addPin, removePin, getTracked };
-}
-
-/** Toast notification logic. */
-export interface ToastState {
-  readonly unseenIds: readonly string[];
-  readonly getToasts: (achievements: readonly GameAchievement[], hasPriorSeen: boolean) => {
-    kind: 'summary' | 'individual';
-    count?: number;
-    firstYear?: number;
-    achievements: readonly GameAchievement[];
-  } | null;
-  readonly markSeen: (ids: readonly string[]) => readonly string[];
-}
-
-/**
- * Create toast state. unseenIds are achievement ids not yet shown to the user.
- * hasPriorSeen: true if the user has any seen record (not first run).
- */
-export function createToastState(unseenIds: readonly string[]): ToastState {
-  const getToasts = (
-    achievements: readonly GameAchievement[],
-    hasPriorSeen: boolean,
-  ): { kind: 'summary' | 'individual'; count?: number; firstYear?: number; achievements: readonly GameAchievement[] } | null => {
-    const earned = achievements.filter((a) => a.earned);
-    const newlyEarned = earned.filter((a) => unseenIds.includes(a.id));
-
-    if (newlyEarned.length === 0) {
-      return null;
-    }
-
-    // First run: show summary toast with retroactive count
-    if (!hasPriorSeen) {
-      // Use retroactiveSummary from stepMilestones if available, otherwise count earned achievements
-      const count = newlyEarned.length;
-      const firstYear = earned.length > 0 ? earned[earned.length - 1]!.earnedDate?.slice(0, 4) : undefined;
-      return { kind: 'summary', count, firstYear, achievements: newlyEarned };
-    }
-
-    // Subsequent runs: show individual toasts, capped at 3
-    const capped = newlyEarned.slice(0, 3);
-    return { kind: 'individual', achievements: capped };
-  };
-
-  const markSeen = (ids: readonly string[]): readonly string[] => {
-    // Remove seen ids from unseen list
-    const seenSet = new Set(ids);
-    return unseenIds.filter((id) => !seenSet.has(id));
-  };
-
-  return { unseenIds, getToasts, markSeen };
-}
-
-/** Step milestone formatting. */
-export interface StepMilestoneView {
-  readonly earned: readonly GameStepMilestone[];
-  readonly next: {
-    readonly id: string;
-    readonly name: string;
-    readonly current: number;
-    readonly target: number;
-    readonly percent: number;
-    readonly label: string;
-  } | null;
-  readonly retroactiveSummary: { readonly count: number; readonly firstYear: number } | null;
-  readonly available: boolean;
-}
-
-/**
- * Format step milestones for display.
- * - next: progress bar with current/target (e.g., "12.0 / 12.5M")
- * - earned: newest first, with dates and points
- * - available: false when stepMilestones is null
- */
-export function formatStepMilestones(milestones: GameStepMilestones | null): StepMilestoneView {
-  if (!milestones) {
-    return { earned: [], next: null, retroactiveSummary: null, available: false };
-  }
-
-  const { earned, next, retroactiveSummary } = milestones;
-
-  // Sort earned newest first
-  const sortedEarned = [...earned].sort((a, b) => b.earnedDate.localeCompare(a.earnedDate));
-
-  // Format next milestone
-  let nextView: StepMilestoneView['next'] = null;
-  if (next) {
-    const { current, target } = next;
-    const percent = target > 0 ? clamp((current / target) * 100, 0, 100) : 0;
-    // Format target with M suffix if >= 1000
-    const formatNumber = (n: number): string => {
-      if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-      if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-      return n.toString();
-    };
-    const label = `${formatNumber(current)} / ${formatNumber(target)}`;
-    nextView = { ...next, percent, label };
-  }
-
-  return {
-    earned: sortedEarned,
-    next: nextView,
-    retroactiveSummary: retroactiveSummary,
-    available: true,
-  };
-}
-
-/**
- * Determine if an achievement tile is "earned" looking.
- * Earned tiles look different from unearned ones.
- */
-export function isEarnedTile(achievement: GameAchievement): boolean {
-  return achievement.earned;
-}
-
-/**
- * Get the display name for an achievement.
- * Hidden unearned achievements show as '???'.
- */
 export function displayName(achievement: GameAchievement): string {
   return isHiddenUnearned(achievement) ? '???' : achievement.name;
 }
 
-/**
- * Get the display points for an achievement.
- * Hidden unearned and feats show as '0 pts' or no points.
- */
+/** Feats of Strength are worth 0 points, whatever the payload holds, and count toward no total. */
+export function featPoints(): number {
+  return 0;
+}
+
 export function displayPoints(achievement: GameAchievement): number {
-  if (isHiddenUnearned(achievement)) return 0;
-  if (achievement.type === 'feat') return 0;
+  if (achievement.type === 'feat' || isHiddenUnearned(achievement)) return 0;
   return achievement.points;
+}
+
+/** The header total: earned (non-feat) points only, exactly like `character.points.total`. */
+export function totalPoints(achievements: readonly GameAchievement[]): number {
+  return achievements.reduce((sum, a) => (a.earned && a.type !== 'feat' ? sum + a.points : sum), 0);
+}
+
+// ---- chains and tile progress -------------------------------------------------------------------------------
+/** How many tiers a chain has: the number of achievements sharing its `chain` id. */
+export function chainLength(achievements: readonly GameAchievement[], chain: string): number {
+  return achievements.filter((a) => a.chain === chain).length;
+}
+
+/** "chain 2 of 4" for the detail sheet; null when the achievement is not part of a chain. */
+export function chainLabel(achievement: GameAchievement, achievements: readonly GameAchievement[]): string | null {
+  if (achievement.type !== 'chain' || achievement.chain === null || achievement.tier === null) return null;
+  return `chain ${achievement.tier} of ${chainLength(achievements, achievement.chain)}`;
+}
+
+/** The tile's one-line progress: a chain shows its tier (`2/4`), a counter its percent, nothing when masked/earned. */
+export function tileProgress(achievement: GameAchievement, achievements: readonly GameAchievement[]): string | null {
+  if (achievement.earned || isHiddenUnearned(achievement)) return null;
+  if (achievement.type === 'chain' && achievement.chain !== null && achievement.tier !== null) {
+    return `${achievement.tier}/${chainLength(achievements, achievement.chain)}`;
+  }
+  if (achievement.progress) {
+    const { current, target } = achievement.progress;
+    return target > 0 ? `${Math.round((current / target) * 100)}%` : `${current}/${target}`;
+  }
+  return null;
+}
+
+export interface DetailProgress {
+  readonly current: number;
+  readonly target: number;
+  readonly percent: number;
+  readonly label: string;
+}
+
+/** The detail sheet's progress bar: current/target as a 0..100% fill, null when earned/masked/without progress. */
+export function detailProgress(achievement: GameAchievement): DetailProgress | null {
+  if (achievement.earned || isHiddenUnearned(achievement) || !achievement.progress) return null;
+  const { current, target } = achievement.progress;
+  return { current, target, percent: target > 0 ? clamp((current / target) * 100, 0, 100) : 0, label: `${current} / ${target}` };
+}
+
+// ---- pinned achievements ------------------------------------------------------------------------------------
+export function isPinned(pinnedIds: readonly string[], id: string): boolean {
+  return pinnedIds.includes(id);
+}
+
+export type AddPinResult =
+  | { readonly ok: true; readonly pinnedIds: readonly string[] }
+  | { readonly ok: false; readonly reason: string; readonly pinnedIds: readonly string[] };
+
+/** Pin one more: idempotent for an already-pinned id, refused (with a short note) once the limit is reached. */
+export function addPin(pinnedIds: readonly string[], id: string, limit = PIN_LIMIT): AddPinResult {
+  if (pinnedIds.includes(id)) return { ok: true, pinnedIds };
+  if (pinnedIds.length >= limit) return { ok: false, reason: pinLimitNote(limit), pinnedIds };
+  return { ok: true, pinnedIds: [...pinnedIds, id] };
+}
+
+export function removePin(pinnedIds: readonly string[], id: string): readonly string[] {
+  return pinnedIds.filter((pinned) => pinned !== id);
+}
+
+/** The Tracked list for pins: pin order, capped, with a missing or already-earned pin dropped. */
+export function resolveTracked(pinnedIds: readonly string[], achievements: readonly GameAchievement[], limit = PIN_LIMIT): readonly GameAchievement[] {
+  const byId = new Map(achievements.map((a) => [a.id, a]));
+  const rows: GameAchievement[] = [];
+  for (const id of pinnedIds) {
+    const achievement = byId.get(id);
+    if (achievement && !achievement.earned) rows.push(achievement);
+  }
+  return rows.slice(0, limit);
+}
+
+// ---- toast selection ----------------------------------------------------------------------------------------
+export interface ToastItem {
+  readonly id: string;
+  readonly name: string;
+  readonly points: number;
+  readonly hidden: boolean;
+}
+
+export interface SummaryToast {
+  readonly count: number;
+  readonly firstYear: number | null;
+}
+
+export type ToastPlan =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'summary'; readonly summary: SummaryToast; readonly seenIds: readonly string[] }
+  | { readonly kind: 'individual'; readonly items: readonly ToastItem[]; readonly seenIds: readonly string[] };
+
+const toastItem = (achievement: GameAchievement): ToastItem => ({
+  id: achievement.id,
+  name: displayName(achievement),
+  points: displayPoints(achievement),
+  hidden: isHiddenUnearned(achievement),
+});
+
+const newestFirst = (achievements: readonly GameAchievement[]): GameAchievement[] =>
+  [...achievements].sort((a, b) => (b.earnedDate ?? '').localeCompare(a.earnedDate ?? '') || a.name.localeCompare(b.name));
+
+/**
+ * What to announce after a /api/game load. `seen` is null when the device holds no seen record at all: then the
+ * whole history is one summary (retroactiveSummary's count, or the earned-achievement count as a fallback) and every
+ * earned id is marked seen. With a seen record, only the newest up to three unseen earned achievements are returned.
+ */
+export function planToasts(
+  achievements: readonly GameAchievement[],
+  milestones: GameStepMilestones | null,
+  seen: readonly string[] | null,
+): ToastPlan {
+  const earned = achievements.filter((a) => a.earned);
+  if (seen === null) {
+    const retroactive = milestones?.retroactiveSummary ?? null;
+    const count = retroactive ? retroactive.count : earned.length;
+    if (count === 0) return { kind: 'none' };
+    const years = earned.map((a) => Number((a.earnedDate ?? '').slice(0, 4))).filter((year) => Number.isFinite(year) && year > 0);
+    const firstYear = retroactive ? retroactive.firstYear : years.length > 0 ? Math.min(...years) : null;
+    return { kind: 'summary', summary: { count, firstYear }, seenIds: earned.map((a) => a.id) };
+  }
+  const unseen = newestFirst(earned.filter((a) => !seen.includes(a.id)));
+  if (unseen.length === 0) return { kind: 'none' };
+  const items = unseen.slice(0, 3).map(toastItem);
+  return { kind: 'individual', items, seenIds: items.map((item) => item.id) };
+}
+
+/** "Achievement earned · First Flag · 10 pts"; a masked achievement drops the points. */
+export function toastText(item: ToastItem): string {
+  return item.hidden ? `Achievement earned · ${item.name}` : `Achievement earned · ${item.name} · ${item.points} pts`;
+}
+
+/** "7 step milestones earned since 2024"; the year is dropped when there is none. */
+export function summaryText(summary: SummaryToast): string {
+  const many = `${summary.count} step milestone${summary.count === 1 ? '' : 's'}`;
+  return summary.firstYear === null ? `${many} earned` : `${many} earned since ${summary.firstYear}`;
+}
+
+// ---- step milestones ----------------------------------------------------------------------------------------
+export function stepNumber(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return String(value);
+}
+
+export interface StepMilestoneView {
+  readonly available: boolean;
+  readonly earned: readonly GameStepMilestone[];
+  readonly next: { readonly id: string; readonly name: string; readonly current: number; readonly target: number; readonly percent: number; readonly label: string } | null;
+  readonly retroactiveSummary: GameStepMilestones['retroactiveSummary'];
+}
+
+/** The Walking section: NEXT as a progress bar and EARNED newest first. Null milestones read as unavailable. */
+export function formatStepMilestones(milestones: GameStepMilestones | null): StepMilestoneView {
+  if (milestones === null) return { available: false, earned: [], next: null, retroactiveSummary: null };
+  const next = milestones.next;
+  return {
+    available: true,
+    earned: [...milestones.earned].sort((a, b) => b.earnedDate.localeCompare(a.earnedDate) || a.name.localeCompare(b.name)),
+    next: next
+      ? { ...next, percent: next.target > 0 ? clamp((next.current / next.target) * 100, 0, 100) : 0, label: `${stepNumber(next.current)} / ${stepNumber(next.target)}` }
+      : null,
+    retroactiveSummary: milestones.retroactiveSummary,
+  };
 }

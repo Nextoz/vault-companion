@@ -1,265 +1,214 @@
-import type { GameAchievement, GameResponse, GameStepMilestones } from '@vault-companion/contracts';
+import type { GameAchievement, GameResponse } from '@vault-companion/contracts';
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { CopyView } from '../lastCopy.ts';
+import { shortDate } from '../character.ts';
 import {
-  categoryPoints,
-  createPinState,
+  addPin,
+  chainLabel,
+  detailProgress,
   displayName,
   displayPoints,
   formatStepMilestones,
   groupByCategory,
-  isEarnedTile,
   isHiddenUnearned,
-  progressText,
+  PIN_LIMIT,
+  removePin,
+  tileProgress,
   totalPoints,
 } from '../achievements.ts';
+import { CopyNote } from './useLastCopy.tsx';
 import { SheetHeader } from './SheetHeader.tsx';
-import { shortDate } from '../character.ts';
+import './Achievements.css';
 
-/** Achievement tile button props. */
-interface AchievementTileProps {
+export interface TogglePinResult {
+  readonly ok: boolean;
+  readonly reason?: string;
+}
+
+function tileLabel(achievement: GameAchievement): string {
+  if (isHiddenUnearned(achievement)) return 'Hidden achievement';
+  const earned = achievement.earned ? ', earned' : '';
+  return `${displayName(achievement)}, ${displayPoints(achievement)} points${earned}`;
+}
+
+/** One tile button in the 4-column grid. A hidden unearned tile shows only ??? (no points, no progress). */
+function AchievementTile({ achievement, all, onOpen }: {
   achievement: GameAchievement;
-  onClick: () => void;
-}
-
-/** A single achievement tile in the grid. */
-function AchievementTile({ achievement, onClick }: AchievementTileProps) {
-  const earned = isEarnedTile(achievement);
+  all: readonly GameAchievement[];
+  onOpen: (achievement: GameAchievement, from: HTMLElement) => void;
+}) {
   const hidden = isHiddenUnearned(achievement);
-  const progress = progressText(achievement);
-
-  return (
-    <button
-      type="button"
-      className={`achievement-tile ${earned ? 'earned' : ''} ${hidden ? 'hidden' : ''}`}
-      onClick={onClick}
-      aria-label={`${displayName(achievement)}, ${displayPoints(achievement)} points${earned ? ', earned' : ''}${progress ? `, ${progress}` : ''}`}
-    >
-      <div className="achievement-tile-name">{displayName(achievement)}</div>
-      <div className="achievement-tile-points">{displayPoints(achievement)} pts</div>
-      {progress && !hidden && <div className="achievement-tile-progress">{progress}</div>}
-      {achievement.type === 'chain' && achievement.tier !== null && !hidden && (
-        <div className="achievement-tile-tier">Tier {achievement.tier + 1}</div>
-      )}
-      {achievement.type === 'meta' && !hidden && <div className="achievement-tile-meta">Meta</div>}
-    </button>
-  );
+  const progress = tileProgress(achievement, all);
+  const earned = achievement.earned;
+  return <button type="button" data-testid="achievement-tile" data-achievement={achievement.id}
+    className={`achievement-tile${earned ? ' is-earned' : ''}${hidden ? ' is-hidden' : ''}`}
+    aria-label={tileLabel(achievement)} onClick={(event) => onOpen(achievement, event.currentTarget)}>
+    <span className="achievement-tile-name">{displayName(achievement)}</span>
+    {!hidden && <span className="achievement-tile-points">{displayPoints(achievement)} pts</span>}
+    {progress !== null && <span className="achievement-tile-progress">{progress}</span>}
+    {achievement.type === 'meta' && !hidden && <span className="achievement-tile-meta">Meta</span>}
+  </button>;
 }
 
-/** Category section with grid of achievement tiles. */
-function CategorySection({
-  category,
-  earned,
-  total,
-  achievements,
-  onOpenAchievement,
-}: {
+function CategorySection({ category, earned, total, achievements, all, onOpen }: {
   category: string;
   earned: number;
   total: number;
   achievements: readonly GameAchievement[];
-  onOpenAchievement: (a: GameAchievement) => void;
+  all: readonly GameAchievement[];
+  onOpen: (achievement: GameAchievement, from: HTMLElement) => void;
 }) {
-  return (
-    <section className="achievements-category">
-      <h3 className="achievements-category-header">
-        {category} · {earned} / {total}
-      </h3>
-      <div className="achievements-grid">
-        {achievements.map((a) => (
-          <AchievementTile key={a.id} achievement={a} onClick={() => onOpenAchievement(a)} />
-        ))}
-      </div>
-    </section>
-  );
+  return <section className="achievements-category" data-testid="achievement-category">
+    <h3 className="achievements-heading">{category} · {earned} / {total}</h3>
+    <div className="achievements-grid">
+      {achievements.map((achievement) => <AchievementTile key={achievement.id} achievement={achievement} all={all} onOpen={onOpen} />)}
+    </div>
+  </section>;
 }
 
-/** Feats of Strength section. */
-function FeatsSection({ feats, onOpenAchievement }: { feats: readonly GameAchievement[]; onOpenAchievement: (a: GameAchievement) => void }) {
+/** Feats of Strength: listed separately, always 0 pts, never part of any total. */
+function FeatsSection({ feats, all, onOpen }: {
+  feats: readonly GameAchievement[];
+  all: readonly GameAchievement[];
+  onOpen: (achievement: GameAchievement, from: HTMLElement) => void;
+}) {
   if (feats.length === 0) return null;
-  return (
-    <section className="achievements-category">
-      <h3 className="achievements-category-header">Feats of Strength · 0 pts</h3>
-      <div className="achievements-grid">
-        {feats.map((a) => (
-          <AchievementTile key={a.id} achievement={a} onClick={() => onOpenAchievement(a)} />
-        ))}
-      </div>
-    </section>
-  );
+  return <section className="achievements-category" data-testid="achievement-feats">
+    <h3 className="achievements-heading">Feats of Strength · 0 pts</h3>
+    <div className="achievements-grid">
+      {feats.map((feat) => <AchievementTile key={feat.id} achievement={feat} all={all} onOpen={onOpen} />)}
+    </div>
+  </section>;
 }
 
-/** Walking step milestones section. */
-function WalkingSection({ milestones }: { milestones: GameStepMilestones | null }) {
+/** The Walking step milestones: NEXT with a progress bar, EARNED newest first, points only. Never shows a zero. */
+function WalkingSection({ milestones, today }: { milestones: GameResponse['stepMilestones']; today: string }) {
   const view = formatStepMilestones(milestones);
-
   if (!view.available) {
-    return (
-      <section className="achievements-category">
-        <h3 className="achievements-category-header">Walking</h3>
-        <p className="muted">Steps unavailable.</p>
-      </section>
-    );
+    return <section className="achievements-category" data-testid="achievement-walking">
+      <h3 className="achievements-heading">Walking</h3>
+      <p className="muted">Steps unavailable.</p>
+      <p className="achievements-note">Points only, no XP · no daily goal, no streak</p>
+    </section>;
   }
-
-  return (
-    <section className="achievements-category">
-      <h3 className="achievements-category-header">Walking</h3>
-      {view.next && (
-        <div className="achievements-next">
-          <div className="achievements-next-header">
-            <span>NEXT</span>
-            <span>{view.next.name}</span>
-          </div>
-          <div className="achievements-progress-bar">
-            <div className="achievements-progress-fill" style={{ width: `${view.next.percent}%` }} />
-          </div>
-          <div className="achievements-next-label">{view.next.label}</div>
-        </div>
-      )}
-      {view.earned.length > 0 && (
-        <div className="achievements-earned-list">
-          <h4>EARNED</h4>
-          <ul>
-            {view.earned.map((m) => (
-              <li key={m.id}>
-                <span>{m.name}</span>
-                <span className="achievements-earned-meta">
-                  {m.points} pts · {shortDate(m.earnedDate, new Date().toISOString().slice(0, 10))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <p className="achievements-footer muted small">
-        Points only, no XP · no daily goal, no streak
-      </p>
-    </section>
-  );
+  return <section className="achievements-category" data-testid="achievement-walking">
+    <h3 className="achievements-heading">Walking</h3>
+    {view.next !== null && <div className="achievements-next">
+      <div className="achievements-next-head"><span>NEXT</span><span>{view.next.name}</span></div>
+      <span className="achievements-bar" role="img" aria-label={`${view.next.name}: ${view.next.label}`}>
+        <span style={{ width: `${view.next.percent}%` }} />
+      </span>
+      <div className="achievements-next-label">{view.next.label}</div>
+    </div>}
+    {view.earned.length > 0 && <div className="achievements-earned">
+      <h4>EARNED</h4>
+      <ul>
+        {view.earned.map((milestone) => <li key={milestone.id}>
+          <span>{milestone.name}</span>
+          <span className="achievements-earned-meta">{milestone.points} pts · {shortDate(milestone.earnedDate, today)}</span>
+        </li>)}
+      </ul>
+    </div>}
+    <p className="achievements-note">Points only, no XP · no daily goal, no streak</p>
+  </section>;
 }
 
-/** Achievement detail sheet. */
-function AchievementDetail({
-  achievement,
-  totalPoints,
-  pinned,
-  onPin,
-  onClose,
-}: {
+/** Screen 4: the badge detail sheet. Close/Escape return focus to the tile that opened it. */
+function AchievementDetail({ achievement, all, today, pinned, onTogglePin, onClose, returnTo }: {
   achievement: GameAchievement;
-  totalPoints: number;
+  all: readonly GameAchievement[];
+  today: string;
   pinned: boolean;
-  onPin: () => void;
+  onTogglePin: (id: string) => TogglePinResult;
   onClose: () => void;
+  returnTo: HTMLElement | null;
 }) {
-  const dialog = useRef<HTMLDivElement>(null);
+  const sheet = useRef<HTMLDivElement>(null);
+  const [note, setNote] = useState<string | null>(null);
   const hidden = isHiddenUnearned(achievement);
-
   useEffect(() => {
-    dialog.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus({ preventScroll: true });
-  }, []);
-
-  const onKeyDown = (e: ReactKeyboardEvent) => {
-    if (e.key === 'Escape') onClose();
+    sheet.current?.querySelector<HTMLElement>('button:not(:disabled), a[href]')?.focus({ preventScroll: true });
+    return () => { if (returnTo !== null && returnTo.isConnected) returnTo.focus(); };
+  }, [returnTo]);
+  const onKeyDown = (event: ReactKeyboardEvent) => {
+    if (event.key === 'Escape') { event.stopPropagation(); onClose(); return; }
+    if (event.key !== 'Tab') return;
+    event.stopPropagation();
+    const controls = sheet.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]');
+    const first = controls?.[0];
+    const last = controls !== undefined && controls.length > 0 ? controls[controls.length - 1] : undefined;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   };
-
-  return (
-    <div className="sheet-backdrop" role="presentation">
-      <div ref={dialog} className="sheet achievement-detail" role="dialog" aria-modal="true" aria-label="Achievement detail" onKeyDown={onKeyDown}>
-        <SheetHeader title="Achievement" onClose={onClose} backLabel="Achievements" onBack={onClose} />
-        <div className="achievement-detail-content">
-          <div className="achievement-detail-name">{displayName(achievement)}</div>
-          <div className="achievement-detail-points">{displayPoints(achievement)} pts</div>
-          {achievement.type === 'chain' && achievement.tier !== null && (
-            <div className="achievement-detail-chain">Chain {achievement.tier + 1} of {achievement.tier + 2}</div>
-          )}
-          {achievement.earned && achievement.earnedDate && (
-            <div className="achievement-detail-earned">
-              Earned {shortDate(achievement.earnedDate, new Date().toISOString().slice(0, 10))}
-            </div>
-          )}
-          {!achievement.earned && achievement.progress && (
-            <div className="achievement-detail-progress">
-              <div className="achievements-progress-bar">
-                <div className="achievements-progress-fill" style={{ width: `${(achievement.progress.current / achievement.progress.target) * 100}%` }} />
-              </div>
-              <div>{progressText(achievement)}</div>
-            </div>
-          )}
-          {!achievement.earned && achievement.locked && achievement.lockedReason && (
-            <div className="achievement-detail-locked muted">{achievement.lockedReason}</div>
-          )}
-          <button type="button" className="achievement-pin-button" onClick={onPin}>
-            {pinned ? 'Unpin' : 'Pin'}
-          </button>
-        </div>
+  const chain = hidden ? null : chainLabel(achievement, all);
+  const progress = hidden ? null : detailProgress(achievement);
+  return <div className="sheet-backdrop" role="presentation">
+    <div ref={sheet} className="sheet achievement-detail" role="dialog" aria-modal="true"
+      aria-label={hidden ? 'Hidden achievement' : displayName(achievement)} onKeyDown={onKeyDown}>
+      <SheetHeader title={hidden ? '???' : displayName(achievement)} onClose={onClose} />
+      <div className="achievement-detail-body">
+        {!hidden && <p className="achievement-detail-points">{displayPoints(achievement)} pts</p>}
+        {chain !== null && <p className="achievement-detail-chain">{chain}</p>}
+        {achievement.earned && achievement.earnedDate !== null && <p className="muted">{shortDate(achievement.earnedDate, today)}</p>}
+        {progress !== null && <div className="achievement-detail-progress">
+          <span className="achievements-bar" role="img" aria-label={`${achievement.name}: ${progress.label}`}><span style={{ width: `${progress.percent}%` }} /></span>
+          <span className="muted">{progress.label}</span>
+        </div>}
+        {!achievement.earned && achievement.locked && achievement.lockedReason !== null && <p className="achievement-detail-locked muted">{achievement.lockedReason}</p>}
+        <button type="button" className="achievement-pin"
+          onClick={() => { const result = onTogglePin(achievement.id); setNote(result.ok ? null : result.reason ?? null); }}>
+          {pinned ? 'Unpin' : 'Pin'}
+        </button>
+        {note !== null && <p className="achievement-pin-note" role="status">{note}</p>}
       </div>
     </div>
-  );
+  </div>;
 }
 
 /**
- * GAM1-C Achievements page (plan screens 3-4). Groups achievements by category with counters and progress bars,
- * chains, meta, hidden ones shown as '???', Feats of Strength (0 points) and upcoming step milestones.
+ * Screen 3: the Achievements page, rendered as a page inside the Character sheet (never its own dialog). The header's
+ * trailing control shows the earned total (feats excluded) and returns to the overview, as do Back and Escape.
  */
-export function Achievements({
-  data,
-  onBack,
-  pinnedIds,
-  onTogglePin,
-}: {
-  data: GameResponse;
+export function AchievementsPage({ data, view, retry, onBack, pinnedIds, onPinsChange }: {
+  data: GameResponse | null;
+  view: CopyView<GameResponse>;
+  retry: () => void;
   onBack: () => void;
   pinnedIds: readonly string[];
-  onTogglePin: (id: string) => void;
+  onPinsChange: (next: readonly string[]) => void;
 }) {
-  const [detailAchievement, setDetailAchievement] = useState<GameAchievement | null>(null);
-  const groups = groupByCategory(data.character.achievements);
-  const feats = data.character.feats;
-  const points = totalPoints(data.character.achievements);
-  const pinState = createPinState(pinnedIds);
-  const isPinned = (id: string) => pinnedIds.includes(id);
-
-  return (
-    <>
-      <div className="sheet-backdrop" role="presentation">
-        <div className="sheet achievements-sheet" role="dialog" aria-modal="true" aria-label="Achievements">
-          <SheetHeader title="Achievements" onClose={onBack} backLabel="Character" onBack={onBack} />
-          <div className="achievements-content">
-            <div className="achievements-total">{points} points</div>
-            {groups.length === 0 && feats.length === 0 ? (
-              <p className="muted">No achievements yet.</p>
-            ) : (
-              <>
-                {groups.map((g) => (
-                  <CategorySection
-                    key={g.category}
-                    category={g.category}
-                    earned={g.earned}
-                    total={g.total}
-                    achievements={g.achievements}
-                    onOpenAchievement={setDetailAchievement}
-                  />
-                ))}
-                <FeatsSection feats={feats} onOpenAchievement={setDetailAchievement} />
-                <WalkingSection milestones={data.stepMilestones} />
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-      {detailAchievement && (
-        <AchievementDetail
-          achievement={detailAchievement}
-          totalPoints={points}
-          pinned={isPinned(detailAchievement.id)}
-          onPin={() => {
-            onTogglePin(detailAchievement.id);
-            setDetailAchievement(null);
-          }}
-          onClose={() => setDetailAchievement(null)}
-        />
-      )}
-    </>
-  );
+  const [detail, setDetail] = useState<{ achievement: GameAchievement; from: HTMLElement | null } | null>(null);
+  const groups = data !== null ? groupByCategory(data.character.achievements) : [];
+  const feats = data?.character.feats ?? [];
+  const points = data !== null ? totalPoints(data.character.achievements) : 0;
+  const today = data?.now.slice(0, 10) ?? '';
+  const empty = data !== null && groups.length === 0 && feats.length === 0;
+  const onTogglePin = (id: string): TogglePinResult => {
+    if (pinnedIds.includes(id)) { onPinsChange(removePin(pinnedIds, id)); return { ok: true }; }
+    const result = addPin(pinnedIds, id, PIN_LIMIT);
+    if (!result.ok) return { ok: false, reason: result.reason };
+    onPinsChange(result.pinnedIds);
+    return { ok: true };
+  };
+  return <>
+    <SheetHeader title="Achievements" onClose={onBack} closeLabel={data !== null ? `${points} pts` : 'Close'} onBack={onBack} backLabel="Character" />
+    <CopyNote view={view} />
+    {data === null && <div className="character-card-empty">
+      <p className="muted">{view.res === null ? 'Loading…' : 'Character could not be loaded.'}</p>
+      {view.res !== null && <button type="button" onClick={retry}>Retry</button>}
+    </div>}
+    {data !== null && <div className="achievements-content">
+      {empty
+        ? <p className="muted" data-testid="achievements-empty">No achievements yet</p>
+        : <>
+          {groups.map((group) => <CategorySection key={group.category} category={group.category} earned={group.earned} total={group.total}
+            achievements={group.achievements} all={data.character.achievements} onOpen={(achievement, from) => setDetail({ achievement, from })} />)}
+          <FeatsSection feats={feats} all={data.character.achievements} onOpen={(achievement, from) => setDetail({ achievement, from })} />
+          <WalkingSection milestones={data.stepMilestones} today={today} />
+        </>}
+    </div>}
+    {detail !== null && data !== null && <AchievementDetail achievement={detail.achievement} all={data.character.achievements} today={today}
+      pinned={pinnedIds.includes(detail.achievement.id)} onTogglePin={onTogglePin} returnTo={detail.from} onClose={() => setDetail(null)} />}
+  </>;
 }
+

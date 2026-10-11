@@ -4,9 +4,31 @@ import {
   howXpWorks, levelLabel, PROFESSION_DESTINATION, professionUnavailable, recentlyEarned,
   restedSegment, shortDate, skillPercent, trackedAchievements, unavailableLines, xpBar,
 } from '../character.ts';
+import { displayName, displayPoints, PIN_LIMIT, pinnedKey, resolveTracked } from '../achievements.ts';
+import { AchievementsPage } from './Achievements.tsx';
 import { CharacterRead } from './CharacterRead.tsx';
 import { SheetHeader } from './SheetHeader.tsx';
 import { CopyNote } from './useLastCopy.tsx';
+
+/** Pinned ids are optional device state, scoped by account; every read and write is guarded. */
+function readPinned(account: string | null): readonly string[] {
+  try {
+    const raw = localStorage.getItem(pinnedKey(account));
+    if (raw === null) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePinned(account: string | null, ids: readonly string[]): void {
+  try {
+    localStorage.setItem(pinnedKey(account), JSON.stringify(ids));
+  } catch {
+    // Storage unavailable: pins still work for this session.
+  }
+}
 
 /**
  * An arc ring: `percent` of the circle from 12 o'clock, plus an optional second arc (the rested reserve) starting
@@ -73,7 +95,21 @@ function ProfessionRing({ profession, rules, unavailable, onOpen }: {
   </li>;
 }
 
-function Tracked({ achievements }: { achievements: readonly GameAchievement[] }) {
+function Tracked({ achievements, pinnedIds }: { achievements: readonly GameAchievement[]; pinnedIds: readonly string[] }) {
+  const pinned = resolveTracked(pinnedIds, achievements, PIN_LIMIT);
+  if (pinned.length > 0) {
+    return <section className="character-section">
+      <h3>Tracked</h3>
+      <ul className="character-rows">
+        {pinned.map((a) => <li key={a.id} className="character-tracked" data-testid="character-tracked">
+          <span className="character-row-line"><span>{displayName(a)}</span><span className="character-row-meta">{displayPoints(a)} pts</span></span>
+          {a.progress !== null && a.progress.target > 0 && <span className="character-progress" aria-hidden="true">
+            <span style={{ width: `${Math.min(100, (a.progress.current / a.progress.target) * 100)}%` }} />
+          </span>}
+        </li>)}
+      </ul>
+    </section>;
+  }
   const tracked = trackedAchievements(achievements);
   if (tracked.length === 0) return null;
   return <section className="character-section">
@@ -123,7 +159,10 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
   onOpenProfession: (destination: string) => void;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
-  const [page, setPage] = useState<'overview' | 'how-xp'>('overview');
+  const [page, setPage] = useState<'overview' | 'how-xp' | 'achievements'>('overview');
+  const [pinnedIds, setPinnedIds] = useState<readonly string[]>(() => readPinned(accountKey));
+  useEffect(() => { setPinnedIds(readPinned(accountKey)); }, [accountKey]);
+  const changePins = (next: readonly string[]) => { setPinnedIds(next); writePinned(accountKey, next); };
   // Return focus to the opener when the sheet closes (the card stays mounted behind the overlay).
   useEffect(() => {
     const invoker = document.activeElement;
@@ -137,8 +176,8 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
   }, [page]);
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === 'Escape') {
-      if (page === 'how-xp') setPage('overview');
-      else onClose();
+      if (page === 'overview') onClose();
+      else setPage('overview');
     }
     if (e.key !== 'Tab') return;
     const controls = dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]');
@@ -151,6 +190,9 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
     <div ref={dialog} className="sheet character-sheet" role="dialog" aria-modal="true" aria-label="Character" onKeyDown={onKeyDown}>
       <CharacterRead refreshKey={refreshKey} accountKey={accountKey}>
         {({ view, data, retry }) => {
+          if (page === 'achievements') {
+            return <AchievementsPage data={data} view={view} retry={retry} onBack={() => setPage('overview')} pinnedIds={pinnedIds} onPinsChange={changePins} />;
+          }
           if (page === 'how-xp') {
             return <>
               <SheetHeader title="How XP works" onClose={onClose} onBack={() => setPage('overview')} backLabel="Character" />
@@ -174,8 +216,11 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
                   rules={data.rules} unavailable={data.unavailable} onOpen={onOpenProfession} />)}
               </ul>
               <p className="character-hint">Tap a ring to open its log</p>
-              <Tracked achievements={data.character.achievements} />
+              <Tracked achievements={data.character.achievements} pinnedIds={pinnedIds} />
               <RecentAchievements achievements={data.character.achievements} today={data.now.slice(0, 10)} />
+              <button type="button" className="character-link-row" onClick={() => setPage('achievements')}>
+                All achievements<span className="character-chevron" aria-hidden="true">›</span>
+              </button>
               <button type="button" className="character-link-row" onClick={() => setPage('how-xp')}>
                 How XP works<span className="character-chevron" aria-hidden="true">›</span>
               </button>
