@@ -1191,6 +1191,11 @@ textarea:focus-visible {
 .reading-books li { border-bottom: 1px solid var(--line); }
 .reading-books button { display: block; width: 100%; text-align: left; padding: 10px 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .reading-sheet input, .reading-sheet textarea { min-width: 0; max-width: 100%; }
+.reading-challenge { min-height: var(--tap); }
+.challenge-sheet input, .challenge-sheet textarea { min-width: 0; max-width: 100%; }
+.challenge-reflection { margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--line); background: var(--surface); overflow-wrap: anywhere; }
+.ai-badge { display: inline-block; margin: 8px 0 4px; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+.challenge-question { margin: 0 0 8px; font-weight: 600; overflow-wrap: anywhere; }
 .chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
 .chip-group button { min-height: var(--tap); padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
 .chip-group button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }

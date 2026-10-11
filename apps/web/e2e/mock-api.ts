@@ -7,6 +7,8 @@ import {
   AiUsageResponse,
   ApiError,
   AskJevResponse,
+  BookFollowUpRequest,
+  BookFollowUpResponse,
   BooksResponse,
   Command,
   DASHBOARD_RANGE_PLAN,
@@ -307,6 +309,11 @@ export class MockApi {
   /** `refused` answers /api/books with a typed refusal instead of rows. */
   booksMode: 'ok' | 'refused' = 'ok';
   #booksBefore = new Map<string, BookView[]>();
+  /** READ1-B: one follow-up question per saved reflection; `unavailable` answers 503 like an unconfigured vault. */
+  followUpMode: 'ok' | 'unavailable' = 'ok';
+  followUpBodies: string[] = [];
+  followUps: { title: string; date: string; ordinal: number; question: string; answer: string }[] = [];
+  #followUpsBefore = new Map<string, { title: string; date: string; ordinal: number; question: string; answer: string }[]>();
   #learningBefore = new Map<string, LearningRow[]>();
 
   session: 'ok' | 'signed-out' = 'ok';
@@ -538,6 +545,7 @@ export class MockApi {
     await on('**/api/books', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.booksMode === 'refused' ? this.#json(route, 200, BooksResponse.parse({ status: 'refused', revision: this.#revision, code: 'refused:book-note-shape', message: 'A book note could not be read.' }))
       : this.#json(route, 200, BooksResponse.parse({ status: 'ok', revision: this.#revision, books: this.books })));
+    await on('**/api/books/follow-up', (route) => this.#followUp(route));
     await on('**/api/learning', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.learningMode === 'absent' ? this.#json(route, 200, LearningResponse.parse({ status: 'absent', revision: this.#revision }))
       : this.learningMode === 'refused' ? this.#json(route, 200, LearningResponse.parse({ status: 'refused', revision: this.#revision, code: 'refused:learning-table-missing', message: 'Learning Gym Log table not found — fix it in Obsidian' }))
@@ -770,6 +778,31 @@ export class MockApi {
         { kind: 'rate', question: 'How ready is this?', score: 'High', probabilities: { Low: 0.2, High: 0.8 } },
       ],
     }));
+  }
+
+  /** READ1-B (ADR-0063): one follow-up question for a saved reflection, with the same origin/account guards. */
+  #followUp(route: Route) {
+    if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
+    const request = route.request();
+    if (new URL(request.url()).search !== '') throw new Error('mock: follow-up carried a query');
+    if (request.headers()['x-vc-request'] !== '1') return this.#json(route, 403, ApiError.parse({ code: 'forbidden', message: 'request origin not allowed', retryable: false }));
+    if (request.headers()['x-vc-account'] !== this.account) {
+      return this.#json(route, 409, ApiError.parse({ code: 'account-mismatch', message: 'this action was saved under a different sign-in', retryable: false }));
+    }
+    this.followUpBodies.push(request.postData() ?? '');
+    if (this.followUpMode === 'unavailable') {
+      return this.#json(route, 503, ApiError.parse({ code: 'follow-up-unavailable', message: 'Follow-up questions are not configured.', retryable: false }));
+    }
+    let raw: unknown = null;
+    try { raw = JSON.parse(request.postData() ?? 'null'); } catch {
+      return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'body is not JSON', retryable: false }));
+    }
+    const parsed = BookFollowUpRequest.safeParse(raw);
+    if (!parsed.success) return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'invalid reflection selection', retryable: false }));
+    const reflection = this.books.find((book) => book.title === parsed.data.title)?.reflections
+      .filter((entry) => entry.date === parsed.data.date)[parsed.data.ordinal - 1];
+    if (!reflection) return this.#json(route, 409, ApiError.parse({ code: 'reflection-not-found', message: 'That saved reflection was not found.', retryable: false }));
+    return this.#json(route, 200, BookFollowUpResponse.parse({ question: 'What did that change for you?' }));
   }
 
   #json(route: Route, status: number, body: unknown) {
@@ -1119,9 +1152,20 @@ export class MockApi {
         const path = `Books/${command.payload.target.payload.title}.md`;
         return { ...base, path, effect: { kind: 'book', op: 'undone', path } };
       }
-      case 'SaveFollowUp':
-      case 'UndoSaveFollowUp':
-        throw new Error('mock: follow-up commands are backend-only');
+      case 'SaveFollowUp': {
+        const { title, date, ordinal, question, answer } = command.payload;
+        this.#followUpsBefore.set(command.operationId, structuredClone(this.followUps));
+        this.followUps = [...this.followUps, { title, date, ordinal, question, answer }];
+        const path = `Books/${title}.md`;
+        return { ...base, path, effect: { kind: 'book', op: 'reflected', path } };
+      }
+      case 'UndoSaveFollowUp': {
+        const before = this.#followUpsBefore.get(command.payload.target.operationId);
+        if (!before) throw new Error('mock: unknown follow-up undo');
+        this.followUps = before;
+        const path = `Books/${command.payload.target.payload.title}.md`;
+        return { ...base, path, effect: { kind: 'book', op: 'undone', path } };
+      }
     }
   }
 }

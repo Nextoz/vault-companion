@@ -1,6 +1,6 @@
 import type { BookView } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
-import { currentBook, defaultReadingDate, isFinishedBook, pageError, progressPercent, reflectionsNewestFirst } from './reading.ts';
+import { currentBook, defaultReadingDate, isFinishedBook, pageError, progressPercent, reflectionOrdinals, reflectionsNewestFirst } from './reading.ts';
 import { VERB } from './ui/ActionsPanel.tsx';
 
 const book = (over: Partial<BookView> = {}): BookView => ({
@@ -87,6 +87,26 @@ describe('reflectionsNewestFirst', () => {
     const input = [{ date: '2026-10-01', text: 'a' }, { date: '2026-10-02', text: 'b' }];
     reflectionsNewestFirst(input);
     expect(input).toEqual([{ date: '2026-10-01', text: 'a' }, { date: '2026-10-02', text: 'b' }]);
+  });
+});
+
+describe('reflectionOrdinals', () => {
+  it('numbers same-date entries 1, 2, 3 in note order, and every entry of another date starts again', () => {
+    const a = { date: '2026-10-02', text: 'a' };
+    const b = { date: '2026-10-05', text: 'b' };
+    const c = { date: '2026-10-05', text: 'c' };
+    const d = { date: '2026-10-05', text: 'd' };
+    const e = { date: '2026-10-09', text: 'e' };
+    expect(reflectionOrdinals([a, b, c, d, e])).toEqual([1, 1, 2, 3, 1]);
+  });
+  it('keeps the note order even when the list is shown newest first', () => {
+    const second = { date: '2026-10-05', text: 'second' };
+    const third = { date: '2026-10-05', text: 'third' };
+    const first = { date: '2026-10-02', text: 'first' };
+    const shown = reflectionsNewestFirst([first, second, third]);
+    expect(shown).toEqual([second, third, first]);
+    // The two 2026-10-05 entries keep their note order, so their ordinals are 1 then 2, not reversed.
+    expect(reflectionOrdinals(shown)).toEqual([1, 2, 1]);
   });
 });
 

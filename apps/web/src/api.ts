@@ -11,6 +11,7 @@ import {
   TrainingResponse,
   LearningResponse,
   BooksResponse,
+  BookFollowUpResponse,
   encodeLinkedNoteHeader,
   encodeNoteHeader,
   HistoryResponse,
@@ -32,6 +33,7 @@ import {
   TriageResponse,
   WeatherResponse,
   type AskJevQuestion,
+  type BookFollowUpRequest,
   type DashboardRange,
   type LinkedNoteRequest,
   type WeatherLocationRequest,
@@ -170,6 +172,68 @@ export async function askJev(path: string, questions: readonly AskJevQuestion[],
     if (abort.signal.aborted) return { kind: 'error', message: 'Jev did not answer in time. Try again.' };
     recordRead('/api/notes/ask-jev', performance.now() - started, res.headers.get('Server-Timing'));
     const parsed = AskJevResponse.safeParse(body);
+    return parsed.success ? { kind: 'ok', data: parsed.data } : { kind: 'error', message: 'Unexpected reply from the server.' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * READ1-B (ADR-0063): one AI follow-up question for a saved reflection. The backend aborts the model call at 30 s, so
+ * the client waits a little longer; the reflection text rides in the body and never enters a log or an error string.
+ */
+export const FOLLOW_UP_TIMEOUT_MS = 35_000;
+
+const followUpTimedOut = 'The AI question did not arrive in time. Try again.';
+
+const followUpError = (code: string | null, message: string | null, status: number): string => {
+  switch (code) {
+    case 'follow-up-unavailable': return 'AI questions are not set up.';
+    case 'follow-up-rate-limited': return "Today's limit of AI questions is used up.";
+    case 'follow-up-bad-output': return 'The AI did not return a question. Try again.';
+    case 'reflection-not-found': return 'That saved reflection is no longer there. Refresh and try again.';
+    default: return status === 502 ? 'The AI did not return a question. Try again.' : message ?? `The server answered ${status}.`;
+  }
+};
+
+export async function askFollowUp(request: BookFollowUpRequest, accountKey: string): Promise<Fetched<BookFollowUpResponse>> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), FOLLOW_UP_TIMEOUT_MS);
+  const started = performance.now();
+  try {
+    let res: Response;
+    try {
+      res = await fetch('/api/books/follow-up', {
+        ...base,
+        method: 'POST',
+        signal: abort.signal,
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-VC-Request': '1',
+          'X-VC-Account': accountKey,
+        },
+        body: JSON.stringify(request),
+      });
+    } catch {
+      return abort.signal.aborted ? { kind: 'error', message: followUpTimedOut } : { kind: 'offline' };
+    }
+    if (res.type === 'opaqueredirect' || res.status === 401 || res.status === 403) return { kind: 'signed-out' };
+    const aborted = new Promise<undefined>((resolve) => abort.signal.addEventListener('abort', () => resolve(undefined)));
+    if (!res.ok) {
+      const body: unknown = await Promise.race([res.json().catch(() => undefined), aborted]);
+      if (abort.signal.aborted) return { kind: 'error', message: followUpTimedOut };
+      const error = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+      return {
+        kind: 'error',
+        message: followUpError(typeof error?.code === 'string' ? error.code : null,
+          typeof error?.message === 'string' ? error.message : null, res.status),
+      };
+    }
+    const body: unknown = await Promise.race([res.json().catch(() => undefined), aborted]);
+    if (abort.signal.aborted) return { kind: 'error', message: followUpTimedOut };
+    recordRead('/api/books/follow-up', performance.now() - started, res.headers.get('Server-Timing'));
+    const parsed = BookFollowUpResponse.safeParse(body);
     return parsed.success ? { kind: 'ok', data: parsed.data } : { kind: 'error', message: 'Unexpected reply from the server.' };
   } finally {
     clearTimeout(timer);
