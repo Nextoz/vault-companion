@@ -3,7 +3,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MorningBriefResponse } from '@vault-companion/contracts';
-import { MockApi, taskView } from './mock-api.ts';
+import { ACCOUNT, MockApi, taskView } from './mock-api.ts';
+import { seenKey } from '../src/achievements.ts';
 import { goTo } from './nav.ts';
 
 // PW1: a manual tour that photographs every screen on the mocked app. Test tooling only: it never touches the live
@@ -36,8 +37,10 @@ const seedOnce = (page: Page, snapshot: unknown) =>
   page.addInitScript((value) => {
     if (window.sessionStorage.getItem('tour-seeded') === '1') return;
     window.sessionStorage.setItem('tour-seeded', '1');
-    window.localStorage.setItem('vc.sinceIWasHere', JSON.stringify(value));
-  }, snapshot);
+    window.localStorage.setItem('vc.sinceIWasHere', JSON.stringify(value.snapshot));
+    // GAM1-C: mark the default fixture's earned achievements seen, so its summary toast stays out of the tour shots.
+    window.localStorage.setItem(value.seenKey, JSON.stringify(['a1', 'a2', 'a3']));
+  }, { snapshot, seenKey: seenKey(ACCOUNT) });
 
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -156,7 +159,32 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await character.getByRole('button', { name: 'How XP works' }).click();
     await expect(character.getByRole('button', { name: /Back/ })).toBeVisible();
   });
+
+  // GAM1-C plan screens 3-4 and 6: the Achievements page, the badge detail and the toast, with the rich fixture.
+  api.gameAchievements = true;
   await character.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Open Character' }).click();
+  await shot('Character - Achievements', async () => {
+    await character.getByRole('button', { name: 'All achievements' }).click();
+    await expect(character.getByRole('heading', { name: 'Feats of Strength · 0 pts' })).toBeVisible();
+  });
+  await shot('Character - Achievements scrolled (Walking)', async () => {
+    await character.evaluate((sheet) => { sheet.scrollTop = sheet.scrollHeight; });
+    await expect(character.getByText('Points only, no XP · no daily goal, no streak')).toBeVisible();
+  });
+  await shot('Achievement detail', async () => {
+    await character.evaluate((sheet) => { sheet.scrollTop = 0; });
+    await character.locator('.achievement-tile', { hasText: 'First Flag' }).click();
+    await expect(page.getByRole('dialog', { name: 'First Flag' })).toBeVisible();
+  });
+  await page.getByRole('dialog', { name: 'First Flag' }).getByRole('button', { name: 'Close' }).click();
+  await page.keyboard.press('Escape');
+  await character.getByRole('button', { name: 'Close' }).click();
+  await shot('Achievement toast', async () => {
+    await page.reload();
+    await expect(page.locator('.achievement-toast')).toHaveCount(3);
+  });
+  await page.reload();
 
   await shot('Status sheet', async () => {
     await goTo(page, 'Status');

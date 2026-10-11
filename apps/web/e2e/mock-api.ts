@@ -201,8 +201,44 @@ export const sampleWeather = (partial = false): WeatherResponse => WeatherRespon
   },
 });
 
+/** GAM1-B/C default Character achievements; unchanged so the existing Character specs keep passing. */
+const DEFAULT_ACHIEVEMENTS = [
+  { id: 'a1', name: 'Founding Steps', category: 'General', type: 'one-off', points: 10, earned: true, earnedDate: '2026-09-02', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
+  { id: 'a2', name: 'Ten Sessions', category: 'Training', type: 'counter', points: 15, earned: true, earnedDate: '2026-09-12', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: { current: 10, target: 10 } },
+  { id: 'a3', name: 'Renaissance', category: 'General', type: 'meta', points: 25, earned: true, earnedDate: '2026-09-20', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
+  { id: 'a4', name: 'Twenty-five Sessions', category: 'Training', type: 'counter', points: 20, earned: false, earnedDate: null, visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: { current: 18, target: 25 } },
+  { id: 'a5', name: 'Scholar: 7-day run', category: 'Learning', type: 'chain', points: 10, earned: false, earnedDate: null, visible: true, locked: false, lockedReason: null, chain: 'scholar-run', tier: 2, progress: { current: 4, target: 7 } },
+];
+
+/** GAM1-C: every achievement type the Achievements page can meet, plus earned step milestones. Synthetic only. */
+const RICH_ACHIEVEMENTS = [
+  { id: 'r1', name: 'First Flag', category: 'General', type: 'one-off', points: 10, earned: true, earnedDate: '2024-02-17', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
+  { id: 'r2', name: 'Ten Sessions', category: 'Training', type: 'counter', points: 15, earned: true, earnedDate: '2026-05-04', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: { current: 10, target: 10 } },
+  { id: 'r3', name: 'Twenty-five Sessions', category: 'Training', type: 'counter', points: 20, earned: false, earnedDate: null, visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: { current: 20, target: 25 } },
+  { id: 'r4', name: 'Scholar run I', category: 'Learning', type: 'chain', points: 5, earned: true, earnedDate: '2026-01-10', visible: true, locked: false, lockedReason: null, chain: 'scholar-run', tier: 1, progress: { current: 3, target: 3 } },
+  { id: 'r5', name: 'Scholar run II', category: 'Learning', type: 'chain', points: 10, earned: false, earnedDate: null, visible: true, locked: false, lockedReason: null, chain: 'scholar-run', tier: 2, progress: { current: 4, target: 7 } },
+  { id: 'r6', name: 'Scholar run III', category: 'Learning', type: 'chain', points: 15, earned: false, earnedDate: null, visible: false, locked: false, lockedReason: null, chain: 'scholar-run', tier: 3, progress: { current: 0, target: 14 } },
+  { id: 'r7', name: 'Scholar run IV', category: 'Learning', type: 'chain', points: 20, earned: false, earnedDate: null, visible: false, locked: false, lockedReason: null, chain: 'scholar-run', tier: 4, progress: { current: 0, target: 30 } },
+  { id: 'r8', name: 'Secret Pilgrim', category: 'General', type: 'hidden', points: 25, earned: false, earnedDate: null, visible: false, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
+  { id: 'r9', name: 'Renaissance', category: 'General', type: 'meta', points: 25, earned: true, earnedDate: '2026-06-20', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
+  { id: 'r10', name: 'Iron Will', category: 'Training', type: 'one-off', points: 30, earned: false, earnedDate: null, visible: true, locked: true, lockedReason: 'Reach level 20 first.', chain: null, tier: null, progress: null },
+];
+const RICH_FEATS = [
+  { id: 'f1', name: 'Founding Reader', category: 'Feats', type: 'feat', points: 50, earned: true, earnedDate: '2024-03-01', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
+];
+const RICH_STEP_MILESTONES = {
+  earned: [
+    { id: 'steps-lifetime-100000', name: '100,000 steps', category: 'Journey', points: 5, ladder: 'lifetime', target: 100000, earnedDate: '2024-02-17', year: null },
+    { id: 'steps-lifetime-1000000', name: '1 million steps', category: 'Journey', points: 15, ladder: 'lifetime', target: 1000000, earnedDate: '2025-05-15', year: null },
+    { id: 'steps-yearly-2026-3000000', name: '2026: 3 million steps', category: 'Journey', points: 10, ladder: 'yearly', target: 3000000, earnedDate: '2026-05-04', year: 2026 },
+    { id: 'steps-lifetime-10000000', name: '10 million steps', category: 'Journey', points: 25, ladder: 'lifetime', target: 10000000, earnedDate: '2026-06-01', year: null },
+  ],
+  next: { id: 'steps-lifetime-12500000', name: '12.5 million steps', current: 12000000, target: 12500000 },
+  retroactiveSummary: { count: 4, firstYear: 2024 },
+};
+
 /** GAM1-B: synthetic Character, no real vault text. Values mirror the shipped rules shape (never asserted verbatim). */
-export const sampleGame = (unavailable: string[] = []): GameResponse => GameResponse.parse({
+export const sampleGame = (unavailable: string[] = [], rich = false): GameResponse => GameResponse.parse({
   revision: 'a'.repeat(40),
   now: '2026-09-30T12:00:00Z',
   rules: {
@@ -238,18 +274,12 @@ export const sampleGame = (unavailable: string[] = []): GameResponse => GameResp
       { id: 'lorekeeper', name: 'Lorekeeper', xp: 400, skill: 60, rank: 'Apprentice', title: 'Apprentice Lorekeeper' },
       { id: 'quartermaster', name: 'Quartermaster', xp: 950, skill: 120, rank: 'Journeyman', title: 'Journeyman of Quartermaster' },
     ],
-    achievements: [
-      { id: 'a1', name: 'Founding Steps', category: 'General', type: 'one-off', points: 10, earned: true, earnedDate: '2026-09-02', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
-      { id: 'a2', name: 'Ten Sessions', category: 'Training', type: 'counter', points: 15, earned: true, earnedDate: '2026-09-12', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: { current: 10, target: 10 } },
-      { id: 'a3', name: 'Renaissance', category: 'General', type: 'meta', points: 25, earned: true, earnedDate: '2026-09-20', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
-      { id: 'a4', name: 'Twenty-five Sessions', category: 'Training', type: 'counter', points: 20, earned: false, earnedDate: null, visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: { current: 18, target: 25 } },
-      { id: 'a5', name: 'Scholar: 7-day run', category: 'Learning', type: 'chain', points: 10, earned: false, earnedDate: null, visible: true, locked: false, lockedReason: null, chain: 'scholar-run', tier: 2, progress: { current: 4, target: 7 } },
-    ],
-    feats: [],
-    points: { total: 50, byCategory: { General: 35, Training: 15 } },
+    achievements: rich ? RICH_ACHIEVEMENTS : DEFAULT_ACHIEVEMENTS,
+    feats: rich ? RICH_FEATS : [],
+    points: rich ? { total: 55, byCategory: { General: 35, Training: 15, Learning: 5 } } : { total: 50, byCategory: { General: 35, Training: 15 } },
     skippedRecords: 0,
   },
-  stepMilestones: null,
+  stepMilestones: rich ? RICH_STEP_MILESTONES : null,
   unavailable,
 });
 
@@ -305,6 +335,8 @@ export class MockApi {
   /** GAM1-B: the Character read. `error`: /api/game answers 503. */
   gameMode: 'ok' | 'error' = 'ok';
   gameUnavailable: string[] = [];
+  /** GAM1-C: serve the richer Character (every achievement type + step milestones) for the Achievements specs. */
+  gameAchievements = false;
   gameReads = 0;
   /** READ1-A2: the Books/ read model (ADR-0062), one row per book note. */
   books: BookView[] = [];
@@ -729,7 +761,7 @@ export class MockApi {
     if (this.session === 'signed-out') return route.fulfill({ status: 401, body: '' });
     this.gameReads++;
     if (this.gameMode === 'error') return this.#json(route, 503, ApiError.parse({ code: 'upstream-unavailable', message: 'reader unavailable', retryable: true }));
-    return this.#json(route, 200, sampleGame(this.gameUnavailable));
+    return this.#json(route, 200, sampleGame(this.gameUnavailable, this.gameAchievements));
   }
 
   #history(route: Route) {

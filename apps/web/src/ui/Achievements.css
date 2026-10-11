@@ -1,0 +1,91 @@
+/* GAM1-C: the Achievements page (plan screen 3), the badge detail sheet (screen 4) and the toast (screen 6).
+   The game palette is repeated here so the detail sheet and the toast, which can sit outside .character-sheet,
+   keep the same gold and well colours. */
+.achievements-content,
+.achievement-detail,
+.achievement-toasts {
+  --game-gold: #f2c86b;
+  --game-well: rgb(255 255 255 / 0.05);
+  --game-track: rgb(255 255 255 / 0.09);
+}
+
+.achievements-content { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---- screen 3: one section per category, a 4-column grid of tile buttons ---- */
+.achievements-heading { margin: 0 0 8px; color: var(--muted); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.achievements-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+
+.achievement-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 64px;
+  padding: 6px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--game-well);
+  color: var(--text);
+  font-size: 0.72rem;
+  text-align: center;
+}
+.achievement-tile.is-earned { border-color: rgb(242 200 107 / 0.55); background: rgb(242 200 107 / 0.12); }
+.achievement-tile.is-hidden { border-style: dashed; color: var(--muted); }
+.achievement-tile-name { overflow-wrap: anywhere; font-weight: 600; line-height: 1.15; }
+.achievement-tile.is-earned .achievement-tile-name::before { content: '✓ '; color: var(--game-gold); }
+.achievement-tile-points,
+.achievement-tile-progress { color: var(--game-gold); font-variant-numeric: tabular-nums; }
+.achievement-tile-progress { color: var(--muted); }
+.achievement-tile-meta { padding: 0 5px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 0.6rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* ---- steps.jpg: NEXT gets a progress bar, EARNED newest first ---- */
+.achievements-next { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.achievements-next-head { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; font-weight: 600; }
+.achievements-next-head > span:first-child { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.08em; }
+.achievements-bar { display: block; height: 6px; border-radius: 3px; background: var(--game-track); overflow: hidden; }
+.achievements-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--game-gold); }
+.achievements-next-label { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+
+.achievements-earned h4 { margin: 0 0 4px; color: var(--muted); font-size: 0.72rem; letter-spacing: 0.08em; }
+.achievements-earned ul { margin: 0; padding: 0; list-style: none; }
+.achievements-earned li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-height: var(--tap); padding: 8px 0; border-top: 1px solid rgb(255 255 255 / 0.08); }
+.achievements-earned li:first-child { border-top: none; }
+.achievements-earned-meta { flex-shrink: 0; color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.achievements-note { margin: 10px 0 0; color: var(--muted); font-size: 0.78rem; }
+
+/* ---- screen 4: the badge detail sheet ---- */
+.achievement-detail-body { display: flex; flex-direction: column; gap: 10px; }
+.achievement-detail-points { margin: 0; color: var(--game-gold); font-weight: 600; }
+.achievement-detail-chain { margin: 0; color: var(--muted); }
+.achievement-detail-progress { display: flex; flex-direction: column; gap: 6px; }
+.achievement-detail-locked { margin: 0; }
+.achievement-pin { min-height: var(--tap); padding: 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--game-well); color: var(--accent); font-weight: 600; }
+.achievement-pin-note { margin: 0; color: var(--warn); font-size: 0.85rem; }
+
+/* ---- screen 6: a quiet toast on any tab; only the dismiss button takes a tap ---- */
+.achievement-toasts {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--tabbar-h) + 88px + env(safe-area-inset-bottom)); /* clears the 56px capture button */
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.achievement-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 14px;
+  border-radius: 12px;
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
+  font-size: 0.85rem;
+}
+.achievement-toast > span { flex: 1 1 auto; min-width: 0; }
+.achievement-toast-dismiss { flex-shrink: 0; width: var(--tap); height: var(--tap); border: 0; background: transparent; color: var(--bg); font-size: 1.15rem; pointer-events: auto; }
