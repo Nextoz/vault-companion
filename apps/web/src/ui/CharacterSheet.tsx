@@ -8,7 +8,7 @@ import { displayName, displayPoints, PIN_LIMIT, pinnedKey, resolveTracked } from
 import { achievementQuality, categoryGlyph } from '../character-skin.ts';
 import { setSoundEnabled, soundEnabled } from '../sound.ts';
 import { AchievementsPage } from './Achievements.tsx';
-import { Glyph, Medal } from './CharacterGlyphs.tsx';
+import { Medal } from './CharacterGlyphs.tsx';
 import './CharacterSkin.css';
 import { CharacterRead } from './CharacterRead.tsx';
 import { SheetHeader } from './SheetHeader.tsx';
@@ -91,11 +91,11 @@ function ProfessionRing({ profession, rules, unavailable, onOpen }: {
       onClick={() => destination !== undefined && onOpen(destination)}>
       <span className="character-ring">
         <Ring className="skill-ring" size={64} stroke={6} percent={note === null ? skillPercent(profession.skill, rules.skill.max) : 0} />
-        <Glyph id={categoryGlyph(profession.id)} className="character-ring-glyph" />
+        <span className="character-ring-value" aria-hidden="true">{note === null ? profession.skill : '–'}</span>
       </span>
       <span className="character-profession-name" aria-hidden="true">{profession.name}</span>
       <span className="character-profession-rank" aria-hidden="true">{note ?? profession.rank}</span>
-      <span className="character-profession-unit" aria-hidden="true">{note === null ? `${profession.skill} / ${rules.skill.max}` : '–'}</span>
+      {note === null && <span className="character-profession-unit" aria-hidden="true">of {rules.skill.max}</span>}
     </button>
   </li>;
 }
