@@ -194,6 +194,8 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(page.getByRole('dialog', { name: 'First Flag' })).toBeVisible();
   });
   await page.getByRole('dialog', { name: 'First Flag' }).getByRole('button', { name: 'Close' }).click();
+  // R2: Close slides the sheet out before it closes; Escape must reach the Character sheet, not the leaving detail.
+  await expect(page.getByRole('dialog', { name: 'First Flag' })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await character.getByRole('button', { name: 'Close' }).click();
   await shot('Achievement banner', async () => {

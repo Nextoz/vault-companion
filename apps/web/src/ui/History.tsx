@@ -5,6 +5,7 @@ import { groupByDay, reopenFor } from '../history.ts';
 import type { QueueItem } from '../queue/queue.ts';
 import { plainWikilinks, taskSegments } from '../text.ts';
 import type { OpenLink } from './NoteView.tsx';
+import { CheckMark } from './TaskList.tsx';
 
 /** The day list inside Progress (ADR-0027); Progress owns the read so it is fetched once. */
 export function History({ result, queued, accountKey, blocked, onReopen, onOpenLink }: {
@@ -26,7 +27,7 @@ export function History({ result, queued, accountKey, blocked, onReopen, onOpenL
           const reopen = reopenFor(item, data.items, queued, accountKey);
           const label = plainWikilinks(item.description);
           return <li key={`${item.source}:${item.locator.lineIndex}`} className="task task-done" data-testid="history-item">
-            <span className="check check-static check-on" aria-hidden="true" />
+            <span className="check check-static check-on" aria-hidden="true"><CheckMark /></span>
             <div className="task-body">
               <span className="task-text">{taskSegments(item.description, item.links).map((seg, i) => seg.kind === 'text'
                 ? <span key={i}>{seg.text}</span>
