@@ -173,8 +173,8 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, defaultK
           </button>
           <button type="button" className="chip-row-item" aria-pressed={kind === 'active-work'} onClick={() => choose('active-work')}>Active Work</button>
           {onSwitch && <>
-            <button type="button" className="chip-row-item" onClick={() => onSwitch('training')}>Training</button>
-            <button type="button" className="chip-row-item" onClick={() => onSwitch('checkin')}>Check-in</button>
+            <button type="button" className="chip-row-item" aria-haspopup="dialog" onClick={() => onSwitch('training')}>Training</button>
+            <button type="button" className="chip-row-item" aria-haspopup="dialog" onClick={() => onSwitch('checkin')}>Check-in</button>
           </>}
         </div>
         <textarea

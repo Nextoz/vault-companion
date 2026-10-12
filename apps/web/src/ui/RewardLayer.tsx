@@ -255,11 +255,13 @@ function Pulse({ step, onLanded }: { step: Extract<Step, { kind: 'pulse' }>; onL
   const landedRef = useRef(onLanded);
   landedRef.current = onLanded;
   const target = step.xp !== null ? step.strip ?? null : null;
-  const [moving] = useState(() => target !== null && !prefersReducedMotion());
+  // Travel only to a strip that is on screen; without one (signed out, no Character read yet) the float keeps its
+  // own rise-and-fade and the landing still updates whatever strip appears.
+  const [moving] = useState(() => target !== null && !prefersReducedMotion() && document.querySelector('.xp-strip') !== null);
   useEffect(() => {
     const el = travel.current;
     if (target === null || !el) return;
-    // Reduced motion: no travel, the strip takes the new value at once.
+    // No travel (reduced motion, or no strip on screen): the strip takes the new value at once.
     if (!moving) { landedRef.current(target); return; }
     const strip = document.querySelector('.xp-strip');
     let animation: Animation | null = null;

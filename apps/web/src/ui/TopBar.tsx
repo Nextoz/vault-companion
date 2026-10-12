@@ -68,7 +68,7 @@ export function TopBar({ barRef, back, dot, busy, checkedAt, failed, signedOut, 
   );
 }
 
-/** The current pull distance; releasing past the threshold calls `onRefresh` once. Passive listeners only. */
+/** The current pull distance; releasing past the threshold calls `onRefresh` once. */
 function usePull(onRefresh: () => void, disabled: boolean): number {
   const [distance, setDistance] = useState(0);
   const refresh = useRef(onRefresh);
@@ -91,6 +91,9 @@ function usePull(onRefresh: () => void, disabled: boolean): number {
       const dx = Math.abs(touch.clientX - start.x);
       if (pulled === 0 && dx > 10 && dx > Math.abs(touch.clientY - start.y)) { reset(); return; }
       pulled = window.scrollY > 0 ? 0 : pullDistance(start.y, touch.clientY, start.top);
+      // While pulling from the top, this gesture is ours: stop iOS rubber-banding the page under the arrow.
+      // Upward moves and every touch that did not start at the top keep native scrolling.
+      if (pulled > 0 && e.cancelable) e.preventDefault();
       setDistance(pulled);
     };
     const up = () => {
@@ -98,7 +101,8 @@ function usePull(onRefresh: () => void, disabled: boolean): number {
       reset();
     };
     document.addEventListener('touchstart', down, { passive: true });
-    document.addEventListener('touchmove', move, { passive: true });
+    // Not passive: `move` cancels native overscroll only while a pull is in progress.
+    document.addEventListener('touchmove', move, { passive: false });
     document.addEventListener('touchend', up, { passive: true });
     document.addEventListener('touchcancel', reset, { passive: true });
     return () => {
