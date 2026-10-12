@@ -1,0 +1,448 @@
+/* Redesign R3a (2026-10-12; review #8, C3, D2): the app chrome. One large-title header on every tab, the extended
+   capture button, the tab bar and the global XP strip along its top edge. Imported after styles.css.
+
+   Shared class names other slices can reuse:
+   - `h1.large-title` (the LargeTitle component): the 34 pt screen title; the top bar fades it in when it scrolls under.
+   - `.chip-row` / `.chip-row-item`: one line of pill chips that scrolls sideways with an edge fade; the selected
+     chip (`aria-pressed="true"`) is filled.
+   - `.visually-hidden`: text for assistive tech only. */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- #8: the top bar --------------------------------------------------------------------------------------- */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  background: rgb(0 0 0 / 94%);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  /* The hairline appears only once content scrolls under the bar, as on iOS. */
+  border-bottom: 0.5px solid transparent;
+  transition: border-color var(--dur-fast) var(--ease-ui);
+}
+
+.top[data-collapsed] {
+  border-bottom-color: var(--line);
+}
+
+.top-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+}
+
+/* The dot's 44 px target starts at the screen edge, so its 12 px circle lines up with the 16 px content gutter. */
+.top-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.top-back {
+  min-height: var(--tap);
+  padding: 0 var(--s-4);
+  font-size: var(--t-body);
+  font-weight: 400;
+}
+
+.top-trail {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.top-trail .link {
+  min-height: var(--tap);
+  padding: 0 var(--s-4);
+  font-size: var(--t-body);
+}
+
+.top-title {
+  max-width: 56vw;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--t-headline);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(var(--s-1));
+  transition: opacity var(--dur-fast) var(--ease-ui), transform var(--dur-base) var(--ease-ui);
+}
+
+.top[data-collapsed] .top-title {
+  opacity: 1;
+  transform: none;
+}
+
+/* Small round status dot: a 44 px target whose 12 px circle carries the colour (ADR-0037 tokens). */
+.status-dot {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.status-dot::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--status-dot, var(--muted));
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 12%);
+}
+
+.status-dot[data-state='red'] { --status-dot: var(--danger); }
+.status-dot[data-state='yellow'] { --status-dot: var(--warn); }
+.status-dot[data-state='green'] { --status-dot: var(--done); }
+
+/* A vault read is running: the dot pulses (reduced motion: a static ring instead, below). */
+.status-dot[data-busy]::before {
+  animation: dot-pulse 1.2s var(--ease-ui) infinite;
+}
+
+@keyframes dot-pulse {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-dot, var(--muted)) 70%, transparent); }
+  to { box-shadow: 0 0 0 8px transparent; }
+}
+
+/* A stale (yellow) or failed (red) vault read; a 28 px pill with a 44 px hit area. Opens Status. */
+.vault-chip {
+  position: relative;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 var(--s-2);
+  border: none;
+  border-radius: var(--r-pill);
+  font-size: var(--t-footnote);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.vault-chip::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--s-2)) calc(-1 * var(--s-1));
+}
+
+.vault-chip[data-tone='yellow'] { background: var(--warn-soft); color: var(--warn); }
+.vault-chip[data-tone='red'] { background: var(--danger-soft); color: var(--danger); }
+
+/* Pull to refresh: an arrow under the bar that turns to point up once a release would refresh. */
+.ptr {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: var(--s-6);
+  height: var(--s-6);
+  margin: var(--s-2) 0 0 calc(-1 * var(--s-4));
+  border-radius: 50%;
+  background: var(--raised);
+  color: var(--muted);
+  opacity: var(--pull);
+  transform: translateY(calc(var(--pull) * var(--s-4))) rotate(calc(var(--pull) * 180deg));
+  pointer-events: none;
+}
+
+.ptr[data-armed] { color: var(--accent); }
+.ptr svg { width: 18px; height: 18px; }
+
+/* ---- #8: the large title (a real h1 in the content) --------------------------------------------------------- */
+h1.large-title {
+  margin: var(--s-2) 0 var(--s-3);
+  color: var(--text);
+  font-size: var(--t-largetitle);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+/* The Scouts page lines up with every other screen's 16 px gutter (its section used to add its own 16 px). */
+.app[data-tab='scouts'] .scouts {
+  padding: 0;
+}
+
+/* Today keeps its Overview/Boards switch on the title's baseline. */
+.today-head h1.large-title { margin: 0; }
+
+/* ---- C3: the capture button ------------------------------------------------------------------------------- */
+.fab {
+  position: fixed;
+  z-index: 3;
+  right: calc(var(--s-4) + env(safe-area-inset-right));
+  bottom: calc(var(--tabbar-h) + var(--s-4) + env(safe-area-inset-bottom));
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  height: 48px;
+  min-width: 48px;
+  padding: 0 var(--s-4) 0 var(--s-3);
+  border: none;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--bg);
+  font-size: var(--t-subhead);
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.5);
+  transition: padding var(--dur-base) var(--ease-ui), gap var(--dur-base) var(--ease-ui),
+    transform var(--dur-press) var(--ease-ui), filter var(--dur-press) var(--ease-ui);
+}
+
+.fab-plus {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.fab-verb {
+  max-width: 7em;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width var(--dur-base) var(--ease-ui), opacity var(--dur-fast) var(--ease-ui);
+}
+
+/* While scrolling down: a 48 px circle (14 + 20 + 14). Compact at rest too: 48 px tall, a 44 px+ target. */
+.fab[data-compact] {
+  gap: 0;
+  padding: 0 14px;
+}
+
+.fab[data-compact] .fab-verb {
+  max-width: 0;
+  opacity: 0;
+}
+
+/* ---- the tab bar ------------------------------------------------------------------------------------------ */
+.tabbar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  gap: 2px;
+  padding: var(--s-1) calc(var(--s-2) + env(safe-area-inset-right)) calc(var(--s-1) + env(safe-area-inset-bottom))
+    calc(var(--s-2) + env(safe-area-inset-left));
+  background: rgb(0 0 0 / 94%);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border-top: 0.5px solid var(--line);
+}
+
+.tabbar .tab {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 48px;
+  padding: var(--s-1) 2px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--t-caption2);
+  font-weight: 600;
+  /* The Log tab's hold opens Character: no iOS callout or text selection on a long press. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The Log tab's hidden "Log, level 12" sits inside its own button, not after the visible label. */
+.tabbar .tab .visually-hidden {
+  top: 0;
+  left: 0;
+}
+
+.tabbar .tab svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+.tabbar .tab[aria-pressed='true'] {
+  color: var(--accent);
+}
+
+/* ---- D2: the XP strip along the tab bar's top edge ------------------------------------------------------- */
+.xp-strip {
+  position: absolute;
+  top: -1px;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: var(--game-track);
+  pointer-events: none;
+}
+
+.xp-strip-fill,
+.xp-strip-rested,
+.xp-strip-glow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.xp-strip-fill {
+  border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  background: var(--accent);
+  transition: width var(--dur-slow) var(--ease-ui);
+}
+
+/* The rested reserve: the same lighter run as the Log card's `.xp-rested`. */
+.xp-strip-rested {
+  background: var(--accent);
+  opacity: 0.35;
+  transition: left var(--dur-slow) var(--ease-ui), width var(--dur-slow) var(--ease-ui);
+}
+
+/* An XP gain is earned: the fill overshoots into place (rewards-only ease). A new level jumps. */
+.xp-strip[data-motion='reward'] :is(.xp-strip-fill, .xp-strip-rested) {
+  transition-duration: var(--dur-slow);
+  transition-timing-function: var(--ease-reward);
+}
+
+.xp-strip[data-motion='none'] :is(.xp-strip-fill, .xp-strip-rested) {
+  transition: none;
+}
+
+/* The "+XP" float landed: a brief gold glow over the fill, after the fill has moved. */
+.xp-strip-glow {
+  border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  background: var(--game-gold);
+  box-shadow: 0 0 8px 1px color-mix(in srgb, var(--game-gold) 70%, transparent);
+  opacity: 0;
+  animation: xp-glow 1.1s var(--ease-ui) both;
+}
+
+@keyframes xp-glow {
+  0%, 25% { opacity: 0; }
+  40% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Rested: a tiny "zz" at the strip's right end, clear of the Log icon. */
+.xp-strip-zz {
+  position: absolute;
+  top: var(--s-1);
+  right: var(--s-2);
+  color: var(--accent);
+  font-size: var(--t-caption2);
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+/* D2 float path: while the "+XP" travels to the strip it pops in and holds; the travel itself fades it out. */
+.reward-xp-travel {
+  display: block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reward-xp-travel.is-moving .reward-xp {
+    animation: xp-pop 1.7s var(--ease-reward) both;
+  }
+}
+
+@keyframes xp-pop {
+  0% { opacity: 0; transform: translateY(18px) scale(0.8); }
+  20%, 100% { opacity: 1; transform: none; }
+}
+
+/* ---- shared chip row (Capture types) ---------------------------------------------------------------------- */
+.chip-row {
+  display: flex;
+  gap: var(--s-2);
+  margin: 0 calc(-1 * var(--s-4));
+  padding: 0 var(--s-4);
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Edge fade: a cut chip says the row continues. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--s-4), #000 calc(100% - var(--s-5)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--s-4), #000 calc(100% - var(--s-5)), transparent);
+}
+
+.chip-row::-webkit-scrollbar { display: none; }
+
+.chip-row-item {
+  position: relative;
+  flex: none;
+  min-height: 36px;
+  padding: 0 var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--t-subhead);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* A 36 px pill with a 44 px hit area. */
+.chip-row-item::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--s-1)) 0;
+}
+
+.chip-row-item[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* Capture's five types wrap onto a second line instead of hiding Check-in off the edge of a 390 px sheet. */
+.chip-row.capture-types {
+  flex-wrap: wrap;
+  row-gap: var(--s-3);
+  margin: 0;
+  padding: var(--s-1) 0;
+  overflow: visible;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* ---- C3: Capture -> Check-in uses the existing form; the sheet header already names it. -------------------- */
+.checkin-sheet .mood {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.checkin-sheet .mood > h2 { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot[data-busy]::before {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-dot, var(--muted)) 45%, transparent);
+  }
+
+  .ptr { transform: none; }
+}

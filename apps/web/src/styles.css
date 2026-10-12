@@ -79,101 +79,6 @@ textarea:focus-visible {
   padding-bottom: calc(var(--tabbar-h) + 88px + env(safe-area-inset-bottom));
 }
 
-.top {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: rgb(0 0 0 / 88%);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--line);
-  padding: calc(8px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 8px
-    calc(16px + env(safe-area-inset-left));
-}
-
-.top-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  justify-content: flex-end;
-}
-
-.top-actions .link {
-  min-height: 32px;
-}
-
-/* Small round status dot: a 44px target whose 12px circle carries the colour. */
-.status-dot {
-  flex: none;
-  width: var(--tap);
-  height: var(--tap);
-  min-width: var(--tap);
-  min-height: var(--tap);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  background: transparent;
-}
-
-.status-dot::before {
-  content: '';
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--status-dot, var(--muted));
-  box-shadow: 0 0 0 1px rgb(255 255 255 / 12%);
-}
-
-.status-dot[data-state='red'] { --status-dot: var(--danger); }
-.status-dot[data-state='yellow'] { --status-dot: var(--warn); }
-.status-dot[data-state='green'] { --status-dot: var(--done); }
-
-/* Fixed bottom tab bar (ADR-0037 dark iOS tokens). Five icon+label buttons; the page and FAB clear it. */
-.tabbar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 3;
-  display: flex;
-  gap: 2px;
-  padding: 4px calc(6px + env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom))
-    calc(6px + env(safe-area-inset-left));
-  background: rgb(0 0 0 / 88%);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border-top: 1px solid var(--line);
-}
-
-.tabbar .tab {
-  flex: 1;
-  min-width: 0;
-  min-height: 48px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 4px 2px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: var(--t-caption2);
-  font-weight: 600;
-}
-
-.tabbar .tab svg {
-  display: block;
-  width: 24px;
-  height: 24px;
-}
-
-.tabbar .tab[aria-pressed='true'] {
-  color: var(--accent);
-}
-
 .back {
   min-height: var(--tap);
   padding: 0;
@@ -624,21 +529,6 @@ textarea:focus-visible {
   color: var(--warn);
 }
 
-.fab {
-  position: fixed;
-  right: calc(20px + env(safe-area-inset-right));
-  bottom: calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom));
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: none;
-  background: var(--accent);
-  color: var(--bg);
-  font-size: var(--t-largetitle);
-  line-height: 1;
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.2);
-}
-
 /* Review #4: a dark raised capsule that drops from under the header, never a white slab over content. */
 .toast {
   position: fixed;
@@ -849,15 +739,9 @@ body:has(.reward-banner) .toast {
   padding: 0;
 }
 
-.vault-status { display: flex; align-items: start; gap: 0.5rem; margin-bottom: 1rem; font-size: var(--t-footnote); }
-.vault-status details { flex: 1; min-width: 0; }
-.vault-status summary { cursor: pointer; min-height: 44px; }
-.vault-status summary > span { display: block; }
-.vault-status button { min-height: 44px; min-width: 44px; }
 
 /* ux3: the Status sheet (opened from the status dot) - grouped, always-visible read-only rows. */
 .status-sheet { margin-bottom: 1rem; }
-.status-sheet-title { margin: 8px 0 0; font-size: var(--t-title2); }
 .status-sheet-line { margin: 2px 0; }
 .status-sheet-sources,
 .status-sheet-scouts { list-style: none; margin: 0; padding: 0; }
@@ -1028,16 +912,6 @@ body:has(.reward-banner) .toast {
 .triage-indicator { margin: 12px 0; }
 .triage-checkin { max-width: 420px; margin: 12px auto; padding: 20px; border: 1px solid var(--line); border-radius: var(--r-sheet); background: var(--surface); display: grid; gap: 14px; }
 /* Dark iOS refresh, slice 4 — Training and History in iPhone mode: large titles, inset cards, small bar charts. */
-.app[data-tab='training'] .training > h2,
-.app[data-tab='history'] .progress > h1 {
-  font-size: var(--t-largetitle);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
-  text-transform: none;
-  color: var(--text);
-  margin: 8px 0 12px;
-}
 .app[data-tab='training'] { --chart: var(--ios-cyan); }
 .app[data-tab='history'] { --chart: var(--ios-green); }
 
@@ -1106,15 +980,6 @@ body:has(.reward-banner) .toast {
 
 /* LG1b: the Learning view mirrors Training — inset card, kind chips, effort/quality split and score sparks. */
 .app[data-tab='learning'] { --chart: var(--ios-cyan); }
-.app[data-tab='learning'] .learning > h2 {
-  font-size: var(--t-largetitle);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
-  text-transform: none;
-  color: var(--text);
-  margin: 8px 0 12px;
-}
 .app[data-tab='learning'] .learning-list {
   background: var(--surface);
   border: none;
@@ -1181,27 +1046,6 @@ body:has(.reward-banner) .toast {
 .progress .progress-days { margin-bottom: 0; }
 
 /* Dark iOS refresh, slice 1 — Today in iPhone mode: large title, inset cards, coloured source chips. */
-
-/* UX8: Today's large title is the real h1 in .today-head (one accessible heading); Tasks/All keep the CSS title. */
-.app[data-tab='tasks'] .content::before {
-  content: 'Tasks';
-  display: block;
-  font-size: var(--t-largetitle);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
-  margin: 8px 0 4px;
-}
-
-.app[data-tab='all'] .content::before {
-  content: 'All tasks';
-  display: block;
-  font-size: var(--t-largetitle);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
-  margin: 8px 0 4px;
-}
 
 .app:is([data-tab='tasks'], [data-tab='all']) .tasks,
 .app:is([data-tab='tasks'], [data-tab='all']) .action-list {
@@ -1306,13 +1150,6 @@ body:has(.reward-banner) .toast {
 }
 
 /* Dark iOS refresh, slice 5 — Notes in iPhone mode, sheets with a grabber, Radar in purple (ResearchRadar.css). */
-.app[data-tab='notes'] .notes > h1 {
-  font-size: var(--t-largetitle);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
-  margin: 8px 0 12px;
-}
 .app[data-tab='notes'] .note-list {
   background: var(--surface);
   border-radius: var(--r-control);
@@ -1352,7 +1189,6 @@ body:has(.reward-banner) .toast {
 .edit-sheet input,
 .edit-sheet select,
 .sheet label input { background: var(--surface); border-color: transparent; }
-.vault-status .read-speed { margin: 0.25rem 0 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
 
 /* Health history (HC3b): the card's range chips plus a plain gap-aware line; keeps the neutral cyan token. */
 .health-history { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -1428,7 +1264,6 @@ body:has(.reward-banner) .toast {
 
 /* UX8 (layout C): the compact header line, the Today title + Overview/Boards switch, the Next up card, the
    two-column tile grid and the collapsed Since I was here pane. Dark iOS tokens as the rest of the sheet. */
-.top-actions .sync-line { margin-right: auto; }
 
 .today-head {
   display: flex;
@@ -1436,14 +1271,6 @@ body:has(.reward-banner) .toast {
   justify-content: space-between;
   gap: 12px;
   margin: 8px 0 4px;
-}
-
-.today-title {
-  font-size: var(--t-largetitle);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
-  margin: 0;
 }
 
 .today-view {

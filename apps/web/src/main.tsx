@@ -10,6 +10,7 @@ import { announceUpdateReady } from './update-ready.ts';
 import './tokens.css';
 import './styles.css';
 import './motion.css';
+import './nav.css';
 
 async function start() {
   const root = createRoot(document.getElementById('root') as HTMLElement);
