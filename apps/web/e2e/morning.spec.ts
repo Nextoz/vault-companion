@@ -131,6 +131,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await sheet.evaluate((element) => { element.scrollTop = element.scrollHeight; });
         expect(await sheet.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
       }
+      // The sheet springs in (R2): measure once it is at rest, not mid-slide.
+      await expect.poll(async () => { const b = await close.boundingBox(); return b ? b.y + b.height : Infinity; }).toBeLessThanOrEqual(844);
       const box = await close.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.y).toBeGreaterThanOrEqual(0);
