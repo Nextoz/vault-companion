@@ -89,6 +89,8 @@ test('a tile opens the badge detail; Pin toggles, a fourth pin is refused, and T
   await refused.getByRole('button', { name: 'Pin', exact: true }).click();
   await expect(refused).toContainText('You can pin up to 3 achievements.');
   await refused.getByRole('button', { name: 'Close' }).click();
+  // R2: Close slides the detail out (inert meanwhile) before it closes; Escape is for the page beneath.
+  await expect(refused).toHaveCount(0);
 
   // Escape leaves the page for the overview, where Tracked lists the pins in pin order.
   await page.keyboard.press('Escape');

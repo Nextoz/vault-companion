@@ -125,6 +125,10 @@
   --dur-fast: 120ms;
   --dur-base: 220ms;
   --dur-slow: 360ms;
+  --dur-sheet: 280ms; /* a sheet slides in or out (R2) */
+  --dur-fade: 150ms; /* the reduced-motion crossfade; the done ring filling */
+  --dur-draw: 200ms; /* the done tick and line-through drawing */
+  --dur-hold: 600ms; /* a done row stays in place before it collapses */
 
   /* ---- layout ---- */
   --tap: 44px;

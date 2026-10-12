@@ -756,6 +756,8 @@ test('review O6: reads that stay stale offer "Reset saved-actions history", whic
 });
 
 test('review O1: after a burst of captures made offline, every task read asks about at most 8 commits', async ({ page, context }) => {
+  // Twelve sheets, each sliding in (R2) before its controls are stable to click: about 27 s alone on the dev machine.
+  test.setTimeout(60_000);
   await page.goto('/');
   await goTo(page, 'Tasks');
   await expect(region(page, 'Today').getByText('Water the plants')).toBeVisible();

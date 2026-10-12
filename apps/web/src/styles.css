@@ -331,24 +331,6 @@ textarea:focus-visible {
   border-color: var(--accent);
 }
 
-.check-on::before {
-  border-style: solid;
-  border-color: var(--done);
-  background: var(--done);
-}
-
-/* The tick inside a done circle: drawn, not an asset; black on green meets WCAG AA. */
-.check-on::after {
-  content: '';
-  position: absolute;
-  left: 18px;
-  top: 14px;
-  width: 6px;
-  height: 11px;
-  border: solid var(--ios-bg);
-  border-width: 0 2.5px 2.5px 0;
-  transform: rotate(45deg);
-}
 
 .task-body {
   display: flex;
@@ -467,13 +449,6 @@ textarea:focus-visible {
   font-size: inherit;
 }
 
-.group-toggle::after {
-  content: ' ▸';
-}
-
-.group-toggle[aria-expanded='true']::after {
-  content: ' ▾';
-}
 
 .group-frozen .task {
   opacity: 0.6;
@@ -713,14 +688,6 @@ body:has(.reward-banner) .toast {
   text-transform: inherit;
 }
 
-.active-work-toggle::after {
-  content: ' ▾';
-  color: var(--muted);
-}
-
-.active-work-toggle[aria-expanded='false']::after {
-  content: ' ▸';
-}
 
 .active-work-body {
   padding: 0;
@@ -1030,8 +997,6 @@ body:has(.reward-banner) .toast {
 .progress-earlier > ul > li { border-bottom: 1px solid var(--line); }
 .progress-week { display: block; width: 100%; min-height: var(--tap); padding: 10px 0; border: none; background: transparent; color: inherit;
   text-align: left; font: inherit; text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; cursor: pointer; }
-.progress-week::after { content: ' ▸'; color: var(--muted); }
-.progress-week[aria-expanded='true']::after { content: ' ▾'; }
 .progress-evidence { padding-bottom: 8px; overflow-wrap: anywhere; }
 .progress-evidence h3 { font-size: var(--t-footnote); text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 10px 0 2px; }
 .progress-evidence li { padding: 4px 0; }

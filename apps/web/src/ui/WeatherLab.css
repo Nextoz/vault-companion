@@ -94,5 +94,3 @@ circle.weather-day-temp-comparison { fill: var(--muted); }
 /* A flex summary drops the native disclosure triangle: draw one so both toggles read as tappable. */
 .weather-sources > summary, .weather-day-hours > summary { list-style: none; gap: 6px; }
 .weather-sources > summary::-webkit-details-marker, .weather-day-hours > summary::-webkit-details-marker { display: none; }
-.weather-sources > summary::before, .weather-day-hours > summary::before { content: '▸'; }
-.weather-sources[open] > summary::before, .weather-day-hours[open] > summary::before { content: '▾'; }
