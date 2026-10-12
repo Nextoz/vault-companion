@@ -4,9 +4,13 @@ import {
   characterConfig,
   computeCharacter,
   computeStepMilestones,
+  describeAchievement,
+  earnedByPhrase,
   StoreUnavailable,
   StoreUnknownOutcome,
   userDate,
+  type AchievementResult,
+  type Character,
   type GameRecord,
   type VaultStore,
 } from '@vault-companion/domain';
@@ -14,6 +18,9 @@ import {
   effectiveRadarDecisions,
   type ApiError,
   type BooksResponse,
+  type GameAchievement,
+  type GameCharacter,
+  type GameFeedback,
   type GameResponse,
   type GameRules,
   type HealthHistoryResponse,
@@ -40,6 +47,33 @@ const isError = (value: unknown): value is ApiError =>
   typeof value === 'object' && value !== null && 'code' in value && 'retryable' in value;
 /** One failing reader never rejects the batch: it becomes a named, unavailable source. */
 const settle = <T>(read: () => Promise<T | ApiError>): Promise<T | ApiError> => read().catch(() => UNAVAILABLE);
+
+/** The wire Character: exactly the GAM1 fields. ADR-0064 additions travel in `feedback`, never here (strict schema). */
+function wireAchievement(a: AchievementResult): GameAchievement {
+  return {
+    id: a.id, name: a.name, category: a.category, type: a.type, points: a.points, earned: a.earned, earnedDate: a.earnedDate,
+    visible: a.visible, locked: a.locked, lockedReason: a.lockedReason, chain: a.chain, tier: a.tier, progress: a.progress,
+  };
+}
+
+function wireCharacter(c: Character): GameCharacter {
+  return {
+    rulesVersion: c.rulesVersion, xp: c.xp, level: c.level, levelXp: c.levelXp, levelCost: c.levelCost, restedXp: c.restedXp,
+    title: c.title, professions: [...c.professions], achievements: c.achievements.map(wireAchievement), feats: c.feats.map(wireAchievement),
+    points: c.points, skippedRecords: c.skippedRecords,
+  };
+}
+
+/** ADR-0064: descriptions and "earned by" lines. A hidden achievement says nothing until it is earned. */
+function gameFeedback(c: Character): GameFeedback {
+  const achievements: GameFeedback['achievements'] = {};
+  for (const a of [...c.achievements, ...c.feats]) {
+    const definition = characterConfig.achievements.find((d) => d.id === a.id);
+    if (!definition || (a.type === 'hidden' && !a.earned)) continue;
+    achievements[a.id] = { description: describeAchievement(definition, characterConfig), earnedBy: earnedByPhrase(a.earnedBy) };
+  }
+  return { criticals: c.criticals, critical: { every: characterConfig.critical.every, multiplier: characterConfig.critical.multiplier }, achievements };
+}
 
 /** The live rules, projected from the single `characterConfig` so the web "How XP works" page cannot drift. */
 function gameRules(): GameRules {
@@ -143,9 +177,10 @@ export function createGameService(deps: GameDeps) {
           now: now.toISOString(),
           rules: gameRules(),
           // Spreads turn the domain's readonly arrays into the wire schema's mutable shape.
-          character: { ...character, professions: [...character.professions], achievements: [...character.achievements], feats: [...character.feats] },
+          character: wireCharacter(character),
           stepMilestones: stepMilestones === null ? null : { ...stepMilestones, earned: [...stepMilestones.earned] },
           unavailable,
+          feedback: gameFeedback(character),
         };
       } catch (e) {
         if (e instanceof StoreUnavailable || e instanceof StoreUnknownOutcome) return UNAVAILABLE;

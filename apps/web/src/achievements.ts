@@ -185,11 +185,6 @@ export function planToasts(
   return { kind: 'individual', items, seenIds: items.map((item) => item.id) };
 }
 
-/** "Achievement earned · First Flag · 10 pts"; a masked achievement drops the points. */
-export function toastText(item: ToastItem): string {
-  return item.hidden ? `Achievement earned · ${item.name}` : `Achievement earned · ${item.name} · ${item.points} pts`;
-}
-
 /** "7 step milestones earned since 2024"; the year is dropped when there is none. */
 export function summaryText(summary: SummaryToast): string {
   const many = `${summary.count} step milestone${summary.count === 1 ? '' : 's'}`;

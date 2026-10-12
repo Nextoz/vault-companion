@@ -127,6 +127,28 @@ describe('GET /api/game', () => {
     expect(leaked()).toBe(false);
   });
 
+  it('sends ADR-0064 feedback beside an unchanged strict Character (old clients keep parsing)', async () => {
+    const store = await InMemoryStore.create(await baseFiles());
+    const { body } = await get(store);
+    // GameResponse.parse above uses the strict GAM1 Character: any ADR-0064 field leaking into it would fail here.
+    expect(body!.feedback!.critical).toEqual(characterConfig.critical);
+    expect(body!.feedback!.criticals).toBeGreaterThanOrEqual(0);
+    expect(body!.feedback!.achievements['quartermaster-tasks-10']).toEqual({ description: 'Complete 10 tasks.', earnedBy: null });
+    expect(body!.feedback!.achievements['athletics-first']).toEqual({ description: 'Log 1 training session.', earnedBy: 'Logging a training session' });
+    // Hidden and unearned: nothing that would spoil it.
+    expect(body!.feedback!.achievements['long-way-back']).toBeUndefined();
+  });
+
+  it('an installed older client (pre-feedback schema, strict nested objects) parses the real payload', async () => {
+    const store = await InMemoryStore.create(await baseFiles());
+    const res = await makeApp(store, {}, true).request('/api/game', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+    const raw: unknown = await res.json();
+    const olderClient = GameResponse.omit({ feedback: true }).strip();
+    const parsed = olderClient.parse(raw);
+    expect('feedback' in parsed).toBe(false);
+    expect(parsed.character.achievements.length).toBeGreaterThan(0);
+  });
+
   it('reports the live rules straight from characterConfig, so the web page cannot hard-code them', async () => {
     const store = await InMemoryStore.create(await baseFiles());
     const { body } = await get(store);

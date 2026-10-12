@@ -2,7 +2,7 @@ import { achievementCatalogue } from './catalogue.ts';
 import type { CharacterConfig } from './types.ts';
 
 export const characterConfig: CharacterConfig = {
-  rulesVersion: 1,
+  rulesVersion: 2,
   professions: [{ id: 'athletics', name: 'Athletics' }, { id: 'scholar', name: 'Scholar' }, { id: 'lorekeeper', name: 'Lorekeeper' }, { id: 'quartermaster', name: 'Quartermaster' }],
   sources: {
     training: { profession: 'athletics', enabled: true, identityField: 'type', baseXp: 30, dailyCap: 2, minutes: { field: 'duration', format: 'duration', after: 20, step: 5, xp: 1, maxBonus: 20 } },
@@ -28,6 +28,8 @@ export const characterConfig: CharacterConfig = {
   ],
   level: { min: 1, max: 60, baseCost: 100, costStep: 15 },
   rested: { perDay: 15, max: 150, multiplier: 0.5 },
+  // ADR-0064: about one capped award in eight is a "Critical!" with double base XP (rested applies on top).
+  critical: { every: 8, multiplier: 2 },
   titles: [{ level: 1, title: 'New Adventurer' }, { level: 10, title: 'Adventurer' }, { level: 30, title: 'Veteran' }, { level: 60, title: 'Seasoned Hero' }],
   dayOneDays: 7,
   achievements: achievementCatalogue,

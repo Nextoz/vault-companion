@@ -41,6 +41,8 @@ export interface CharacterConfig {
   readonly ranks: readonly { readonly skill: number; readonly name: string; readonly title: string }[];
   readonly level: { readonly min: number; readonly max: number; readonly baseCost: number; readonly costStep: number };
   readonly rested: { readonly perDay: number; readonly max: number; readonly multiplier: number };
+  /** A deterministic surprise: about one award in `every` has its base XP multiplied (ADR-0064). */
+  readonly critical: { readonly every: number; readonly multiplier: number };
   readonly titles: readonly { readonly level: number; readonly title: string }[];
   readonly dayOneDays: number;
   readonly achievements: readonly AchievementDefinition[];
@@ -68,6 +70,8 @@ export interface AchievementResult {
   readonly lockedReason: string | null;
   readonly chain: string | null;
   readonly tier: number | null;
+  /** The source of the record whose award earned it (`task`, `training`, ...); null when unearned. */
+  readonly earnedBy: string | null;
   /** Weekly rhythm intentionally has no resetting counter. */
   readonly progress: { readonly current: number; readonly target: number } | null;
 }
@@ -79,6 +83,8 @@ export interface Character {
   /** Zero at maximum level. */
   readonly levelCost: number;
   readonly restedXp: number;
+  /** How many awards so far were critical (ADR-0064); the phone diffs it to announce a new one. */
+  readonly criticals: number;
   readonly title: string;
   readonly professions: readonly { readonly id: string; readonly name: string; readonly xp: number; readonly skill: number; readonly rank: string; readonly title: string }[];
   readonly achievements: readonly AchievementResult[];

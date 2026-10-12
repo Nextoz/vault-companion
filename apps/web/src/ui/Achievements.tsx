@@ -16,6 +16,7 @@ import {
   tileProgress,
   totalPoints,
 } from '../achievements.ts';
+import { earnedByText } from '../rewards.ts';
 import { CopyNote } from './useLastCopy.tsx';
 import { SheetHeader } from './SheetHeader.tsx';
 import './Achievements.css';
@@ -114,9 +115,10 @@ function WalkingSection({ milestones, today }: { milestones: GameResponse['stepM
 }
 
 /** Screen 4: the badge detail sheet. Close/Escape return focus to the tile that opened it. */
-function AchievementDetail({ achievement, all, today, pinned, onTogglePin, onClose, returnTo }: {
+function AchievementDetail({ achievement, all, feedback, today, pinned, onTogglePin, onClose, returnTo }: {
   achievement: GameAchievement;
   all: readonly GameAchievement[];
+  feedback: GameResponse['feedback'];
   today: string;
   pinned: boolean;
   onTogglePin: (id: string) => TogglePinResult;
@@ -142,14 +144,20 @@ function AchievementDetail({ achievement, all, today, pinned, onTogglePin, onClo
   };
   const chain = hidden ? null : chainLabel(achievement, all);
   const progress = hidden ? null : detailProgress(achievement);
+  // ADR-0064: what it asks, and what earned it. A hidden achievement keeps its secret until earned.
+  const extra = hidden ? undefined : feedback?.achievements[achievement.id];
+  const earnedLine = achievement.earned && achievement.earnedDate !== null
+    ? [shortDate(achievement.earnedDate, today), earnedByText(extra?.earnedBy ?? null)].filter((part) => part !== null).join(' · ')
+    : null;
   return <div className="sheet-backdrop" role="presentation">
     <div ref={sheet} className="sheet achievement-detail" role="dialog" aria-modal="true"
       aria-label={hidden ? 'Hidden achievement' : displayName(achievement)} onKeyDown={onKeyDown}>
       <SheetHeader title={hidden ? '???' : displayName(achievement)} onClose={onClose} />
       <div className="achievement-detail-body">
+        {extra !== undefined && <p className="achievement-detail-description">{extra.description}</p>}
         {!hidden && <p className="achievement-detail-points">{displayPoints(achievement)} pts</p>}
         {chain !== null && <p className="achievement-detail-chain">{chain}</p>}
-        {achievement.earned && achievement.earnedDate !== null && <p className="muted">{shortDate(achievement.earnedDate, today)}</p>}
+        {earnedLine !== null && <p className="achievement-detail-earned" data-testid="achievement-earned-line">{earnedLine}</p>}
         {progress !== null && <div className="achievement-detail-progress">
           <span className="achievements-bar" role="img" aria-label={`${achievement.name}: ${progress.label}`}><span style={{ width: `${progress.percent}%` }} /></span>
           <span className="muted">{progress.label}</span>
@@ -207,7 +215,7 @@ export function AchievementsPage({ data, view, retry, onBack, pinnedIds, onPinsC
           <WalkingSection milestones={data.stepMilestones} today={today} />
         </>}
     </div>}
-    {detail !== null && data !== null && <AchievementDetail achievement={detail.achievement} all={data.character.achievements} today={today}
+    {detail !== null && data !== null && <AchievementDetail achievement={detail.achievement} all={data.character.achievements} feedback={data.feedback} today={today}
       pinned={pinnedIds.includes(detail.achievement.id)} onTogglePin={onTogglePin} returnTo={detail.from} onClose={() => setDetail(null)} />}
   </>;
 }

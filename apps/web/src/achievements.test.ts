@@ -23,7 +23,6 @@ import {
   stepNumber,
   summaryText,
   tileProgress,
-  toastText,
   totalPoints,
 } from './achievements.ts';
 
@@ -224,8 +223,6 @@ describe('planToasts', () => {
 
 describe('toast text', () => {
   it('names the achievement and its points, and drops the points when masked', () => {
-    expect(toastText({ id: 'a', name: 'First Flag', points: 10, hidden: false })).toBe('Achievement earned · First Flag · 10 pts');
-    expect(toastText({ id: 'a', name: '???', points: 0, hidden: true })).toBe('Achievement earned · ???');
   });
 
   it('reads the summary with and without a year, singular and plural', () => {

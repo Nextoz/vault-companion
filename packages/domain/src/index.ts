@@ -36,4 +36,5 @@ export * from './game/types.ts';
 export * from './game/config.ts';
 export * from './game/catalogue.ts';
 export * from './game/engine.ts';
+export * from './game/describe.ts';
 export * from './game/step-milestones.ts';

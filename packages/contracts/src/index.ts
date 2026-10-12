@@ -1519,6 +1519,24 @@ export const GameRules = z.strictObject({
 });
 export type GameRules = z.infer<typeof GameRules>;
 
+/**
+ * ADR-0064 reward feedback. A separate top-level field on purpose: the nested Character objects are strict, so new
+ * fields there would make an installed older client reject the whole read, while it strips unknown top-level keys.
+ */
+export const GameFeedback = z.strictObject({
+  /** Critical awards so far; the phone diffs two reads to announce a new one. */
+  criticals: z.number().int().nonnegative(),
+  critical: z.strictObject({ every: z.number().int().nonnegative(), multiplier: z.number() }),
+  /** Keyed by achievement id. Hidden achievements appear only once earned. */
+  achievements: z.record(z.string(), z.strictObject({
+    /** What it asks, one sentence: "Complete 10 tasks." */
+    description: z.string(),
+    /** What earned it: "Completing a task"; null while unearned. */
+    earnedBy: z.string().nullable(),
+  })),
+});
+export type GameFeedback = z.infer<typeof GameFeedback>;
+
 export const GameResponse = z.strictObject({
   revision: commitSha,
   now: isoInstant,
@@ -1529,6 +1547,8 @@ export const GameResponse = z.strictObject({
   stepMilestones: GameStepMilestones.nullable(),
   /** Named sources that failed to read: `training`, `learning`, `library`, `tasks`, `health`. */
   unavailable: z.array(z.string()),
+  /** Optional so a new client still reads an older Worker during a rollout. */
+  feedback: GameFeedback.optional(),
 });
 export type GameResponse = z.infer<typeof GameResponse>;
 export * from './dashboard.ts';

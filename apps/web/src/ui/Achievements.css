@@ -1,9 +1,8 @@
-/* GAM1-C: the Achievements page (plan screen 3), the badge detail sheet (screen 4) and the toast (screen 6).
-   The game palette is repeated here so the detail sheet and the toast, which can sit outside .character-sheet,
-   keep the same gold and well colours. */
+/* GAM1-C: the Achievements page (plan screen 3) and the badge detail sheet (screen 4); the toast became the ADR-0064
+   reward layer (Rewards.css). The game palette is repeated here so the detail sheet, which can sit outside .character-sheet,
+   keeps the same gold and well colours. */
 .achievements-content,
-.achievement-detail,
-.achievement-toasts {
+.achievement-detail {
   --game-gold: #f2c86b;
   --game-well: rgb(255 255 255 / 0.05);
   --game-track: rgb(255 255 255 / 0.09);
@@ -56,36 +55,11 @@
 
 /* ---- screen 4: the badge detail sheet ---- */
 .achievement-detail-body { display: flex; flex-direction: column; gap: 10px; }
+.achievement-detail-description { margin: 0; color: var(--text); font-size: 1rem; line-height: 1.35; }
+.achievement-detail-earned { margin: 0; color: var(--game-gold); font-size: 0.88rem; }
 .achievement-detail-points { margin: 0; color: var(--game-gold); font-weight: 600; }
 .achievement-detail-chain { margin: 0; color: var(--muted); }
 .achievement-detail-progress { display: flex; flex-direction: column; gap: 6px; }
 .achievement-detail-locked { margin: 0; }
 .achievement-pin { min-height: var(--tap); padding: 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--game-well); color: var(--accent); font-weight: 600; }
 .achievement-pin-note { margin: 0; color: var(--warn); font-size: 0.85rem; }
-
-/* ---- screen 6: a quiet toast on any tab; only the dismiss button takes a tap ---- */
-.achievement-toasts {
-  position: fixed;
-  left: 50%;
-  bottom: calc(var(--tabbar-h) + 88px + env(safe-area-inset-bottom)); /* clears the 56px capture button */
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: min(360px, calc(100vw - 32px));
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-.achievement-toast {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 6px 0 14px;
-  border-radius: 12px;
-  background: var(--text);
-  color: var(--bg);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
-  font-size: 0.85rem;
-}
-.achievement-toast > span { flex: 1 1 auto; min-width: 0; }
-.achievement-toast-dismiss { flex-shrink: 0; width: var(--tap); height: var(--tap); border: 0; background: transparent; color: var(--bg); font-size: 1.15rem; pointer-events: auto; }
