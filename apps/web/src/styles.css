@@ -8,8 +8,9 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Follow the reader's iOS text size (Dynamic Type): the root becomes their body size, and rem sizes scale with it. */
-@supports (font: -apple-system-body) {
+/* Follow the reader's iOS text size (Dynamic Type): the root becomes their body size, and rem sizes scale with it.
+   iOS only (-webkit-touch-callout): macOS Safari resolves -apple-system-body to 13 px and would shrink the whole app. */
+@supports (font: -apple-system-body) and (-webkit-touch-callout: none) {
   :root {
     font: -apple-system-body;
     font-family: var(--font-ui);
@@ -57,11 +58,14 @@ button:active:not(:disabled),
 
 :is(.tile, .next-up, .morning-line, .checkin-line, .siwh-line, .siwh-toggle, .note-row, .progress-week,
   .training-session, .reading-books button, .character-card-button, .character-link-row, .scout-panel,
-  .task-edit, .active-work-toggle, .group-toggle):active:not(:disabled) {
+  .task-edit, .active-work-toggle, .group-toggle, .scout-row, .needs-you-row):active:not(:disabled) {
   transform: none;
   filter: none;
   box-shadow: var(--press-overlay);
 }
+
+/* The full-screen level-up is a button only so a tap anywhere closes it; it must not shrink or flash. */
+.reward-level:active { transform: none; filter: none; }
 
 button:focus-visible,
 textarea:focus-visible {
@@ -663,17 +667,17 @@ textarea:focus-visible {
 /* Review #4: a dark raised capsule that drops from under the header, never a white slab over content. */
 .toast {
   position: fixed;
-  z-index: 20;
+  z-index: 9; /* below sheets (10): an open sheet's header is never covered; Done today keeps its own Undo */
   left: 50%;
-  top: calc(64px + env(safe-area-inset-top));
+  top: calc(3.75rem + env(safe-area-inset-top)); /* under the header, which grows with the text size */
   display: flex;
   align-items: center;
   gap: var(--s-2);
   max-width: calc(100vw - 2 * var(--s-4));
   min-height: var(--tap);
-  padding: 0 var(--s-1) 0 var(--s-4);
+  padding: var(--s-1) var(--s-1) var(--s-1) var(--s-4);
   border: 1px solid var(--line);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-card);
   background: var(--raised);
   color: var(--text);
   font-size: var(--t-subhead);
@@ -684,8 +688,13 @@ textarea:focus-visible {
 
 .toast > span { min-width: 0; overflow-wrap: anywhere; }
 
-/* The achievement banner also drops from the top; while it shows, the toast steps below it instead of hiding Undo. */
-body:has(.reward-banner) .toast { top: calc(120px + env(safe-area-inset-top)); }
+/* The achievement banner owns the top and its height follows its text; while it shows, the toast moves to the bottom,
+   above the capture button, and above the reward layer (z 60), so a tap meant for Undo never lands on the banner. */
+body:has(.reward-banner) .toast {
+  z-index: 61;
+  top: auto;
+  bottom: calc(var(--tabbar-h) + 88px + env(safe-area-inset-bottom));
+}
 
 .toast button {
   flex: none;
@@ -720,7 +729,7 @@ body:has(.reward-banner) .toast { top: calc(120px + env(safe-area-inset-top)); }
   padding: 16px calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom))
     calc(16px + env(safe-area-inset-left));
   background: var(--surface);
-  border-radius: var(--r-card) var(--r-card) 0 0;
+  border-radius: var(--r-sheet) var(--r-sheet) 0 0;
 }
 
 .sheet h2 {
@@ -881,7 +890,7 @@ body:has(.reward-banner) .toast { top: calc(120px + env(safe-area-inset-top)); }
 
 /* ux3: the Status sheet (opened from the status dot) - grouped, always-visible read-only rows. */
 .status-sheet { margin-bottom: 1rem; }
-.status-sheet-title { margin: 8px 0 0; font-size: var(--t-title1); }
+.status-sheet-title { margin: 8px 0 0; font-size: var(--t-title2); }
 .status-sheet-line { margin: 2px 0; }
 .status-sheet-sources,
 .status-sheet-scouts { list-style: none; margin: 0; padding: 0; }
@@ -918,6 +927,7 @@ body:has(.reward-banner) .toast { top: calc(120px + env(safe-area-inset-top)); }
   min-height: 44px;
   min-width: 0;
   font: inherit;
+  font-size: max(16px, var(--t-body)); /* iOS zooms into inputs below 16 px */
   color: inherit;
   background: var(--bg);
   border: 1px solid var(--line);
@@ -1013,7 +1023,7 @@ body:has(.reward-banner) .toast { top: calc(120px + env(safe-area-inset-top)); }
 .triage-card.triage-dragging { transition: none; cursor: grabbing; }
 .triage-card.triage-next { transform: translateY(14px) scale(.955); opacity: .85; pointer-events: none; }
 .triage-datehead { display: flex; align-items: center; gap: 14px; }
-.triage-dateblock { width: 68px; flex: none; border-radius: var(--r-card); padding: 8px 0; display: flex; flex-direction: column; align-items: center; line-height: 1.05; background: var(--accent); color: var(--surface); }
+.triage-dateblock { width: 4rem; flex: none; border-radius: var(--r-card); padding: 8px 0; display: flex; flex-direction: column; align-items: center; line-height: 1.05; background: var(--accent); color: var(--surface); }
 .triage-dateblock span { font-size: var(--t-caption); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .triage-dateblock strong { font-size: var(--t-largetitle); font-weight: 800; font-variant-numeric: tabular-nums; }
 .triage-time { font-size: var(--t-headline); font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -1182,11 +1192,11 @@ body:has(.reward-banner) .toast { top: calc(120px + env(safe-area-inset-top)); }
 .reading-challenge { min-height: var(--tap); }
 .challenge-sheet input, .challenge-sheet textarea { min-width: 0; max-width: 100%; }
 .challenge-reflection { margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--line); background: var(--surface); overflow-wrap: anywhere; }
-.ai-badge { display: inline-block; margin: 8px 0 4px; padding: 2px 8px; border-radius: var(--r-pill); background: var(--accent); color: #fff; font-size: var(--t-footnote); font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+.ai-badge { display: inline-block; margin: 8px 0 4px; padding: 2px 8px; border-radius: var(--r-pill); background: var(--accent); color: var(--bg); font-size: var(--t-footnote); font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
 .challenge-question { margin: 0 0 8px; font-weight: 600; overflow-wrap: anywhere; }
 .chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
 .chip-group button { min-height: var(--tap); padding: 6px 14px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface); color: var(--text); }
-.chip-group button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chip-group button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 /* Progress Wall (ADR-0027) */
 .progress h2 { font-size: var(--t-body); margin: 20px 0 6px; }
 .progress-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-control); padding: 4px 12px 8px; overflow-wrap: anywhere; }
@@ -1623,7 +1633,7 @@ body:has(.reward-banner) .toast { top: calc(120px + env(safe-area-inset-top)); }
   gap: 12px;
   margin: 0 calc(-16px - env(safe-area-inset-right)) 0 calc(-16px - env(safe-area-inset-left));
   padding: 20px calc(16px + env(safe-area-inset-right)) 6px calc(16px + env(safe-area-inset-left));
-  border-radius: var(--r-card) var(--r-card) 0 0;
+  border-radius: var(--r-sheet) var(--r-sheet) 0 0;
   background: var(--raised);
 }
 .sheet-header::before {

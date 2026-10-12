@@ -1,5 +1,5 @@
 // Redesign R1 (review #5, #6): component CSS names a token, never a raw value. Every `font-size` and `border-radius`
-// declaration in apps/web CSS (tokens.css excepted) must be `inherit`, `0`, `50%`, or use a `var(--…)` token. The
+// declaration in apps/web CSS (tokens.css excepted) must be `inherit`, `0`, `50%`, or use defined `var(--…)` tokens. The
 // few intentional exceptions are listed in ALLOWED by exact `file:selector`, each with the reason it is not a token.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -7,6 +7,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const webDir = fileURLToPath(new URL('..', import.meta.url));
+// Token names tokens.css defines: a typo such as var(--t-subheading) is invalid at computed time and silently inherits.
+const defined = new Set([...readFileSync(new URL('./tokens.css', import.meta.url), 'utf8').matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]));
+
+/** Every var() names a defined token and carries no raw fallback (var(--x, 13px) would hide a raw value). */
+function tokensOnly(value: string): boolean {
+  const refs = [...value.matchAll(/var\(\s*(--[\w-]+)\s*([,)])/g)];
+  return refs.length > 0 && refs.every((m) => defined.has(m[1] ?? '') && m[2] === ')');
+}
 
 const ALLOWED: Record<string, string> = {
   // The root size every rem token is relative to (1rem = 17 px); a Dynamic Type `font:` override follows it.
@@ -46,7 +54,7 @@ function scan(file: string): Offence[] {
       if (decl && (decl[1] === 'font-size' || decl[1] === 'border-radius')) {
         const value = (decl[2] ?? '').trim();
         const selector = stack[stack.length - 1] ?? '';
-        const ok = ['inherit', '0', '50%'].includes(value) || value.includes('var(--') || `${rel}:${selector}` in ALLOWED;
+        const ok = ['inherit', '0', '50%'].includes(value) || tokensOnly(value) || `${rel}:${selector}` in ALLOWED;
         if (!ok) offences.push({ where: `${rel}:${startLine}`, text: `${selector} { ${decl[1]}: ${value} }` });
       }
       buffer = '';
