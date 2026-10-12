@@ -1,4 +1,5 @@
 // Small per-device conveniences in localStorage. None of it is vault content; all of it is optional.
+import { rememberedLogView, type LogView } from './log-view.ts';
 import { parseSinceIWasHereSnapshot, type SiwhSnapshot } from './ui/since-i-was-here.ts';
 
 export type CaptureKind = 'task' | 'note' | 'active-work';
@@ -65,4 +66,7 @@ export const prefs = {
    */
   sinceIWasHereSnapshot: (): SiwhSnapshot | null => parseSinceIWasHereSnapshot(read('vc.sinceIWasHere')),
   setSinceIWasHereSnapshot: (snapshot: SiwhSnapshot) => write('vc.sinceIWasHere', JSON.stringify(snapshot)),
+  /** R3b: the Log view last shown on this device, so the Log tab reopens there (Training when unknown). */
+  logView: (): LogView => rememberedLogView(read('vc.logView')),
+  setLogView: (view: LogView) => write('vc.logView', view),
 };

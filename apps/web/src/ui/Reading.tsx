@@ -35,7 +35,6 @@ export function Reading({ refreshKey, accountKey, queue, baseRevision, open, onC
   const shownReflections = current ? reflectionsNewestFirst(current.reflections) : [];
   const ordinals = reflectionOrdinals(shownReflections);
   return <section className="group reading" aria-label="Reading">
-    <h2>Reading</h2>
     <CopyNote view={view} />
     {!res && <p className="muted">Loading reading…</p>}
     {res && !read && <p className="muted">Reading could not be loaded. Refresh when connected.</p>}

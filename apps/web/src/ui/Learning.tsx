@@ -4,7 +4,6 @@ import { copenhagenDay } from '../triage.ts';
 import { BarChart } from './BarChart.tsx';
 import { kindName, learningRowKeys, learningWeekBars, scoreTrends, type ScoreTrend } from '../learning.ts';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
-import { LargeTitle } from './LargeTitle.tsx';
 
 /** A tiny SVG polyline for one kind's scores; the series always has at least two points. */
 function TrendSpark({ values }: { values: readonly number[] }) {
@@ -16,7 +15,11 @@ function TrendSpark({ values }: { values: readonly number[] }) {
   return <svg className="learning-spark" viewBox="0 0 40 16" aria-hidden="true"><polyline points={points} /></svg>;
 }
 
-export function Learning({ refreshKey, accountKey }: { refreshKey: number | null; accountKey: string | null }) {
+export function Learning({ refreshKey, accountKey, onAdd }: {
+  refreshKey: number | null; accountKey: string | null;
+  /** R3b: the empty state's primary action, the same sheet as the capture button. */
+  onAdd: () => void;
+}) {
   const view = useLastCopy<LearningResponse>(accountKey, 'learning', getLearning, refreshKey);
   const res = view.res;
   const read = res?.kind === 'ok' ? res.data : null;
@@ -26,14 +29,16 @@ export function Learning({ refreshKey, accountKey }: { refreshKey: number | null
   const keys = learningRowKeys(rows);
   const today = copenhagenDay(new Date().toISOString());
   return <section className="group learning" aria-label="Learning sessions">
-    <LargeTitle>Learning</LargeTitle>
     <CopyNote view={view} />
     {!res && <p className="muted">Loading learning…</p>}
     {res && !read && <p className="muted">Learning could not be loaded. Refresh when connected.</p>}
     {read?.status === 'absent' && <p className="muted">Learning Gym Log not found. Create Personal/Learning Gym Log.md in Obsidian.</p>}
     {read?.status === 'refused' && <p className="error">{read.message}</p>}
     {read?.status === 'ok' && <>
-      {rows.length === 0 && <p className="muted">No sessions yet.</p>}
+      {rows.length === 0 && <div className="log-empty">
+        <p className="muted">No sessions yet.</p>
+        <button type="button" className="primary" onClick={onAdd}>Log your first session</button>
+      </div>}
       {rows.length > 0 && <BarChart title="Sessions per week" testId="learning-chart" bars={learningWeekBars(rows.map((r) => r.date), today)} />}
       {trends.length > 0 && <ul className="learning-trends" aria-label="Score trend">
         {trends.map((trend) => <li key={trend.kind} data-testid="learning-trend">

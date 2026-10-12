@@ -26,13 +26,13 @@ beforeEach(async () => {
 
 afterEach(() => { dom.window.close(); vi.clearAllMocks(); });
 
-async function mount(data: unknown, accountKey = 'a'.repeat(64)) {
+async function mount(data: unknown, accountKey = 'a'.repeat(64), onAdd: () => void = () => undefined) {
   vi.mocked(getLearning).mockResolvedValue(data as never);
   document.body.replaceChildren();
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  await act(async () => { root.render(createElement(Learning, { refreshKey: null, accountKey })); });
+  await act(async () => { root.render(createElement(Learning, { refreshKey: null, accountKey, onAdd })); });
   return root;
 }
 
@@ -69,6 +69,16 @@ describe('Learning', () => {
     await mount({ kind: 'ok', data: { status: 'refused', revision: '1'.repeat(40), code: 'refused:learning-table-missing', message: 'Learning Gym Log table not found — fix it in Obsidian' } });
     expect(document.body.textContent).toContain('Learning Gym Log table not found');
     expect(document.querySelectorAll('[data-testid="learning-row"]')).toHaveLength(0);
+  });
+
+  it('R3b: an empty log offers its first session, opening the same sheet as the capture button', async () => {
+    const onAdd = vi.fn();
+    await mount({ kind: 'ok', data: LearningResponse.parse({ ...base(), rows: [] }) }, 'a'.repeat(64), onAdd);
+    expect(document.body.textContent).toContain('No sessions yet.');
+    const add = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Log your first session');
+    expect(add?.className).toContain('primary');
+    await act(async () => { add?.click(); });
+    expect(onAdd).toHaveBeenCalledOnce();
   });
 
   it('says a failed read could not be loaded instead of showing rows', async () => {

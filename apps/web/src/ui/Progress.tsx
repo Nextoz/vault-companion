@@ -17,7 +17,6 @@ import { MoodHistory } from './LogMood.tsx';
 import { NoteScreen } from './Notes.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 import type { OpenLink } from './NoteView.tsx';
-import { LargeTitle } from './LargeTitle.tsx';
 
 type Note = NotesResponse['notes'][number];
 const ok = <T,>(r: Fetched<T> | null): T | null | undefined => (r === null ? undefined : r.kind === 'ok' ? r.data : null);
@@ -65,7 +64,6 @@ export function Progress({ refreshKey, queue, queued, accountKey, baseRevision, 
   const [week, ...earlier] = loading ? [] : progressWeeks(inputs, today);
   const evidence = { onOpenLink, onOpenNote: setOpenNote };
   return <section aria-label="Progress" className="progress">
-    <LargeTitle>Progress</LargeTitle>
     <MoodHistory items={queued} queue={queue} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked} />
     <CopyNote view={combineViews([historyView, trainingView, triageView, notesView])} />
     {loading && <p role="status">Loading progress…</p>}

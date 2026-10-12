@@ -56,7 +56,7 @@ button:active:not(:disabled),
   filter: brightness(1.15);
 }
 
-:is(.tile, .next-up, .morning-line, .checkin-line, .siwh-line, .siwh-toggle, .note-row, .progress-week,
+:is(.tile, .next-up, .morning-line, .siwh-line, .note-row, .progress-week,
   .training-session, .reading-books button, .character-card-button, .character-link-row, .scout-panel,
   .task-edit, .active-work-toggle, .group-toggle, .scout-row, .needs-you-row):active:not(:disabled) {
   transform: none;
@@ -115,35 +115,8 @@ textarea:focus-visible {
   margin: 12px 0;
 }
 
-.log-view {
-  margin: 12px 0;
-}
-
-/* Five segments: let each shrink below its label width (Linux fonts overflowed 390 px at 400). */
-.log-view button {
-  min-width: 0;
-  padding-inline: 4px;
-  font-size: var(--t-subhead);
-}
-
-/* GAM1-B: the Log Character card (plan screen 1) and the Character screen (plan screen 2, mockup 2026-10-10).
+/* GAM1-B: the Character screen (plan screen 2, mockup 2026-10-10); the Log's Character strip lives in today-log.css.
    The game keeps its own palette inside these classes: gold for points and the card edge, one hue per profession. */
-.character-card { margin: 12px 0; }
-
-.character-card-button {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-  min-height: var(--tap);
-  padding: 12px 14px;
-  text-align: left;
-  background: var(--surface);
-  border: 1px solid color-mix(in srgb, var(--game-gold) 42%, transparent);
-  border-radius: var(--r-card);
-}
-
-.character-card-head,
 .character-card-empty {
   display: flex;
   align-items: baseline;
@@ -151,10 +124,6 @@ textarea:focus-visible {
   gap: 12px;
 }
 
-.character-card-title { font-size: var(--t-headline); font-weight: 600; }
-.character-card-points { color: var(--game-gold); font-size: var(--t-subhead); font-weight: 600; font-variant-numeric: tabular-nums; }
-.character-card-level { color: var(--muted); font-size: var(--t-subhead); font-variant-numeric: tabular-nums; }
-.character-card-open { margin-top: 2px; color: var(--accent); font-size: var(--t-subhead); }
 .character-card-empty p { margin: 0; }
 
 /* The level bar on the card: a track, the fill, and the rested reserve as a fainter run of the same colour. */
@@ -212,7 +181,7 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
-/* UX2: the compact Today morning card, the check-in line, and the details they open. */
+/* UX2: the compact Today morning card and the details it opens. */
 .morning-card {
   display: flex;
   flex-direction: column;
@@ -220,8 +189,7 @@ textarea:focus-visible {
   margin: 12px 0;
 }
 
-.morning-line,
-.checkin-line {
+.morning-line {
   width: 100%;
   text-align: left;
   padding: 12px 14px;
@@ -254,23 +222,9 @@ textarea:focus-visible {
   color: var(--muted);
 }
 
-.checkin-line {
-  margin: 0 0 12px;
-  color: var(--accent);
-}
-
 .morning-card .morning,
 .morning-card .weather-morning {
   margin: 0;
-}
-
-/* SIWH: the compact "Since I was here" pane above the morning card. It renders nothing when empty, so it never
-   takes space without something to say. */
-.since-i-was-here {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 12px 0;
 }
 
 .group.since-i-was-here h2 {
@@ -1300,23 +1254,6 @@ body:has(.reward-banner) .toast {
 /* UX8 (layout C): the compact header line, the Today title + Overview/Boards switch, the Next up card, the
    two-column tile grid and the collapsed Since I was here pane. Dark iOS tokens as the rest of the sheet. */
 
-.today-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 8px 0 4px;
-}
-
-.today-view {
-  background: var(--surface);
-  border-radius: var(--r-control);
-  padding: 2px;
-  min-width: 180px;
-}
-
-.today-view button { min-height: 36px; padding: 0 12px; }
-
 .today-overview { margin-top: 8px; }
 
 /* The one prominent card: the pick and its Start action, then the quiet "N more tasks today" line. */
@@ -1369,60 +1306,6 @@ body:has(.reward-banner) .toast {
   font-weight: 600;
   color: var(--muted);
 }
-
-.next-up-add { align-self: flex-start; }
-
-.next-up-more { align-self: flex-start; margin-top: 2px; }
-
-/* Two columns; the grid maps the pure tile list, so two more tiles slot in without a layout change. */
-.tile-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0;
-}
-
-.tile {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: left;
-  min-height: 84px;
-  padding: 12px 14px;
-  border-radius: var(--r-card);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  color: var(--text);
-}
-
-.tile-title {
-  font-size: var(--t-footnote);
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--tile-title-dark);
-}
-
-.tile-text {
-  font-size: var(--t-callout);
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-
-/* SIWH collapsed to one summary line that expands to the changes and the dismiss controls. */
-.siwh-toggle {
-  width: 100%;
-  text-align: left;
-  padding: 10px 14px;
-  border-radius: var(--r-control);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  color: var(--text);
-  font-size: var(--t-callout);
-  font-weight: 600;
-}
-
-.siwh-toggle[aria-expanded='true'] { border-color: var(--accent); }
 
 .scout-diagnostics .scout-diagnostics-open { margin: 0; }
 
@@ -1537,14 +1420,14 @@ body:has(.reward-banner) .toast {
 
 /* A2 signature (review section 3A): every big number in SF Pro Rounded, so levels, steps, prices and temperatures read
    like game stats without artwork; and a faint top-lit edge on cards. Gold stays reserved for rewards (tokens.css). */
-:is(.character-level-number, .character-card-points, .scout-metric strong, .scout-row-findings strong,
+:is(.character-level-number, .character-card-points, .character-ring-value, .scout-metric strong, .scout-row-findings strong,
   .triage-dateblock strong, .dash-price, .health-value, .weather-day-temp, .weather-week-low, .weather-week-high,
   .reward-xp, .reward-level-number, .reward-banner-points, .achievement-tile-points, .next-up-time) {
   font-family: var(--font-rounded);
   font-variant-numeric: tabular-nums;
 }
 
-:is(.tile, .next-up, .morning-line, .checkin-line, .siwh-toggle, .character-card-button, .scout-panel, .progress-card,
+:is(.tile, .next-up, .morning-line, .character-card-button, .scout-panel, .progress-card,
   .reading-current, .tasks, .action-list, .triage-card, .dash-card) {
   background-image: var(--card-sheen);
 }
