@@ -36,7 +36,7 @@ test('the capture button names what it adds on every screen', async ({ page }) =
   }
 });
 
-test('the capture pill shrinks to a 56 px circle while scrolling down and extends on the way up', async ({ page }) => {
+test('the capture pill shrinks to a 48 px circle while scrolling down and extends on the way up', async ({ page }) => {
   const api = new MockApi();
   api.open = Array.from({ length: 30 }, (_, i) => taskView(10 + i, `Synthetic task ${i + 1}`));
   await api.install(page);
@@ -47,7 +47,7 @@ test('the capture pill shrinks to a 56 px circle while scrolling down and extend
   expect((await fab.boundingBox())!.width).toBeGreaterThan(100);
   await page.evaluate(() => window.scrollTo(0, 400));
   await expect(fab).toHaveAttribute('data-compact');
-  await expect.poll(async () => Math.round((await fab.boundingBox())!.width)).toBe(56);
+  await expect.poll(async () => Math.round((await fab.boundingBox())!.width)).toBe(48);
   await expect(fab).toHaveAccessibleName('Capture');
   await page.evaluate(() => window.scrollTo(0, 300));
   await expect(fab).not.toHaveAttribute('data-compact');
