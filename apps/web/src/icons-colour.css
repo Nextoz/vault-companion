@@ -67,6 +67,8 @@
   min-width: 0;
 }
 
+.task-trail { display: flex; flex: none; align-items: center; gap: var(--s-1); }
+
 .task-title-line .task-text { min-width: 0; flex: 1; }
 
 .due {

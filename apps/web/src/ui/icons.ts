@@ -10,7 +10,7 @@ export const ICON_PATHS = {
   // Tab bar and generic glyphs.
   today: SUN,
   tasks: 'm4 6 1.6 1.6L8.5 4.7M4 12.5l1.6 1.6L8.5 11.2M4 19l1.6 1.6L8.5 17.7M12 6.5h8M12 13h8M12 19.5h8',
-  scouts: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM7.5 12a4.5 4.5 0 0 0 4.5 4.5M12 12l5.8-5.8M16 14.5h.01',
+  scouts: 'M7 7h3v10H6a3 3 0 0 1-3-3v-1l2-5.5A1.5 1.5 0 0 1 6.4 6H7ZM17 7h-3v10h4a3 3 0 0 0 3-3v-1l-2-5.5A1.5 1.5 0 0 0 17.6 6H17ZM10 11h4M5 9.5h2M17 9.5h2',
   notes: 'M7 3h7l4 4v14H7ZM14 3v4h4M10 12h5M10 16h5',
   log: DUMBBELL,
   chevron: 'm9 6 6 6-6 6',

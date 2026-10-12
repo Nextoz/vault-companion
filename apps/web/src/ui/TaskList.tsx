@@ -335,16 +335,8 @@ function TaskRow({
                 ),
               )}
         </span>
+        <span className="task-trail">
         {chip && <span className={`due due-${chip.tone}`} data-testid="due-chip">{chip.text}</span>}
-        </span>
-        <span className="task-meta">
-          {readOnly && <span className="readonly">{readOnlyText(readOnly)}</span>}
-          {action && <StateChip state={action.state} />}
-          {canEdit && !textTappable && task && (
-            <button type="button" className="task-edit-link" aria-label={`Edit: ${text}`} onClick={() => onEdit?.(task)}>
-              Edit
-            </button>
-          )}
           {!row.done && task && onCalendar && (
             inCalendar ? (
               <button type="button" className="calendar-link" aria-label={`In Calendar: ${text}`} onClick={() => onCalendar(task)}>
@@ -355,6 +347,16 @@ function TaskRow({
                 <CalendarGlyph />
               </button>
             )
+          )}
+        </span>
+        </span>
+        <span className="task-meta">
+          {readOnly && <span className="readonly">{readOnlyText(readOnly)}</span>}
+          {action && <StateChip state={action.state} />}
+          {canEdit && !textTappable && task && (
+            <button type="button" className="task-edit-link" aria-label={`Edit: ${text}`} onClick={() => onEdit?.(task)}>
+              Edit
+            </button>
           )}
         </span>
         {action?.state === 'attention' && action.error ? (
