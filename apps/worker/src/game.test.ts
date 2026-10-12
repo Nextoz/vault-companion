@@ -139,6 +139,16 @@ describe('GET /api/game', () => {
     expect(body!.feedback!.achievements['long-way-back']).toBeUndefined();
   });
 
+  it('an installed older client (pre-feedback schema, strict nested objects) parses the real payload', async () => {
+    const store = await InMemoryStore.create(await baseFiles());
+    const res = await makeApp(store, {}, true).request('/api/game', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+    const raw: unknown = await res.json();
+    const olderClient = GameResponse.omit({ feedback: true }).strip();
+    const parsed = olderClient.parse(raw);
+    expect('feedback' in parsed).toBe(false);
+    expect(parsed.character.achievements.length).toBeGreaterThan(0);
+  });
+
   it('reports the live rules straight from characterConfig, so the web page cannot hard-code them', async () => {
     const store = await InMemoryStore.create(await baseFiles());
     const { body } = await get(store);
