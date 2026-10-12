@@ -35,9 +35,10 @@
   --maybe: var(--ios-purple);
   --maybe-soft: rgb(191 90 242 / 18%);
 
-  /* On the raised sheet grey the card values fail AA (blue 3.8:1, muted 4.3:1); `.sheet` swaps these in. */
+  /* On the raised sheet grey the card values fail AA (blue 3.8:1, muted 4.3:1, red 4.1:1); `.sheet` swaps these in. */
   --accent-on-raised: #409cff;
   --muted-on-raised: #a1a1a6;
+  --danger-on-raised: #ff6961; /* #ff453a is 4.1:1 on raised; every sheet shows .error */
 
   /* One hue per domain, used for its Today tile, its Log accent and its profession ring (review #10). */
   --hue-training: #ff7a59; /* Training, Athletics */
@@ -110,4 +111,5 @@
 .sheet {
   --accent: var(--accent-on-raised);
   --muted: var(--muted-on-raised);
+  --danger: var(--danger-on-raised);
 }

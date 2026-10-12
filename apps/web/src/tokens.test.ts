@@ -44,7 +44,7 @@ describe('design tokens meet WCAG AA', () => {
 
   const pairs: [string, string, string][] = [
     ['--text', '--bg', bg], ['--text', '--surface', card], ['--text', '--raised', raised],
-    ['--muted', '--bg', bg], ['--muted', '--surface', card], ['--muted-on-raised', '--raised', raised],
+    ['--muted', '--bg', bg], ['--muted', '--surface', card], ['--muted-on-raised', '--raised', raised], ['--danger-on-raised', '--raised', raised],
     ['--accent', '--bg', bg], ['--accent', '--surface', card], ['--accent-on-raised', '--raised', raised],
     ['--warn', '--surface', card], ['--danger', '--surface', card], ['--done', '--surface', card],
     ['--game-gold', '--surface', card], ['--game-gold', '--raised', raised],
@@ -65,9 +65,12 @@ describe('design tokens meet WCAG AA', () => {
     const sheet = block('.sheet');
     expect(sheet.get('--accent')).toBe('var(--accent-on-raised)');
     expect(sheet.get('--muted')).toBe('var(--muted-on-raised)');
+    expect(sheet.get('--danger')).toBe('var(--danger-on-raised)');
   });
 
-  it('the card values would fail on the raised grey (why the sheet swap exists)', () => {
-    expect(contrast(resolve('--ios-blue'), raised)).toBeLessThan(4.5);
+  it('sheets are drawn on --raised, the surface the on-raised pairs are checked against', () => {
+    const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+    expect(styles).toMatch(/\n\.sheet \{ background: var\(--raised\);/);
   });
+
 });
