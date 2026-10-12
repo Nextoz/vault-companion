@@ -56,6 +56,9 @@ describe('diffRewards', () => {
     expect(banners).toHaveLength(ACHIEVEMENT_CAP);
     expect(banners.at(-1)).toMatchObject({ id: 'major', major: true });
     expect(newlyEarnedIds(game({ extra }), after)).toHaveLength(6);
+    // Seen ids are filtered before the cap: two seen minors leave room for three unseen ones.
+    const unseen = diffRewards(game({ extra }), after, new Set(['x0', 'x1'])).filter((e) => e.kind === 'achievement');
+    expect(unseen.map((e) => e.kind === 'achievement' && e.id)).toEqual(['x3', 'x4', 'major']);
   });
 
   it('says nothing for an unchanged revision, an Undo or a rules change', () => {

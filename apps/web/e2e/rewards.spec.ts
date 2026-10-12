@@ -48,7 +48,7 @@ test('a completed task plays Critical XP, the skill up, the achievement banner a
   await expect(banner).toContainText('Earned by completing a task');
   await banner.getByRole('button', { name: 'Dismiss' }).click();
 
-  const level = page.getByRole('button', { name: /Level 13 reached/ });
+  const level = page.getByRole('button', { name: /Level up!\s*13/ });
   await expect(level).toBeVisible();
   await expect(level).toContainText('Next level in 276 XP');
   await level.click();

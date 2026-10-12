@@ -82,7 +82,13 @@ function play(notes: readonly Note[], master = 0.5, lowpass?: { from: number; to
   const ctx = audio();
   if (ctx === null) return;
   // A context iOS interrupted may resume without a gesture; if it does not, this reward is silent.
-  if (needsResume(ctx)) { void ctx.resume().then(() => { if (ctx.state === 'running') play(notes, master, lowpass); }).catch(() => undefined); return; }
+  if (needsResume(ctx)) {
+    // Without a gesture iOS may keep the resume pending until a later tap; a sound that late is dropped, never
+    // replayed in a burst with others.
+    const asked = Date.now();
+    void ctx.resume().then(() => { if (ctx.state === 'running' && Date.now() - asked < 1000) play(notes, master, lowpass); }).catch(() => undefined);
+    return;
+  }
   try {
     const now = ctx.currentTime + 0.01;
     const out = ctx.createGain();

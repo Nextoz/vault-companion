@@ -66,21 +66,21 @@ function soundFor(step: Step): void {
 const SETTLE_MS = 600;
 const RETRY_MS = 2500;
 
-const levelKey = (account: string): string => `vc.rewards.level.${account}`;
+const levelKey = (account: string, rulesVersion: number): string => `vc.rewards.level.${account}.v${rulesVersion}`;
 
 /** The highest level this device celebrated (or saw on open); null when unknown. Storage errors read as unknown. */
-function readMaxLevel(account: string): number | null {
+function readMaxLevel(account: string, rulesVersion: number): number | null {
   try {
-    const value = Number(localStorage.getItem(levelKey(account)));
+    const value = Number(localStorage.getItem(levelKey(account, rulesVersion)));
     return Number.isInteger(value) && value > 0 ? value : null;
   } catch {
     return null;
   }
 }
 
-function raiseMaxLevel(account: string, level: number): void {
+function raiseMaxLevel(account: string, rulesVersion: number, level: number): void {
   try {
-    if ((readMaxLevel(account) ?? 0) < level) localStorage.setItem(levelKey(account), String(level));
+    if ((readMaxLevel(account, rulesVersion) ?? 0) < level) localStorage.setItem(levelKey(account, rulesVersion), String(level));
   } catch {
     // Not remembered: a later Undo and redo may replay the level screen once.
   }
@@ -152,8 +152,10 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
     const gen = ++generation.current;
     openRead.current = read(gen).then((game) => {
       if (game === null) return;
+      // A partial open read becomes a provisional baseline; the first complete read replaces it without a diff, so
+      // the first action after such an open is not celebrated (safe, and rare).
       baseline.current = nextBaseline(baseline.current, game).baseline;
-      raiseMaxLevel(accountKey, game.character.level);
+      raiseMaxLevel(accountKey, game.character.rulesVersion, game.character.level);
       const plan = planToasts(game.character.achievements, game.stepMilestones, readSeen(accountKey));
       if (plan.kind === 'summary') enqueue([{ kind: 'summary', text: summaryText(plan.summary) }]);
       if (plan.kind === 'individual') {
@@ -164,7 +166,7 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
         }));
       }
       if (plan.kind !== 'none') addSeen(accountKey, plan.seenIds);
-    });
+    }).catch(() => undefined);
     const pendingTimers = timers.current;
     return () => {
       generation.current++;
@@ -193,9 +195,11 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
     const { baseline: kept, diff } = nextBaseline(before, next);
     baseline.current = kept;
     if (!diff || before === null) return;
-    const events = withoutCelebrated(diffRewards(before, next), readSeen(account) ?? [], readMaxLevel(account));
+    const seen = readSeen(account) ?? [];
+    const rules = next.character.rulesVersion;
+    const events = withoutCelebrated(diffRewards(before, next, new Set(seen)), seen, readMaxLevel(account, rules));
     addSeen(account, [...newlyEarnedIds(before, next), ...celebratedIds(events)]);
-    raiseMaxLevel(account, next.character.level);
+    raiseMaxLevel(account, rules, next.character.level);
     enqueue(toSteps(events));
   }, [read, later, enqueue]);
 
@@ -284,7 +288,7 @@ function AchievementBanner({ reward, onOpen, onDismiss }: { reward: AchievementR
 const SPARKS = Array.from({ length: 18 }, (_, i) => i);
 
 function LevelUp({ step, onClose }: { step: Extract<Step, { kind: 'level' }>; onClose: () => void }) {
-  return <button type="button" className="reward-level" onClick={onClose} aria-label={`Level ${step.level} reached. Tap to continue`}>
+  return <button type="button" className="reward-level" onClick={onClose}>
     <span className="reward-level-rays" aria-hidden="true" />
     {SPARKS.map((i) => <span key={i} className="reward-level-spark" aria-hidden="true"
       style={{ ['--x' as string]: `${(i * 37) % 100}%`, ['--d' as string]: `${(i % 6) * 0.18}s`, ['--s' as string]: `${0.6 + (i % 4) * 0.25}` }} />)}

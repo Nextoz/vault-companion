@@ -44,7 +44,7 @@ export function achievementReward(achievement: GameAchievement, feedback: GameRe
  * The celebrations between two reads of the same account. Returns nothing when the rules changed between them (a
  * deploy that retunes XP is not something you did), when the revision is unchanged, or when XP went down (an Undo).
  */
-export function diffRewards(before: GameResponse, after: GameResponse): RewardEvent[] {
+export function diffRewards(before: GameResponse, after: GameResponse, alreadySeen: ReadonlySet<string> = new Set()): RewardEvent[] {
   const a = before.character;
   const b = after.character;
   if (a.rulesVersion !== b.rulesVersion || before.revision === after.revision || b.xp < a.xp) return [];
@@ -63,7 +63,8 @@ export function diffRewards(before: GameResponse, after: GameResponse): RewardEv
 
   const wasEarned = new Set([...a.achievements, ...a.feats].filter((x) => x.earned).map((x) => x.id));
   const fresh = [...b.achievements, ...b.feats]
-    .filter((x) => x.earned && !wasEarned.has(x.id))
+    // Already-announced ids are dropped before the cap, so a seen one never pushes a new one out of the three.
+    .filter((x) => x.earned && !wasEarned.has(x.id) && !alreadySeen.has(x.id))
     .map((x) => achievementReward(x, after.feedback))
     // Minor before major, so the glowing one lands last; ties by points then name for a stable order.
     .sort((x, y) => Number(x.major) - Number(y.major) || x.points - y.points || x.name.localeCompare(y.name));
