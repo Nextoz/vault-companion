@@ -31,6 +31,7 @@ test('completing a task plays the done moment in place, then the row ends in Don
   const done = region(page, 'Done today').getByTestId('task').filter({ hasText: 'Water the plants' });
   await expect(done).toBeVisible();
   await expect(done.locator('.check-on .check-tick')).toHaveCount(1);
+  expect(api.applied).toHaveLength(1); // the hold and fold never complete the task twice
   // Unfolded to its full height (the arrival animation has finished and left no clipping behind).
   await expect.poll(async () => (await done.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 });
@@ -85,4 +86,23 @@ test('a short drag on the header springs the sheet back and leaves it open', asy
   // Close still works afterwards: it slides the sheet out, then closes it.
   await sheet.getByRole('button', { name: 'Cancel' }).click();
   await expect(sheet).toHaveCount(0);
+});
+
+test('under reduced motion, tapping the sheet header title plays no animation (no blink)', async ({ page }) => {
+  const sheet = await openEditSheet(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // Count every animation started on the sheet or its backdrop from here on.
+  await page.evaluate(() => {
+    const original = Element.prototype.animate;
+    const w = window as unknown as { sheetAnimations: number };
+    w.sheetAnimations = 0;
+    Element.prototype.animate = function (this: Element, ...args: Parameters<Element['animate']>) {
+      if (this.closest('.sheet-backdrop')) w.sheetAnimations++;
+      return original.apply(this, args);
+    };
+  });
+  await sheet.locator('.sheet-header h2').click();
+  await expect(sheet).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { sheetAnimations: number }).sheetAnimations)).toBe(0);
+  expect(await sheet.evaluate((el) => el.parentElement?.getAnimations().length ?? -1)).toBe(0);
 });

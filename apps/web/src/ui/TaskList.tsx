@@ -90,7 +90,11 @@ interface Props {
   tapped: ReadonlySet<string>;
   /** No completion from this list (Done today, or the file is write-blocked). */
   blocked: boolean;
-  onComplete: (task: TaskView) => void;
+  /**
+   * Queues the completion. `false` (at once) means it was refused before anything was queued; a promise settles to
+   * whether the write was kept. The done moment plays only for an accepted completion and is undone if it fails.
+   */
+  onComplete: (task: TaskView) => boolean | Promise<boolean>;
   onEdit?: (task: TaskView) => void;
   onOpenLink: (link: OpenLink) => void;
   /** Undo a saved app completion from its Done today row (P4-B); rows without `undo` offer none. */
@@ -141,8 +145,8 @@ export function TaskList({
     });
   };
 
-  // The tapped row holds, then folds; the write was already queued by onComplete.
-  const startLeaving = (row: Row, li: HTMLLIElement) => {
+  // The tapped row holds, then folds; the write was already queued by onComplete (`kept` says whether it was kept).
+  const startLeaving = (row: Row, li: HTMLLIElement, kept: Promise<boolean>) => {
     const occurrence = occurrenceOf(row);
     if (occurrence !== null) justCompleted.set(occurrence, performance.now());
     const index = visible.findIndex((r) => r.key === row.key);
@@ -157,8 +161,16 @@ export function TaskList({
       });
     }
     setLeaving((prev) => new Map(prev).set(row.key, { row, index: Math.max(index, 0), animation: motion.animation }));
+    void kept.then((ok) => {
+      if (ok) return;
+      // The completion could not be kept on the device: the row stays, whole, as it was.
+      if (occurrence !== null) justCompleted.delete(occurrence);
+      motion.animation?.cancel();
+      clip(li, false);
+      drop(row.key);
+    });
     void motion.done.then(() => {
-      // Still a live row after the fold (the write could not be kept, or is unusually slow): show it again, whole.
+      // Still a live row after the fold (an unusually slow write): show it again, whole.
       if (live.current.has(row.key)) {
         motion.animation?.cancel();
         clip(li, false);
@@ -191,7 +203,7 @@ export function TaskList({
       arriving.forEach((r) => { const key = occurrenceOf(r); if (key !== null) justCompleted.delete(key); });
     }
     sectionWasShown.current = section.current !== null;
-  });
+  }, [rows, leaving]);
 
   if (visible.length === 0 && !empty) return null;
   const shown = collapsible?.open ?? true;
@@ -252,12 +264,12 @@ function TaskRow({
   row: Row;
   /** Tapped done here and on its way out: the done moment plays, the row is inert. */
   leaving: boolean;
-  onLeaving: (row: Row, li: HTMLLIElement) => void;
+  onLeaving: (row: Row, li: HTMLLIElement, kept: Promise<boolean>) => void;
   liRef: (el: HTMLLIElement | null) => void;
   tapped: ReadonlySet<string>;
   blocked: boolean;
   overdue: boolean;
-  onComplete: (t: TaskView) => void;
+  onComplete: Props['onComplete'];
   onUndo: Props['onUndo'];
   onEdit: Props['onEdit'];
   onOpenLink: (link: OpenLink) => void;
@@ -291,8 +303,8 @@ function TaskRow({
           onClick={(e) => {
             e.currentTarget.disabled = true; // synchronous: a second tap cannot mint a second envelope
             const li = e.currentTarget.closest('li');
-            onComplete(task);
-            if (li) onLeaving(row, li);
+            const accepted = onComplete(task);
+            if (accepted !== false && li) onLeaving(row, li, Promise.resolve(accepted));
           }}
         />
       ) : (

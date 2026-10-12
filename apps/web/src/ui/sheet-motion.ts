@@ -49,15 +49,29 @@ export function useSheetDismiss(header: RefObject<HTMLElement | null>, onClose: 
   const busy = useRef(false);
   // Fill-forwards animations that hold a dismissed sheet off-screen until onClose unmounts it (or springs it back).
   const held = useRef<Animation[]>([]);
+  // The exit takes a moment: by its end the caller may have a newer onClose, or be saving (disabled). Read them then.
+  const latest = useRef({ onClose, enabled });
+  latest.current = { onClose, enabled };
+  // Focus inside the sheet when it went inert for its exit, given back if it springs back.
+  const focused = useRef<HTMLElement | null>(null);
 
-  const restore = (parts: Parts, from: number | string, scrimFrom: string | null) => {
+  /**
+   * Back to rest. `faded` says the reduced-motion exit faded the whole sheet out, so it fades back in; a tap on the
+   * header or a short drag only clears what the finger moved.
+   */
+  const restore = (parts: Parts, from: number | string, scrimFrom: string | null, faded = false) => {
     const { sheet, backdrop } = parts;
     held.current.forEach((a) => a.cancel());
     held.current = [];
     sheet.style.transform = '';
     if (backdrop) backdrop.style.backgroundColor = '';
+    if (sheet.inert) {
+      sheet.inert = false;
+      if (focused.current?.isConnected) focused.current.focus();
+    }
+    focused.current = null;
     if (prefersReducedMotion()) {
-      if (backdrop) play(backdrop, [{ opacity: 0 }, { opacity: 1 }], { duration: duration('--dur-fade'), easing: 'linear' });
+      if (backdrop && faded) play(backdrop, [{ opacity: 0 }, { opacity: 1 }], { duration: duration('--dur-fade'), easing: 'linear' });
       return;
     }
     const options = { duration: duration('--dur-sheet'), easing: easing('--ease-sheet') };
@@ -70,6 +84,9 @@ export function useSheetDismiss(header: RefObject<HTMLElement | null>, onClose: 
   const dismiss = async (parts: Parts, offset: number, velocity: number, scrimNow: string) => {
     const { sheet, backdrop } = parts;
     busy.current = true;
+    // A leaving sheet takes no more taps or keys (Save during the exit would race the close).
+    focused.current = document.activeElement instanceof HTMLElement && sheet.contains(document.activeElement) ? document.activeElement : null;
+    sheet.inert = true;
     const reduced = prefersReducedMotion();
     const height = sheet.getBoundingClientRect().height;
     const steps: Promise<void>[] = [];
@@ -96,13 +113,14 @@ export function useSheetDismiss(header: RefObject<HTMLElement | null>, onClose: 
     sheet.style.transform = '';
     if (backdrop) backdrop.style.backgroundColor = '';
     await Promise.all(steps);
-    if (!sheet.isConnected) { busy.current = false; return; } // closed meanwhile (Escape): never close twice
+    if (!sheet.isConnected) { busy.current = false; return; } // closed meanwhile: never close twice
     try {
-      flushSync(() => onClose());
+      // The caller's current state decides, not the state at the tap (e.g. a save that started meanwhile).
+      if (latest.current.enabled) flushSync(() => latest.current.onClose());
     } finally {
       busy.current = false;
       // Still mounted: a guard refused (unsaved text, a save in flight). Bring the sheet back.
-      if (sheet.isConnected) restore(parts, reduced ? 0 : '100%', backdrop ? scaleAlpha(scrimNow, 0) : null);
+      if (sheet.isConnected) restore(parts, reduced ? 0 : '100%', backdrop ? scaleAlpha(scrimNow, 0) : null, reduced);
     }
   };
 

@@ -300,30 +300,36 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
     [queue, tasks],
   );
 
+  // R2: refusals answer `false` synchronously, so the list plays its done moment only for an accepted completion;
+  // the promise says whether the write was kept on the device.
   const complete = useCallback(
-    async (task: TaskView) => {
+    (task: TaskView): boolean | Promise<boolean> => {
       const key = occurrenceKey(task.locator);
-      if (tappedRef.current.has(key)) return;
+      if (tappedRef.current.has(key)) return false;
       if (!accountKey || !tasks) {
         setNotice('Connect once to set up this device.');
-        return;
+        return false;
       }
-      if (tasks.writeBlock) return; // every task-list write would be refused (writeBlock.ts)
+      if (tasks.writeBlock) return false; // every task-list write would be refused (writeBlock.ts)
       // Redoing the action on the task settles a discarded refusal of it.
       setUnresolved((list) => list.filter((u) => notRedoneBy(u, task, tasks.allOpen)));
       tappedRef.current.add(key);
       setTapped(new Set(tappedRef.current));
-      try {
-        const envelope = completeTask({ baseRevision: tasks.revision }, task.locator);
-        const label = plainWikilinks(task.description);
-        await queue.enqueue(envelope, { accountKey, label, taskKey: key });
-        setToast({ target: envelope, label });
-      } catch {
-        setNotice('Could not keep this action on the device.');
-      } finally {
-        tappedRef.current.delete(key);
-        setTapped(new Set(tappedRef.current));
-      }
+      return (async () => {
+        try {
+          const envelope = completeTask({ baseRevision: tasks.revision }, task.locator);
+          const label = plainWikilinks(task.description);
+          await queue.enqueue(envelope, { accountKey, label, taskKey: key });
+          setToast({ target: envelope, label });
+          return true;
+        } catch {
+          setNotice('Could not keep this action on the device.');
+          return false;
+        } finally {
+          tappedRef.current.delete(key);
+          setTapped(new Set(tappedRef.current));
+        }
+      })();
     },
     [accountKey, queue, tasks],
   );
