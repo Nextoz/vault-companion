@@ -979,6 +979,8 @@ body:has(.reward-banner) .toast {
 .reading-books li { border-bottom: 1px solid var(--line); }
 .reading-books button { display: block; width: 100%; text-align: left; padding: 10px 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .reading-sheet input, .reading-sheet textarea { min-width: 0; max-width: 100%; }
+/* The Book picker: same field look as the sheet's inputs (stacked under its label, full width, 44px, surface fill). */
+.reading-sheet label select { display: block; width: 100%; min-width: 0; max-width: 100%; min-height: 44px; box-sizing: border-box; padding: 8px; font: inherit; font-size: max(16px, var(--t-body)); color: inherit; background: var(--surface); border: 1px solid transparent; border-radius: var(--r-control); }
 .reading-challenge { min-height: var(--tap); }
 .challenge-sheet input, .challenge-sheet textarea { min-width: 0; max-width: 100%; }
 .challenge-reflection { margin: 8px 0; padding: 8px 10px; border-left: 3px solid var(--line); background: var(--surface); overflow-wrap: anywhere; }
