@@ -3,7 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { planToasts, seenKey, summaryText } from '../achievements.ts';
 import { getGame } from '../api.ts';
 import type { QueueItem } from '../queue/queue.ts';
-import { achievementReward, diffRewards, earnedByText, newlyEarnedIds, skillText, xpText, type AchievementReward, type RewardEvent } from '../rewards.ts';
+import {
+  achievementReward, celebratedIds, diffRewards, earnedByText, newlyEarnedIds, nextBaseline, skillText, withoutCelebrated, xpText,
+  type AchievementReward, type RewardEvent,
+} from '../rewards.ts';
 import { playReward, unlockAudioOnFirstTap } from '../sound.ts';
 import './Rewards.css';
 
@@ -36,7 +39,8 @@ type Step =
   | { readonly kind: 'summary'; readonly text: string }
   | { readonly kind: 'level'; readonly level: number; readonly nextCost: number; readonly title: string | null };
 
-const DURATION: Readonly<Record<Step['kind'], number>> = { pulse: 1700, achievement: 4800, title: 4200, summary: 4000, level: 6500 };
+// Banners match their 5 s CSS animation; the level screen closes on any tap before that.
+const DURATION: Readonly<Record<Step['kind'], number>> = { pulse: 1700, achievement: 5000, title: 5000, summary: 5000, level: 5500 };
 
 export function toSteps(events: readonly RewardEvent[]): Step[] {
   const steps: Step[] = [];
@@ -62,11 +66,35 @@ function soundFor(step: Step): void {
 const SETTLE_MS = 600;
 const RETRY_MS = 2500;
 
+const levelKey = (account: string): string => `vc.rewards.level.${account}`;
+
+/** The highest level this device celebrated (or saw on open); null when unknown. Storage errors read as unknown. */
+function readMaxLevel(account: string): number | null {
+  try {
+    const value = Number(localStorage.getItem(levelKey(account)));
+    return Number.isInteger(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function raiseMaxLevel(account: string, level: number): void {
+  try {
+    if ((readMaxLevel(account) ?? 0) < level) localStorage.setItem(levelKey(account), String(level));
+  } catch {
+    // Not remembered: a later Undo and redo may replay the level screen once.
+  }
+}
+
 /**
  * ADR-0064: the reward layer. Mounted once by App on every tab. On open it announces achievements this device has
  * not seen (GAM1-C behaviour, now as banners). After each queued action reaches GitHub it re-reads /api/game, diffs
- * it against the previous read and plays the celebrations in order. Never takes focus; only the banner and the level
- * screen take a tap. Silent while signed out or when a read fails.
+ * it against the last complete read and plays the celebrations in order. Never takes focus; only the banner and the
+ * level screen take a tap. Silent while signed out or when a read fails.
+ *
+ * Every account session is one generation: a sign-out or account switch clears the queue, the timers and the
+ * baseline, and any read or timer from an older generation is ignored. Reads carry a sequence number, so a slow read
+ * can never replace a newer baseline; post-save reads wait for the open read first.
  */
 export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
   accountKey: string | null;
@@ -74,17 +102,25 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
   items: readonly QueueItem[];
   onOpenCharacter: () => void;
 }) {
+  const active = !signedOut && accountKey !== null;
+  const [current, setCurrent] = useState<Step | null>(null);
+  const [stepKey, setStepKey] = useState(0);
+  const generation = useRef(0);
   const baseline = useRef<GameResponse | null>(null);
   const savedIds = useRef<Set<string> | null>(null);
   const pending = useRef<Step[]>([]);
-  const [current, setCurrent] = useState<Step | null>(null);
-  const [stepKey, setStepKey] = useState(0);
-  const timers = useRef<number[]>([]);
-  const active = !signedOut && accountKey !== null;
-
-  const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
-
   const showing = useRef(false);
+  const timers = useRef(new Set<number>());
+  const settle = useRef<number | null>(null);
+  const readSeq = useRef(0);
+  const appliedSeq = useRef(0);
+  const openRead = useRef<Promise<void>>(Promise.resolve());
+
+  const later = useCallback((fn: () => void, ms: number) => {
+    const id = window.setTimeout(() => { timers.current.delete(id); fn(); }, ms);
+    timers.current.add(id);
+  }, []);
+
   const advance = useCallback(() => {
     const next = pending.current.shift() ?? null;
     showing.current = next !== null;
@@ -99,51 +135,71 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
     if (!showing.current) advance();
   }, [advance]);
 
-  useEffect(() => unlockAudioOnFirstTap(), []);
-  useEffect(() => () => { for (const t of timers.current) clearTimeout(t); }, []);
+  /** One /api/game read for generation `gen`: null when it failed, belongs to an old generation or was overtaken. */
+  const read = useCallback(async (gen: number): Promise<GameResponse | null> => {
+    const seq = ++readSeq.current;
+    const res = await getGame();
+    if (generation.current !== gen || res.kind !== 'ok' || seq < appliedSeq.current) return null;
+    appliedSeq.current = seq;
+    return res.data;
+  }, []);
 
-  // Open: the baseline read, plus the unseen-on-this-device announcement.
+  useEffect(() => unlockAudioOnFirstTap(), []);
+
+  // Open (and every account change): reset, take the baseline read, announce what this device has not seen.
   useEffect(() => {
     if (!active) return;
-    let cancelled = false;
-    baseline.current = null;
-    savedIds.current = null;
-    void getGame().then((res) => {
-      if (cancelled || res.kind !== 'ok') return;
-      baseline.current = res.data;
-      const plan = planToasts(res.data.character.achievements, res.data.stepMilestones, readSeen(accountKey));
+    const gen = ++generation.current;
+    openRead.current = read(gen).then((game) => {
+      if (game === null) return;
+      baseline.current = nextBaseline(baseline.current, game).baseline;
+      raiseMaxLevel(accountKey, game.character.level);
+      const plan = planToasts(game.character.achievements, game.stepMilestones, readSeen(accountKey));
       if (plan.kind === 'summary') enqueue([{ kind: 'summary', text: summaryText(plan.summary) }]);
       if (plan.kind === 'individual') {
-        const byId = new Map(res.data.character.achievements.map((a) => [a.id, a]));
+        const byId = new Map(game.character.achievements.map((a) => [a.id, a]));
         enqueue(plan.items.flatMap((item) => {
           const a = byId.get(item.id);
-          return a ? [{ kind: 'achievement' as const, reward: achievementReward(a, res.data.feedback) }] : [];
+          return a ? [{ kind: 'achievement' as const, reward: achievementReward(a, game.feedback) }] : [];
         }));
       }
       if (plan.kind !== 'none') addSeen(accountKey, plan.seenIds);
     });
-    return () => { cancelled = true; };
-  }, [active, accountKey, enqueue]);
+    const pendingTimers = timers.current;
+    return () => {
+      generation.current++;
+      for (const id of pendingTimers) clearTimeout(id);
+      pendingTimers.clear();
+      if (settle.current !== null) clearTimeout(settle.current);
+      settle.current = null;
+      baseline.current = null;
+      savedIds.current = null;
+      pending.current = [];
+      showing.current = false;
+      setCurrent(null);
+    };
+  }, [active, accountKey, enqueue, read]);
 
-  const refresh = useCallback((attempt: number) => {
-    if (!active) return;
-    void getGame().then((res) => {
-      if (res.kind !== 'ok') return;
-      const before = baseline.current;
-      baseline.current = res.data;
-      if (before === null) return;
-      if (before.revision === res.data.revision && attempt === 0) {
-        baseline.current = before;
-        later(() => refresh(1), RETRY_MS);
-        return;
-      }
-      addSeen(accountKey, newlyEarnedIds(before, res.data));
-      enqueue(toSteps(diffRewards(before, res.data)));
-    });
-  }, [active, accountKey, enqueue]);
+  const refresh = useCallback(async (gen: number, account: string, attempt: number) => {
+    await openRead.current;
+    const next = await read(gen);
+    if (next === null) return;
+    const before = baseline.current;
+    // The commit may not be visible yet: wait once, keeping the old baseline.
+    if (before !== null && before.revision === next.revision && attempt === 0) {
+      later(() => { if (generation.current === gen) void refresh(gen, account, 1); }, RETRY_MS);
+      return;
+    }
+    const { baseline: kept, diff } = nextBaseline(before, next);
+    baseline.current = kept;
+    if (!diff || before === null) return;
+    const events = withoutCelebrated(diffRewards(before, next), readSeen(account) ?? [], readMaxLevel(account));
+    addSeen(account, [...newlyEarnedIds(before, next), ...celebratedIds(events)]);
+    raiseMaxLevel(account, next.character.level);
+    enqueue(toSteps(events));
+  }, [read, later, enqueue]);
 
   // Every action that newly reaches "saved" schedules one settled re-read (several saves coalesce into one).
-  const settle = useRef<number | null>(null);
   useEffect(() => {
     if (!active) return;
     const saved = items.filter((item) => item.state === 'saved').map((item) => item.operationId);
@@ -152,8 +208,9 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
     if (fresh.length === 0) return;
     for (const id of fresh) savedIds.current.add(id);
     if (settle.current !== null) clearTimeout(settle.current);
-    settle.current = window.setTimeout(() => { settle.current = null; refresh(0); }, SETTLE_MS);
-  }, [items, active, refresh]);
+    const gen = generation.current;
+    settle.current = window.setTimeout(() => { settle.current = null; void refresh(gen, accountKey, 0); }, SETTLE_MS);
+  }, [items, active, accountKey, refresh]);
 
   // Auto-advance; a tap on a banner or the level screen advances early.
   useEffect(() => {
@@ -162,20 +219,21 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
     return () => clearTimeout(timer);
   }, [current, stepKey, advance]);
 
-  if (!active || current === null) return null;
+  if (!active) return null;
   const open = () => { advance(); onOpenCharacter(); };
-  return <div className="reward-layer" aria-live="polite">
-    {current.kind === 'pulse' && <Pulse key={stepKey} step={current} />}
-    {current.kind === 'achievement' && <AchievementBanner key={stepKey} reward={current.reward} onOpen={open} onDismiss={advance} />}
-    {current.kind === 'title' && <Banner key={stepKey} label="New title" name={current.title} major onOpen={open} onDismiss={advance} />}
-    {current.kind === 'summary' && <Banner key={stepKey} label="Achievements" name={current.text} onOpen={open} onDismiss={advance} />}
-    {current.kind === 'level' && <LevelUp key={stepKey} step={current} onClose={advance} />}
+  // One always-mounted live region, so a screen reader announces each celebration as it appears.
+  return <div className="reward-layer" role="status">
+    {current?.kind === 'pulse' && <Pulse key={stepKey} step={current} />}
+    {current?.kind === 'achievement' && <AchievementBanner key={stepKey} reward={current.reward} onOpen={open} onDismiss={advance} />}
+    {current?.kind === 'title' && <Banner key={stepKey} label="New title" name={current.title} major onOpen={open} onDismiss={advance} />}
+    {current?.kind === 'summary' && <Banner key={stepKey} label="Achievements" name={current.text} onOpen={open} onDismiss={advance} />}
+    {current?.kind === 'level' && <LevelUp key={stepKey} step={current} onClose={advance} />}
   </div>;
 }
 
 function Pulse({ step }: { step: Extract<Step, { kind: 'pulse' }> }) {
   const critical = step.xp !== null && step.xp.criticals > 0;
-  return <div className="reward-pulse" role="status">
+  return <div className="reward-pulse">
     {step.xp !== null && <span className={`reward-xp${critical ? ' is-critical' : ''}`}>{xpText(step.xp)}</span>}
     {step.skills.map((skill) => <span key={skill.profession} className="reward-skill">{skillText(skill)}</span>)}
   </div>;
@@ -204,15 +262,15 @@ function Banner({ label, name, lines = [], points, major = false, onOpen, onDism
   onOpen: () => void;
   onDismiss: () => void;
 }) {
-  return <div className={`reward-banner${major ? ' is-major' : ''}`} role="status">
-    <button type="button" className="reward-banner-main" onClick={onOpen} aria-label={`${label}: ${name}`}>
+  return <div className={`reward-banner${major ? ' is-major' : ''}`}>
+    <button type="button" className="reward-banner-main" onClick={onOpen}>
       <Badge major={major} />
       <span className="reward-banner-text">
         <span className="reward-banner-label">{label}</span>
         <span className="reward-banner-name">{name}</span>
         {lines.map((line) => <span key={line} className="reward-banner-line">{line}</span>)}
       </span>
-      {points !== undefined && points > 0 && <span className="reward-banner-points" aria-label={`${points} points`}>{points}</span>}
+      {points !== undefined && points > 0 && <span className="reward-banner-points"><span aria-hidden="true">{points}</span><span className="reward-sr"> {points} points</span></span>}
     </button>
     <button type="button" className="reward-banner-dismiss" aria-label="Dismiss" onClick={onDismiss}>×</button>
   </div>;

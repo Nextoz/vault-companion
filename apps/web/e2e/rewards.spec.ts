@@ -36,7 +36,7 @@ async function openWithReward(page: Page): Promise<MockApi> {
 }
 
 test('a completed task plays Critical XP, the skill up, the achievement banner and the level up, in that order', async ({ page }) => {
-  await openWithReward(page);
+  const api = await openWithReward(page);
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
 
   await expect(page.locator('.reward-xp.is-critical')).toHaveText('Critical! +6 XP');
@@ -54,16 +54,19 @@ test('a completed task plays Critical XP, the skill up, the achievement banner a
   await level.click();
   await expect(level).toHaveCount(0);
 
-  // Marked seen on this device: a reload does not announce the same achievement again.
+  // Marked seen on this device: a reload does not announce the same achievement again. Wait for the open read itself,
+  // not a fixed time, so the check cannot pass just because the read was slow.
+  const reads = api.gameReads;
   await page.reload();
-  await page.waitForTimeout(1500);
+  await expect.poll(() => api.gameReads).toBeGreaterThan(reads);
+  await page.waitForTimeout(300);
   await expect(page.locator('.reward-banner')).toHaveCount(0);
 });
 
 test('a banner tap opens the Character', async ({ page }) => {
   await openWithReward(page);
   await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
-  await page.getByRole('button', { name: /Achievement earned: Twenty-five Sessions/ }).click();
+  await page.locator('.reward-banner-main', { hasText: 'Twenty-five Sessions' }).click();
   await expect(page.getByRole('dialog', { name: 'Character' })).toBeVisible();
 });
 

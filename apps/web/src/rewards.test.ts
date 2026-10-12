@@ -1,6 +1,9 @@
-import type { GameAchievement, GameResponse } from '@vault-companion/contracts';
+import type { GameAchievement } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
-import { ACHIEVEMENT_CAP, diffRewards, earnedByText, newlyEarnedIds, skillText, xpText } from './rewards.ts';
+import { GameResponse } from '@vault-companion/contracts';
+import {
+  ACHIEVEMENT_CAP, celebratedIds, diffRewards, earnedByText, isComplete, newlyEarnedIds, nextBaseline, skillText, titleSeenId, withoutCelebrated, xpText,
+} from './rewards.ts';
 
 const achievement = (id: string, over: Partial<GameAchievement> = {}): GameAchievement => ({
   id, name: id, category: 'quartermaster', type: 'one-off', points: 10, earned: false, earnedDate: null, visible: true,
@@ -40,16 +43,19 @@ describe('diffRewards', () => {
   });
 
   it('puts the major achievement last and announces a profession rank as a title', () => {
-    const events = diffRewards(game(), game({ revision: 'b', xp: 110, earned: ['tasks-50', 'tasks-10'], skill: 76, rank: 'Journeyman' }));
-    expect(events.filter((e) => e.kind === 'achievement').map((e) => e.kind === 'achievement' && e.id)).toEqual(['tasks-10', 'tasks-50']);
+    const extra = [achievement('big', { points: 50 }), achievement('small', { points: 5 })];
+    const events = diffRewards(game({ extra }), game({ revision: 'b', xp: 110, earned: ['big', 'small'], skill: 76, rank: 'Journeyman', extra }));
+    expect(events.filter((e) => e.kind === 'achievement').map((e) => e.kind === 'achievement' && e.id)).toEqual(['small', 'big']);
     expect(events.at(-1)).toEqual({ kind: 'title', title: 'Journeyman quartermaster' });
   });
 
-  it('caps banners but marks every newly earned id', () => {
-    const extra = Array.from({ length: 5 }, (_, i) => achievement(`x${i}`));
+  it('caps banners, keeps the major one, and marks every newly earned id', () => {
+    const extra = [achievement('major', { points: 50 }), ...Array.from({ length: 5 }, (_, i) => achievement(`x${i}`))];
     const after = game({ revision: 'b', xp: 103, earned: extra.map((a) => a.id), extra });
-    expect(diffRewards(game({ extra }), after).filter((e) => e.kind === 'achievement')).toHaveLength(ACHIEVEMENT_CAP);
-    expect(newlyEarnedIds(game({ extra }), after)).toHaveLength(5);
+    const banners = diffRewards(game({ extra }), after).filter((e) => e.kind === 'achievement');
+    expect(banners).toHaveLength(ACHIEVEMENT_CAP);
+    expect(banners.at(-1)).toMatchObject({ id: 'major', major: true });
+    expect(newlyEarnedIds(game({ extra }), after)).toHaveLength(6);
   });
 
   it('says nothing for an unchanged revision, an Undo or a rules change', () => {
@@ -76,4 +82,34 @@ it('formats the lines', () => {
   expect(skillText({ kind: 'skill', profession: 'Quartermaster', skill: 76 })).toBe('Your skill in Quartermaster has increased to 76.');
   expect(earnedByText('Completing a task')).toBe('Earned by completing a task');
   expect(earnedByText(null)).toBeNull();
+});
+
+describe('guards around the diff', () => {
+  it('never diffs a partial read and never lets it replace a complete baseline', () => {
+    const complete = game();
+    const partial = { ...game({ revision: 'b', xp: 40 }), unavailable: ['tasks'] };
+    expect(isComplete(complete)).toBe(true);
+    expect(isComplete({ ...complete, unavailable: ['health'] })).toBe(true);
+    expect(isComplete(partial)).toBe(false);
+    expect(nextBaseline(complete, partial)).toEqual({ baseline: complete, diff: false });
+    expect(nextBaseline(partial, complete)).toEqual({ baseline: complete, diff: false });
+    expect(nextBaseline(null, complete)).toEqual({ baseline: complete, diff: false });
+    const next = game({ revision: 'c', xp: 106 });
+    expect(nextBaseline(complete, next)).toEqual({ baseline: next, diff: true });
+  });
+
+  it('drops achievements, titles and levels already celebrated (Undo then redo)', () => {
+    const events = diffRewards(game(), game({ revision: 'b', xp: 106, level: 3, earned: ['tasks-10'], skill: 76, rank: 'Journeyman' }));
+    const seen = celebratedIds(events);
+    expect(seen).toEqual(['tasks-10', titleSeenId('Journeyman quartermaster')]);
+    expect(withoutCelebrated(events, seen, 3).map((e) => e.kind)).toEqual(['xp', 'skill']);
+    expect(withoutCelebrated(events, [], 2).map((e) => e.kind)).toEqual(events.map((e) => e.kind));
+    expect(withoutCelebrated(events, [], null).some((e) => e.kind === 'level')).toBe(true);
+  });
+
+  it('an installed older client (no feedback in its schema) still parses a new payload', () => {
+    const olderClient = GameResponse.omit({ feedback: true }).strip();
+    const parsed = olderClient.parse(game());
+    expect('feedback' in parsed).toBe(false);
+  });
 });

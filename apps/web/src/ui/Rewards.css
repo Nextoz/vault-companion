@@ -93,7 +93,7 @@
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6), 0 0 22px rgb(242 200 107 / 0.35), 0 10px 30px rgb(0 0 0 / 0.55), inset 0 0 14px rgb(242 200 107 / 0.18);
   transform: translateX(-50%);
   pointer-events: auto;
-  animation: rw-drop 4.8s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+  animation: rw-drop 5s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
 }
 /* A light sweep across the frame once it lands. */
 .reward-banner::after {
@@ -107,7 +107,7 @@
 }
 .reward-banner.is-major {
   border-width: 3px;
-  animation: rw-drop 4.8s cubic-bezier(0.2, 0.9, 0.25, 1.15) both, rw-glow 1.2s 0.4s ease-in-out 3 alternate;
+  animation: rw-drop 5s cubic-bezier(0.2, 0.9, 0.25, 1.15) both, rw-glow 1.2s 0.4s ease-in-out 3 alternate;
 }
 .reward-banner-main {
   display: flex;
@@ -213,9 +213,13 @@
 @keyframes rw-stamp { 0% { opacity: 0; transform: scale(2.6); } 60% { opacity: 1; transform: scale(0.94); } 100% { transform: scale(1); } }
 @keyframes rw-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
+/* Screen-reader-only text (the points inside the shield). */
+.reward-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
 @media (prefers-reduced-motion: reduce) {
-  .reward-xp, .reward-xp.is-critical, .reward-skill { animation: rw-fade 1.7s ease both; }
-  .reward-banner, .reward-banner.is-major { animation: rw-plain 4.8s ease both; transform: translateX(-50%); }
+  /* Opacity only: nothing moves, scales or shakes. */
+  .reward-xp, .reward-xp.is-critical, .reward-skill { animation: rw-plain 1.7s ease both; }
+  .reward-banner, .reward-banner.is-major { animation: rw-plain 5s ease both; transform: translateX(-50%); }
   .reward-banner::after, .reward-level-rays, .reward-level-spark { display: none; }
   .reward-badge, .reward-level-label, .reward-level-number, .reward-level-title, .reward-level-next, .reward-level-hint { animation: none; }
 }

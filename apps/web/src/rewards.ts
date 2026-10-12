@@ -102,3 +102,46 @@ export function skillText(event: Extract<RewardEvent, { kind: 'skill' }>): strin
 export function earnedByText(earnedBy: string | null): string | null {
   return earnedBy === null ? null : `Earned by ${earnedBy.charAt(0).toLowerCase()}${earnedBy.slice(1)}`;
 }
+
+// ---- guards around the diff (review round 1) ------------------------------------------------------------------
+
+/** Step milestones never award XP; every other unavailable source would make XP look lower than it is. */
+const NON_XP_SOURCES: ReadonlySet<string> = new Set(['health']);
+
+/** A read whose XP is trustworthy: no XP source failed. A partial read must never become the diff baseline. */
+export function isComplete(game: GameResponse): boolean {
+  return game.unavailable.every((source) => NON_XP_SOURCES.has(source));
+}
+
+/**
+ * Which read to keep as the baseline, and whether to diff. A partial read is never diffed and never replaces a
+ * complete baseline (else the next complete read would announce old achievements again); a complete read replaces a
+ * missing or partial baseline without a diff.
+ */
+export function nextBaseline(current: GameResponse | null, next: GameResponse): { readonly baseline: GameResponse; readonly diff: boolean } {
+  if (!isComplete(next)) return { baseline: current ?? next, diff: false };
+  if (current === null || !isComplete(current)) return { baseline: next, diff: false };
+  return { baseline: next, diff: true };
+}
+
+/** The seen-record key for a title, so Undo and redo of a rank-up never announce it twice. */
+export const titleSeenId = (title: string): string => `title:${title}`;
+
+/**
+ * Drops what this device already celebrated: an achievement or title in the seen record, and a level up to a level
+ * not above the highest one celebrated. Undo then redo replays the XP float, never the banner or the level screen.
+ */
+export function withoutCelebrated(events: readonly RewardEvent[], seen: readonly string[], maxLevel: number | null): RewardEvent[] {
+  const known = new Set(seen);
+  return events.filter((event) => {
+    if (event.kind === 'achievement') return !known.has(event.id);
+    if (event.kind === 'title') return !known.has(titleSeenId(event.title));
+    if (event.kind === 'level') return maxLevel === null || event.level > maxLevel;
+    return true;
+  });
+}
+
+/** Seen ids to record for a set of events (achievements and titles). */
+export function celebratedIds(events: readonly RewardEvent[]): string[] {
+  return events.flatMap((event) => event.kind === 'achievement' ? [event.id] : event.kind === 'title' ? [titleSeenId(event.title)] : []);
+}

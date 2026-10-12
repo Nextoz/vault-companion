@@ -197,12 +197,23 @@ describe('critical awards (ADR-0064)', () => {
     expect(c.xp).toBe(days.length * 5 * 3 + expected * 3);
   });
 
-  it('never moves a past critical when a later record is added or identities change', () => {
+  it('keeps critical slots stable when identities change or a record joins a day', () => {
     const before = computeCharacter(days.flatMap(day => tasks(day, 3)), characterConfig, days.at(-1)!);
     const renamed = days.flatMap(day => tasks(day, 3).map(r => ({ ...r, id: `moved-${(r as { id: string }).id}` })));
-    expect(computeCharacter(renamed, characterConfig, days.at(-1)!).criticals).toBe(before.criticals);
-    const later = computeCharacter([...days.flatMap(day => tasks(day, 3)), ...tasks(date(41), 1)], characterConfig, date(41));
-    expect(later.criticals).toBeGreaterThanOrEqual(before.criticals);
+    expect(computeCharacter(renamed, characterConfig, days.at(-1)!)).toMatchObject({ criticals: before.criticals, xp: before.xp });
+    // A same-day record that sorts FIRST takes slot 1; the earlier slots keep their verdicts, one slot is added.
+    const crowded = days.flatMap(day => [task(`0-${day}`, 0, day), ...tasks(day, 3)]);
+    const fourth = days.filter(day => isCritical(day, 'task', 4, 8)).length;
+    expect(computeCharacter(crowded, characterConfig, days.at(-1)!).criticals).toBe(before.criticals + fourth);
+  });
+
+  it('applies rested XP on top of a critical base', () => {
+    const day = days.find(d => isCritical(d, 'task', 1, 8))!;
+    // Ten idle days before `day` fill the reserve; the critical doubles the base, rested adds half of the doubled base.
+    const c = computeCharacter([task('warm', 0, '2025-12-01'), task('x', 0, day)], characterConfig, day);
+    const warm = isCritical('2025-12-01', 'task', 1, 8) ? 6 : 3;
+    expect(c.criticals).toBe(1 + (warm === 6 ? 1 : 0));
+    expect(c.xp).toBe(warm + 6 + 3);
   });
 
   it('never criticals an award beyond the daily cap', () => {

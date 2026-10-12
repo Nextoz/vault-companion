@@ -5,21 +5,26 @@
 export type RewardSound = 'xp' | 'critical' | 'achievement' | 'title' | 'level';
 
 const KEY = 'vc.sound';
+/** The session's setting; storage only persists it, so a refused write still silences this session. */
+let enabled: boolean | null = null;
 
 /** On by default; the Character sheet toggles it. Storage errors read as on and are never thrown. */
 export function soundEnabled(): boolean {
+  if (enabled !== null) return enabled;
   try {
-    return localStorage.getItem(KEY) !== '0';
+    enabled = localStorage.getItem(KEY) !== '0';
   } catch {
-    return true;
+    enabled = true;
   }
+  return enabled;
 }
 
 export function setSoundEnabled(on: boolean): void {
+  enabled = on;
   try {
     localStorage.setItem(KEY, on ? '1' : '0');
   } catch {
-    // Not remembered in private mode; the current session still follows the toggle through the caller's state.
+    // Not remembered in private mode; this session still follows the switch.
   }
 }
 
@@ -39,17 +44,28 @@ function audio(): AudioContext | null {
   return context;
 }
 
+/** Not running: 'suspended' before a gesture, and iOS's 'interrupted' after the app was in the background. */
+const needsResume = (ctx: AudioContext): boolean => (ctx.state as string) !== 'running' && (ctx.state as string) !== 'closed';
+
 /**
- * iOS starts an AudioContext suspended until a user gesture. The reward plays after a network read, outside the tap,
- * so the first tap anywhere unlocks the context once; later rewards then play without a gesture.
+ * iOS starts an AudioContext suspended until a user activation, and `pointerdown` from a touch does not count; the
+ * reward plays after a network read, outside the tap. So every activating event (touchend, pointerup, click) resumes
+ * a stopped context, and so does returning to the app (iOS interrupts audio in the background). The iPhone silent
+ * switch still silences Web Audio, by design.
  */
 export function unlockAudioOnFirstTap(): () => void {
   const unlock = () => {
     const ctx = audio();
-    if (ctx !== null && ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
+    if (ctx !== null && needsResume(ctx)) void ctx.resume().catch(() => undefined);
   };
-  window.addEventListener('pointerdown', unlock, { passive: true });
-  return () => window.removeEventListener('pointerdown', unlock);
+  const onVisible = () => { if (document.visibilityState === 'visible') unlock(); };
+  const events = ['touchend', 'pointerup', 'click'] as const;
+  for (const name of events) window.addEventListener(name, unlock, { passive: true });
+  document.addEventListener('visibilitychange', onVisible);
+  return () => {
+    for (const name of events) window.removeEventListener(name, unlock);
+    document.removeEventListener('visibilitychange', onVisible);
+  };
 }
 
 interface Note {
@@ -64,7 +80,9 @@ interface Note {
 
 function play(notes: readonly Note[], master = 0.5, lowpass?: { from: number; to: number; over: number }): void {
   const ctx = audio();
-  if (ctx === null || ctx.state !== 'running') return;
+  if (ctx === null) return;
+  // A context iOS interrupted may resume without a gesture; if it does not, this reward is silent.
+  if (needsResume(ctx)) { void ctx.resume().then(() => { if (ctx.state === 'running') play(notes, master, lowpass); }).catch(() => undefined); return; }
   try {
     const now = ctx.currentTime + 0.01;
     const out = ctx.createGain();
