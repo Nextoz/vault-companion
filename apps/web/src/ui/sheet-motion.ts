@@ -30,6 +30,9 @@ function partsOf(header: HTMLElement | null): Parts | null {
 }
 
 /** The backdrop's colour with its alpha scaled by `k` (0 = clear), from a computed `rgb()/rgba()` value. */
+/** The backdrop's current scrim colour ('' where there is no layout engine, as motion.ts does for tokens). */
+const scrimOf = (el: Element): string => (typeof getComputedStyle === 'function' ? getComputedStyle(el).backgroundColor : '');
+
 export function scaleAlpha(color: string, k: number): string {
   const inner = /rgba?\(([^)]*)\)/.exec(color)?.[1];
   if (inner === undefined) return color;
@@ -77,7 +80,7 @@ export function useSheetDismiss(header: RefObject<HTMLElement | null>, onClose: 
     const options = { duration: duration('--dur-sheet'), easing: easing('--ease-sheet') };
     if (from !== 0) play(sheet, [{ transform: at(from) }, { transform: at(0) }], options);
     if (backdrop && scrimFrom !== null) {
-      play(backdrop, [{ backgroundColor: scrimFrom }, { backgroundColor: getComputedStyle(backdrop).backgroundColor }], options);
+      play(backdrop, [{ backgroundColor: scrimFrom }, { backgroundColor: scrimOf(backdrop) }], options);
     }
   };
 
@@ -133,7 +136,7 @@ export function useSheetDismiss(header: RefObject<HTMLElement | null>, onClose: 
       return;
     }
     settle(parts);
-    void dismiss(parts, 0, 0, parts.backdrop ? getComputedStyle(parts.backdrop).backgroundColor : '');
+    void dismiss(parts, 0, 0, parts.backdrop ? scrimOf(parts.backdrop) : '');
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
@@ -149,7 +152,7 @@ export function useSheetDismiss(header: RefObject<HTMLElement | null>, onClose: 
       height: parts.sheet.getBoundingClientRect().height,
       offset: 0,
       samples: [{ t: e.timeStamp, y: e.clientY }],
-      scrim: parts.backdrop ? getComputedStyle(parts.backdrop).backgroundColor : '',
+      scrim: parts.backdrop ? scrimOf(parts.backdrop) : '',
       parts,
     };
     e.currentTarget.setPointerCapture?.(e.pointerId);
