@@ -5,8 +5,11 @@ import {
   restedSegment, shortDate, skillPercent, trackedAchievements, unavailableLines, xpBar,
 } from '../character.ts';
 import { displayName, displayPoints, PIN_LIMIT, pinnedKey, resolveTracked } from '../achievements.ts';
+import { achievementQuality, categoryGlyph } from '../character-skin.ts';
 import { setSoundEnabled, soundEnabled } from '../sound.ts';
 import { AchievementsPage } from './Achievements.tsx';
+import { Glyph, Medal } from './CharacterGlyphs.tsx';
+import './CharacterSkin.css';
 import { CharacterRead } from './CharacterRead.tsx';
 import { SheetHeader } from './SheetHeader.tsx';
 import { CopyNote } from './useLastCopy.tsx';
@@ -88,10 +91,11 @@ function ProfessionRing({ profession, rules, unavailable, onOpen }: {
       onClick={() => destination !== undefined && onOpen(destination)}>
       <span className="character-ring">
         <Ring className="skill-ring" size={64} stroke={6} percent={note === null ? skillPercent(profession.skill, rules.skill.max) : 0} />
-        <span className="character-ring-value" aria-hidden="true">{note === null ? profession.skill : '–'}</span>
+        <Glyph id={categoryGlyph(profession.id)} className="character-ring-glyph" />
       </span>
       <span className="character-profession-name" aria-hidden="true">{profession.name}</span>
       <span className="character-profession-rank" aria-hidden="true">{note ?? profession.rank}</span>
+      <span className="character-profession-unit" aria-hidden="true">{note === null ? `${profession.skill} / ${rules.skill.max}` : '–'}</span>
     </button>
   </li>;
 }
@@ -101,7 +105,7 @@ function Tracked({ achievements, pinnedIds }: { achievements: readonly GameAchie
   if (pinned.length > 0) {
     return <section className="character-section">
       <h3>Tracked</h3>
-      <ul className="character-rows">
+      <ul className="character-rows skin-frame">
         {pinned.map((a) => <li key={a.id} className="character-tracked" data-testid="character-tracked">
           <span className="character-row-line"><span>{displayName(a)}</span><span className="character-row-meta">{displayPoints(a)} pts</span></span>
           {a.progress !== null && a.progress.target > 0 && <span className="character-progress" aria-hidden="true">
@@ -115,7 +119,7 @@ function Tracked({ achievements, pinnedIds }: { achievements: readonly GameAchie
   if (tracked.length === 0) return null;
   return <section className="character-section">
     <h3>Tracked</h3>
-    <ul className="character-rows">
+    <ul className="character-rows skin-frame">
       {tracked.map((t) => <li key={t.id} className="character-tracked" data-testid="character-tracked">
         <span className="character-row-line"><span>{t.name}</span><span className="character-row-meta">{t.current} / {t.target}</span></span>
         <span className="character-progress" aria-hidden="true"><span style={{ width: `${t.percent}%` }} /></span>
@@ -130,9 +134,10 @@ function RecentAchievements({ achievements, today }: { achievements: readonly Ga
     <h3>Recent achievements</h3>
     {recent.length === 0
       ? <p className="muted small">No achievements yet.</p>
-      : <ul className="character-rows">
-        {recent.map((a) => <li key={a.id} className="character-row-line" data-testid="character-achievement">
-          <span>{a.name}</span>
+      : <ul className="character-rows skin-frame">
+        {recent.map((a) => <li key={a.id} className="character-row-line character-recent" data-testid="character-achievement" data-quality={achievementQuality(a)}>
+          <Medal glyph={categoryGlyph(a.category)} lit className="is-small" />
+          <span className="character-recent-name">{a.name}</span>
           <span className="character-row-meta">{a.points} pts · {shortDate(a.earnedDate ?? '', today)}</span>
         </li>)}
       </ul>}
@@ -143,11 +148,11 @@ function HowXpWorks({ rules, critical }: { rules: GameRules; critical: NonNullab
   return <div className="character-how-xp">
     {howXpWorks(rules).map((section) => <section key={section.id} className="character-section">
       <h3>{section.heading}</h3>
-      <ul>{section.lines.map((line, i) => <li key={i}>{line}</li>)}</ul>
+      {section.lines.map((line, i) => <p key={i}>{line}</p>)}
     </section>)}
     {critical !== null && critical.every > 0 && <section className="character-section" data-testid="how-xp-critical">
       <h3>Critical!</h3>
-      <ul><li>About 1 in {critical.every} rewarded actions is a Critical!: {critical.multiplier}× its base XP. Daily caps still apply.</li></ul>
+      <p>About 1 in {critical.every} rewarded actions is a Critical!: {critical.multiplier}× its base XP. Daily caps still apply.</p>
     </section>}
   </div>;
 }
@@ -201,7 +206,7 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
   };
   return <div className="sheet-backdrop" role="presentation">
-    <div ref={dialog} className="sheet character-sheet" role="dialog" aria-modal="true" aria-label="Character" onKeyDown={onKeyDown}>
+    <div ref={dialog} className="sheet character-sheet character-skin" role="dialog" aria-modal="true" aria-label="Character" onKeyDown={onKeyDown}>
       <CharacterRead refreshKey={refreshKey} accountKey={accountKey}>
         {({ view, data, retry }) => {
           if (page === 'achievements') {
@@ -221,24 +226,28 @@ export function CharacterSheet({ refreshKey, accountKey, onClose, onOpenProfessi
               {view.res !== null && <button type="button" onClick={retry}>Retry</button>}
             </div>}
             {data && <>
-              <LevelHero character={data.character} />
-              {data.unavailable.length > 0 && <ul className="character-unavailable">
-                {unavailableLines(data.unavailable).map((line) => <li key={line}>{line}</li>)}
-              </ul>}
-              <ul className="character-professions" aria-label="Professions">
-                {data.character.professions.map((profession) => <ProfessionRing key={profession.id} profession={profession}
-                  rules={data.rules} unavailable={data.unavailable} onOpen={onOpenProfession} />)}
-              </ul>
-              <p className="character-hint">Tap a ring to open its log</p>
+              <section className="character-pane skin-frame" aria-label="Level and professions">
+                <LevelHero character={data.character} />
+                {data.unavailable.length > 0 && <ul className="character-unavailable">
+                  {unavailableLines(data.unavailable).map((line) => <li key={line}>{line}</li>)}
+                </ul>}
+                <ul className="character-professions" aria-label="Professions">
+                  {data.character.professions.map((profession) => <ProfessionRing key={profession.id} profession={profession}
+                    rules={data.rules} unavailable={data.unavailable} onOpen={onOpenProfession} />)}
+                </ul>
+                <p className="character-hint">Tap a ring to open its log</p>
+              </section>
               <Tracked achievements={data.character.achievements} pinnedIds={pinnedIds} />
               <RecentAchievements achievements={data.character.achievements} today={data.now.slice(0, 10)} />
-              <button type="button" className="character-link-row" onClick={() => setPage('achievements')}>
-                All achievements<span className="character-chevron" aria-hidden="true">›</span>
-              </button>
-              <button type="button" className="character-link-row" onClick={() => setPage('how-xp')}>
-                How XP works<span className="character-chevron" aria-hidden="true">›</span>
-              </button>
-              <SoundToggle />
+              <div className="character-links skin-frame">
+                <button type="button" className="character-link-row" onClick={() => setPage('achievements')}>
+                  All achievements<span className="character-chevron" aria-hidden="true">›</span>
+                </button>
+                <button type="button" className="character-link-row" onClick={() => setPage('how-xp')}>
+                  How XP works<span className="character-chevron" aria-hidden="true">›</span>
+                </button>
+                <SoundToggle />
+              </div>
             </>}
           </>;
         }}

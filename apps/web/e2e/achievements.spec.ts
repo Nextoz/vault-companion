@@ -32,10 +32,10 @@ test('All achievements groups by category with counters, masks hidden ones, mark
   // Every achievement is a tile button in the grid (10 achievements + 1 feat).
   await expect(dialog.getByTestId('achievement-tile')).toHaveCount(11);
 
-  // An unearned hidden achievement shows as ??? with no points and no progress.
+  // An unearned hidden achievement shows a single ? in its frame, with no points and no progress (R4).
   const hidden = dialog.locator('.achievement-tile.is-hidden');
   await expect(hidden).toHaveCount(3);
-  await expect(hidden.first()).toHaveText('???');
+  await expect(hidden.first()).toHaveText('?');
   await expect(hidden.first()).not.toContainText('pts');
 
   // A chain shows its tier, a counter its percent, a meta tile is marked.

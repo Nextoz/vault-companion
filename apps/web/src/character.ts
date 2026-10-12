@@ -145,6 +145,11 @@ export function levelExamples(rules: GameRules): Array<{ level: number; cost: nu
   return levels.map((level) => ({ level, cost: levelCostAt(level, rules) }));
 }
 
+/** XP the next skill point costs at `skill`: the domain engine's rule (base cost + floor(skill / step)). */
+export function skillCostAt(skill: number, rules: GameRules): number {
+  return rules.skill.baseCost + Math.floor(Math.max(0, skill) / rules.skill.step);
+}
+
 export interface RuleSection {
   readonly id: string;
   readonly heading: string;
@@ -203,7 +208,7 @@ export function howXpWorks(rules: GameRules): RuleSection[] {
       id: 'skill',
       heading: 'Skill and ranks',
       lines: [
-        `Skill grows by ${rules.skill.baseCost} + floor(skill / ${rules.skill.step}), capped at ${rules.skill.max}.`,
+        `Each skill point costs a little more XP: ${skillCostAt(0, rules)} at first, ${skillCostAt(rules.skill.max - 1, rules)} near the top. Skill stops at ${rules.skill.max}.`,
         ...rules.ranks.map((rank) => `${rank.name} at skill ${rank.skill}.`),
       ],
     },

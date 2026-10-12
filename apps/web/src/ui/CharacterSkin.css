@@ -1,0 +1,228 @@
+/* Redesign R4 (review "Design and Feel" option B2): the Character skin. Only the Character sheet, its Achievements
+   and How XP works pages, and the achievement detail wear it (`.character-skin`); the reward banner shares the frame
+   language in Rewards.css. Parchment-tinted dark, 1 px gold hairlines with corner notches, a serif for names, and
+   item-quality colours per achievement tier. Every value is a token (tokens.css, `--skin-*`). */
+
+/* ---- the skin surface ---- */
+.sheet.character-skin {
+  gap: var(--s-4);
+  /* A fixed-length fall-off, so a short sheet (the detail) and the sticky header meet on the same colour. */
+  background: linear-gradient(180deg, var(--skin-bg) 0, var(--skin-bg-deep) 900px) var(--skin-bg-deep);
+  color: var(--skin-text);
+  font-variant-numeric: lining-nums;
+  --muted: var(--skin-muted);
+}
+/* Clear at rest so the header sits on the sheet's own gradient; opaque only once content scrolls beneath it. */
+.character-skin .sheet-header { background: transparent; }
+.character-skin .sheet-header[data-scrolled] { background: var(--skin-bg); }
+.character-skin .sheet-header h2 { font-family: var(--font-serif); font-size: var(--t-title3); font-weight: 600; letter-spacing: 0; }
+.character-skin .sheet-header[data-scrolled] { box-shadow: 0 1px 0 var(--skin-rule); }
+.character-skin .muted { color: var(--skin-muted); }
+
+/* Item quality: one custom property (--q) the frame, glyph and name read. Only inside the skin. */
+.character-skin [data-quality='common'], .character-skin[data-quality='common'] { --q: var(--skin-quality-common); }
+.character-skin [data-quality='uncommon'], .character-skin[data-quality='uncommon'] { --q: var(--skin-quality-uncommon); }
+.character-skin [data-quality='rare'], .character-skin[data-quality='rare'] { --q: var(--skin-quality-rare); }
+.character-skin [data-quality='epic'], .character-skin[data-quality='epic'] { --q: var(--skin-quality-epic); }
+.character-skin [data-quality='legendary'], .character-skin[data-quality='legendary'] { --q: var(--skin-quality-legendary); }
+
+/* ---- the frame: a gold hairline with brighter corner notches, pure CSS ---- */
+.skin-frame {
+  position: relative;
+  border: 1px solid var(--skin-frame);
+  border-radius: var(--r-skin);
+  background: var(--skin-raised);
+}
+.skin-frame::after {
+  --c: var(--frame-notch, var(--skin-notch));
+  --n: var(--skin-notch-size);
+  position: absolute;
+  inset: -1px;
+  border-radius: var(--r-skin);
+  background:
+    linear-gradient(var(--c) 0 0) left top / var(--n) 1px,
+    linear-gradient(var(--c) 0 0) left top / 1px var(--n),
+    linear-gradient(var(--c) 0 0) right top / var(--n) 1px,
+    linear-gradient(var(--c) 0 0) right top / 1px var(--n),
+    linear-gradient(var(--c) 0 0) left bottom / var(--n) 1px,
+    linear-gradient(var(--c) 0 0) left bottom / 1px var(--n),
+    linear-gradient(var(--c) 0 0) right bottom / var(--n) 1px,
+    linear-gradient(var(--c) 0 0) right bottom / 1px var(--n);
+  background-repeat: no-repeat;
+  content: '';
+  pointer-events: none;
+}
+
+/* ---- section headings: serif, followed by a hairline rule ---- */
+.character-skin :is(.character-section h3, .achievements-heading) {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin: 0 0 var(--s-2);
+  color: var(--skin-text);
+  font-family: var(--font-serif);
+  font-size: var(--t-headline);
+  font-weight: 600;
+  font-variant-numeric: lining-nums;
+  letter-spacing: 0;
+}
+.character-skin :is(.character-section h3, .achievements-heading)::after { flex: 1; height: 1px; background: var(--skin-rule); content: ''; }
+
+/* ---- the framed glyph (achievement tiles, recent rows, the detail) ---- */
+.skin-medal {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  background: var(--skin-bg-deep);
+  color: var(--skin-muted);
+  --frame-notch: color-mix(in srgb, var(--skin-muted) 55%, transparent);
+  border-color: color-mix(in srgb, var(--skin-muted) 18%, transparent);
+}
+.skin-medal > * { grid-area: 1 / 1; }
+.skin-medal-glyph { width: 22px; height: 22px; }
+.skin-medal-arc { width: 100%; height: 100%; }
+.skin-medal-track,
+.skin-medal-fill { fill: none; stroke-width: 2; }
+.skin-medal-track { stroke: var(--game-track); }
+.skin-medal-fill { stroke: var(--skin-muted); stroke-linecap: round; }
+.skin-medal-unknown { color: var(--skin-muted); font-family: var(--font-serif); font-size: var(--t-title2); line-height: 1; }
+.skin-medal.is-lit {
+  --frame-notch: var(--q, var(--skin-notch));
+  border-color: color-mix(in srgb, var(--q, var(--game-gold)) 22%, transparent);
+  background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--q, var(--game-gold)) 16%, transparent), transparent 72%), var(--skin-bg-deep);
+  color: var(--q, var(--game-gold));
+}
+.skin-medal.is-small { width: 32px; height: 32px; }
+.skin-medal.is-small::after { content: none; } /* notches crowd a 32 px frame */
+.skin-medal.is-small .skin-medal-glyph { width: 16px; height: 16px; }
+.skin-medal.is-large { width: 56px; height: 56px; }
+.skin-medal.is-large .skin-medal-glyph { width: 26px; height: 26px; }
+
+/* ---- Character overview: the pane (level, title, professions) ---- */
+.character-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5) var(--s-2) var(--s-3);
+  background: radial-gradient(ellipse 80% 45% at 50% 0%, color-mix(in srgb, var(--game-gold) 8%, transparent), transparent), var(--skin-raised);
+}
+
+/* Rings: SVG arcs drawn with pathLength=100, so the dash values are percentages. */
+.ring-track { fill: none; stroke: var(--game-track); }
+.ring-fill,
+.ring-rested { fill: none; stroke: var(--ring-colour, var(--game-gold)); stroke-linecap: round; }
+
+.character-hero { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.character-level {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 136px;
+  height: 136px;
+}
+.level-ring { position: absolute; inset: 0; width: 100%; height: 100%; --ring-colour: var(--game-gold); }
+.level-ring .ring-rested { stroke: var(--skin-rested); opacity: 0.6; }
+.character-level-number { font-size: var(--t-display); font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
+.character-level-word { margin-top: var(--s-1); color: var(--skin-muted); font-size: var(--t-caption); letter-spacing: 0.12em; text-transform: uppercase; }
+.character-title { margin: var(--s-3) 0 var(--s-1); font-family: var(--font-serif); font-size: var(--t-title2); font-weight: 600; }
+.character-xp-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-1) var(--s-3);
+  margin: 0;
+  color: var(--skin-muted);
+  font-size: var(--t-subhead);
+  font-variant-numeric: tabular-nums;
+}
+.character-rested { color: var(--skin-rested); }
+.character-xp-line > span:last-child { color: var(--game-gold); }
+.character-unavailable {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-skin);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--t-subhead);
+  list-style: none;
+}
+
+.character-professions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-1);
+  margin: 0;
+  padding: var(--s-4) 0 0;
+  border-top: 1px solid var(--skin-rule);
+  list-style: none;
+}
+.character-profession { --ring-colour: var(--game-gold); min-width: 0; }
+.character-profession[data-profession='athletics'] { --ring-colour: var(--hue-training); }
+.character-profession[data-profession='scholar'] { --ring-colour: var(--hue-learning); }
+.character-profession[data-profession='lorekeeper'] { --ring-colour: var(--hue-research); }
+.character-profession[data-profession='quartermaster'] { --ring-colour: var(--hue-tasks); }
+.character-ring-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: var(--s-1) 2px;
+  border: 0;
+  border-radius: var(--r-skin);
+  background: transparent;
+  color: var(--skin-text);
+}
+.character-ring-button:active { background: var(--game-well); }
+.character-ring { position: relative; display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: var(--s-2); }
+.skill-ring { position: absolute; inset: 0; width: 100%; height: 100%; }
+.character-ring-glyph { width: 24px; height: 24px; color: var(--ring-colour); }
+.character-profession-name,
+.character-profession-rank,
+.character-profession-unit { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.character-profession-name { font-size: var(--t-caption); font-weight: 600; letter-spacing: -0.01em; }
+.character-profession-rank { color: var(--skin-muted); font-size: var(--t-caption); }
+.character-profession-unit { color: var(--skin-text); font-family: var(--font-rounded); font-size: var(--t-caption); font-variant-numeric: tabular-nums; }
+.character-hint { margin: 0; color: var(--skin-muted); font-size: var(--t-footnote); text-align: center; }
+
+/* ---- Tracked and Recent achievements ---- */
+.character-rows { margin: 0; padding: 0 var(--s-4); list-style: none; }
+.character-rows > li { min-height: var(--tap); padding: var(--s-3) 0; border-top: 1px solid var(--skin-rule); }
+.character-rows > li:first-child { border-top: none; }
+.character-row-line { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); }
+.character-row-meta { flex-shrink: 0; color: var(--skin-muted); font-size: var(--t-subhead); font-variant-numeric: tabular-nums; }
+.character-tracked { display: flex; flex-direction: column; gap: var(--s-2); }
+.character-tracked .character-row-line > span:first-child { font-family: var(--font-serif); }
+.character-progress { display: block; height: 4px; border-radius: var(--r-tight); background: var(--game-track); overflow: hidden; }
+.character-progress > span { display: block; height: 100%; border-radius: var(--r-tight); background: var(--game-gold); }
+.character-rows > li.character-recent { align-items: center; padding: var(--s-2) 0; }
+.character-recent-name { flex: 1; min-width: 0; color: var(--q); font-family: var(--font-serif); font-size: var(--t-callout); }
+
+/* ---- links: one framed group ---- */
+.character-links { display: flex; flex-direction: column; }
+.character-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--s-4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--skin-text);
+  text-align: left;
+}
+.character-link-row + .character-link-row { border-top: 1px solid var(--skin-rule); }
+.character-chevron { color: var(--skin-muted); font-size: var(--t-title2); line-height: 1; }
+
+/* ---- How XP works: plain sentences under serif headings ---- */
+.character-how-xp { display: flex; flex-direction: column; gap: var(--s-5); padding-bottom: var(--s-4); }
+.character-how-xp p { margin: 0; color: var(--skin-text); font-size: var(--t-callout); line-height: 1.45; }
+.character-how-xp p + p { margin-top: var(--s-2); }

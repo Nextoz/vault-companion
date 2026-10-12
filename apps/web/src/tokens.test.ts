@@ -56,6 +56,22 @@ describe('design tokens meet WCAG AA', () => {
     expect(contrast(resolve(fg), background)).toBeGreaterThanOrEqual(4.5);
   });
 
+  // Redesign R4: the Character skin. Each text colour is checked on the lighter skin surfaces (the worst case for
+  // light text), including the five item-quality colours and the blue links the sheet header keeps.
+  const skinText = ['--skin-text', '--skin-muted', '--skin-rested', '--game-gold', '--accent-on-raised',
+    '--skin-quality-common', '--skin-quality-uncommon', '--skin-quality-rare', '--skin-quality-epic', '--skin-quality-legendary'];
+  const skinPairs = ['--skin-bg', '--skin-raised'].flatMap((surface) =>
+    skinText.map((fg): [string, string, string] => [fg, surface, resolve(surface)]));
+
+  it.each(skinPairs)('skin: %s on %s', (fg, _label, background) => {
+    expect(contrast(resolve(fg), background)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the WoW rare and epic hues would fail on the skin (why the quality colours are lifted)', () => {
+    expect(contrast('#0070dd', resolve('--skin-bg'))).toBeLessThan(4.5);
+    expect(contrast('#a335ee', resolve('--skin-bg'))).toBeLessThan(4.5);
+  });
+
   it('dark text on a filled accent button', () => {
     expect(contrast(bg, resolve('--accent'))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(bg, resolve('--accent-on-raised'))).toBeGreaterThanOrEqual(4.5);

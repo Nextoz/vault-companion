@@ -56,6 +56,30 @@
   --game-well: rgb(255 255 255 / 0.05);
   --game-track: rgb(255 255 255 / 0.09);
 
+  /* Character skin (redesign R4, review option B2): only Character, Achievements, How XP works, the achievement
+     detail and the reward banner read these. A parchment-tinted dark, gold hairline frames with corner notches, a
+     serif for names. Text pairs are checked on --skin-bg (the lighter end of the gradient) and --skin-raised. */
+  --skin-bg: #1a1712;
+  --skin-bg-deep: #100e0b;
+  --skin-raised: #221e18;
+  --skin-text: #f3ecdd;
+  --skin-muted: #a89f8c;
+  --skin-rested: #5aa2ff;
+  --skin-frame: color-mix(in srgb, var(--game-gold) 30%, transparent);
+  --skin-notch: color-mix(in srgb, var(--game-gold) 85%, transparent);
+  --skin-rule: color-mix(in srgb, var(--game-gold) 22%, transparent);
+  --skin-notch-size: 6px;
+  --r-skin: 2px;
+
+  /* Item quality per achievement tier (5 / 10 / 25 / 50 pts, Feats). WoW hues, lifted until each reads 4.5:1 on the
+     skin; rare (#0070dd) and epic (#a335ee) needed it. Never used outside the Character screens: they clash with the
+     status green and the action blue. */
+  --skin-quality-common: #f4efe4;
+  --skin-quality-uncommon: #3fe04f;
+  --skin-quality-rare: #3a8eff;
+  --skin-quality-epic: #b06cf5;
+  --skin-quality-legendary: #ff8000;
+
   /* A2 signature: a faint top-lit edge on cards. */
   --card-sheen: linear-gradient(rgb(255 255 255 / 0.03), transparent 40%);
   --press-overlay: inset 0 0 0 100vmax rgb(255 255 255 / 0.07);
