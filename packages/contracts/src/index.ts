@@ -398,7 +398,8 @@ const bookAuthor = z.string().max(200).refine((s) => !/[\r\n\u2028\u2029]/.test(
 export const StartBookPayload = z.strictObject({
   title: bookTitle,
   author: bookAuthor,
-  totalPages: z.number().int().min(1).max(100_000),
+  /** Omitted for a book without pages (an audiobook): the note carries no `totalPages`, only reflections can be added. */
+  totalPages: z.number().int().min(1).max(100_000).optional(),
 });
 export type StartBookPayload = z.infer<typeof StartBookPayload>;
 

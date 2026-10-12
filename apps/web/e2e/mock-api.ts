@@ -957,6 +957,14 @@ export class MockApi {
     }
     if (typeof mode === 'object') return this.#json(route, 409, ApiError.parse({ ...mode.refuse, operationId: command.operationId }));
 
+    // Like the domain (ADR-0062): a book without pages cannot take a page.
+    if (command.type === 'LogReading') {
+      const { title } = command.payload;
+      if (this.books.find((book) => book.title === title)?.totalPages === 0) {
+        return this.#json(route, 409, ApiError.parse({ code: 'refused:book-page-invalid', message: 'This book has no page count, so pages cannot be logged', retryable: false, operationId: command.operationId }));
+      }
+    }
+
     // Like the Worker (ADR-0013): an Undo's token must be its completion's commit.
     if ((command.type === 'UndoCompleteTask' || command.type === 'UndoActiveWork' || command.type === 'UndoEditTraining') && this.#receipts.get(command.payload.target.operationId)?.commitSha !== command.payload.targetCommit) {
       return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'Undo target does not match.', retryable: false }));
@@ -1178,7 +1186,7 @@ export class MockApi {
       case 'StartBook': {
         const { title, author, totalPages } = command.payload;
         this.#booksBefore.set(command.operationId, structuredClone(this.books));
-        this.books = [...this.books, { title, author, totalPages, currentPage: 0, status: 'reading', lastRead: null, reflections: [] }];
+        this.books = [...this.books, { title, author, totalPages: totalPages ?? 0, currentPage: 0, status: 'reading', lastRead: null, reflections: [] }];
         const path = `Books/${title}.md`;
         return { ...base, path, effect: { kind: 'book', op: 'started', path } };
       }

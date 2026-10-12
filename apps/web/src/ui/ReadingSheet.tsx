@@ -8,9 +8,11 @@ import { SheetHeader } from './SheetHeader.tsx';
 /** READ1-A2: one sheet for the three reading actions. Start has no queue picker (v1); Reflect keeps its draft outside. */
 export type ReadingSheetKind = 'start' | 'log' | 'reflect';
 
-export function ReadingSheet({ kind, book, queue, accountKey, baseRevision, onClose, now = new Date(), draft = '', onDraftChange }: {
+export function ReadingSheet({ kind, book, books = [], queue, accountKey, baseRevision, onClose, now = new Date(), draft = '', onDraftChange }: {
   kind: ReadingSheetKind;
   book?: BookView | undefined;
+  /** Every book on the shelf: Reflect offers a picker when there is more than one, so a thought goes to the chosen book. */
+  books?: readonly BookView[];
   queue: PendingQueue;
   accountKey: string | null;
   baseRevision: string | null;
@@ -20,6 +22,8 @@ export function ReadingSheet({ kind, book, queue, accountKey, baseRevision, onCl
   draft?: string;
   onDraftChange?: (text: string) => void;
 }) {
+  const [chosenTitle, setChosenTitle] = useState(book?.title ?? '');
+  const target = kind === 'reflect' ? books.find((b) => b.title === chosenTitle) ?? book : book;
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [totalPages, setTotalPages] = useState('');
@@ -28,8 +32,9 @@ export function ReadingSheet({ kind, book, queue, accountKey, baseRevision, onCl
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const guard = useRef(false);
-  const startParsed = StartBookPayload.safeParse({ title: title.trim(), author: author.trim(), totalPages: Number(totalPages) });
-  const startReady = startParsed.success && title.trim() !== '' && author.trim() !== '';
+  // Author and page count are optional: an audiobook has no pages, and then only reflections can be added.
+  const startParsed = StartBookPayload.safeParse({ title: title.trim(), author: author.trim(), ...(totalPages.trim() === '' ? {} : { totalPages: Number(totalPages) }) });
+  const startReady = startParsed.success && title.trim() !== '';
   const typedPage = page.trim() === '' ? Number.NaN : Number(page);
   const pageProblem = book ? pageError(typedPage, book.currentPage, book.totalPages) : 'No book is open.';
   const ready = kind === 'start' ? startReady : kind === 'log' ? pageProblem === null : draft.trim() !== '';
@@ -45,10 +50,10 @@ export function ReadingSheet({ kind, book, queue, accountKey, baseRevision, onCl
       } else if (kind === 'log' && book) {
         await queue.enqueue(logReading({ baseRevision }, { title: book.title, page: typedPage, date }),
           { accountKey, label: `${book.title} · p. ${typedPage}`, taskKey: 'reading' });
-      } else if (kind === 'reflect' && book) {
+      } else if (kind === 'reflect' && target) {
         // The text travels verbatim and never reaches a label, a log or an error string.
-        await queue.enqueue(saveReflection({ baseRevision }, { title: book.title, date, text: draft }),
-          { accountKey, label: `${book.title} · reflection`, taskKey: 'reading' });
+        await queue.enqueue(saveReflection({ baseRevision }, { title: target!.title, date, text: draft }),
+          { accountKey, label: `${target!.title} · reflection`, taskKey: 'reading' });
         onDraftChange?.('');
       } else return;
       onClose();
@@ -61,8 +66,8 @@ export function ReadingSheet({ kind, book, queue, accountKey, baseRevision, onCl
     <SheetHeader title={heading} onClose={onClose} disabled={saving} />
     {kind === 'start' && <>
       <label>Title<input type="text" required maxLength={80} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
-      <label>Author<input type="text" required maxLength={200} value={author} onChange={(e) => setAuthor(e.target.value)} /></label>
-      <label>Total pages<input type="number" inputMode="numeric" required min="1" step="1" value={totalPages} onChange={(e) => setTotalPages(e.target.value)} /></label>
+      <label>Author (optional)<input type="text" maxLength={200} value={author} onChange={(e) => setAuthor(e.target.value)} /></label>
+      <label>Total pages (leave empty for an audiobook)<input type="number" inputMode="numeric" min="1" step="1" value={totalPages} onChange={(e) => setTotalPages(e.target.value)} /></label>
     </>}
     {kind === 'log' && book && <>
       <p className="muted small">{book.title}</p>
@@ -70,8 +75,12 @@ export function ReadingSheet({ kind, book, queue, accountKey, baseRevision, onCl
       {pageProblem && <p className="muted small" role="alert">{pageProblem}</p>}
       <label>Date<input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
     </>}
-    {kind === 'reflect' && book && <>
-      <p className="muted small">{book.title}</p>
+    {kind === 'reflect' && target && <>
+      {books.length > 1
+        ? <label>Book<select value={target.title} onChange={(e) => setChosenTitle(e.target.value)}>
+            {books.map((b) => <option key={b.title} value={b.title}>{b.title}</option>)}
+          </select></label>
+        : <p className="muted small">{target.title}</p>}
       <label>What stayed with me?<textarea rows={5} maxLength={20000} value={draft} onChange={(e) => onDraftChange?.(e.target.value)} /></label>
       <label>Date<input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
     </>}

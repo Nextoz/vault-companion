@@ -31,6 +31,11 @@ const created =
   '## Reflections\n';
 
 it('creates the canonical note', () => {
+  const pageless = kernel.createBookNote({ title: 'Audio', author: '' });
+  expect(pageless).not.toContain('totalPages');
+  expect(kernel.parseBookNote(pageless)).toMatchObject({ ok: true, frontmatter: { totalPages: null, status: 'reading' } });
+  expect(kernel.appendProgress(pageless, { date: '2026-10-05', page: 1 })).toMatchObject({ code: 'refused:book-page-invalid' });
+  expect(kernel.appendReflection(pageless, { date: '2026-10-05', text: 'a thought' })).toMatchObject({ ok: true });
   expect(kernel.createBookNote({ title: 'Synthetic Book', author: 'Synthetic Author', totalPages: 100 })).toBe(created);
   const parsed = kernel.parseBookNote(kernel.createBookNote({ title: 'T', author: '', totalPages: 3 }));
   expect(parsed).toMatchObject({

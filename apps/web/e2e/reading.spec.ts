@@ -24,8 +24,8 @@ test('an empty shelf starts a book from the sheet; Undo takes it away', async ({
   await region.getByRole('button', { name: 'Start a book', exact: true }).click();
   const sheet = page.getByRole('dialog', { name: 'Start a book', exact: true });
   await sheet.getByLabel('Title', { exact: true }).fill('Synthetic Book');
-  await sheet.getByLabel('Author', { exact: true }).fill('A. Author');
-  await sheet.getByLabel('Total pages', { exact: true }).fill('200');
+  await sheet.getByLabel('Author').fill('A. Author');
+  await sheet.getByLabel('Total pages').fill('200');
   await sheet.getByRole('button', { name: 'Start book', exact: true }).click();
 
   const current = region.getByTestId('reading-current');
@@ -56,6 +56,33 @@ test('the reading book leads, a done book is listed below and shows Finished whe
   await expect(current).toContainText('Finished One');
   await expect(current).toContainText('Finished');
   await expect(current.getByRole('button', { name: /Mark done/i })).toHaveCount(0);
+});
+
+test('a second book can be started next to the first, as an audiobook, and each gets its own thoughts', async ({ page }) => {
+  const api = new MockApi();
+  api.books = [book({ title: 'Reading One', currentPage: 40 })];
+  await api.install(page);
+  await page.goto('/');
+  const region = await openReading(page);
+
+  await region.getByRole('button', { name: 'Start another book', exact: true }).click();
+  const start = page.getByRole('dialog', { name: 'Start a book', exact: true });
+  await start.getByLabel('Title', { exact: true }).fill('Audio Walk');
+  await start.getByRole('button', { name: 'Start book', exact: true }).click();
+  await expect(region.getByRole('button', { name: /Audio Walk/ })).toBeVisible();
+  expect(api.applied[0]).toMatchObject({ type: 'StartBook', payload: { title: 'Audio Walk', author: '' } });
+  expect(api.applied[0]!.payload).not.toHaveProperty('totalPages');
+  await region.getByRole('button', { name: /Audio Walk/ }).click();
+  await expect(region.getByTestId('reading-current')).toContainText('Audio Walk');
+  await expect(region.getByRole('button', { name: 'Log pages', exact: true })).toHaveCount(0);
+
+  await region.getByRole('button', { name: 'Reflect', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Reflect', exact: true });
+  await sheet.getByRole('combobox').selectOption('Reading One');
+  await sheet.getByLabel('What stayed with me?', { exact: true }).fill('Thought for the first book.');
+  await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(() => api.applied.at(-1)?.type).toBe('SaveReflection');
+  expect(api.applied.at(-1)).toMatchObject({ type: 'SaveReflection', payload: { title: 'Reading One' } });
 });
 
 test('a lower page is blocked on the device in plain words, and Save stays disabled', async ({ page }) => {
