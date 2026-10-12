@@ -225,15 +225,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.siwh-toggle::after {
-  content: '\203a';
-  font-size: var(--t-title3);
-  line-height: 1;
-  transition: transform var(--dur-fast) var(--ease-ui);
-}
-
-.siwh-toggle[aria-expanded='true']::after { transform: rotate(90deg); }
-
 .siwh-toggle:active:not(:disabled) { box-shadow: none; color: var(--text); }
 
 /* ---- Log: the title, the Character strip, the chips -------------------------------------------------------- */

@@ -406,6 +406,9 @@ test('Today comes first; Overdue is a collapsed group below it, with its count, 
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(toggle).toBeVisible(); // the count stays visible, collapsed or expanded
   await expect(overdue.getByTestId('task')).toHaveCount(2);
+  // R5: the due state is a chip on the title line, not an ISO date (clock is 2026-09-24).
+  await expect(overdue.getByTestId('due-chip')).toHaveText(['4d late', '2d late']);
+  await expect(overdue.getByText('2026-09-20')).toHaveCount(0);
   await overdue.getByRole('button', { name: 'Complete: Return the drill' }).click();
   await expect.poll(() => api.applied.length).toBe(1);
   await expect(overdue.getByRole('button', { name: '1 overdue' })).toBeVisible();

@@ -12,6 +12,7 @@ import './styles.css';
 import './motion.css';
 import './nav.css';
 import './today-log.css';
+import './icons-colour.css';
 
 async function start() {
   const root = createRoot(document.getElementById('root') as HTMLElement);

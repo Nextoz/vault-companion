@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
+import { LOG_VIEW_DOMAIN } from './domain.ts';
 import { LOG_VIEW_LABELS, LOG_VIEWS, type LogView } from '../log-view.ts';
 
 /**
@@ -21,7 +22,7 @@ export function LogViewChips({ view, onSelect }: { view: LogView | null; onSelec
   return (
     <div ref={row} className="chip-row log-view" role="group" aria-label="Log view">
       {LOG_VIEWS.map((v) => (
-        <button key={v} type="button" className="chip-row-item" aria-pressed={view === v} onClick={() => onSelect(v)}>
+        <button key={v} type="button" className="chip-row-item" data-domain={LOG_VIEW_DOMAIN[v] ?? undefined} aria-pressed={view === v} onClick={() => onSelect(v)}>
           {LOG_VIEW_LABELS[v]}
         </button>
       ))}

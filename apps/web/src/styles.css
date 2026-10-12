@@ -362,11 +362,6 @@ textarea:focus-visible {
   display: none;
 }
 
-.due-over {
-  color: var(--warn);
-  font-weight: 600;
-}
-
 .readonly {
   font-style: italic;
 }
@@ -761,7 +756,7 @@ body:has(.reward-banner) .toast {
   border-radius: var(--r-tight);
 }
 /* The title opens the edit sheet: a muted chevron says so (the accessible name comes from aria-label). */
-.quest-title::after { margin-left: var(--s-1); color: var(--muted); font-weight: 400; content: '›'; }
+.quest-title::after { margin-left: var(--s-1); color: var(--muted); }
 .quest-objectives { display: flex; flex-direction: column; gap: var(--s-1); margin: 0; padding: 0; list-style: none; }
 .quest-objective { display: flex; align-items: flex-start; gap: var(--s-2); color: var(--text); font-size: var(--t-subhead); line-height: 1.35; }
 /* A plain marker, not a checkbox: objectives are read here and acted on with the buttons below. */
@@ -1120,7 +1115,7 @@ body:has(.reward-banner) .toast {
   border-bottom: 0.5px solid var(--line);
 }
 .app[data-tab='notes'] .note-list li:last-child .note-row { border-bottom: none; }
-.app[data-tab='notes'] .note-row::after { content: '›'; color: var(--muted); font-size: var(--t-title3); }
+.app[data-tab='notes'] .note-row::after { color: var(--muted); }
 .app[data-tab='notes'] .note-row-title { flex: 1; }
 .app[data-tab='notes'] .note-head { border-bottom: 0.5px solid var(--line); }
 .app[data-tab='notes'] .note-body {

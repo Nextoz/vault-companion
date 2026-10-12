@@ -14,7 +14,7 @@ test('offline report queues, sends once back online, and its Undo targets the du
   await api.install(page);
   await page.goto('/');
   await expect(page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: 'Today', exact: true }))
-    .toHaveAttribute('aria-pressed', 'true');
+    .toHaveAttribute('aria-current', 'page');
 
   const sheet = await openReport(page);
   await expect(sheet.getByRole('button', { name: 'Bug', exact: true })).toHaveAttribute('aria-pressed', 'true');

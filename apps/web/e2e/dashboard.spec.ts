@@ -23,7 +23,7 @@ test('Dashboard keeps Today default and supports mobile ranges, touch and keyboa
   await api.install(page);
   await page.goto('/');
   const nav = page.getByRole('navigation', { name: 'Views' });
-  await expect(nav.getByRole('button', { name: 'Today', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(nav.getByRole('button', { name: 'Today', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(nav.getByRole('button')).toHaveText(['Today', 'Tasks', 'Scouts', 'Notes', 'Log']);
   // UX8 layout C: the Dashboard stack lives on the Today screen's Boards view (Overview is the default).
   await goTo(page, 'Board');
