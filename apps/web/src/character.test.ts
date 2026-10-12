@@ -2,7 +2,7 @@ import type { GameAchievement, GameRules } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   emptyCharacterLine, howXpWorks, levelCostAt, levelExamples, levelLabel, professionUnavailable, recentlyEarned,
-  professionLine, restedSegment, shortDate, skillLabel, skillPercent, sourceLabel, trackedAchievements, unavailableLines, xpBar,
+  professionLine, restedSegment, shortDate, skillCostAt, skillLabel, skillPercent, sourceLabel, trackedAchievements, unavailableLines, xpBar,
 } from './character.ts';
 
 /** Distinctive synthetic values so a hard-coded page (the real config) would fail every assertion below. */
@@ -140,6 +140,15 @@ describe('howXpWorks', () => {
     for (const literal of ['Apprentice', 'New Adventurer', '300', '60']) {
       expect(text).not.toContain(literal);
     }
+  });
+
+  it('states the skill cost in words, from the engine rule: first point and the last before the cap', () => {
+    const skill = howXpWorks(rules()).find((section) => section.id === 'skill')?.lines[0];
+    // 22 + floor(0 / 7) = 22 at first; 22 + floor(110 / 7) = 37 for the last point below 111.
+    expect(skill).toBe('Each skill point costs a little more XP: 22 at first, 37 near the top. Skill stops at 111.');
+    // The real config (base 5, step 10, max 300) reads as the review asked: 5 at first, 34 near the top.
+    const real = rules({ skill: { max: 300, baseCost: 5, step: 10 } });
+    expect([skillCostAt(0, real), skillCostAt(299, real)]).toEqual([5, 34]);
   });
 
   it('changes when a rule value changes, so the page cannot be hard-coded', () => {

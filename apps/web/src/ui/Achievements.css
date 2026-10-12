@@ -1,58 +1,77 @@
-/* GAM1-C: the Achievements page (plan screen 3) and the badge detail sheet (screen 4); the toast became the ADR-0064
-   reward layer (Rewards.css). The game palette (--game-*) is global in tokens.css. */
+/* GAM1-C: the Achievements page (plan screen 3) and the badge detail sheet (screen 4), in the R4 Character skin
+   (CharacterSkin.css: the frame, the framed glyph, quality colours, headings). The toast became the ADR-0064 reward
+   layer (Rewards.css). */
 
-.achievements-content { display: flex; flex-direction: column; gap: 16px; }
+.achievements-content { display: flex; flex-direction: column; gap: var(--s-5); padding-bottom: var(--s-4); }
+.achievements-count { color: var(--skin-muted); font-family: var(--font-rounded); font-size: var(--t-subhead); font-weight: 500; font-variant-numeric: tabular-nums; }
 
-/* ---- screen 3: one section per category, a 4-column grid of tile buttons ---- */
-.achievements-heading { margin: 0 0 8px; color: var(--muted); font-size: var(--t-footnote); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
-.achievements-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+/* ---- screen 3: one section per category, a 4-column grid, icon first ---- */
+.achievements-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-4) var(--s-2); }
 
 .achievement-tile {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
-  min-height: 64px;
-  padding: 6px 4px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-control);
-  background: var(--game-well);
-  color: var(--text);
-  font-size: var(--t-caption);
+  gap: 2px;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: var(--s-1) 0;
+  border: 0;
+  border-radius: var(--r-skin);
+  background: transparent;
+  color: var(--skin-muted);
   text-align: center;
 }
-.achievement-tile.is-earned { border-color: color-mix(in srgb, var(--game-gold) 55%, transparent); background: color-mix(in srgb, var(--game-gold) 12%, transparent); }
-.achievement-tile.is-hidden { border-style: dashed; color: var(--muted); }
-.achievement-tile-name { overflow-wrap: anywhere; font-weight: 600; line-height: 1.15; }
-.achievement-tile.is-earned .achievement-tile-name::before { content: '✓ '; color: var(--game-gold); }
-.achievement-tile-points,
-.achievement-tile-progress { color: var(--game-gold); font-variant-numeric: tabular-nums; }
-.achievement-tile-progress { color: var(--muted); }
-.achievement-tile-meta { padding: 0 5px; border-radius: var(--r-tight); background: var(--accent-soft); color: var(--accent); font-size: var(--t-caption2); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.achievement-tile .skin-medal { margin-bottom: var(--s-1); }
+.achievement-tile:active .skin-medal { box-shadow: var(--press-overlay); }
+.achievement-tile-name {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--font-serif);
+  font-size: var(--t-footnote);
+  line-height: 1.2;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.achievement-tile.is-earned .achievement-tile-name { color: var(--q); }
+.achievement-tile-points { color: var(--skin-muted); font-size: var(--t-caption); }
+.achievement-tile-progress { white-space: nowrap; }
 
 /* ---- steps.jpg: NEXT gets a progress bar, EARNED newest first ---- */
-.achievements-next { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-.achievements-next-head { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-subhead); font-weight: 600; }
-.achievements-next-head > span:first-child { color: var(--muted); font-size: var(--t-caption); letter-spacing: 0.08em; }
+.achievements-next { display: flex; flex-direction: column; gap: var(--s-2); margin-bottom: var(--s-3); }
+.achievements-next-head { display: flex; justify-content: space-between; gap: var(--s-2); font-size: var(--t-subhead); font-weight: 600; }
+.achievements-next-head > span:first-child { color: var(--skin-muted); font-size: var(--t-caption); letter-spacing: 0.08em; }
 .achievements-bar { display: block; height: 6px; border-radius: var(--r-tight); background: var(--game-track); overflow: hidden; }
 .achievements-bar > span { display: block; height: 100%; border-radius: var(--r-tight); background: var(--game-gold); }
-.achievements-next-label { color: var(--muted); font-size: var(--t-footnote); font-variant-numeric: tabular-nums; }
+.achievements-next-label { color: var(--skin-muted); font-size: var(--t-footnote); font-variant-numeric: tabular-nums; }
 
-.achievements-earned h4 { margin: 0 0 4px; color: var(--muted); font-size: var(--t-caption); letter-spacing: 0.08em; }
+.achievements-earned h4 { margin: 0 0 var(--s-1); color: var(--skin-muted); font-size: var(--t-caption); letter-spacing: 0.08em; }
 .achievements-earned ul { margin: 0; padding: 0; list-style: none; }
-.achievements-earned li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-height: var(--tap); padding: 8px 0; border-top: 1px solid rgb(255 255 255 / 0.08); }
+.achievements-earned li { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); padding: var(--s-2) 0; border-top: 1px solid var(--skin-rule); }
 .achievements-earned li:first-child { border-top: none; }
-.achievements-earned-meta { flex-shrink: 0; color: var(--muted); font-size: var(--t-footnote); font-variant-numeric: tabular-nums; }
-.achievements-note { margin: 10px 0 0; color: var(--muted); font-size: var(--t-footnote); }
+.achievements-earned-name { flex: 1; min-width: 0; color: var(--q); font-family: var(--font-serif); font-size: var(--t-callout); }
+.achievements-earned-meta { flex-shrink: 0; color: var(--skin-muted); font-size: var(--t-footnote); font-variant-numeric: tabular-nums; }
+.achievements-note { margin: var(--s-3) 0 0; color: var(--skin-muted); font-size: var(--t-footnote); }
 
-/* ---- screen 4: the badge detail sheet ---- */
-.achievement-detail-body { display: flex; flex-direction: column; gap: 10px; }
-.achievement-detail-description { margin: 0; color: var(--text); font-size: var(--t-body); line-height: 1.35; }
-.achievement-detail-earned { margin: 0; color: var(--game-gold); font-size: var(--t-subhead); }
-.achievement-detail-points { margin: 0; color: var(--game-gold); font-weight: 600; }
-.achievement-detail-chain { margin: 0; color: var(--muted); }
-.achievement-detail-progress { display: flex; flex-direction: column; gap: 6px; }
-.achievement-detail-locked { margin: 0; }
-.achievement-pin { min-height: var(--tap); padding: 0 16px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--game-well); color: var(--accent); font-weight: 600; }
+/* ---- screen 4: the badge detail, the WoW tooltip moment ---- */
+.achievement-detail[data-quality] .sheet-header h2 { color: var(--q); }
+.achievement-detail-body { display: flex; flex-direction: column; gap: var(--s-4); padding-top: var(--s-1); }
+.achievement-detail-head { display: flex; align-items: center; gap: var(--s-3); }
+.achievement-detail-kind { flex: 1; min-width: 0; margin: 0; color: var(--skin-muted); font-size: var(--t-subhead); }
+.achievement-detail-quality { color: var(--q); font-weight: 600; }
+.achievement-shield { position: relative; display: grid; flex-shrink: 0; place-items: center; width: 40px; height: 44px; color: var(--game-gold); }
+.achievement-shield svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: color-mix(in srgb, var(--game-gold) 12%, transparent); stroke: var(--game-gold); stroke-width: 1.5; }
+.achievement-shield-points { position: relative; margin-top: -2px; font-family: var(--font-rounded); font-size: var(--t-callout); font-weight: 700; font-variant-numeric: tabular-nums; }
+.achievement-shield-unit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.achievement-detail-feat { flex-shrink: 0; color: var(--skin-quality-legendary); font-size: var(--t-caption); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.achievement-detail-description { margin: 0; color: var(--skin-text); font-size: var(--t-body); line-height: 1.4; }
+.achievement-detail-earned { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); margin: 0; padding-top: var(--s-3); border-top: 1px solid var(--skin-rule); color: var(--skin-text); font-size: var(--t-subhead); }
+.achievement-detail-date { flex-shrink: 0; color: var(--skin-muted); font-variant-numeric: tabular-nums; }
+.achievement-detail-progress { display: flex; flex-direction: column; gap: var(--s-2); padding-top: var(--s-3); border-top: 1px solid var(--skin-rule); }
+.achievement-detail-left { color: var(--skin-muted); font-size: var(--t-subhead); font-variant-numeric: tabular-nums; }
+.achievement-detail-locked { margin: 0; color: var(--skin-muted); font-size: var(--t-subhead); }
+.achievement-pin { min-height: var(--tap); padding: 0 var(--s-4); border: 1px solid var(--skin-frame); border-radius: var(--r-skin); background: transparent; color: var(--accent); font-weight: 600; }
 .achievement-pin-note { margin: 0; color: var(--warn); font-size: var(--t-subhead); }

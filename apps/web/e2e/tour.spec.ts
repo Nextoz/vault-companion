@@ -51,6 +51,16 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
 
   const api = new MockApi();
   api.open = [taskView(10, 'Water the plants'), taskView(11, 'Call the bike shop'), taskView(3, CALENDAR_TASK)];
+  // R4: Active Work on the Tasks shot (the quest-log cue outside Character).
+  api.activeWork = '## Now';
+  api.activeWorkItems = [
+    { name: 'Garden plan', outcome: null, next: 'Order seeds', review: '2026-09-28', link: null, needsReview: true,
+      locator: { path: 'Tasks/Active Work Now.md', blobSha: '5'.repeat(40), lineIndex: 3,
+        lineText: '- [ ] **Garden plan:** Next: Order seeds ⏳ 2026-09-28', occurrencesAtRead: 1 } },
+    { name: 'Bike repair', outcome: null, next: 'Call the shop about the brake cable', review: '2026-10-07', link: null, needsReview: false,
+      locator: { path: 'Tasks/Active Work Now.md', blobSha: '5'.repeat(40), lineIndex: 4,
+        lineText: '- [ ] **Bike repair:** Next: Call the shop about the brake cable ⏳ 2026-10-07', occurrencesAtRead: 1 } },
+  ];
   api.morning = MockApi.SAMPLE_MORNING;
   api.morningBrief = brief(TODAY);
   api.triage = { ...api.triage, feedState: 'ok', generatedAt: '2026-09-28T06:50:00+02:00',
