@@ -60,6 +60,16 @@ describe('ReadingSheet start', () => {
     expect(typeof enqueue.mock.calls[0]![0].payload.totalPages).toBe('number');
   });
 
+  it('keeps Start disabled when the title is blank, even with author and pages filled', async () => {
+    const { queue } = queueMock();
+    await render(createElement(ReadingSheet, { ...common, queue, kind: 'start' }));
+    await setValue(label('Author')!.querySelector('input')!, 'A. Author');
+    await setValue(label('Total pages')!.querySelector('input')!, '200');
+    expect(button('Start book')!.hasAttribute('disabled')).toBe(true);
+    await setValue(label('Title')!.querySelector('input')!, '   ');
+    expect(button('Start book')!.hasAttribute('disabled')).toBe(true);
+  });
+
   it('starts a book with only a title (author and pages optional, e.g. an audiobook)', async () => {
     const { queue, enqueue } = queueMock();
     await render(createElement(ReadingSheet, { ...common, queue, kind: 'start' }));
