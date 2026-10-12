@@ -69,7 +69,8 @@ function scan(file: string): Offence[] {
 }
 
 describe('component CSS names tokens', () => {
-  const files = cssFiles(webDir);
+  // Only the app's own stylesheets: build output and Playwright traces under apps/web carry foreign CSS.
+  const files = cssFiles(join(webDir, 'src'));
 
   it('finds the stylesheets', () => {
     expect(files.length).toBeGreaterThan(5);
