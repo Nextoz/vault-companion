@@ -60,12 +60,13 @@ describe('ReadingSheet start', () => {
     expect(typeof enqueue.mock.calls[0]![0].payload.totalPages).toBe('number');
   });
 
-  it('keeps Save disabled when the author is blank', async () => {
-    const { queue } = queueMock();
+  it('starts a book with only a title (author and pages optional, e.g. an audiobook)', async () => {
+    const { queue, enqueue } = queueMock();
     await render(createElement(ReadingSheet, { ...common, queue, kind: 'start' }));
-    await setValue(label('Title')!.querySelector('input')!, 'Synthetic Book');
-    await setValue(label('Total pages')!.querySelector('input')!, '200');
-    expect(button('Start book')!.hasAttribute('disabled')).toBe(true);
+    await setValue(label('Title')!.querySelector('input')!, 'Audio Walk');
+    expect(button('Start book')!.hasAttribute('disabled')).toBe(false);
+    await act(async () => { button('Start book')!.click(); });
+    expect(enqueue.mock.calls[0]![0].payload).toEqual({ title: 'Audio Walk', author: '' });
   });
 });
 

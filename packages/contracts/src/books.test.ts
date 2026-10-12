@@ -4,6 +4,7 @@ import { ApiError, BookFollowUpRequest, BookFollowUpResponse, BooksResponse, Com
 const envelope = (type: string, payload: unknown) => ({ schemaVersion: 1, operationId: '00000000-0000-4000-8000-000000000001', type, payload, occurredAt: '2026-10-05T10:00:00Z', baseRevision: '1'.repeat(40) });
 
 it('accepts the three book commands and their Undos', () => {
+  expect(Command.safeParse(envelope('StartBook', { title: 'Audio Book', author: '' })).success).toBe(true);
   const start = Command.parse(envelope('StartBook', { title: 'Synthetic Book', author: 'A', totalPages: 100 }));
   expect(Command.safeParse({ ...envelope('UndoStartBook', { target: start, targetCommit: '2'.repeat(40) }) }).success).toBe(true);
   const log = Command.parse(envelope('LogReading', { title: 'Synthetic Book', page: 40, date: '2026-10-05' }));

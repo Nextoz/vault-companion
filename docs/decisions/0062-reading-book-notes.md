@@ -25,6 +25,10 @@ totalPages: <int>
 <text>
 ```
 
+`totalPages` is optional: a book without pages (an audiobook) omits the line; `StartBook` then takes no `totalPages`,
+`LogReading` on it is `refused:book-page-invalid`, and only reflections are added (owner decision 2026-10-12, several books
+at once: each is its own note).
+
 The current page is the latest `- YYYY-MM-DD: p. N` line under `## Progress`; frontmatter is never rewritten by a log.
 `status: done` is set only by an explicit `FinishBook` (out of A1 scope). Missing `## Progress`/`## Reflections`,
 or two of either heading ⇒ `refused:book-note-shape`. Text outside the spliced span stays byte-identical (BOM, EOL).

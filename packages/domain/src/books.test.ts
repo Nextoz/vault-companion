@@ -92,6 +92,20 @@ it('StartBook creates a valid note, refuses the same title again and every inval
   }
 });
 
+it('several books coexist; a book without pages takes reflections, refuses pages, and Undo removes it', async () => {
+  const h = await setup({ [BOOK]: fixture });
+  const target = h.command('StartBook', { title: 'Audio Walk', author: '' });
+  const started = receipt(await h.run(target));
+  const audio = 'Books/Audio Walk.md';
+  expect(h.store.text(audio)).not.toContain('totalPages');
+  expect(h.store.text(BOOK)).toBe(fixture);
+  expect(await h.run(h.command('LogReading', { title: 'Audio Walk', page: 1, date: '2026-10-05' }))).toMatchObject({ code: 'refused:book-page-invalid' });
+  const saved = receipt(await h.run(h.command('SaveReflection', { title: 'Audio Walk', date: '2026-10-05', text: 'On the walk' })));
+  expect(saved.path).toBe(audio);
+  receipt(await h.run(h.command('SaveReflection', { title: 'Synthetic Book', date: '2026-10-05', text: 'Other book' })));
+  expect(started.path).toBe(audio);
+});
+
 it('LogReading appends one line and refuses a page at or before the current page or past totalPages', async () => {
   const h = await setup({ [BOOK]: fixture });
   const logged = receipt(await h.run(h.command('LogReading', { title: 'Synthetic Book', page: 40, date: '2026-10-05' })));

@@ -1178,7 +1178,7 @@ export class MockApi {
       case 'StartBook': {
         const { title, author, totalPages } = command.payload;
         this.#booksBefore.set(command.operationId, structuredClone(this.books));
-        this.books = [...this.books, { title, author, totalPages, currentPage: 0, status: 'reading', lastRead: null, reflections: [] }];
+        this.books = [...this.books, { title, author, totalPages: totalPages ?? 0, currentPage: 0, status: 'reading', lastRead: null, reflections: [] }];
         const path = `Books/${title}.md`;
         return { ...base, path, effect: { kind: 'book', op: 'started', path } };
       }
