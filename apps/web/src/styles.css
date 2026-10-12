@@ -58,7 +58,7 @@ button:active:not(:disabled),
 
 :is(.tile, .next-up, .morning-line, .checkin-line, .siwh-line, .siwh-toggle, .note-row, .progress-week,
   .training-session, .reading-books button, .character-card-button, .character-link-row, .scout-panel,
-  .task-edit, .active-work-toggle, .group-toggle, .scout-row, .needs-you-row):active:not(:disabled) {
+  .task-edit, .active-work-toggle, .quest-title, .group-toggle, .scout-row, .needs-you-row):active:not(:disabled) {
   transform: none;
   filter: none;
   box-shadow: var(--press-overlay);
@@ -837,10 +837,14 @@ body:has(.reward-banner) .toast {
   font-size: var(--t-headline);
   font-weight: 600;
   text-align: left;
+  border-radius: var(--r-tight);
 }
+/* The title opens the edit sheet: a muted chevron says so (the accessible name comes from aria-label). */
+.quest-title::after { margin-left: var(--s-1); color: var(--muted); font-weight: 400; content: '›'; }
 .quest-objectives { display: flex; flex-direction: column; gap: var(--s-1); margin: 0; padding: 0; list-style: none; }
 .quest-objective { display: flex; align-items: flex-start; gap: var(--s-2); color: var(--text); font-size: var(--t-subhead); line-height: 1.35; }
-.quest-tick { flex-shrink: 0; width: 16px; height: 16px; margin-top: 1px; fill: none; stroke: var(--muted); stroke-width: 1.5; }
+/* A plain marker, not a checkbox: objectives are read here and acted on with the buttons below. */
+.quest-marker { flex-shrink: 0; width: 6px; height: 6px; margin: 0.45em 5px 0; background: var(--muted); transform: rotate(45deg); }
 .quest-label { color: var(--muted); }
 .active-work-item p.quest-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: var(--s-1) 0 0 var(--s-5); color: var(--muted); font-size: var(--t-footnote); }
 .active-work-item p.quest-meta .chip { margin: 0; }

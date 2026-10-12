@@ -2,6 +2,7 @@
 // the locked tile's progress arc and the category glyph. No React, no CSS: the components read these and the skin
 // tokens (`--skin-quality-*`) paint them, only inside the Character screens.
 import type { GameAchievement } from '@vault-companion/contracts';
+import { isHiddenUnearned } from './achievements.ts';
 
 export type Quality = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
@@ -37,16 +38,16 @@ export function qualityLabel(quality: Quality): string {
  * How much of the locked tile's arc is drawn, 0..1. Null (no arc) when the achievement is earned, still hidden, or
  * has no measurable progress; a chain without its own counter has no arc either.
  */
-export function lockedArc(achievement: Pick<GameAchievement, 'earned' | 'visible' | 'progress'>): number | null {
-  if (achievement.earned || !achievement.visible || achievement.progress === null) return null;
+export function lockedArc(achievement: Pick<GameAchievement, 'earned' | 'visible' | 'type' | 'progress'>): number | null {
+  if (isHiddenUnearned(achievement) || achievement.earned || achievement.progress === null) return null;
   const { current, target } = achievement.progress;
   if (target <= 0) return null;
   return Math.min(1, Math.max(0, current / target));
 }
 
 /** What is left on an unearned achievement with progress ("3 to go"); null when there is nothing to count. */
-export function remainingText(achievement: Pick<GameAchievement, 'earned' | 'visible' | 'progress'>): string | null {
-  if (achievement.earned || !achievement.visible || achievement.progress === null) return null;
+export function remainingText(achievement: Pick<GameAchievement, 'earned' | 'visible' | 'type' | 'progress'>): string | null {
+  if (isHiddenUnearned(achievement) || achievement.earned || achievement.progress === null) return null;
   const left = achievement.progress.target - achievement.progress.current;
   return left > 0 ? `${left} to go` : null;
 }

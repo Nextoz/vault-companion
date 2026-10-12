@@ -32,26 +32,31 @@ describe('tier -> item quality', () => {
 
 describe('locked progress arc', () => {
   it('draws current / target for an unearned, visible achievement', () => {
-    expect(lockedArc({ earned: false, visible: true, progress: progress(18, 25) })).toBeCloseTo(0.72);
+    expect(lockedArc({ type: 'counter', earned: false, visible: true, progress: progress(18, 25) })).toBeCloseTo(0.72);
   });
 
   it('no arc once earned, while hidden, or without measurable progress', () => {
-    expect(lockedArc({ earned: true, visible: true, progress: progress(10, 10) })).toBeNull();
-    expect(lockedArc({ earned: false, visible: false, progress: progress(3, 14) })).toBeNull();
-    expect(lockedArc({ earned: false, visible: true, progress: null })).toBeNull();
-    expect(lockedArc({ earned: false, visible: true, progress: progress(0, 0) })).toBeNull();
+    expect(lockedArc({ type: 'counter', earned: true, visible: true, progress: progress(10, 10) })).toBeNull();
+    expect(lockedArc({ type: 'counter', earned: false, visible: false, progress: progress(3, 14) })).toBeNull();
+    expect(lockedArc({ type: 'counter', earned: false, visible: true, progress: null })).toBeNull();
+    expect(lockedArc({ type: 'counter', earned: false, visible: true, progress: progress(0, 0) })).toBeNull();
+  });
+
+  it('no arc and nothing left for an engine-shaped hidden achievement (visible, but type hidden)', () => {
+    expect(lockedArc({ type: 'hidden', earned: false, visible: true, progress: progress(1, 4) })).toBeNull();
+    expect(remainingText({ type: 'hidden', earned: false, visible: true, progress: progress(1, 4) })).toBeNull();
   });
 
   it('clamps to 0..1 when the payload over- or under-shoots', () => {
-    expect(lockedArc({ earned: false, visible: true, progress: progress(40, 25) })).toBe(1);
-    expect(lockedArc({ earned: false, visible: true, progress: progress(-2, 25) })).toBe(0);
+    expect(lockedArc({ type: 'counter', earned: false, visible: true, progress: progress(40, 25) })).toBe(1);
+    expect(lockedArc({ type: 'counter', earned: false, visible: true, progress: progress(-2, 25) })).toBe(0);
   });
 
   it('says what is left, and nothing when there is nothing to count', () => {
-    expect(remainingText({ earned: false, visible: true, progress: progress(4, 7) })).toBe('3 to go');
-    expect(remainingText({ earned: false, visible: true, progress: progress(7, 7) })).toBeNull();
-    expect(remainingText({ earned: true, visible: true, progress: progress(4, 7) })).toBeNull();
-    expect(remainingText({ earned: false, visible: false, progress: progress(0, 14) })).toBeNull();
+    expect(remainingText({ type: 'counter', earned: false, visible: true, progress: progress(4, 7) })).toBe('3 to go');
+    expect(remainingText({ type: 'counter', earned: false, visible: true, progress: progress(7, 7) })).toBeNull();
+    expect(remainingText({ type: 'counter', earned: true, visible: true, progress: progress(4, 7) })).toBeNull();
+    expect(remainingText({ type: 'counter', earned: false, visible: false, progress: progress(0, 14) })).toBeNull();
   });
 });
 

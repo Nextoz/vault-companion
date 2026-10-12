@@ -12,11 +12,6 @@ import { activeWorkCalendarKey } from './calendar-sheet.ts';
 import type { OpenLink } from './NoteView.tsx';
 import { StateChip } from './StateChip.tsx';
 
-/** An open objective's tick box (quest-log styling, R4). */
-function QuestTick() {
-  return <svg className="quest-tick" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="2" y="2" width="12" height="12" rx="3" /></svg>;
-}
-
 export function ActiveWorkCard({ revision, queue, accountKey, onOpenLink, calendarLinks, onCalendar }: {
   revision: string | null; queue: PendingQueue; accountKey: string | null; onOpenLink: (link: OpenLink) => void;
   /** CAL-b: item keys already linked to a Google event; absent means no calendar affordance is shown. */
@@ -81,7 +76,7 @@ export function ActiveWorkCard({ revision, queue, accountKey, onOpenLink, calend
         {read && activeWorkRows(read, snapshot.items, accountKey).map(({ item, action, blocked }) => {
           // CAL-b: the link state is read from the item key, built from the same locator identity the actions use.
           const inCalendar = calendarLinks?.has(activeWorkCalendarKey(item.locator)) ?? false;
-          // R4: a quest-log entry in the normal palette: the title, then its objective lines with tick boxes.
+          // R4: a quest-log entry in the normal palette: the title, then its objective lines.
           return <article className="active-work-item quest" key={item.locator.lineIndex + ':' + item.locator.lineText}>
           <div className="quest-head">
             <button type="button" className="quest-title" disabled={busy || blocked || !accountKey} aria-label={'Edit: ' + item.name} onClick={() => setEditing(item)}>{item.name}</button>
@@ -94,7 +89,7 @@ export function ActiveWorkCard({ revision, queue, accountKey, onOpenLink, calend
             )}
           </div>
           {item.next && <ul className="quest-objectives">
-            <li className="quest-objective"><QuestTick /><span><span className="quest-label">Next: </span>{item.next}</span></li>
+            <li className="quest-objective"><span className="quest-marker" aria-hidden="true" /><span><span className="quest-label">Next: </span>{item.next}</span></li>
           </ul>}
           {item.review && <p className="quest-meta">Review: {item.review}{item.needsReview && <span className="chip">Needs review</span>}</p>}
           {item.link && <button type="button" className="link" aria-label={'Open note: ' + item.link} onClick={(e) => onOpenLink({
