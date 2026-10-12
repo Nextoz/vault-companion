@@ -58,10 +58,11 @@ test('Capture offers Training and Check-in, which open their own sheets', async 
   await api.install(page);
   await page.goto('/');
   const capture = page.getByRole('dialog', { name: 'Capture', exact: true });
-  const types = capture.getByRole('group', { name: 'Capture type' });
+  const types = capture.getByRole('group', { name: 'Log instead' });
 
   await page.getByRole('button', { name: 'Capture', exact: true }).click();
-  await expect(types.getByRole('button')).toHaveText(['Task', 'Note', 'Active Work', 'Training', 'Check-in']);
+  await expect(capture.getByRole('group', { name: 'Capture type' }).getByRole('button')).toHaveText(['Task', 'Note', 'Active Work']);
+  await expect(types.getByRole('button')).toHaveText(['Training', 'Check-in']);
   await types.getByRole('button', { name: 'Training', exact: true }).click();
   await expect(capture).toHaveCount(0);
   const training = page.getByRole('dialog', { name: 'Log training' });
@@ -156,4 +157,17 @@ test('one large-title header: real h1 titles that move into the bar, and a stale
   await expect(chip).toHaveText('Stale');
   await chip.click();
   await expect(page.getByRole('region', { name: 'Vault status' }).getByRole('button', { name: 'Refresh vault' })).toBeVisible();
+});
+
+test('the selected tab is marked aria-current="page", not aria-pressed (R5)', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  await page.goto('/');
+  const nav = page.getByRole('navigation', { name: 'Views' });
+  await expect(nav.getByRole('button', { name: 'Today', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(nav.getByRole('button', { name: 'Tasks', exact: true })).not.toHaveAttribute('aria-current');
+  await expect(nav.locator('[aria-pressed]')).toHaveCount(0);
+  await nav.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await expect(nav.getByRole('button', { name: 'Tasks', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(nav.getByRole('button', { name: 'Today', exact: true })).not.toHaveAttribute('aria-current');
 });

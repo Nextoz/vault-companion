@@ -1,4 +1,5 @@
 import { SheetHeader } from './SheetHeader.tsx';
+import { Icon } from './Icon.tsx';
 // CAL-b: the "Add to Calendar" / "In Calendar" bottom sheet. It writes Google Calendar directly through the API (the
 // vault is never touched): no offline queue, so a failure shows inline instead of replaying later. One operation ID
 // per open, so a repeated send is the same event; the pure decisions live in calendar-sheet.ts.
@@ -14,12 +15,7 @@ import { isMissingBrief } from './morning-card.ts';
 
 /** A quiet calendar glyph in the row's secondary colour; presentational only. */
 export function CalendarGlyph() {
-  return (
-    <svg className="calendar-glyph-icon" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
-      <rect x="3" y="5" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M3 9.5h18M8 3v4M16 3v4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-  );
+  return <Icon className="calendar-glyph-icon" name="calendar" size={17} />;
 }
 
 export function CalendarSheet({ target, accountKey, onClose, onSaved }: {

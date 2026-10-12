@@ -257,7 +257,7 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
   });
   await shot('Capture - Check-in', async () => {
     await page.getByRole('button', { name: 'Capture', exact: true }).click();
-    await page.getByRole('group', { name: 'Capture type' }).getByRole('button', { name: 'Check-in', exact: true }).click();
+    await page.getByRole('group', { name: 'Log instead' }).getByRole('button', { name: 'Check-in', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Check-in' })).toBeVisible();
   });
   await page.getByRole('dialog', { name: 'Check-in' }).getByRole('button', { name: 'Close' }).click();

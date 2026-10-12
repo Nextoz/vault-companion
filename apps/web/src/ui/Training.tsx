@@ -5,6 +5,7 @@ import type { PendingQueue } from '../queue/queue.ts';
 import { trainingRowKeys, trainingSummary } from '../training.ts';
 import { copenhagenDay } from '../triage.ts';
 import { weekBars } from '../week-chart.ts';
+import { Icon } from './Icon.tsx';
 import { BarChart } from './BarChart.tsx';
 import { TrainingSheet } from './TrainingSheet.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
@@ -33,7 +34,7 @@ export function Training({ refreshKey, accountKey, queue, baseRevision, onAdd }:
       </div>}
       {read.rows.length > 0 && <BarChart title="Sessions per week" testId="training-chart" bars={weekBars(read.rows.map((r) => r.date), copenhagenDay(new Date().toISOString()))} />}
       <ul className="training-list">{read.rows.map((row, i) => {
-        const summary = <span className="training-session-line"><span aria-hidden="true">{row.type === 'Run' ? '🏃' : row.type === 'Gym' ? '🏋️' : '●'}</span> <strong>{row.type}</strong> {trainingSummary(row)}</span>;
+        const summary = <span className="training-session-line"><Icon className="training-icon" name={row.type === 'Run' ? 'run' : row.type === 'Gym' ? 'dumbbell' : 'dot'} /> <strong>{row.type}</strong> {trainingSummary(row)}</span>;
         const editable = row.type === 'Run' || row.type === 'Gym';
         return <li key={keys[i]} data-testid="training-row">
           <p className="muted small">{row.date}{row.time && ` · ${row.time}`}</p>
@@ -41,7 +42,7 @@ export function Training({ refreshKey, accountKey, queue, baseRevision, onAdd }:
             ? <button type="button" className="training-session" aria-label={`Edit ${row.type} session on ${row.date}${row.time ? ` at ${row.time}` : ''}`}
                 onClick={() => setEditing({ row, key: keys[i]! })}>{summary}</button>
             : summary}
-          {row.note && <details><summary aria-label="Show session note">📝</summary><p>{row.note}</p></details>}
+          {row.note && <details><summary aria-label="Show session note"><Icon name="note" /></summary><p>{row.note}</p></details>}
         </li>;
       })}</ul>
       {read.unknownLines.length > 0 && <div className="active-work-unknown"><p className="muted small">Edited in Obsidian</p><pre>{read.unknownLines.join('\n')}</pre></div>}

@@ -8,6 +8,8 @@ import { CalendarGlyph } from './CalendarSheet.tsx';
 import { taskCalendarKey } from './calendar-sheet.ts';
 import type { OpenLink } from './NoteView.tsx';
 import { duration, easing, play, prefersReducedMotion } from './motion.ts';
+import { dueChip } from './due-chip.ts';
+import { copenhagenDay } from '../triage.ts';
 import { StateChip } from './StateChip.tsx';
 
 /**
@@ -99,6 +101,7 @@ interface Props {
   onOpenLink: (link: OpenLink) => void;
   /** Undo a saved app completion from its Done today row (P4-B); rows without `undo` offer none. */
   onUndo?: (target: CompleteTaskCommand, label: string) => void;
+  /** Kept for callers; the due chip now derives overdue from the date itself. */
   overdue?: boolean;
   empty?: string;
   /** The task list has a sync conflict: rows are shown as last read, not as actionable tasks (writeBlock.ts). */
@@ -120,7 +123,6 @@ export function TaskList({
   onEdit,
   onUndo,
   onOpenLink,
-  overdue = false,
   empty,
   frozen = false,
   collapsible,
@@ -231,7 +233,6 @@ export function TaskList({
               liRef={(el) => { if (el) rowEls.current.set(row.key, el); else rowEls.current.delete(row.key); }}
               tapped={tapped}
               blocked={blocked}
-              overdue={overdue}
               onComplete={onComplete}
               onEdit={onEdit}
               onUndo={onUndo}
@@ -253,7 +254,6 @@ function TaskRow({
   liRef,
   tapped,
   blocked,
-  overdue,
   onComplete,
   onEdit,
   onUndo,
@@ -268,7 +268,6 @@ function TaskRow({
   liRef: (el: HTMLLIElement | null) => void;
   tapped: ReadonlySet<string>;
   blocked: boolean;
-  overdue: boolean;
   onComplete: Props['onComplete'];
   onUndo: Props['onUndo'];
   onEdit: Props['onEdit'];
@@ -289,6 +288,7 @@ function TaskRow({
   const textTappable = task !== null && taskSegments(row.description, task.links).some((seg) => seg.kind === 'text' && seg.text.trim() !== '');
   // CAL-b: the link state is read from the item key; the key itself is stable for the read's locator.
   const calendarKey = task ? taskCalendarKey(task.locator) : null;
+  const chip = task && !row.done ? dueChip(task.due, copenhagenDay(new Date().toISOString())) : null;
   const inCalendar = calendarKey !== null && (calendarLinks?.has(calendarKey) ?? false);
 
   return (
@@ -311,6 +311,7 @@ function TaskRow({
         <span className={`check check-static${row.done ? ' check-on' : ''}`} aria-hidden="true">{row.done && <CheckMark />}</span>
       )}
       <div className="task-body">
+        <span className="task-title-line">
         <span className="task-text">
           {leaving ? <span className="task-strike">{text}</span> : task === null || action?.type === 'EditTask'
             ? text
@@ -334,8 +335,9 @@ function TaskRow({
                 ),
               )}
         </span>
+        {chip && <span className={`due due-${chip.tone}`} data-testid="due-chip">{chip.text}</span>}
+        </span>
         <span className="task-meta">
-          {task?.due && !row.done && <span className={overdue ? 'due due-over' : 'due'}>{task.due}</span>}
           {readOnly && <span className="readonly">{readOnlyText(readOnly)}</span>}
           {action && <StateChip state={action.state} />}
           {canEdit && !textTappable && task && (

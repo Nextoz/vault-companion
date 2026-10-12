@@ -1,0 +1,109 @@
+/* Redesign R5 (review #10): one icon set, one hue per domain, and the quick wins. Imported after styles.css. */
+
+/* ---- icons: 24 box, colour from the parent (currentColor) ---- */
+.icon {
+  display: inline-block;
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+}
+
+.calendar-glyph .icon { width: 17px; height: 17px; vertical-align: baseline; }
+
+.tabbar .tab .icon { display: block; width: 24px; height: 24px; }
+
+/* The weather accent: sun and rain only, one colour. */
+.icon[data-icon='sun'],
+.icon[data-icon='rain'] { color: var(--hue-weather); }
+
+.weather-week-icon .icon { width: 1.3rem; height: 1.3rem; vertical-align: middle; }
+
+.training-icon { color: var(--domain-hue, var(--muted)); }
+.training-list { --domain-hue: var(--hue-training); }
+
+.training-list summary .icon { vertical-align: middle; }
+
+/* ---- disclosure and drill-in chevrons: one mask (motion.css --chevron), turned 90 degrees when open ---- */
+.siwh-toggle::after,
+.quest-title::after,
+.app[data-tab='notes'] .note-row::after {
+  content: '';
+  display: inline-block;
+  flex: none;
+  width: 0.7em;
+  height: 0.7em;
+  background: currentColor;
+  -webkit-mask: var(--chevron) center / contain no-repeat;
+  mask: var(--chevron) center / contain no-repeat;
+  transition: transform var(--dur-base) var(--ease-ui);
+}
+
+.siwh-toggle[aria-expanded='true']::after { transform: rotate(90deg); }
+
+/* ---- domain hues: a component names its domain, this maps it to one token ---- */
+[data-domain='training'] { --domain-hue: var(--hue-training); }
+[data-domain='learning'] { --domain-hue: var(--hue-learning); }
+[data-domain='research'] { --domain-hue: var(--hue-research); }
+[data-domain='tasks'] { --domain-hue: var(--hue-tasks); }
+[data-domain='health'] { --domain-hue: var(--hue-health); }
+[data-domain='weather'] { --domain-hue: var(--hue-weather); }
+[data-domain='events'] { --domain-hue: var(--hue-events); }
+[data-domain='markets'] { --domain-hue: var(--hue-markets); }
+
+/* The Log's selected view takes its domain hue; Progress (no domain) keeps the accent. */
+.log-view .chip-row-item[data-domain][aria-pressed='true'] {
+  border-color: var(--domain-hue);
+  background: var(--domain-hue);
+}
+
+/* ---- quick wins ---- */
+/* b. The due state is a chip on the title line, right-aligned. */
+.task-title-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.task-title-line .task-text { min-width: 0; flex: 1; }
+
+.due {
+  flex: none;
+  padding: 1px var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--raised);
+  color: var(--muted-on-raised);
+  font-size: var(--t-footnote);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.due-today { background: var(--accent-soft); color: var(--accent); }
+.due-over { background: var(--danger-soft); color: var(--danger); }
+
+/* c. A Save that cannot be pressed is a grey well, not a dimmed pressed button. */
+button.primary:disabled {
+  border-color: transparent;
+  background: var(--raised);
+  color: var(--muted-on-raised);
+  opacity: 1;
+}
+
+/* d. Capture's kind picker is the shared segmented pill; the two hand-over chips sit under it. */
+.capture-kind { margin: 0 0 var(--s-2); }
+.capture-kind button:disabled { opacity: 0.45; }
+
+/* e. Numbers that change width should not shift their neighbours. */
+.tile-stat, .next-up-time, .weather-week-low, .weather-week-high, .weather-week-rain, .training-session-line,
+.progress-week, .health-tile, .ai-usage-tile, .xp-line, .reward-xp {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .siwh-toggle::after,
+  .quest-title::after,
+  .app[data-tab='notes'] .note-row::after { transition: none; }
+}

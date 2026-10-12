@@ -48,7 +48,7 @@ describe('design tokens meet WCAG AA', () => {
     ['--accent', '--bg', bg], ['--accent', '--surface', card], ['--accent-on-raised', '--raised', raised],
     ['--warn', '--surface', card], ['--danger', '--surface', card], ['--done', '--surface', card],
     ['--game-gold', '--surface', card], ['--game-gold', '--raised', raised],
-    ...['--hue-training', '--hue-learning', '--hue-research', '--hue-tasks', '--hue-health', '--hue-weather', '--hue-markets']
+    ...['--hue-training', '--hue-learning', '--hue-research', '--hue-tasks', '--hue-health', '--hue-weather', '--hue-events', '--hue-markets']
       .map((hue): [string, string, string] => [hue, '--surface', card]),
   ];
 

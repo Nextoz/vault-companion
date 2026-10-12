@@ -38,6 +38,7 @@ import {
   weatherGlyph,
   type DayHour,
 } from './weather-week.ts';
+import { Icon } from './Icon.tsx';
 import './WeatherLab.css';
 
 /** Matches the provider's bounded 15-minute cache: a projection older than this is labelled stale, never repainted fresh. */
@@ -259,7 +260,7 @@ function WeatherWeekRows({ week, today, onOpen, registerRow }: WeekRowsProps) {
                 aria-label={`${dayLabel(day.day)}: ${weatherCodeLabel(day.weatherCode)}, ${weekBarLabel(day)}, rain ${rainLabel(day, rainMode)}${day.models === 1 ? `, ${modelCountLabel(day)}` : ''}${day.partial ? ', partial day' : ''}${isBest ? ', best run day' : ''}`}
               >
                 <span className="weather-week-day">{rowDayLabel(day.day, today)}</span>
-                <span className="weather-week-icon" aria-hidden="true">{weatherGlyph(day.weatherCode)}</span>
+                <span className="weather-week-icon" aria-hidden="true"><Icon name={weatherGlyph(day.weatherCode)} /></span>
                 <span className="weather-week-low">{degrees(day.lowTemperatureC)}</span>
                 <span className="weather-week-track" aria-hidden="true">
                   {bar && <span className={`weather-week-fill${day.models === 1 ? ' weather-week-fill-single' : ''}`} style={{ left: `${bar.left}%`, width: `${bar.width}%` }} />}

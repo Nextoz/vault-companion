@@ -1,6 +1,7 @@
 // Weather week overview + day meteogram math (WX1b). Pure presentation helpers over the shared `WeatherProjection`
 // week days: no provider calls, no vault text, no domain import. Provider nulls stay gaps and are never interpolated.
 import { WEATHER_TIME_ZONE, type WeatherModelSeries, type WeatherRunWindow, type WeatherWeekDay } from '@vault-companion/contracts';
+import type { IconName } from './icons.ts';
 
 export interface Scale {
   readonly min: number;
@@ -238,19 +239,19 @@ export function rainSummary(hours: readonly DayHour[]): string {
   return `Rain from ${clock(rainy[0]!.hour)}`;
 }
 
-/** WMO weather-code glyph for a week row. Emoji only: no provider or note text is rendered as an icon. */
-export function weatherGlyph(code: number | null): string {
-  if (code === null) return '•';
-  if (code === 0) return '☀️';
-  if (code <= 2) return '🌤️';
-  if (code === 3) return '☁️';
-  if (code <= 48) return '🌫️';
-  if (code <= 57) return '🌦️';
-  if (code <= 67) return '🌧️';
-  if (code <= 77) return '❄️';
-  if (code <= 82) return '🌧️';
-  if (code <= 86) return '❄️';
-  return '⛈️';
+/** WMO weather code -> icon name for a week row (icons.ts). No provider or note text is rendered as an icon. */
+export function weatherGlyph(code: number | null): IconName {
+  if (code === null) return 'dot';
+  if (code === 0) return 'sun';
+  if (code <= 2) return 'part-cloud';
+  if (code === 3) return 'cloud';
+  if (code <= 48) return 'fog';
+  if (code <= 57) return 'drizzle';
+  if (code <= 67) return 'rain';
+  if (code <= 77) return 'snow';
+  if (code <= 82) return 'rain';
+  if (code <= 86) return 'snow';
+  return 'storm';
 }
 
 /** Short accessible description of a WMO weather code for a week row's label. */

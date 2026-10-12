@@ -162,21 +162,17 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, defaultK
     <div className="sheet-backdrop" role="presentation" onClick={() => text.length === 0 && onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Capture" onClick={(e) => e.stopPropagation()}>
         <SheetHeader title="Capture" onClose={onClose} />
-        {/* C3: five types, so a chip row (one line, scrolls sideways if a font runs wide) rather than a squeezed
-            segmented control. Training and Check-in open their own sheets; text typed here stays as the draft. */}
-        <div className="chip-row capture-types" role="group" aria-label="Capture type">
-          <button type="button" className="chip-row-item" aria-pressed={kind === 'task'} disabled={taskBlocked !== null} onClick={() => choose('task')}>
-            Task
-          </button>
-          <button type="button" className="chip-row-item" aria-pressed={kind === 'note'} onClick={() => choose('note')}>
-            Note
-          </button>
-          <button type="button" className="chip-row-item" aria-pressed={kind === 'active-work'} onClick={() => choose('active-work')}>Active Work</button>
-          {onSwitch && <>
-            <button type="button" className="chip-row-item" aria-haspopup="dialog" onClick={() => onSwitch('training')}>Training</button>
-            <button type="button" className="chip-row-item" aria-haspopup="dialog" onClick={() => onSwitch('checkin')}>Check-in</button>
-          </>}
+        {/* R5: what to capture is the shared segmented pill; Training and Check-in open their own sheets, so they
+            stay chips beside it. Text typed here stays as the draft. */}
+        <div className="segmented capture-kind" role="group" aria-label="Capture type">
+          <button type="button" aria-pressed={kind === 'task'} disabled={taskBlocked !== null} onClick={() => choose('task')}>Task</button>
+          <button type="button" aria-pressed={kind === 'note'} onClick={() => choose('note')}>Note</button>
+          <button type="button" aria-pressed={kind === 'active-work'} onClick={() => choose('active-work')}>Active Work</button>
         </div>
+        {onSwitch && <div className="chip-row capture-types" role="group" aria-label="Log instead">
+          <button type="button" className="chip-row-item" aria-haspopup="dialog" onClick={() => onSwitch('training')}>Training</button>
+          <button type="button" className="chip-row-item" aria-haspopup="dialog" onClick={() => onSwitch('checkin')}>Check-in</button>
+        </div>}
         <textarea
           aria-label={kind === 'active-work' ? 'Name' : kind === 'task' ? 'Task text' : 'Note text'}
           placeholder={kind === 'active-work' ? 'Name of this work' : kind === 'task' ? 'What needs doing?' : 'What is on your mind?'}

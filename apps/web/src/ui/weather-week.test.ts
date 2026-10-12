@@ -183,10 +183,24 @@ describe('day meteogram data', () => {
 
 describe('weather code icon', () => {
   it('maps codes to a glyph and an accessible label, with a gap for null', () => {
-    expect(weatherGlyph(0)).toBe('☀️');
-    expect(weatherGlyph(3)).toBe('☁️');
-    expect(weatherGlyph(95)).toBe('⛈️');
-    expect(weatherGlyph(null)).toBe('•');
+    expect(weatherGlyph(0)).toBe('sun');
+    expect(weatherGlyph(1)).toBe('part-cloud');
+    expect(weatherGlyph(2)).toBe('part-cloud');
+    expect(weatherGlyph(3)).toBe('cloud');
+    expect(weatherGlyph(45)).toBe('fog');
+    expect(weatherGlyph(48)).toBe('fog');
+    expect(weatherGlyph(51)).toBe('drizzle');
+    expect(weatherGlyph(57)).toBe('drizzle');
+    expect(weatherGlyph(61)).toBe('rain');
+    expect(weatherGlyph(67)).toBe('rain');
+    expect(weatherGlyph(71)).toBe('snow');
+    expect(weatherGlyph(77)).toBe('snow');
+    expect(weatherGlyph(80)).toBe('rain');
+    expect(weatherGlyph(82)).toBe('rain');
+    expect(weatherGlyph(85)).toBe('snow');
+    expect(weatherGlyph(86)).toBe('snow');
+    expect(weatherGlyph(95)).toBe('storm');
+    expect(weatherGlyph(null)).toBe('dot');
     expect(weatherCodeLabel(0)).toBe('Clear');
     expect(weatherCodeLabel(3)).toBe('Overcast');
     expect(weatherCodeLabel(null)).toBe('No forecast');
