@@ -44,7 +44,7 @@ function scan(file: string): Offence[] {
     } else if (ch === '}' || ch === ';') {
       const decl = /^([\w-]+)\s*:\s*([\s\S]+)$/.exec(buffer.trim());
       if (decl && (decl[1] === 'font-size' || decl[1] === 'border-radius')) {
-        const value = decl[2].trim();
+        const value = (decl[2] ?? '').trim();
         const selector = stack[stack.length - 1] ?? '';
         const ok = ['inherit', '0', '50%'].includes(value) || value.includes('var(--') || `${rel}:${selector}` in ALLOWED;
         if (!ok) offences.push({ where: `${rel}:${startLine}`, text: `${selector} { ${decl[1]}: ${value} }` });

@@ -4,7 +4,7 @@
 .insights-overview p { display: flex; flex-wrap: wrap; gap: .25rem; margin: 0; min-width: 0; }
 .insights-overview p strong { margin-right: .35rem; }
 .insights-trend { display: flex; align-items: end; gap: 3px; width: 84px; height: 40px; flex: 0 0 84px; padding-block: 3px; }
-.insights-trend span { width: 9px; border-radius: var(--r-tight) var(--r-tight) 1px 1px; }
+.insights-trend span { width: 9px; border-radius: calc(var(--r-tight) / 2) calc(var(--r-tight) / 2) 1px 1px; }
 .insights-bar { background: currentColor; opacity: .68; }
 .insights-bar-gap { height: 2px; background: currentColor; opacity: .2; }
 .insights-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: .75rem; margin-top: .85rem; }
