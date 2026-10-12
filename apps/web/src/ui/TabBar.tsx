@@ -124,12 +124,11 @@ export function TabBar({ tab, onSelect, inert, strip, level = null, onHoldLog }:
       {strip}
       {ITEMS.map(({ key, label, to }) => (
         <button key={key} type="button" className="tab" aria-pressed={active === key}
+          aria-label={key === 'log' && level !== null ? label + logTabSuffix(level) : undefined}
           {...(key === 'log' ? hold.handlers : {})}
           onClick={() => { if (key === 'log' && hold.consume()) return; onSelect(to); }}>
           <Icon>{ICONS[key]}</Icon>
-          {key === 'log' && level !== null
-            ? <><span aria-hidden="true">{label}</span><span className="visually-hidden">{label}{logTabSuffix(level)}</span></>
-            : <span>{label}</span>}
+          <span>{label}</span>
         </button>
       ))}
     </nav>
