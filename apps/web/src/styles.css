@@ -267,136 +267,7 @@ textarea:focus-visible {
 @media (prefers-reduced-motion: reduce) { .xp-fill { transition: none; } }
 .xp-rested { position: absolute; inset: 0 auto 0 0; background: var(--accent); opacity: 0.35; }
 
-/* Rings: SVG arcs drawn with pathLength=100, so the dash values are percentages. */
-.ring-track { fill: none; stroke: var(--game-track); }
-.ring-fill,
-.ring-rested { fill: none; stroke: var(--ring-colour, var(--accent)); stroke-linecap: round; }
-.ring-rested { opacity: 0.35; }
-
-.character-hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 6px 0 4px;
-  text-align: center;
-}
-
-.character-level {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 8rem;
-  height: 8rem;
-}
-
-.level-ring { position: absolute; inset: 0; width: 100%; height: 100%; }
-.character-level-number { font-size: var(--t-display); font-weight: 700; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.character-level-word { margin-top: 4px; color: var(--muted); font-size: var(--t-footnote); }
-.character-title { margin: 12px 0 2px; font-size: var(--t-title3); font-weight: 600; letter-spacing: -0.01em; }
-.character-xp-line {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px 12px;
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--t-subhead);
-  font-variant-numeric: tabular-nums;
-}
-
-.character-rested { color: rgb(100 170 255); }
-.character-unavailable {
-  list-style: none;
-  margin: 0;
-  padding: 8px 12px;
-  border-radius: var(--r-control);
-  background: var(--warn-soft);
-  color: var(--warn);
-  font-size: var(--t-subhead);
-}
-
-.character-professions {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-}
-
-.character-profession { --ring-colour: var(--accent); min-width: 0; }
-.character-profession[data-profession='athletics'] { --ring-colour: #ff6b4a; }
-.character-profession[data-profession='scholar'] { --ring-colour: #5fd18c; }
-.character-profession[data-profession='lorekeeper'] { --ring-colour: #a98bff; }
-.character-profession[data-profession='quartermaster'] { --ring-colour: #ffb547; }
-
-.character-ring-button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  width: 100%;
-  min-width: 0;
-  min-height: var(--tap);
-  padding: 6px 2px;
-  border: 0;
-  border-radius: var(--r-control);
-  background: transparent;
-}
-
-.character-ring-button:active { background: var(--game-well); }
-.character-ring { position: relative; display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 4px; }
-.skill-ring { position: absolute; inset: 0; width: 100%; height: 100%; }
-.character-ring-value { font-size: var(--t-headline); font-weight: 650; font-variant-numeric: tabular-nums; }
-.character-profession-name,
-.character-profession-rank {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.character-profession-name { font-size: var(--t-caption); font-weight: 600; letter-spacing: -0.01em; }
-.character-profession-rank { color: var(--muted); font-size: var(--t-caption2); }
-.character-hint { margin: 0; color: var(--muted); font-size: var(--t-footnote); text-align: center; }
-
-.character-section h3 { margin: 6px 0 8px; font-size: var(--t-callout); font-weight: 600; }
-.character-rows {
-  list-style: none;
-  margin: 0;
-  padding: 0 14px;
-  border-radius: var(--r-control);
-  background: var(--game-well);
-}
-
-.character-rows > li { min-height: var(--tap); padding: 11px 0; border-top: 1px solid rgb(255 255 255 / 0.08); }
-.character-rows > li:first-child { border-top: none; }
-.character-row-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.character-row-meta { flex-shrink: 0; color: var(--muted); font-size: var(--t-subhead); font-variant-numeric: tabular-nums; }
-.character-tracked { display: flex; flex-direction: column; gap: 8px; }
-.character-progress { display: block; height: 4px; border-radius: var(--r-tight); background: var(--game-track); overflow: hidden; }
-.character-progress > span { display: block; height: 100%; border-radius: var(--r-tight); background: var(--game-gold); }
-
-.character-link-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: 48px;
-  margin-top: 4px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: var(--r-control);
-  background: var(--game-well);
-  text-align: left;
-}
-
-.character-chevron { color: var(--muted); font-size: var(--t-title2); line-height: 1; }
-.character-how-xp ul { margin: 0; padding-left: 18px; font-size: var(--t-callout); line-height: 1.45; }
-.character-how-xp li + li { margin-top: 4px; }
-.character-how-xp .character-section + .character-section { margin-top: 12px; }
+/* The Character screen, Achievements and How XP works wear the R4 skin: ui/CharacterSkin.css. */
 
 /* UX5: the Mood check-in history at the top of the Log's Progress view. Read-only evidence rows. */
 .log-mood {
@@ -1031,9 +902,32 @@ body:has(.reward-banner) .toast {
   padding: 8px;
 }
 
-.active-work-item { padding: 12px 0; border-bottom: 0.5px solid var(--line); overflow-wrap: anywhere; }
+.active-work-item { padding: var(--s-3) 0; border-bottom: 0.5px solid var(--line); overflow-wrap: anywhere; }
+.active-work-item:last-of-type { border-bottom: none; }
 .active-work-item p { margin: 6px 0; }
-.active-work-item .chip { display: inline-block; margin: 8px 0; }
+.active-work-item .chip { display: inline-block; margin: 8px var(--s-2) 0 0; }
+/* R4: Active Work as a quest log, in the normal app palette (no gold, no serif): the title, then objective lines
+   with tick boxes, then the review date. */
+.quest-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.quest-title {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--t-headline);
+  font-weight: 600;
+  text-align: left;
+}
+.quest-objectives { display: flex; flex-direction: column; gap: var(--s-1); margin: 0; padding: 0; list-style: none; }
+.quest-objective { display: flex; align-items: flex-start; gap: var(--s-2); color: var(--text); font-size: var(--t-subhead); line-height: 1.35; }
+.quest-tick { flex-shrink: 0; width: 16px; height: 16px; margin-top: 1px; fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.quest-label { color: var(--muted); }
+.active-work-item p.quest-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: var(--s-1) 0 0 var(--s-5); color: var(--muted); font-size: var(--t-footnote); }
+.active-work-item p.quest-meta .chip { margin: 0; }
+.active-work-item .action-buttons { margin-top: var(--s-3); }
 .active-work-unknown pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 .sheet label { display: block; margin: 8px 0; }
 .sheet label input { display: block; width: 100%; min-height: 44px; box-sizing: border-box; }
@@ -1781,7 +1675,7 @@ body:has(.reward-banner) .toast {
 
 /* A2 signature (review section 3A): every big number in SF Pro Rounded, so levels, steps, prices and temperatures read
    like game stats without artwork; and a faint top-lit edge on cards. Gold stays reserved for rewards (tokens.css). */
-:is(.character-level-number, .character-ring-value, .character-card-points, .scout-metric strong, .scout-row-findings strong,
+:is(.character-level-number, .character-card-points, .scout-metric strong, .scout-row-findings strong,
   .triage-dateblock strong, .dash-price, .health-value, .weather-day-temp, .weather-week-low, .weather-week-high,
   .reward-xp, .reward-level-number, .reward-banner-points, .achievement-tile-points, .next-up-time) {
   font-family: var(--font-rounded);

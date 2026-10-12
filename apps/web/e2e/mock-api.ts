@@ -286,7 +286,14 @@ export const sampleGame = (unavailable: string[] = [], rich = false): GameRespon
   feedback: {
     criticals: 0, critical: { every: 8, multiplier: 2 },
     achievements: rich
-      ? { r2: { description: 'Log 10 training sessions.', earnedBy: 'Logging a training session' } }
+      ? {
+        r1: { description: 'Complete your first task.', earnedBy: 'Completing a task' },
+        r2: { description: 'Log 10 training sessions.', earnedBy: 'Logging a training session' },
+        r4: { description: 'Learn three days in a row.', earnedBy: 'Logging a learning session' },
+        r5: { description: 'Learn seven days in a row.', earnedBy: null },
+        r9: { description: 'Reach Journeyman in every profession.', earnedBy: 'Reaching a new rank' },
+        f1: { description: 'Was there when the Character began.', earnedBy: null },
+      }
       : { a4: { description: 'Log 25 training sessions.', earnedBy: null } },
   },
 });

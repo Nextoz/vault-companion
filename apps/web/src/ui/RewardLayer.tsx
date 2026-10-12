@@ -2,6 +2,7 @@ import type { GameResponse } from '@vault-companion/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { planToasts, seenKey, summaryText } from '../achievements.ts';
 import { getGame } from '../api.ts';
+import { bannerQuality, type Quality } from '../character-skin.ts';
 import type { QueueItem } from '../queue/queue.ts';
 import {
   achievementReward, celebratedIds, diffRewards, earnedByText, newlyEarnedIds, nextBaseline, skillText, withoutCelebrated, xpText,
@@ -257,16 +258,18 @@ function Badge({ major }: { major: boolean }) {
   </span>;
 }
 
-function Banner({ label, name, lines = [], points, major = false, onOpen, onDismiss }: {
+function Banner({ label, name, lines = [], points, quality, major = false, onOpen, onDismiss }: {
   label: string;
   name: string;
   lines?: readonly string[];
   points?: number;
+  /** R4: the item quality of the badge it announces (Rewards.css colours the frame and the name). */
+  quality?: Quality;
   major?: boolean;
   onOpen: () => void;
   onDismiss: () => void;
 }) {
-  return <div className={`reward-banner motion-fade${major ? ' is-major' : ''}`}>
+  return <div className={`reward-banner motion-fade${major ? ' is-major' : ''}`} data-quality={quality}>
     <button type="button" className="reward-banner-main" onClick={onOpen}>
       <Badge major={major} />
       <span className="reward-banner-text">
@@ -282,7 +285,7 @@ function Banner({ label, name, lines = [], points, major = false, onOpen, onDism
 
 function AchievementBanner({ reward, onOpen, onDismiss }: { reward: AchievementReward; onOpen: () => void; onDismiss: () => void }) {
   const lines = [reward.description, earnedByText(reward.earnedBy)].filter((line): line is string => line !== null);
-  return <Banner label="Achievement earned" name={reward.name} lines={lines} points={reward.points} major={reward.major} onOpen={onOpen} onDismiss={onDismiss} />;
+  return <Banner label="Achievement earned" name={reward.name} lines={lines} points={reward.points} quality={bannerQuality(reward.points)} major={reward.major} onOpen={onOpen} onDismiss={onDismiss} />;
 }
 
 const SPARKS = Array.from({ length: 18 }, (_, i) => i);
