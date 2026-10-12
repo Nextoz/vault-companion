@@ -1,0 +1,369 @@
+/* Redesign R3b (2026-10-12; review #7, #9, A2): Today and Log, content first. Imported after styles.css and nav.css.
+   Today: Next up, the inline check-in, the tiles (2 px domain-hue top edge), then "Since I was here" as one quiet
+   line. Log: the "Log" title, a 56 px Character strip, the views as R3a's chip row, and empty states with an action.
+   Every stat here is set in rounded, tabular numerals (A2). */
+
+/* ---- Today: the title row and the Overview/Boards switch ---------------------------------------------------- */
+.today-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: var(--s-2) 0 var(--s-4);
+}
+
+.today-view {
+  flex: none;
+  gap: 0;
+  padding: 2px;
+  border-radius: var(--r-control);
+  background: var(--surface);
+}
+
+/* A 32 px segment inside a 36 px track, with a 44 px hit area (review #7: it was a 36 px target). */
+.today-view button {
+  position: relative;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-tight);
+  font-size: var(--t-subhead);
+}
+
+.today-view button::after {
+  content: '';
+  position: absolute;
+  inset: calc((32px - var(--tap)) / 2) 0;
+}
+
+/* ---- Today: one job per row --------------------------------------------------------------------------------- */
+.morning-card.today-overview {
+  gap: var(--s-3);
+  margin: 0;
+}
+
+.next-up {
+  gap: var(--s-1);
+  margin: 0;
+  padding: var(--s-4);
+}
+
+.next-up-title { margin-bottom: var(--s-1); }
+
+.next-up-empty {
+  margin: 0 0 var(--s-1);
+  color: var(--text);
+}
+
+.next-up-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-top: var(--s-2);
+}
+
+.next-up-start { margin: 0; }
+
+/* The quiet link to the Tasks tab sits on the action's row, right-aligned; still a 44 px target. */
+.next-up-more {
+  min-width: 0;
+  margin: 0 calc(-1 * var(--s-2)) 0 0;
+  padding: 0 var(--s-2);
+  text-align: right;
+}
+
+/* The inline check-in (CheckinRow.tsx): one question, five round 48 px targets, the scale's ends under them. */
+.checkin-row {
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background-color: var(--surface);
+  background-image: var(--card-sheen);
+}
+
+.checkin-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.checkin-row-prompt {
+  margin: 0;
+  font-size: var(--t-headline);
+  font-weight: 600;
+}
+
+/* Small text, 44 px hit area: the earlier answers, tapping them steps back. */
+.checkin-row-back,
+.checkin-other {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  font-size: var(--t-subhead);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.checkin-row-back::after,
+.checkin-other::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--s-3)) calc(-1 * var(--s-2));
+}
+
+.checkin-targets {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+.checkin-target {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--raised);
+  color: var(--text);
+  font-family: var(--font-rounded);
+  font-size: var(--t-headline);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkin-ends {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  min-height: var(--s-5);
+  margin-top: var(--s-2);
+  color: var(--muted);
+  font-size: var(--t-footnote);
+}
+
+.checkin-row .muted.small,
+.checkin-row .error {
+  margin: var(--s-2) 0 0;
+}
+
+/* Tiles: the label names the thing, the body says the fact; colour is a 2 px top edge in the domain hue. Two columns;
+   the grid maps the pure tile list, so two more tiles slot in without a layout change. */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+  margin: 0;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: var(--s-1);
+  min-height: 88px;
+  padding: var(--s-3) var(--s-4) var(--s-4);
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--tile-hue);
+  border-radius: var(--r-card);
+  background-color: var(--surface);
+  color: var(--text);
+  text-align: left;
+}
+
+.tile-label {
+  color: var(--muted);
+  font-size: var(--t-footnote);
+  font-weight: 600;
+}
+
+.tile-body {
+  font-size: var(--t-callout);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.tile-count {
+  color: var(--muted);
+}
+
+.tile-stat {
+  color: var(--text);
+  font-family: var(--font-rounded);
+  font-size: var(--t-title1);
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "Since I was here": one quiet line at the bottom of Today; it expands in place and renders nothing when empty. */
+.since-i-was-here {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
+}
+
+.siwh-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: var(--t-subhead);
+  font-weight: 400;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.siwh-toggle::after {
+  content: '\203a';
+  font-size: var(--t-title3);
+  line-height: 1;
+  transition: transform var(--dur-fast) var(--ease-ui);
+}
+
+.siwh-toggle[aria-expanded='true']::after { transform: rotate(90deg); }
+
+.siwh-toggle:active:not(:disabled) { box-shadow: none; color: var(--text); }
+
+/* ---- Log: the title, the Character strip, the chips -------------------------------------------------------- */
+.character-card { margin: 0 0 var(--s-3); }
+
+.character-card-button {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 56px;
+  padding: 0 var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--game-gold) 35%, transparent);
+  border-radius: var(--r-card);
+  background-color: var(--surface);
+  text-align: left;
+}
+
+/* The level badge: rounded numerals in a gold ring, the one game mark on the strip. */
+.character-card-level {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--game-gold);
+  border-radius: 50%;
+  color: var(--game-gold);
+  font-family: var(--font-rounded);
+  font-size: var(--t-subhead);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.character-card-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.character-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.character-card-title {
+  overflow: hidden;
+  font-size: var(--t-subhead);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.character-card-xp {
+  flex: none;
+  color: var(--muted);
+  font-family: var(--font-rounded);
+  font-size: var(--t-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.character-card .xp-bar {
+  height: 4px;
+  border-radius: var(--r-pill);
+}
+
+.character-card .xp-fill { border-radius: var(--r-pill); }
+
+.character-card-points {
+  flex: none;
+  color: var(--game-gold);
+  font-family: var(--font-rounded);
+  font-size: var(--t-headline);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.character-card-unit {
+  font-size: var(--t-caption);
+  font-weight: 600;
+}
+
+.character-card-chevron {
+  flex: none;
+  margin-left: calc(-1 * var(--s-1));
+  color: var(--muted);
+  font-size: var(--t-title2);
+  line-height: 1;
+}
+
+.character-card-note { margin: var(--s-1) 0 0; }
+
+.character-card > .character-card-empty {
+  min-height: 56px;
+  align-items: center;
+}
+
+/* The Log views: R3a's chip row, one line that scrolls sideways under an edge fade. */
+.chip-row.log-view {
+  margin-top: 0;
+  margin-bottom: var(--s-4);
+  padding-block: var(--s-1);
+}
+
+/* Progress: the Mood card and the week card were flush; one card gap between them. */
+.progress > .log-mood { margin-bottom: var(--s-3); }
+
+/* Empty Log views lead to the same sheet as the capture button. */
+.log-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-6) var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  text-align: center;
+}
+
+.log-empty p { margin: 0; }
+
+.log-empty .primary {
+  min-height: var(--tap);
+  padding: 0 var(--s-5);
+  border-radius: var(--r-control);
+  font-size: var(--t-headline);
+}

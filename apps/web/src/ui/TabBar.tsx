@@ -109,13 +109,15 @@ export const LONG_PRESS_MS = 500;
  * D2: `strip` (the XP strip) runs along its top edge; the Log tab names the level for assistive tech ("Log, level
  * 12") and a 500 ms hold on it opens the Character sheet.
  */
-export function TabBar({ tab, onSelect, inert, strip, level = null, onHoldLog }: {
+export function TabBar({ tab, onSelect, inert, strip, level = null, onHoldLog, logTo }: {
   tab: Tab;
   onSelect: (tab: Tab) => void;
   inert?: boolean;
   strip?: ReactNode;
   level?: number | null;
   onHoldLog?: (() => void) | undefined;
+  /** R3b: the Log view the Log button opens (the one last shown on this device); Training when omitted. */
+  logTo?: Tab;
 }) {
   const active = barKey(tab);
   const hold = useHold(onHoldLog);
@@ -126,7 +128,7 @@ export function TabBar({ tab, onSelect, inert, strip, level = null, onHoldLog }:
         <button key={key} type="button" className="tab" aria-pressed={active === key}
           aria-label={key === 'log' && level !== null ? label + logTabSuffix(level) : undefined}
           {...(key === 'log' ? hold.handlers : {})}
-          onClick={() => { if (key === 'log' && hold.consume()) return; onSelect(to); }}>
+          onClick={() => { if (key === 'log' && hold.consume()) return; onSelect(key === 'log' ? logTo ?? to : to); }}>
           <Icon>{ICONS[key]}</Icon>
           <span>{label}</span>
         </button>

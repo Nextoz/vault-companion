@@ -70,7 +70,7 @@ export interface MoodCheckinFormProps {
   /** The day the check-in belongs to; the device's local date at save time when omitted (today's check-in). */
   date?: string;
   /** Seed values when editing a check-in the device already holds. */
-  initial?: Pick<MoodCheckinPayload, 'mood' | 'energy' | 'sleep'> | null;
+  initial?: (Pick<MoodCheckinPayload, 'mood' | 'energy'> & { sleep?: number }) | null;
   onSaved?: () => void;
   onCancel?: () => void;
 }
@@ -82,7 +82,7 @@ export interface MoodCheckinFormProps {
 export function MoodCheckinForm({ queue, accountKey, baseRevision, blocked, date, initial, onSaved, onCancel }: MoodCheckinFormProps) {
   const [mood, setMood] = useState<number | null>(initial?.mood ?? null);
   const [energy, setEnergy] = useState<number | null>(initial?.energy ?? null);
-  const [sleepText, setSleepText] = useState(initial ? String(initial.sleep) : '');
+  const [sleepText, setSleepText] = useState(initial?.sleep !== undefined ? String(initial.sleep) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const guard = useRef(false);

@@ -8,10 +8,11 @@ import { weekBars } from '../week-chart.ts';
 import { BarChart } from './BarChart.tsx';
 import { TrainingSheet } from './TrainingSheet.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
-import { LargeTitle } from './LargeTitle.tsx';
 
-export function Training({ refreshKey, accountKey, queue, baseRevision }: {
+export function Training({ refreshKey, accountKey, queue, baseRevision, onAdd }: {
   refreshKey: number | null; accountKey: string | null; queue: PendingQueue; baseRevision: string | null;
+  /** R3b: the empty state's primary action, the same sheet as the capture button. */
+  onAdd: () => void;
 }) {
   const view = useLastCopy<TrainingResponse>(accountKey, 'training', getTraining, refreshKey);
   const res = view.res;
@@ -20,14 +21,16 @@ export function Training({ refreshKey, accountKey, queue, baseRevision }: {
   // B12: only a Run or Gym row opens the sheet, bound to its exact read row and stable key.
   const [editing, setEditing] = useState<{ row: TrainingRow; key: string } | null>(null);
   return <section className="group training" aria-label="Training sessions">
-    <LargeTitle>Training</LargeTitle>
     <CopyNote view={view} />
     {!res && <p className="muted">Loading training…</p>}
     {res && !read && <p className="muted">Training could not be loaded. Refresh when connected.</p>}
     {read?.status === 'absent' && <p className="muted">Training log not found. Create Health/Training Log.md in Obsidian.</p>}
     {read?.status === 'refused' && <p className="error">{read.message}</p>}
     {read?.status === 'ok' && <>
-      {read.rows.length === 0 && <p className="muted">No sessions yet.</p>}
+      {read.rows.length === 0 && <div className="log-empty">
+        <p className="muted">No sessions yet.</p>
+        <button type="button" className="primary" onClick={onAdd}>Log your first session</button>
+      </div>}
       {read.rows.length > 0 && <BarChart title="Sessions per week" testId="training-chart" bars={weekBars(read.rows.map((r) => r.date), copenhagenDay(new Date().toISOString()))} />}
       <ul className="training-list">{read.rows.map((row, i) => {
         const summary = <span className="training-session-line"><span aria-hidden="true">{row.type === 'Run' ? '🏃' : row.type === 'Gym' ? '🏋️' : '●'}</span> <strong>{row.type}</strong> {trainingSummary(row)}</span>;

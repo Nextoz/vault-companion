@@ -1,68 +1,91 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { MockApi } from './mock-api.ts';
 import { goTo } from './nav.ts';
 
 const DAY_ONE = new Date('2026-09-24T10:00:00Z');
 const NEXT_MORNING = new Date(DAY_ONE.getTime() + 86_400_000);
-const PROMPT = 'How are you today? Check in';
 const CHECKED_IN = /^Checked in \d{2}:\d{2}$/;
 
-test('mood check-in: chips, Danish sleep, no row on Today, and Undo brings the prompt back', async ({ page }) => {
+const row = (page: Page) => page.getByRole('region', { name: 'Check-in', exact: true });
+/** R3b: the inline row asks one question at a time; each group is named by what it asks. */
+const target = (page: Page, kind: 'Mood' | 'Energy' | 'Sleep', name: string) =>
+  row(page).getByRole('group', { name: kind, exact: true }).getByRole('button', { name, exact: true });
+
+test('inline check-in end to end: mood -> energy -> sleep, saved once, the row is gone; Undo brings it back', async ({ page }) => {
   const api = new MockApi();
   await api.install(page);
   await page.goto('/');
   await goTo(page, 'Today');
 
-  // UX2: the form sits behind the one-line check-in prompt until it is tapped.
-  const prompt = page.getByRole('button', { name: PROMPT });
-  await expect(prompt).toBeVisible();
+  // Review #7: the row sits between Next up and the tiles, with five round 48 px targets.
+  await expect(row(page)).toBeVisible();
+  await expect(row(page)).toContainText('How are you today?');
   const next = await page.getByRole('region', { name: 'Next up', exact: true }).boundingBox();
-  const row = await prompt.boundingBox();
+  const box = await row(page).boundingBox();
   const tiles = await page.getByRole('group', { name: 'Today tiles' }).boundingBox();
-  expect(row!.y).toBeGreaterThanOrEqual(next!.y + next!.height);
-  expect(row!.y + row!.height).toBeLessThanOrEqual(tiles!.y);
-  expect(row!.height).toBeGreaterThanOrEqual(44);
-  await prompt.click();
-  const card = page.getByRole('region', { name: 'Mood check-in' });
-  await expect(card).toBeVisible();
-  // B8: each chip row carries a visible label and what its scale ends mean.
-  for (const [label, low, high] of [['Mood', 'low', 'great'], ['Energy', 'drained', 'energised']] as const) {
-    const row = card.locator('.scale-row').filter({ has: page.getByRole('group', { name: label, exact: true }) });
-    await expect(row.locator('.scale-label')).toHaveText(label);
-    await expect(row.locator('.scale-ends')).toContainText(low);
-    await expect(row.locator('.scale-ends')).toContainText(high);
+  expect(box!.y).toBeGreaterThanOrEqual(next!.y + next!.height);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(tiles!.y);
+  const moods = row(page).getByRole('group', { name: 'Mood', exact: true }).getByRole('button');
+  await expect(moods).toHaveText(['−2', '−1', '0', '+1', '+2']);
+  for (const b of await moods.all()) {
+    const size = await b.boundingBox();
+    expect([Math.round(size!.width), Math.round(size!.height)]).toEqual([48, 48]);
   }
-  const save = card.getByRole('button', { name: 'Check in', exact: true });
-  await expect(save).toBeDisabled();
+  await expect(row(page)).toContainText('low');
+  await expect(row(page)).toContainText('great');
 
-  await card.getByRole('button', { name: 'Mood +2', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Mood +2', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await card.getByRole('button', { name: 'Energy \u22121', exact: true }).click();
-  await card.getByLabel('Sleep (hours)').fill('7,5'); // Danish comma
-  await expect(save).toBeEnabled();
-  await save.click();
+  // One tap per question; nothing is enqueued before the last answer (MoodCheckin needs all three), no Skip.
+  await target(page, 'Mood', 'Mood +2').click();
+  await expect(row(page)).toContainText('Energy?');
+  await expect(row(page).getByRole('button', { name: /skip/i })).toHaveCount(0);
+  // The earlier answer is the way back.
+  await row(page).getByRole('button', { name: 'Back: Mood +2' }).click();
+  await expect(row(page)).toContainText('How are you today?');
+  await target(page, 'Mood', 'Mood +2').click();
+  await target(page, 'Energy', 'Energy −1').click();
+  await expect(row(page)).toContainText('Sleep?');
+  expect(api.applied).toEqual([]);
+  await target(page, 'Sleep', 'Sleep 7 hours').click();
 
-  // UX6: once today is checked in there is no row, no form and no "Checked in HH:MM" anywhere on Today.
-  await expect(page.getByRole('region', { name: 'Mood check-in' })).toHaveCount(0);
+  // UX6: once today is checked in there is no row and no "Checked in HH:MM" anywhere on Today.
+  await expect(row(page)).toHaveCount(0);
   await expect(page.getByRole('button', { name: CHECKED_IN })).toHaveCount(0);
-  await expect(prompt).toHaveCount(0);
-  // A round trip through another tab proves the check-in (not a stale open flag) hides it.
-  await goTo(page, 'Notes');
-  await goTo(page, 'Today');
-  await expect(prompt).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Mood check-in' })).toHaveCount(0);
   await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['MoodCheckin']);
   const checkin = api.applied[0];
-  expect(checkin?.type === 'MoodCheckin' && checkin.payload).toMatchObject({ mood: 2, energy: -1, sleep: 7.5 });
+  expect(checkin?.type === 'MoodCheckin' && checkin.payload).toMatchObject({ mood: 2, energy: -1, sleep: 7 });
+  // A round trip through another tab proves the saved check-in (not a stale step) hides it.
+  await goTo(page, 'Notes');
+  await goTo(page, 'Today');
+  await expect(row(page)).toHaveCount(0);
 
+  // The existing Undo path (Actions) brings the row back at its first question.
   const action = page.getByTestId('action').filter({ hasText: 'Mood check-in' });
   await action.getByRole('button', { name: 'Undo', exact: true }).click();
-  // Undoing the check-in brings the prompt back; tap it to reach the form again.
-  await expect(prompt).toBeVisible();
-  await prompt.click();
-  await expect(card.getByLabel('Sleep (hours)')).toBeVisible();
-  await expect(card.getByRole('button', { name: CHECKED_IN })).toHaveCount(0);
+  await expect(row(page)).toBeVisible();
+  await expect(row(page)).toContainText('How are you today?');
   await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['MoodCheckin', 'UndoMoodCheckin']);
+});
+
+test('"Other" opens the full check-in sheet with the answers so far, for a half hour of sleep', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  await page.goto('/');
+  await goTo(page, 'Today');
+  await target(page, 'Mood', 'Mood −1').click();
+  await target(page, 'Energy', 'Energy +1').click();
+  await row(page).getByRole('button', { name: 'Other…', exact: true }).click();
+
+  const sheet = page.getByRole('dialog', { name: 'Check-in' });
+  const form = sheet.getByRole('region', { name: 'Mood check-in' });
+  await expect(form.getByRole('button', { name: 'Mood −1', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(form.getByRole('button', { name: 'Energy +1', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await form.getByLabel('Sleep (hours)').fill('7,5'); // Danish comma
+  await form.getByRole('button', { name: 'Check in', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(row(page)).toHaveCount(0);
+  await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['MoodCheckin']);
+  const checkin = api.applied[0];
+  expect(checkin?.type === 'MoodCheckin' && checkin.payload).toMatchObject({ mood: -1, energy: 1, sleep: 7.5 });
 });
 
 test('today\'s check-in is edited from Log and Progress, and the row returns next morning', async ({ page }) => {
@@ -72,13 +95,9 @@ test('today\'s check-in is edited from Log and Progress, and the row returns nex
   await page.goto('/');
   await goTo(page, 'Today');
 
-  const prompt = page.getByRole('button', { name: PROMPT });
-  await prompt.click();
-  const card = page.getByRole('region', { name: 'Mood check-in' });
-  await card.getByRole('button', { name: 'Mood +2', exact: true }).click();
-  await card.getByRole('button', { name: 'Energy \u22121', exact: true }).click();
-  await card.getByLabel('Sleep (hours)').fill('7,5');
-  await card.getByRole('button', { name: 'Check in', exact: true }).click();
+  await target(page, 'Mood', 'Mood +2').click();
+  await target(page, 'Energy', 'Energy −1').click();
+  await target(page, 'Sleep', 'Sleep 8 hours').click();
   await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['MoodCheckin']);
 
   // UX5/UX6: today's entry now carries the Edit control in the Log's Progress view.
@@ -90,24 +109,22 @@ test('today\'s check-in is edited from Log and Progress, and the row returns nex
   await expect(edit).toBeVisible();
   // Prefilled from the saved check-in.
   await expect(edit.getByRole('button', { name: 'Mood +2', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(edit.getByLabel('Sleep (hours)')).toHaveValue('7.5');
+  await expect(edit.getByLabel('Sleep (hours)')).toHaveValue('8');
 
-  await edit.getByRole('button', { name: 'Mood \u22121', exact: true }).click();
+  await edit.getByRole('button', { name: 'Mood −1', exact: true }).click();
   await edit.getByRole('button', { name: 'Check in', exact: true }).click();
   await expect(edit).toHaveCount(0);
   await expect.poll(() => api.applied.map((c) => c.type)).toEqual(['MoodCheckin', 'MoodCheckin']);
   const edited = api.applied[1];
-  expect(edited?.type === 'MoodCheckin' && edited.payload).toMatchObject({ mood: -1, energy: -1, sleep: 7.5 });
+  expect(edited?.type === 'MoodCheckin' && edited.payload).toMatchObject({ mood: -1, energy: -1, sleep: 8 });
 
   // Still no row on Today; the day's later check-in wins.
   await goTo(page, 'Today');
-  await expect(page.getByRole('button', { name: PROMPT })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Mood check-in' })).toHaveCount(0);
+  await expect(row(page)).toHaveCount(0);
 
-  // Next morning the date-keyed check-in no longer hides the prompt.
+  // Next morning the date-keyed check-in no longer hides the row.
   await page.clock.setSystemTime(NEXT_MORNING);
   await page.clock.runFor(1000);
-  await expect(page.getByRole('button', { name: PROMPT })).toBeVisible();
-  await page.getByRole('button', { name: PROMPT }).click();
-  await expect(page.getByRole('region', { name: 'Mood check-in' })).toBeVisible();
+  await expect(row(page)).toBeVisible();
+  await expect(row(page)).toContainText('How are you today?');
 });

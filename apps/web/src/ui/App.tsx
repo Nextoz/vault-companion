@@ -50,6 +50,8 @@ import { RewardLayer } from './RewardLayer.tsx';
 import { Triage } from './Triage.tsx';
 import { TaskList } from './TaskList.tsx';
 import { TabBar, type Tab } from './TabBar.tsx';
+import { LogViewChips } from './LogViewChips.tsx';
+import { isLogView, type LogView } from '../log-view.ts';
 
 interface Toast {
   target: CompleteTaskCommand;
@@ -378,8 +380,10 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   // Calm by default: the actions list sits below the tasks unless something needs the user.
   const needsAttention = snapshot.items.some((i) => i.state === 'attention');
   // GAM1-B: the four Log views share one segmented switch and the Character card above it.
-  const logView = tab === 'training' || tab === 'history' || tab === 'health' || tab === 'learning' || tab === 'reading';
-  const selectLogView = (next: Tab) => { setLogFromCharacter(false); setTab(next); };
+  const logView = isLogView(tab);
+  const selectLogView = (next: LogView) => { setLogFromCharacter(false); setTab(next); };
+  // R3b: the Log tab reopens on the view last shown on this device (a chip, a Character ring or the tab itself).
+  useEffect(() => { if (isLogView(tab)) prefs.setLogView(tab); }, [tab]);
   // ADR-0037 tokens: red = cannot work, yellow = something to see, green = settled.
   const statusDot = signedOut || readFailed || connection === 'error' || connection === 'offline'
     ? 'red'
@@ -495,18 +499,14 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {logView && !signedOut && (
           <>
             {logFromCharacter && <Back onBack={() => { setLogFromCharacter(false); setCharacterOpen(true); }} />}
+            {/* R3b (review #9): one "Log" title, the Character strip, then the views as chips; no title repeats the chip. */}
+            <LargeTitle className="log-title">Log</LargeTitle>
             <CharacterCard refreshKey={checkedAt} accountKey={accountKey} onOpen={() => setCharacterOpen(true)} />
-            <div className="segmented log-view" role="group" aria-label="Log view">
-              <button type="button" aria-pressed={tab === 'training'} onClick={() => selectLogView('training')}>Training</button>
-              <button type="button" aria-pressed={tab === 'history'} onClick={() => selectLogView('history')}>Progress</button>
-              <button type="button" aria-pressed={tab === 'health'} onClick={() => selectLogView('health')}>Health</button>
-              <button type="button" aria-pressed={tab === 'learning'} onClick={() => selectLogView('learning')}>Learning</button>
-              <button type="button" aria-pressed={tab === 'reading'} onClick={() => selectLogView('reading')}>Reading</button>
-            </div>
+            <LogViewChips view={isLogView(tab) ? tab : null} onSelect={selectLogView} />
           </>
         )}
 
-        {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} />}
+        {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} onAdd={() => setCaptureOpen(true)} />}
         {tab === 'history' && !signedOut && (
           <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
             accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />
@@ -514,7 +514,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
         {tab === 'health' && !signedOut && <HealthPanel key={`health:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
 
-        {tab === 'learning' && !signedOut && <Learning key={`learning:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
+        {tab === 'learning' && !signedOut && <Learning key={`learning:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} onAdd={() => setCaptureOpen(true)} />}
 
         {tab === 'reading' && !signedOut && <Reading key={`reading:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} open={captureOpen} onClose={() => setCaptureOpen(false)} />}
 
@@ -607,7 +607,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           <TabBar tab={tab} onSelect={(next) => { setLogFromCharacter(false); setTab(next); }} inert={noteOpen || editing !== null || characterOpen}
             level={signedOut ? null : data?.character.level ?? null}
             strip={!signedOut && <XpStrip read={data?.character ?? null} landing={xpLanding} />}
-            onHoldLog={signedOut ? undefined : () => setCharacterOpen(true)} />
+            onHoldLog={signedOut ? undefined : () => setCharacterOpen(true)} logTo={prefs.logView()} />
         )}
       </CharacterRead>
 

@@ -264,6 +264,22 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await page.clock.fastForward(11 * 60 * 1000);
     await expect(page.getByRole('button', { name: 'Vault stale: open Status' })).toBeVisible();
   });
+  // R3b (review #7, #9): the inline check-in's last step, and the Log reopening on the view last shown.
+  await shot('Today - check-in sleep step', async () => {
+    await goTo(page, 'Today');
+    const row = page.getByRole('region', { name: 'Check-in', exact: true });
+    await row.getByRole('button', { name: 'Mood +1', exact: true }).click();
+    await row.getByRole('button', { name: 'Energy 0', exact: true }).click();
+    await expect(row).toContainText('Sleep?');
+  });
+  await shot('Log - Reading remembered', async () => {
+    await goTo(page, 'Log');
+    await page.getByRole('group', { name: 'Log view' }).getByRole('button', { name: 'Reading', exact: true }).click();
+    await goTo(page, 'Today');
+    await goTo(page, 'Log');
+    await expect(page.getByRole('group', { name: 'Log view' }).getByRole('button', { name: 'Reading', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await page.evaluate(() => window.scrollTo(0, 0));
+  });
 
   const index = [
     '# Tour screenshots',
