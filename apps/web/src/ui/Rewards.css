@@ -2,9 +2,9 @@
    capture button, a blue skill-up line, and a full-screen level up. Colours are local tokens so a later skin can
    restyle them in one place. Reduced motion swaps every movement for a plain fade. */
 .reward-layer {
-  --rw-gold: #f2c86b;
-  --rw-gold-hi: #fff1c2;
-  --rw-gold-lo: #8a5a14;
+  --rw-gold: var(--game-gold);
+  --rw-gold-hi: var(--game-gold-hi);
+  --rw-gold-lo: var(--game-gold-lo);
   --rw-ink: #1a1206;
   --rw-crit: #ff9f1a;
   --rw-skill: #8cc4ff;

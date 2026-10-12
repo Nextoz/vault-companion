@@ -238,8 +238,8 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
 function Pulse({ step }: { step: Extract<Step, { kind: 'pulse' }> }) {
   const critical = step.xp !== null && step.xp.criticals > 0;
   return <div className="reward-pulse">
-    {step.xp !== null && <span className={`reward-xp${critical ? ' is-critical' : ''}`}>{xpText(step.xp)}</span>}
-    {step.skills.map((skill) => <span key={skill.profession} className="reward-skill">{skillText(skill)}</span>)}
+    {step.xp !== null && <span className={`reward-xp motion-fade${critical ? ' is-critical' : ''}`}>{xpText(step.xp)}</span>}
+    {step.skills.map((skill) => <span key={skill.profession} className="reward-skill motion-fade">{skillText(skill)}</span>)}
   </div>;
 }
 
@@ -266,7 +266,7 @@ function Banner({ label, name, lines = [], points, major = false, onOpen, onDism
   onOpen: () => void;
   onDismiss: () => void;
 }) {
-  return <div className={`reward-banner${major ? ' is-major' : ''}`}>
+  return <div className={`reward-banner motion-fade${major ? ' is-major' : ''}`}>
     <button type="button" className="reward-banner-main" onClick={onOpen}>
       <Badge major={major} />
       <span className="reward-banner-text">

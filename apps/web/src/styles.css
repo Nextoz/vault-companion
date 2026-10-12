@@ -1,43 +1,20 @@
+/* Tokens live in tokens.css (imported first in main.tsx). This file names tokens, never raw values. */
 :root {
-  /* Dark iOS palette (UI refresh, 2026-10-01): permanent dark; colour carries one meaning everywhere. */
-  --ios-bg: #000000;
-  --ios-card: #1c1c1e;
-  --ios-raised: #2c2c2e;
-  --ios-separator: #38383a;
-  --ios-text: #ffffff;
-  --ios-secondary: #8e8e93;
-  --ios-blue: #0a84ff; /* primary action, selected tab, tasks */
-  --ios-green: #30d158; /* done, healthy */
-  --ios-yellow: #ffd60a; /* degraded, warning */
-  --ios-red: #ff453a; /* failing, overdue, high priority */
-  --ios-orange: #ff9f0a; /* weather */
-  --ios-purple: #bf5af2; /* research, Radar */
-  --ios-pink: #ff375f; /* events, triage */
-  --ios-cyan: #64d2ff; /* training, health */
-  --ios-indigo: #5e5ce6; /* markets, Dashboard */
-  --bg: var(--ios-bg);
-  --surface: var(--ios-card);
-  --raised: var(--ios-raised);
-  --text: var(--ios-text);
-  --muted: var(--ios-secondary);
-  --line: var(--ios-separator);
-  --accent: var(--ios-blue);
-  --accent-soft: rgb(10 132 255 / 18%);
-  --done: var(--ios-green);
-  --warn: var(--ios-yellow);
-  --warn-soft: rgb(255 214 10 / 18%);
-  --danger: var(--ios-red);
-  --danger-soft: rgb(255 69 58 / 18%);
-  --maybe: var(--ios-purple);
-  --maybe-soft: rgb(191 90 242 / 18%);
-  --tap: 44px;
-  --tabbar-h: 56px;
   color-scheme: dark;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-size: 17px;
   line-height: 1.4;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Follow the reader's iOS text size (Dynamic Type): the root becomes their body size, and rem sizes scale with it. */
+@supports (font: -apple-system-body) {
+  :root {
+    font: -apple-system-body;
+    font-family: var(--font-ui);
+    line-height: 1.4;
+  }
 }
 
 * {
@@ -57,15 +34,33 @@ button {
   min-height: var(--tap);
   min-width: var(--tap);
   padding: 0 14px;
-  border-radius: 10px;
+  border-radius: var(--r-control);
   border: 1px solid var(--line);
   background: var(--surface);
   cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-ui), filter var(--dur-press) var(--ease-ui),
+    box-shadow var(--dur-press) var(--ease-ui);
 }
 
 button:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* Review #2: every tap answers. The tap highlight is off (:root), so a pressed control shrinks a little and brightens;
+   full-width rows and cards lift instead of shrinking, because a scaled row looks like it detached from its list. */
+button:active:not(:disabled),
+[role='button']:active {
+  transform: scale(0.97);
+  filter: brightness(1.15);
+}
+
+:is(.tile, .next-up, .morning-line, .checkin-line, .siwh-line, .siwh-toggle, .note-row, .progress-week,
+  .training-session, .reading-books button, .character-card-button, .character-link-row, .scout-panel,
+  .task-edit, .active-work-toggle, .group-toggle):active:not(:disabled) {
+  transform: none;
+  filter: none;
+  box-shadow: var(--press-overlay);
 }
 
 button:focus-visible,
@@ -222,13 +217,6 @@ textarea:focus-visible {
 
 /* GAM1-B: the Log Character card (plan screen 1) and the Character screen (plan screen 2, mockup 2026-10-10).
    The game keeps its own palette inside these classes: gold for points and the card edge, one hue per profession. */
-.character-card,
-.character-sheet {
-  --game-gold: #f2c86b;
-  --game-well: rgb(255 255 255 / 0.05);
-  --game-track: rgb(255 255 255 / 0.09);
-}
-
 .character-card { margin: 12px 0; }
 
 .character-card-button {
@@ -799,27 +787,45 @@ textarea:focus-visible {
   box-shadow: 0 4px 14px rgb(0 0 0 / 0.2);
 }
 
+/* Review #4: a dark raised capsule that drops from under the header, never a white slab over content. */
 .toast {
   position: fixed;
+  z-index: 20;
   left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(var(--tabbar-h) + 32px + env(safe-area-inset-bottom));
+  top: calc(64px + env(safe-area-inset-top));
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 6px 0 16px;
-  border-radius: 12px;
-  background: var(--text);
-  color: var(--bg);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.2);
+  gap: var(--s-2);
+  max-width: calc(100vw - 2 * var(--s-4));
+  min-height: var(--tap);
+  padding: 0 var(--s-1) 0 var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--raised);
+  color: var(--text);
+  font-size: var(--t-subhead);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+  transform: translateX(-50%);
+  animation: toast-in var(--dur-base) var(--ease-ui) both;
 }
 
+.toast > span { min-width: 0; overflow-wrap: anywhere; }
+
+/* The achievement banner also drops from the top; while it shows, the toast steps below it instead of hiding Undo. */
+body:has(.reward-banner) .toast { top: calc(120px + env(safe-area-inset-top)); }
+
 .toast button {
+  flex: none;
   border: none;
+  border-radius: var(--r-pill);
   background: transparent;
-  color: var(--bg);
+  color: var(--accent-on-raised);
   font-weight: 600;
-  text-decoration: underline;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 .sheet-backdrop {
@@ -1137,9 +1143,9 @@ textarea:focus-visible {
 .triage-reasons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
 .triage-reasons button { font-size: 13px; padding: 6px 10px; border-radius: 999px; }
 .triage-reasons button[aria-pressed='true'] { background: var(--danger-soft); color: var(--danger); border-color: transparent; font-weight: 600; }
-.triage-undo { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border-radius: 12px; background: var(--text); color: var(--bg); font-size: 14px; min-height: 48px; }
-.triage-undo small { display: block; font-size: 12px; opacity: .8; }
-.triage-undo button { background: none; border: none; color: var(--bg); font-weight: 700; }
+.triage-undo { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--raised); color: var(--text); font-size: var(--t-subhead); min-height: 48px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.5); }
+.triage-undo small { display: block; font-size: var(--t-caption); color: var(--muted-on-raised); }
+.triage-undo button { background: none; border: none; color: var(--accent-on-raised); font-weight: 700; }
 .triage-done { display: grid; place-items: center; color: var(--text); font-size: 20px; }
 .triage-screen { position: fixed; inset: 0; z-index: 60; background: var(--bg); overflow-y: auto; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
 .triage-screen > header { display: flex; align-items: center; justify-content: space-between; max-width: 440px; margin: auto; }
@@ -1411,12 +1417,26 @@ textarea:focus-visible {
   align-items: center;
 }
 
+/* Reduced motion removes movement, not feedback (review #2): transitions keep colour and opacity changes but never
+   move or scale, and keyframe animations stop unless the element opts in with `.motion-fade` (an opacity-only
+   reduced-motion variant, as the reward layer has). */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    transition: none !important;
+    transition-property: opacity, color, background-color, border-color, box-shadow, filter !important;
+    scroll-behavior: auto !important;
+  }
+
+  :not(.motion-fade),
+  :not(.motion-fade)::before,
+  :not(.motion-fade)::after {
     animation: none !important;
+  }
+
+  button:active:not(:disabled),
+  [role='button']:active {
+    transform: none;
   }
 }
 
@@ -1787,3 +1807,17 @@ textarea:focus-visible {
 .morning-brief-todos ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .morning-brief-todo { margin: 0; }
 .sheet-header .sheet-back { margin: 0 0 0 -8px; font-weight: 400; }
+
+/* A2 signature (review section 3A): every big number in SF Pro Rounded, so levels, steps, prices and temperatures read
+   like game stats without artwork; and a faint top-lit edge on cards. Gold stays reserved for rewards (tokens.css). */
+:is(.character-level-number, .character-ring-value, .character-card-points, .scout-metric strong, .scout-row-findings strong,
+  .triage-dateblock strong, .dash-price, .health-value, .weather-day-temp, .weather-week-low, .weather-week-high,
+  .reward-xp, .reward-level-number, .reward-banner-points, .achievement-tile-points, .next-up-time) {
+  font-family: var(--font-rounded);
+  font-variant-numeric: tabular-nums;
+}
+
+:is(.tile, .next-up, .morning-line, .checkin-line, .siwh-toggle, .character-card-button, .scout-panel, .progress-card,
+  .reading-current, .tasks, .action-list, .triage-card, .dash-card) {
+  background-image: var(--card-sheen);
+}

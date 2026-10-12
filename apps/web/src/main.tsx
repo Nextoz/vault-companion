@@ -6,6 +6,7 @@ import { openPendingStore } from './queue/db.ts';
 import { PendingQueue } from './queue/queue.ts';
 import { App } from './ui/App.tsx';
 import { announceUpdateReady } from './update-ready.ts';
+import './tokens.css';
 import './styles.css';
 
 async function start() {

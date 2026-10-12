@@ -1,12 +1,5 @@
 /* GAM1-C: the Achievements page (plan screen 3) and the badge detail sheet (screen 4); the toast became the ADR-0064
-   reward layer (Rewards.css). The game palette is repeated here so the detail sheet, which can sit outside .character-sheet,
-   keeps the same gold and well colours. */
-.achievements-content,
-.achievement-detail {
-  --game-gold: #f2c86b;
-  --game-well: rgb(255 255 255 / 0.05);
-  --game-track: rgb(255 255 255 / 0.09);
-}
+   reward layer (Rewards.css). The game palette (--game-*) is global in tokens.css. */
 
 .achievements-content { display: flex; flex-direction: column; gap: 16px; }
 
