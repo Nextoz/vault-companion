@@ -1,10 +1,11 @@
 import type { ScoutStatus, ScoutsResponse } from '@vault-companion/contracts';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getScoutOutput, getScouts, type Fetched } from '../api.ts';
 import { attentionCount, displayState, exactTime, lastRun, pluralise, pluralNoun, previewableScouts, scoutsNeedAttention, type DisplayState } from '../scouts.ts';
 import { Insights } from './Insights.tsx';
 import { ScoutTime } from './ScoutTime.tsx';
 import './Scouts.css';
+import { LargeTitle } from './LargeTitle.tsx';
 
 type ScoutEntry = ScoutsResponse['scouts'][number];
 /** The calendar-sync tracker never belongs in the health list; only a failed or stale run deserves a line. */
@@ -55,7 +56,7 @@ function FindingsNote({ id }: { id: string }) {
   }, [id]);
   return 'html' in content ? <article className="note-body scout-findings" data-testid="scout-findings" dangerouslySetInnerHTML={{ __html: content.html }} /> : <p role="status">{content.message}</p>;
 }
-export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar }: {
+export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar, belowTitle }: {
   page: boolean;
   onOpen: () => void;
   refreshKey: number | null;
@@ -63,6 +64,8 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar }: {
   /** Retained for callers; Radar now lives on its own screen, reached from the small link below. */
   blocked: boolean;
   onOpenRadar?: () => void;
+  /** Review #8: what sits under the large title (the triage indicator), so nothing sits above it. */
+  belowTitle?: ReactNode;
 }) {
   const [result, setResult] = useState<Fetched<ScoutsResponse> | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -100,7 +103,8 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar }: {
   if (problemCount > 0) summary.push(`${problemCount} with problems`);
   if (runningCount > 0) summary.push(`${runningCount} running`);
   return <section aria-label="Scouts" className="scouts">
-    <h1>Scouts</h1>
+    <LargeTitle>Scouts</LargeTitle>
+    {belowTitle}
     {!data && <p role="status">{!result ? 'Loading scouts…' : result.kind === 'error' ? result.message : result.kind === 'signed-out' ? 'Sign in to view scouts.' : 'Scouts unavailable offline.'}</p>}
     {data?.scouts.length === 0 && <p>No status yet</p>}
     {data && (detail ? <div className="scout-detail">
