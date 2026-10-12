@@ -94,6 +94,20 @@
   background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--q, var(--game-gold)) 16%, transparent), transparent 72%), var(--skin-bg-deep);
   color: var(--q, var(--game-gold));
 }
+.skin-medal-check {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--game-gold);
+  box-shadow: 0 0 0 2px var(--skin-bg-deep);
+}
+.skin-medal-check svg { width: 12px; height: 12px; fill: none; stroke: var(--skin-bg-deep); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .skin-medal.is-small { width: 32px; height: 32px; }
 .skin-medal.is-small::after { content: none; } /* notches crowd a 32 px frame */
 .skin-medal.is-small .skin-medal-glyph { width: 16px; height: 16px; }

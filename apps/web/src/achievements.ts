@@ -38,9 +38,13 @@ export function groupByCategory(achievements: readonly GameAchievement[]): Achie
 }
 
 // ---- hidden mask, feats and points --------------------------------------------------------------------------
-/** A hidden, unearned achievement: its name, points and progress are all masked. */
-export function isHiddenUnearned(achievement: GameAchievement): boolean {
-  return !achievement.visible && !achievement.earned;
+/**
+ * A hidden, unearned achievement: its name, points and progress are all masked. Two shapes reach the app: a chain tier
+ * not yet visible (visible: false), and a 'hidden' achievement, which the domain engine sends as visible: true with the
+ * name '???' and no progress (engine.ts). Both stay secret until earned.
+ */
+export function isHiddenUnearned(achievement: Pick<GameAchievement, 'visible' | 'earned' | 'type'>): boolean {
+  return !achievement.earned && (!achievement.visible || achievement.type === 'hidden');
 }
 
 export function displayName(achievement: GameAchievement): string {

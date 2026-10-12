@@ -77,6 +77,14 @@ describe('hidden mask', () => {
     expect(isHiddenUnearned(achievement({ visible: true, earned: false }))).toBe(false);
   });
 
+  it('masks a hidden achievement as the engine sends it: visible, named ???, no progress', () => {
+    const engineHidden = achievement({ type: 'hidden', visible: true, earned: false, name: '???', points: 25, progress: null });
+    expect(isHiddenUnearned(engineHidden)).toBe(true);
+    expect(displayPoints(engineHidden)).toBe(0);
+    // Once earned the engine sends its real name, and nothing is masked.
+    expect(isHiddenUnearned(achievement({ type: 'hidden', visible: true, earned: true, earnedDate: '2026-01-01', name: 'Long Way Back' }))).toBe(false);
+  });
+
   it('shows ??? for a hidden unearned name, and the real name once earned', () => {
     expect(displayName(achievement({ visible: false, earned: false, name: 'Secret' }))).toBe('???');
     expect(displayName(achievement({ visible: false, earned: true, name: 'Revealed' }))).toBe('Revealed');

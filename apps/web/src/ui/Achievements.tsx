@@ -55,7 +55,7 @@ function AchievementTile({ achievement, all, onOpen }: {
     data-quality={hidden ? undefined : achievementQuality(achievement)}
     className={`achievement-tile${earned ? ' is-earned' : ''}${hidden ? ' is-hidden' : ''}`}
     aria-label={tileLabel(achievement)} onClick={(event) => onOpen(achievement, event.currentTarget)}>
-    <Medal glyph={categoryGlyph(achievement.category)} lit={earned} arc={lockedArc(achievement)} hidden={hidden} />
+    <Medal glyph={categoryGlyph(achievement.category)} lit={earned} check={earned} arc={lockedArc(achievement)} hidden={hidden} />
     {!hidden && <>
       <span className="achievement-tile-name">{displayName(achievement)}</span>
       <span className="achievement-tile-points">{displayPoints(achievement)} pts{meta.map((part) => <span key={part} className="achievement-tile-progress"> · {part}</span>)}</span>

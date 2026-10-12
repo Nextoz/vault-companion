@@ -34,9 +34,11 @@ export function Glyph({ id, className }: { id: GlyphId; className?: string }) {
  * `data-quality` on an ancestor). Locked: grey, with the progress arc (`arc`, 0..1) around the glyph when it has
  * measurable progress. Hidden: a single "?" in the frame.
  */
-export function Medal({ glyph, lit, arc = null, hidden = false, className = '' }: {
+export function Medal({ glyph, lit, check = false, arc = null, hidden = false, className = '' }: {
   glyph: GlyphId;
   lit: boolean;
+  /** A gold check on the frame's corner: "earned" never rests on colour alone. */
+  check?: boolean;
   arc?: number | null;
   hidden?: boolean;
   className?: string;
@@ -52,5 +54,6 @@ export function Medal({ glyph, lit, arc = null, hidden = false, className = '' }
         </svg>}
         <Glyph id={glyph} className="skin-medal-glyph" />
       </>}
+    {check && <span className="skin-medal-check"><svg viewBox="0 0 16 16" focusable="false"><path d="m4.5 8.3 2.4 2.4 4.6-5" /></svg></span>}
   </span>;
 }
