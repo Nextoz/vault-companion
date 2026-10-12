@@ -28,7 +28,10 @@ async function openWithReward(page: Page): Promise<MockApi> {
   api.open = [taskView(10, 'Water the plants')];
   // The task fixture is due on this day (as in app.spec.ts); the clock still runs.
   await page.clock.install({ time: new Date('2026-09-24T10:00:00Z') });
-  await page.addInitScript((key) => { window.localStorage.setItem(key, JSON.stringify(['a1', 'a2', 'a3'])); }, seenKey(ACCOUNT));
+  // Seed once: an init script runs again on every reload, and re-seeding there would wipe what the app marked seen.
+  await page.addInitScript((key) => {
+    if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, JSON.stringify(['a1', 'a2', 'a3']));
+  }, seenKey(ACCOUNT));
   await api.install(page);
   await page.goto('/');
   await goTo(page, 'Tasks');
@@ -56,11 +59,14 @@ test('a completed task plays Critical XP, the skill up, the achievement banner a
 
   // Marked seen on this device: a reload does not announce the same achievement again. Wait for the open read itself,
   // not a fixed time, so the check cannot pass just because the read was slow.
+  const seen = await page.evaluate((key) => window.localStorage.getItem(key), seenKey(ACCOUNT));
+  expect(JSON.parse(seen ?? '[]')).toContain('a4');
   const reads = api.gameReads;
   await page.reload();
   await expect.poll(() => api.gameReads).toBeGreaterThan(reads);
-  await page.waitForTimeout(300);
-  await expect(page.locator('.reward-banner')).toHaveCount(0);
+  await page.waitForTimeout(1000);
+  // A single count, not a polling expect: a 5 s retry would outlast the banner's own 5 s and pass on a false banner.
+  expect(await page.locator('.reward-banner').count()).toBe(0);
 });
 
 test('a banner tap opens the Character', async ({ page }) => {
