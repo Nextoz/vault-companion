@@ -4,6 +4,7 @@ import { copenhagenDay } from '../triage.ts';
 import { BarChart } from './BarChart.tsx';
 import { kindName, learningRowKeys, learningWeekBars, scoreTrends, type ScoreTrend } from '../learning.ts';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
+import { LargeTitle } from './LargeTitle.tsx';
 
 /** A tiny SVG polyline for one kind's scores; the series always has at least two points. */
 function TrendSpark({ values }: { values: readonly number[] }) {
@@ -25,7 +26,7 @@ export function Learning({ refreshKey, accountKey }: { refreshKey: number | null
   const keys = learningRowKeys(rows);
   const today = copenhagenDay(new Date().toISOString());
   return <section className="group learning" aria-label="Learning sessions">
-    <h2>Learning</h2>
+    <LargeTitle>Learning</LargeTitle>
     <CopyNote view={view} />
     {!res && <p className="muted">Loading learning…</p>}
     {res && !read && <p className="muted">Learning could not be loaded. Refresh when connected.</p>}

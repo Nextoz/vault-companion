@@ -1,5 +1,6 @@
 import type { GameResponse } from '@vault-companion/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { stripFractions, type StripValue } from '../nav.ts';
 import { planToasts, seenKey, summaryText } from '../achievements.ts';
 import { getGame } from '../api.ts';
 import type { QueueItem } from '../queue/queue.ts';
@@ -33,7 +34,7 @@ function addSeen(account: string, ids: readonly string[]): void {
 
 // ---- steps: one celebration on screen at a time, small first, the biggest last ------------------------------
 type Step =
-  | { readonly kind: 'pulse'; readonly xp: Extract<RewardEvent, { kind: 'xp' }> | null; readonly skills: readonly Extract<RewardEvent, { kind: 'skill' }>[] }
+  | { readonly kind: 'pulse'; readonly xp: Extract<RewardEvent, { kind: 'xp' }> | null; readonly skills: readonly Extract<RewardEvent, { kind: 'skill' }>[]; readonly strip?: StripValue }
   | { readonly kind: 'achievement'; readonly reward: AchievementReward }
   | { readonly kind: 'title'; readonly title: string }
   | { readonly kind: 'summary'; readonly text: string }
@@ -96,11 +97,13 @@ function raiseMaxLevel(account: string, rulesVersion: number, level: number): vo
  * baseline, and any read or timer from an older generation is ignored. Reads carry a sequence number, so a slow read
  * can never replace a newer baseline; post-save reads wait for the open read first.
  */
-export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
+export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter, onXpLanded }: {
   accountKey: string | null;
   signedOut: boolean;
   items: readonly QueueItem[];
   onOpenCharacter: () => void;
+  /** D2: the "+XP" float reached the XP strip; the strip animates to this value. */
+  onXpLanded?: (value: StripValue) => void;
 }) {
   const active = !signedOut && accountKey !== null;
   const [current, setCurrent] = useState<Step | null>(null);
@@ -115,6 +118,8 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
   const readSeq = useRef(0);
   const appliedSeq = useRef(0);
   const openRead = useRef<Promise<void>>(Promise.resolve());
+  const landedRef = useRef(onXpLanded);
+  landedRef.current = onXpLanded;
 
   const later = useCallback((fn: () => void, ms: number) => {
     const id = window.setTimeout(() => { timers.current.delete(id); fn(); }, ms);
@@ -200,7 +205,9 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
     const events = withoutCelebrated(diffRewards(before, next, new Set(seen)), seen, readMaxLevel(account, rules));
     addSeen(account, [...newlyEarnedIds(before, next), ...celebratedIds(events)]);
     raiseMaxLevel(account, rules, next.character.level);
-    enqueue(toSteps(events));
+    // D2: the "+XP" float flies to where the new value ends on the global XP strip.
+    const { level, levelXp, levelCost, restedXp } = next.character;
+    enqueue(toSteps(events).map((step) => (step.kind === 'pulse' && step.xp !== null ? { ...step, strip: { level, levelXp, levelCost, restedXp } } : step)));
   }, [read, later, enqueue]);
 
   // Every action that newly reaches "saved" schedules one settled re-read (several saves coalesce into one).
@@ -225,9 +232,10 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
 
   if (!active) return null;
   const open = () => { advance(); onOpenCharacter(); };
+  const landed = (value: StripValue) => landedRef.current?.(value);
   // One always-mounted live region, so a screen reader announces each celebration as it appears.
   return <div className="reward-layer" role="status">
-    {current?.kind === 'pulse' && <Pulse key={stepKey} step={current} />}
+    {current?.kind === 'pulse' && <Pulse key={stepKey} step={current} onLanded={landed} />}
     {current?.kind === 'achievement' && <AchievementBanner key={stepKey} reward={current.reward} onOpen={open} onDismiss={advance} />}
     {current?.kind === 'title' && <Banner key={stepKey} label="New title" name={current.title} major onOpen={open} onDismiss={advance} />}
     {current?.kind === 'summary' && <Banner key={stepKey} label="Achievements" name={current.text} onOpen={open} onDismiss={advance} />}
@@ -235,12 +243,51 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter }: {
   </div>;
 }
 
-function Pulse({ step }: { step: Extract<Step, { kind: 'pulse' }> }) {
+/** D2 float path: the "+XP" pops in, holds, then travels down to the strip's new fill end and fades there. */
+const FLOAT_HOLD_MS = 550;
+const FLOAT_TRAVEL_MS = 800;
+/** The share of the travel after which the float sits on the strip (the rest is its fade). */
+const FLOAT_LAND = 0.8;
+
+function Pulse({ step, onLanded }: { step: Extract<Step, { kind: 'pulse' }>; onLanded: (value: StripValue) => void }) {
   const critical = step.xp !== null && step.xp.criticals > 0;
+  const travel = useRef<HTMLSpanElement>(null);
+  const landedRef = useRef(onLanded);
+  landedRef.current = onLanded;
+  const target = step.xp !== null ? step.strip ?? null : null;
+  const [moving] = useState(() => target !== null && !prefersReducedMotion());
+  useEffect(() => {
+    const el = travel.current;
+    if (target === null || !el) return;
+    // Reduced motion: no travel, the strip takes the new value at once.
+    if (!moving) { landedRef.current(target); return; }
+    const strip = document.querySelector('.xp-strip');
+    let animation: Animation | null = null;
+    if (strip && typeof el.animate === 'function') {
+      const from = el.getBoundingClientRect();
+      const to = strip.getBoundingClientRect();
+      const x = to.left + to.width * stripFractions(target).fill - (from.left + from.width / 2);
+      const y = to.top + to.height / 2 - (from.top + from.height / 2);
+      const easing = getComputedStyle(document.documentElement).getPropertyValue('--ease-ui').trim() || 'ease-out';
+      animation = el.animate([
+        { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+        { transform: `translate(${x}px, ${y}px) scale(0.35)`, opacity: 1, offset: FLOAT_LAND },
+        { transform: `translate(${x}px, ${y}px) scale(0.2)`, opacity: 0 },
+      ], { duration: FLOAT_TRAVEL_MS, delay: FLOAT_HOLD_MS, easing, fill: 'both' });
+    }
+    const timer = window.setTimeout(() => landedRef.current(target), FLOAT_HOLD_MS + FLOAT_TRAVEL_MS * FLOAT_LAND);
+    return () => { window.clearTimeout(timer); animation?.cancel(); };
+  }, [target, moving]);
   return <div className="reward-pulse">
-    {step.xp !== null && <span className={`reward-xp motion-fade${critical ? ' is-critical' : ''}`}>{xpText(step.xp)}</span>}
+    {step.xp !== null && <span ref={travel} className={moving ? 'reward-xp-travel is-moving' : 'reward-xp-travel'}>
+      <span className={`reward-xp motion-fade${critical ? ' is-critical' : ''}`}>{xpText(step.xp)}</span>
+    </span>}
     {step.skills.map((skill) => <span key={skill.profession} className="reward-skill motion-fade">{skillText(skill)}</span>)}
   </div>;
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 function Badge({ major }: { major: boolean }) {

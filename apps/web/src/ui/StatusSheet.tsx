@@ -11,6 +11,7 @@ import { exactTime } from '../scouts.ts';
 import { readTimings, speedRows } from '../timings.ts';
 import { ActionsPanel } from './ActionsPanel.tsx';
 import { budgetFreshness, budgetRows, buildLine, dataSourceRows, scoutRows, shortRevision, stateLabel, type BudgetRow, type ScoutRow } from './status-sheet.ts';
+import { LargeTitle } from './LargeTitle.tsx';
 
 const DASHBOARD_KEYS = ['dashboard:1W', 'dashboard:1M', 'dashboard:3M'] as const;
 const stateClass = (state: string) => `scout-state-${state.toLowerCase().replaceAll(' ', '-')}`;
@@ -110,7 +111,7 @@ export function StatusSheet({
 
   return (
     <section className="status-sheet" aria-label="Vault status">
-      <h1 className="status-sheet-title">Status</h1>
+      <LargeTitle className="status-sheet-title">Status</LargeTitle>
 
       <section className="group" aria-label="Vault">
         <h2>Vault</h2>

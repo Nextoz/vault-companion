@@ -234,6 +234,27 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
   });
   await page.getByRole('dialog', { name: 'Report', exact: true }).getByRole('button', { name: 'Cancel' }).click();
 
+  // R3a (review #8, C3, D2): the bar title and the compact capture button once a screen scrolls, Capture's
+  // Training/Check-in hand-offs, and a stale vault read as a chip in the bar.
+  await shot('Log - Progress scrolled (bar title, compact capture)', async () => {
+    await goTo(page, 'Progress');
+    await page.evaluate(() => window.scrollTo(0, 420));
+    await expect(page.locator('header.top')).toHaveAttribute('data-collapsed');
+    await expect(page.locator('.fab')).toHaveAttribute('data-compact');
+    await page.waitForTimeout(400); // let the pill finish shrinking for the photo
+  });
+  await shot('Capture - Check-in', async () => {
+    await page.getByRole('button', { name: 'Capture', exact: true }).click();
+    await page.getByRole('group', { name: 'Capture type' }).getByRole('button', { name: 'Check-in', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Check-in' })).toBeVisible();
+  });
+  await page.getByRole('dialog', { name: 'Check-in' }).getByRole('button', { name: 'Close' }).click();
+  await shot('Stale vault chip', async () => {
+    await goTo(page, 'Tasks');
+    await page.clock.fastForward(11 * 60 * 1000);
+    await expect(page.getByRole('button', { name: 'Vault stale: open Status' })).toBeVisible();
+  });
+
   const index = [
     '# Tour screenshots',
     '',

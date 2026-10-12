@@ -8,6 +8,7 @@ import { App } from './ui/App.tsx';
 import { announceUpdateReady } from './update-ready.ts';
 import './tokens.css';
 import './styles.css';
+import './nav.css';
 
 async function start() {
   const root = createRoot(document.getElementById('root') as HTMLElement);

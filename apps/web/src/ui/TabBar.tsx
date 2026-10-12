@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { logTabSuffix } from '../nav.ts';
 
 /** Every internal screen. The bottom bar groups them into five buttons. */
 export type Tab =
@@ -100,17 +101,72 @@ const ITEMS: ReadonlyArray<{ key: BarKey; label: string; to: Tab }> = [
   { key: 'log', label: 'Log', to: 'training' },
 ];
 
-/** Fixed bottom tab bar: five icon+label buttons, one pressed per screen (All shares Tasks, both Log views share Log). */
-export function TabBar({ tab, onSelect, inert }: { tab: Tab; onSelect: (tab: Tab) => void; inert?: boolean }) {
+/** Holding the Log tab this long opens the Character sheet (D2). */
+export const LONG_PRESS_MS = 500;
+
+/**
+ * Fixed bottom tab bar: five icon+label buttons, one pressed per screen (All shares Tasks, both Log views share Log).
+ * D2: `strip` (the XP strip) runs along its top edge; the Log tab names the level for assistive tech ("Log, level
+ * 12") and a 500 ms hold on it opens the Character sheet.
+ */
+export function TabBar({ tab, onSelect, inert, strip, level = null, onHoldLog }: {
+  tab: Tab;
+  onSelect: (tab: Tab) => void;
+  inert?: boolean;
+  strip?: ReactNode;
+  level?: number | null;
+  onHoldLog?: (() => void) | undefined;
+}) {
   const active = barKey(tab);
+  const hold = useHold(onHoldLog);
   return (
     <nav className="tabbar" aria-label="Views" inert={inert}>
+      {strip}
       {ITEMS.map(({ key, label, to }) => (
-        <button key={key} type="button" className="tab" aria-pressed={active === key} onClick={() => onSelect(to)}>
+        <button key={key} type="button" className="tab" aria-pressed={active === key}
+          {...(key === 'log' ? hold.handlers : {})}
+          onClick={() => { if (key === 'log' && hold.consume()) return; onSelect(to); }}>
           <Icon>{ICONS[key]}</Icon>
-          <span>{label}</span>
+          {key === 'log' && level !== null
+            ? <><span aria-hidden="true">{label}</span><span className="visually-hidden">{label}{logTabSuffix(level)}</span></>
+            : <span>{label}</span>}
         </button>
       ))}
     </nav>
   );
+}
+
+/** A press held for LONG_PRESS_MS fires `onHold`; the click that ends that press is then swallowed. */
+function useHold(onHold: (() => void) | undefined) {
+  const timer = useRef<number | null>(null);
+  const fired = useRef(false);
+  const origin = useRef<{ x: number; y: number } | null>(null);
+  const cancel = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(() => cancel, []);
+  return {
+    consume: () => {
+      const was = fired.current;
+      fired.current = false;
+      return was;
+    },
+    handlers: onHold ? {
+      onPointerDown: (e: ReactPointerEvent) => {
+        fired.current = false;
+        origin.current = { x: e.clientX, y: e.clientY };
+        cancel();
+        timer.current = window.setTimeout(() => { timer.current = null; fired.current = true; onHold(); }, LONG_PRESS_MS);
+      },
+      onPointerMove: (e: ReactPointerEvent) => {
+        const o = origin.current;
+        if (o && Math.hypot(e.clientX - o.x, e.clientY - o.y) > 10) cancel();
+      },
+      onPointerUp: cancel,
+      onPointerLeave: cancel,
+      onPointerCancel: cancel,
+      onContextMenu: (e: ReactMouseEvent) => e.preventDefault(),
+    } : {},
+  };
 }

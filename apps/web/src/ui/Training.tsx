@@ -8,6 +8,7 @@ import { weekBars } from '../week-chart.ts';
 import { BarChart } from './BarChart.tsx';
 import { TrainingSheet } from './TrainingSheet.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
+import { LargeTitle } from './LargeTitle.tsx';
 
 export function Training({ refreshKey, accountKey, queue, baseRevision }: {
   refreshKey: number | null; accountKey: string | null; queue: PendingQueue; baseRevision: string | null;
@@ -19,7 +20,7 @@ export function Training({ refreshKey, accountKey, queue, baseRevision }: {
   // B12: only a Run or Gym row opens the sheet, bound to its exact read row and stable key.
   const [editing, setEditing] = useState<{ row: TrainingRow; key: string } | null>(null);
   return <section className="group training" aria-label="Training sessions">
-    <h2>Training</h2>
+    <LargeTitle>Training</LargeTitle>
     <CopyNote view={view} />
     {!res && <p className="muted">Loading training…</p>}
     {res && !read && <p className="muted">Training could not be loaded. Refresh when connected.</p>}

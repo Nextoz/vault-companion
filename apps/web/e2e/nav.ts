@@ -34,7 +34,9 @@ export async function goTo(page: Page, name: Screen): Promise<void> {
     await page.getByRole('group', { name: 'Today view' }).getByRole('button', { name: 'Boards', exact: true }).click();
     return;
   }
-  await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: BAR[name], exact: true }).click();
+  // D2: the Log tab's name carries the level for assistive tech ("Log, level 12").
+  const bar = BAR[name];
+  await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: bar === 'Log' ? /^Log(, level \d+)?$/ : bar, exact: true }).click();
   if (name === 'Today') {
     // UX8: Today keeps whichever view was last picked; specs that mean the Overview select it explicitly.
     await page.getByRole('group', { name: 'Today view' }).getByRole('button', { name: 'Overview', exact: true }).click();
