@@ -126,7 +126,7 @@ export function CalendarSheet({ target, accountKey, onClose, onSaved }: {
                 ))}
               </div>
             )}
-            <label>Title<input required maxLength={500} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
+            <label>Title<input type="text" required maxLength={500} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
             <label>Type
               <select value={type} onChange={(e) => setType(e.target.value as CalendarEventType)}>
                 {CALENDAR_EVENT_TYPES.map((option) => <option key={option} value={option}>{CALENDAR_TYPE_LABELS[option]}</option>)}

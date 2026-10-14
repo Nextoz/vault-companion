@@ -16,13 +16,19 @@ test('Today attention opens Scouts, compact rows and history lead to sanitised f
   await expect(scouts.getByTestId('scout-summary')).toHaveText('1 ok · 2 with problems');
   await expect(failed).toContainText('Failed');
   await expect(failed).toContainText('Last run Today 06:50');
-  await expect(failed).toContainText('— findings');
+  await expect(failed).toContainText('Findings unknown');
   await expect(healthy).toContainText('Healthy');
   await expect(healthy).toContainText('4 findings');
   // Board tiles carry a decorative findings sparkline (the button label states the numbers); source/AI chips stay in the detail view.
   await expect(healthy.locator('.scout-sparkline')).toHaveAttribute('aria-hidden', 'true');
   await expect(scouts.locator('.scout-list')).not.toContainText('Sources');
-  await expect(scouts.getByRole('button', { name: /unreadable.json/ })).toContainText('No status yet');
+  const unreadable = scouts.getByRole('button', { name: /Unreadable scout/ });
+  await expect(unreadable).toContainText('Status unavailable');
+  await expect(scouts.locator('.scout-list')).not.toContainText('unreadable.json');
+  await unreadable.click();
+  await scouts.getByText('Source details', { exact: true }).click();
+  await expect(scouts).toContainText('unreadable.json');
+  await scouts.getByRole('button', { name: 'Back to scouts' }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await failed.click();
   await expect(scouts.getByRole('list', { name: 'Run history, oldest to newest' }).getByRole('listitem')).toHaveCount(1);

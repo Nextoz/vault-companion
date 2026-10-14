@@ -3,7 +3,7 @@
 import type { AiBudgetResponse, AiUsageResponse } from '@vault-companion/contracts';
 import { useId, useState } from 'react';
 import type { Fetched } from '../api.ts';
-import { aiUsageSpark, aiUsageTiles, type AiUsageMetric, type AiUsageRange, type AiUsageTile } from './ai-usage.ts';
+import { aiUsageDayLabel, aiUsageSpark, aiUsageTiles, formatAiUsageValue, type AiUsageMetric, type AiUsageRange, type AiUsageTile } from './ai-usage.ts';
 import './Dashboard.css';
 
 export const AI_USAGE_EMPTY = 'No AI usage has been recorded yet.';
@@ -29,7 +29,13 @@ function Tile({ tile, range }: { tile: AiUsageTile; range: AiUsageRange }) {
   return (
     <div className="ai-usage-tile">
       <h3 className="ai-usage-provider">{tile.title}</h3>
-      {tile.left !== null && <p className={`ai-usage-left ai-usage-left-${tile.leftTone ?? 'ok'}`}>{tile.left}</p>}
+      <p className="ai-usage-value">{tile.total === null ? 'Usage unavailable'
+        : `${formatAiUsageValue(tile.metric, tile.currency, tile.total)} ${tile.metric === 'cost' ? `cost${tile.currency ? '' : ' (currency unknown)'}` : METRIC_LABEL[tile.metric]}`}</p>
+      {tile.windowStart && tile.windowEnd && <p className="ai-usage-period muted small">
+        {aiUsageDayLabel(tile.windowStart)}–{aiUsageDayLabel(tile.windowEnd)} · {range} days
+      </p>}
+      {tile.metric === 'tokens' && tile.total !== null && <p className="muted small ai-usage-note">Output + cache-write</p>}
+      {tile.left !== null && <p className={`ai-usage-left ai-usage-left-${tile.leftTone ?? 'ok'}`}>Budget: {tile.left}</p>}
       {tile.points.length > 0 && <Sparkline tile={tile} range={range} />}
       {tile.note && <p className="ai-usage-note muted small">{tile.note}</p>}
     </div>

@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { isoWithOffset } from './time.ts';
+import { displayDate, isoWithOffset } from './time.ts';
+
+describe('displayDate', () => {
+  it.each([
+    ['2026-10-13', '13 Oct 2026'],
+    ['2026-09-23', '23 Sep 2026'],
+    ['2026-01-01', '1 Jan 2026'],
+    ['2024-02-29', '29 Feb 2024'],
+    ['2026-03-29', '29 Mar 2026'],
+    ['2026-10-25', '25 Oct 2026'],
+  ])('preserves the date without a time-zone conversion: %s', (date, expected) => {
+    expect(displayDate(date)).toBe(expected);
+  });
+  it.each(['2026-02-29', '2026-04-31', '2026-13-01', '', 'invalid', '2026-10-13T23:00:00Z'])('does not invent a day for %s', (date) => {
+    expect(displayDate(date)).toBe('Date unknown');
+  });
+});
 
 describe('isoWithOffset', () => {
   const instant = new Date('2026-10-24T21:59:59.123Z');

@@ -46,6 +46,8 @@ export interface AiUsageTile {
   readonly currency: string | null;
   /** Only the days the file carried inside the window, oldest first; no invented points. */
   readonly points: readonly AiUsagePoint[];
+  /** Sum of observed days only; null means no observations, never zero usage. */
+  readonly total: number | null;
   /** First day the file carried at all, even when it is older than the window; null with no days. */
   readonly historyStart: string | null;
   readonly windowStart: string | null;
@@ -79,7 +81,7 @@ const tileFor = (id: string, provider: AiUsageProvider, budgetById: ReadonlyMap<
   const left = row ? row.value : null;
   const leftTone = row ? row.tone : null;
   if (days.length === 0) {
-    return { id, title, metric, currency: provider.currency ?? null, points: [], historyStart: null,
+    return { id, title, metric, currency: provider.currency ?? null, points: [], total: null, historyStart: null,
       windowStart: null, windowEnd: null, left, leftTone, note: `${title}: no history yet` };
   }
   const windowEnd = days[days.length - 1]!.date;
@@ -88,8 +90,12 @@ const tileFor = (id: string, provider: AiUsageProvider, budgetById: ReadonlyMap<
     .filter((day) => day.date >= windowStart)
     .map((day) => ({ date: day.date, value: aiUsageDayValue(metric, day) }));
   const historyStart = days[0]!.date;
-  const note = historyStart > windowStart ? `${title}: history starts ${aiUsageDayLabel(historyStart)}` : null;
-  return { id, title, metric, currency: provider.currency ?? null, points, historyStart, windowStart, windowEnd, left, leftTone, note };
+  const observedDays = new Set(points.map((point) => point.date)).size;
+  const note = observedDays < range
+    ? `${observedDays} of ${range} days recorded; missing days excluded${historyStart > windowStart ? `. History starts ${aiUsageDayLabel(historyStart)}` : ''}`
+    : null;
+  const total = points.reduce((sum, point) => sum + point.value, 0);
+  return { id, title, metric, currency: provider.currency ?? null, points, total, historyStart, windowStart, windowEnd, left, leftTone, note };
 };
 
 export interface AiUsageView { readonly tiles: readonly AiUsageTile[]; readonly freshness: AiUsageFreshness | null; }

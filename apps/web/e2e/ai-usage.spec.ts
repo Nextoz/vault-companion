@@ -15,8 +15,8 @@ test('AB3b: the AI usage panel shows one tile per provider with its budget left 
   const panel = page.getByRole('region', { name: 'AI usage', exact: true });
   await expect(panel).toBeVisible();
   await expect(panel.locator('.ai-usage-tile')).toHaveCount(5);
-  await expect(panel.locator('.ai-usage-tile', { hasText: 'Claude Code' }).locator('.ai-usage-left')).toHaveText('58 % used');
-  await expect(panel.locator('.ai-usage-tile', { hasText: 'Scaleway' }).locator('.ai-usage-left')).toHaveText('$6.14 left');
+  await expect(panel.locator('.ai-usage-tile', { hasText: 'Claude Code' }).locator('.ai-usage-left')).toHaveText('Budget: 58 % used');
+  await expect(panel.locator('.ai-usage-tile', { hasText: 'Scaleway' }).locator('.ai-usage-left')).toHaveText('Budget: $6.14 left');
   await expect(panel.locator('.ai-usage-tile', { hasText: 'Jev' }).locator('.ai-usage-left')).toHaveCount(0);
   await expect(panel.locator('.ai-usage-updated')).toContainText('Updated 13:45');
   await expect(panel.locator('.ai-usage-spark').first()).toBeVisible();

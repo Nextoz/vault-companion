@@ -1,8 +1,10 @@
-# Checkpoint — 2026-10-04 (SC2)
+# Checkpoint — 2026-10-14 (UI review follow-through)
 
 Overwrite this file at milestones only. ≤ 40 lines. Policy lives in `docs/orchestration.md`, not here.
 
 ## State
+
+- **UI review follow-through (2026-10-14):** Next up task/event content uses the 17 px headline token, weight 600, normal wrapping; page titles retain their hierarchy. Needs you rows stack their title/reason, Calendar fields share app typography and 44 px targets, AI usage shows totals/units/date windows with explicit missing-history coverage, Notes uses readable date-only labels, and Scouts distinguishes unknown from zero with unreadable source details available on demand. New browser checks cover long/short/empty Next up at 320/390/430 px and enlarged text; the screenshot tour now uses realistic titles and opens the panes it names. Final checks and independent PR review are in progress; no production or physical-phone verification claimed.
 
 - **GAM1-D reward feedback** (ADR-0064, owner daytime session 2026-10-11): `RewardLayer` replaces the GAM1-C toast; re-reads `/api/game` after each saved action and diffs (`apps/web/src/rewards.ts`): +XP float, Critical! (deterministic, `isCritical`, rulesVersion 2), WoW skill-up line, gold achievement banner with description and "earned by", full-screen level up, synthesised sounds (`sound.ts`, switch on the Character sheet). Descriptions via domain `describeAchievement`; wire field `feedback` is top-level and optional (old clients strip it). Open: owner phone check, sound volume on iPhone.
 - **GAM1-A1** (ADR-0060, domain only): pure `computeCharacter` + one config (`packages/domain/src/game/`), 62-entry catalogue, simulation (level 15 at week 12). Skipped review findings: rest accrues from first valid record by design. **GAM1-A2 done**: `GET /api/game` (adapters in `apps/worker/src/game.ts`, failed sources named in `unavailable`) + step milestones (achievements only, no XP; `step-milestones.ts`). `clean-slate` stays unearned until completions carry overdue data. **GAM1-B done** (Log -> Character card, Character screen with 4 profession rings opening their records, How XP works from the live `rules` field of `/api/game`; pure `apps/web/src/character.ts`). Next: GAM1-C (Achievements, toast).
