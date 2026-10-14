@@ -92,9 +92,13 @@ test('Needs you separates title, explanation and dismiss action', async ({ page 
   await expect(sheet.locator('.needs-you-list')).toHaveCSS('list-style-type', 'none');
   const row = sheet.getByRole('button', { name: /City events/ });
   await expect(row).toContainText('runner could not start');
-  const title = await row.locator('.needs-you-title').boundingBox();
-  const reason = await row.locator('.muted').boundingBox();
-  expect(reason!.y).toBeGreaterThanOrEqual(title!.y + title!.height);
+  // Read both boxes in one frame: the sheet's entrance animation moves between separate protocol calls.
+  const layout = await row.evaluate((element) => {
+    const title = element.querySelector('.needs-you-title')!.getBoundingClientRect();
+    const reason = element.querySelector('.muted')!.getBoundingClientRect();
+    return { titleBottom: title.bottom, reasonTop: reason.top };
+  });
+  expect(layout.reasonTop).toBeGreaterThanOrEqual(layout.titleBottom);
   await tapTarget(sheet.getByRole('button', { name: 'Got it' }));
   await readableWithin(row);
   await page.screenshot({ path: test.info().outputPath('needs-you.png'), animations: 'disabled' });
