@@ -76,7 +76,7 @@ describe('compact scout health list', () => {
     expect(list.querySelectorAll('.scout-row')).toHaveLength(4);
     expect(list.querySelectorAll('.scout-dot')).toHaveLength(4);
     expect(row('City events').textContent).toContain('Failed');
-    expect(row('City events').textContent).toContain('— findings');
+    expect(row('City events').textContent).toContain('Findings unknown');
     expect(row('City events').textContent).toContain('Last run Today 06:50');
     expect(row('Learning opportunities').textContent).toContain('4 findings');
     expect(row('Deep research').textContent).toContain('Ran with problems');
@@ -101,16 +101,30 @@ describe('compact scout health list', () => {
     root = await render([failed, zero]);
     expect(row('City events').getAttribute('aria-label')).toContain('findings unknown');
     expect(row('Quiet scout').getAttribute('aria-label')).toContain('0 findings');
-    // The visible list stays compact: only the known zero shows a number, unknown stays a dash.
-    expect(row('City events').querySelector('.scout-row-findings')!.textContent).toBe('— findings');
+    // The visible list distinguishes missing evidence from an observed zero.
+    expect(row('City events').querySelector('.scout-row-findings')!.textContent).toBe('Findings unknown');
     expect(row('Quiet scout').querySelector('.scout-row-findings')!.textContent).toBe('0 findings');
   });
 
-  it('keeps a malformed record as an honest disabled fallback', async () => {
+  it('labels a malformed record honestly and preserves its source in an accessible detail', async () => {
     root = await render([healthy, unreadable]);
-    const broken = row('unreadable.json');
-    expect(broken.textContent).toContain('No status yet');
-    expect(broken.disabled).toBe(true);
+    const broken = row('Unreadable scout');
+    expect(broken.textContent).toContain('Status unavailable');
+    expect(broken.textContent).toContain('Last run unknown');
+    expect(broken.textContent).toContain('Findings unknown');
+    expect(broken.getAttribute('aria-label')).toContain('findings unknown, last run unknown');
+    expect(broken.textContent).not.toContain('unreadable.json');
+    expect(broken.disabled).toBe(false);
+    await click(broken);
+    const detail = document.querySelector('.scout-detail')!;
+    expect(detail.querySelector('h2')!.textContent).toBe('Unreadable scout');
+    expect(detail.querySelector('[role="status"]')!.textContent).toContain('last run and findings are unknown');
+    expect(detail.querySelector('details summary')!.textContent).toBe('Source details');
+    expect(detail.querySelector('details .scout-source-file')!.textContent).toBe('unreadable.json');
+    expect(document.querySelector('.scout-list')).toBeNull();
+    await click(detail.querySelector('.scout-back')!);
+    expect(document.querySelector('.scout-detail')).toBeNull();
+    expect(row('Unreadable scout').disabled).toBe(false);
   });
 
   it('opens a detail with the sparkline, source/AI chips, findings loading, and a working Back', async () => {

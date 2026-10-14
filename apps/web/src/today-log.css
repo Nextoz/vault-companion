@@ -6,6 +6,7 @@
 /* ---- Today: the title row and the Overview/Boards switch ---------------------------------------------------- */
 .today-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
@@ -49,6 +50,13 @@
 }
 
 .next-up-title { margin-bottom: var(--s-1); }
+
+.needs-you-list { list-style: none; margin: 0; padding: 0; }
+.needs-you-item { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: var(--s-2) 0; }
+.needs-you-item + .needs-you-item { border-top: 1px solid var(--line); }
+.needs-you-row { display: flex; flex-direction: column; align-items: stretch; gap: var(--s-1); width: 100%; min-width: 0; min-height: var(--tap); padding: var(--s-2); text-align: left; overflow-wrap: anywhere; }
+.needs-you-title { font-weight: 600; }
+.needs-you-dismiss { min-height: var(--tap); margin-left: auto; }
 
 .next-up-empty {
   margin: 0 0 var(--s-1);

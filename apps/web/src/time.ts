@@ -2,6 +2,16 @@
 
 const pad = (n: number, width = 2) => String(Math.trunc(Math.abs(n))).padStart(width, '0');
 
+/** A date-only value has no time zone: validate it and format in UTC so its day never shifts. */
+export function displayDate(date: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Date unknown';
+  const at = Date.parse(`${date}T00:00:00Z`);
+  if (!Number.isFinite(at) || new Date(at).toISOString().slice(0, 10) !== date) return 'Date unknown';
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' }).formatToParts(at);
+  const part = (type: string) => parts.find((entry) => entry.type === type)?.value ?? '';
+  return `${part('day')} ${part('month')} ${part('year')}`;
+}
+
 /** The calendar date (YYYY-MM-DD) of an instant in an IANA time zone, as the server dates `✅` (A16/A38). */
 export function dateIn(iso: string, timeZone: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(iso));

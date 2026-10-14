@@ -1166,8 +1166,9 @@ body:has(.reward-banner) .toast {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  flex-shrink: 0;
   padding: 0;
   border: none;
   background: transparent;
@@ -1175,7 +1176,8 @@ body:has(.reward-banner) .toast {
 }
 .calendar-glyph:active { color: var(--text); }
 .calendar-link {
-  min-height: 32px;
+  min-width: var(--tap);
+  min-height: var(--tap);
   padding: 0 2px;
   border: none;
   background: transparent;
@@ -1185,6 +1187,7 @@ body:has(.reward-banner) .toast {
 .calendar-sheet label { display: block; margin: 8px 0; }
 .calendar-sheet input[type='date'],
 .calendar-sheet input[type='time'],
+.calendar-sheet input[type='text'],
 .calendar-sheet select,
 .calendar-sheet textarea {
   display: block;
@@ -1245,9 +1248,9 @@ body:has(.reward-banner) .toast {
 
 .next-up-title {
   margin: 0;
-  font-size: var(--t-title1);
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: var(--t-headline);
+  font-weight: 600;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 

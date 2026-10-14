@@ -55,5 +55,6 @@
 .scout-triage-more { margin-left: auto; font-size: var(--t-subhead); font-weight: 500; opacity: .85; }
 
 .scout-detail .scout-back { min-height: 44px; }
+.scout-source-file { overflow-wrap: anywhere; }
 .scout-detail .scout-sparkline { margin-top: 4px; }
 .scout-chips { margin-bottom: 12px; }

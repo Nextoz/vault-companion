@@ -59,7 +59,7 @@ describe('aiUsageTiles slicing and honesty', () => {
     const short = tile('claude', { claude: { label: 'Claude', days: [day('2026-09-08'), day('2026-09-10')] } });
     expect(short.windowStart).toBe('2026-09-04');
     expect(short.points.map((point) => point.date)).toEqual(['2026-09-08', '2026-09-10']);
-    expect(short.note).toBe('Claude: history starts 8 Sep');
+    expect(short.note).toBe('2 of 7 days recorded; missing days excluded. History starts 8 Sep');
     const spark = aiUsageSpark(short, 160, 36, 3);
     expect(spark.segments).toHaveLength(0);
     expect(spark.dots).toHaveLength(2);
@@ -83,6 +83,26 @@ describe('aiUsageTiles slicing and honesty', () => {
 
   it('has no numbers at all when the response is missing', () => {
     expect(aiUsageTiles(null, budget, now, TZ, 7)).toEqual({ tiles: [], freshness: null });
+  });
+
+  it('sums only the selected observations with token semantics and marks interior gaps', () => {
+    const short = tile('claude', { claude: { days: [
+      day('2026-09-20', { outputTokens: 500 }),
+      day('2026-09-28', { outputTokens: 100, cacheWriteTokens: 5, cacheReadTokens: 9_000 }),
+      day('2026-10-04', { outputTokens: 200, cacheWriteTokens: 10 }),
+    ] } });
+    expect(short.total).toBe(315);
+    expect(short.note).toBe('2 of 7 days recorded; missing days excluded');
+  });
+
+  it('distinguishes absent observations from an observed zero and preserves cost currency', () => {
+    expect(tile('jev', { jev: { days: [] } }).total).toBeNull();
+    expect(tile('jev', { jev: { days: [day('2026-10-04', { calls: 0 })] } }).total).toBe(0);
+    const cost = tile('scaleway', { scaleway: { currency: 'EUR', days: [
+      day('2026-10-03', { cost: 1.5 }), day('2026-10-04', { cost: 2.25 }),
+    ] } });
+    expect(cost.total).toBe(3.75);
+    expect(cost.currency).toBe('EUR');
   });
 });
 
