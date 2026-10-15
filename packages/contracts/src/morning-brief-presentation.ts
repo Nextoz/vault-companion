@@ -55,6 +55,15 @@ export function briefNews(file: Pick<MorningBriefResponse, 'brief'>): BriefDiges
   return httpsItems(file.brief.news);
 }
 
+/** Shared Hacker News state for email and phone; absence means a pre-feature digest. */
+export function briefHackerNews(file: Pick<MorningBriefResponse, 'brief' | 'unavailable' | 'unavailableReasons'>): { items: BriefDigestItem[]; message: string | null } | null {
+  const reason = briefDigestUnavailable(file);
+  if (file.brief.hackerNewsUnavailable) return { items: [], message: 'Source unavailable.' };
+  if (file.brief.hackerNews === undefined) return reason === null ? null : { items: [], message: `Hacker News unavailable: ${reason}` };
+  const items = httpsItems(file.brief.hackerNews);
+  return { items, message: items.length === 0 ? 'Nothing new here today.' : null };
+}
+
 /** The Needs-you bullets, in note order ([] when the file predates the digest fields). */
 export function briefNeedsYou(file: Pick<MorningBriefResponse, 'brief'>): BriefDigestItem[] {
   return httpsItems(file.brief.needsYou);

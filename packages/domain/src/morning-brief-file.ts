@@ -63,6 +63,8 @@ const Brief = z.object({
   copenhagen: z.array(BriefDigestItem).max(3).optional(),
   news: z.array(BriefDigestItem).max(3).optional(),
   research: z.array(BriefDigestItem).max(3).optional(),
+  hackerNews: z.array(BriefDigestItem).max(3).optional(),
+  hackerNewsUnavailable: z.boolean().optional(),
   oneThing: BriefOneThing.optional(),
   encouragement: z.string().optional(),
 });
@@ -143,6 +145,8 @@ export function serializeBriefFile(file: BriefFile): Uint8Array {
     ...(file.brief.needsYou !== undefined ? { needsYou: file.brief.needsYou.map((item) => ({ title: item.title, line: item.line, url: item.url })) } : {}),
     ...(file.brief.copenhagen !== undefined ? { copenhagen: file.brief.copenhagen.map((item) => ({ title: item.title, line: item.line, url: item.url })) } : {}),
     ...(file.brief.news !== undefined ? { news: file.brief.news.map((item) => ({ title: item.title, line: item.line, url: item.url })) } : {}),
+    ...(file.brief.hackerNews !== undefined ? { hackerNews: file.brief.hackerNews.map((item) => ({ title: item.title, line: item.line, url: item.url })) } : {}),
+    ...(file.brief.hackerNewsUnavailable !== undefined ? { hackerNewsUnavailable: file.brief.hackerNewsUnavailable } : {}),
     ...(file.brief.research !== undefined ? { research: file.brief.research.map((item) => ({ title: item.title, line: item.line, url: item.url })) } : {}),
     ...(file.brief.oneThing !== undefined ? { oneThing: { text: file.brief.oneThing.text, ...(file.brief.oneThing.quote !== undefined ? { quote: file.brief.oneThing.quote } : {}) } } : {}),
     ...(file.brief.encouragement !== undefined ? { encouragement: file.brief.encouragement } : {}),

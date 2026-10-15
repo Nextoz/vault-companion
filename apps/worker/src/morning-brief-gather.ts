@@ -40,7 +40,7 @@ export interface MorningBriefCandidates {
   readonly trainingRecent: TrainingRecent;
   readonly weatherWindows: WeatherRunWindow[];
   /** MB3b/MB3b-2: the tracked digest note's sections; empty when it was unavailable or carried none. Digest text stays local. */
-  readonly digest: { readonly news: DigestItem[]; readonly research: DigestItem[]; readonly needsYou: DigestItem[]; readonly copenhagen: DigestItem[]; readonly oneThing: DigestOneThing | null };
+  readonly digest: { readonly hackerNews?: DigestItem[]; readonly hackerNewsUnavailable?: boolean; readonly news: DigestItem[]; readonly research: DigestItem[]; readonly needsYou: DigestItem[]; readonly copenhagen: DigestItem[]; readonly oneThing: DigestOneThing | null };
   /** Names of the readers that failed (ApiError or throw); the other slots still hold their values. */
   readonly unavailable: string[];
   /** Per-reader reason for `unavailable`: the `ApiError.code` enum string, or `threw` for an exception. Names match `unavailable`. */
@@ -246,7 +246,7 @@ export async function gatherCandidates(deps: MorningBriefGatherDeps): Promise<Mo
   else if (digest.value === null) { unavailable.push('digest'); unavailableCodes.digest = 'not-found'; }
   else {
     const parsed = parseDigestNote(digest.value);
-    if (parsed.recognized) digestSections = { news: parsed.news, research: parsed.research, needsYou: parsed.needsYou, copenhagen: parsed.copenhagen, oneThing: parsed.oneThing };
+    if (parsed.recognized) digestSections = { ...(parsed.hackerNews !== undefined ? { hackerNews: parsed.hackerNews, hackerNewsUnavailable: parsed.hackerNewsUnavailable ?? false } : {}), news: parsed.news, research: parsed.research, needsYou: parsed.needsYou, copenhagen: parsed.copenhagen, oneThing: parsed.oneThing };
     else { unavailable.push('digest'); unavailableCodes.digest = 'invalid'; }
   }
 

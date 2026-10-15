@@ -21,6 +21,8 @@ export interface DigestOneThing {
 export interface DigestSections {
   readonly news: DigestItem[];
   readonly research: DigestItem[];
+  readonly hackerNews?: DigestItem[];
+  readonly hackerNewsUnavailable?: boolean;
   readonly needsYou: DigestItem[];
   readonly copenhagen: DigestItem[];
   readonly oneThing: DigestOneThing | null;
@@ -53,12 +55,13 @@ const empty = (): DigestSections => ({ news: [], research: [], needsYou: [], cop
 const BULLET = /^-\s+\*\*(?<title>.+?)\*\*\s+-\s+(?<line>.*?)\s*\(\[[^\]]*\]\((?<url>https:\/\/[^)\s]+)\)\)\s*$/;
 const HEADING = /^##\s+(?<name>.+?)\s*$/;
 
-type ListSection = 'news' | 'research' | 'needsYou' | 'copenhagen';
+type ListSection = 'hackerNews' | 'news' | 'research' | 'needsYou' | 'copenhagen';
 type Section = ListSection | 'oneThing' | null;
 
 /** Per-section survivor cap; needs-you keeps five, the rest keep three (owner MB3b-2). */
 const LIST_CAPS: Record<ListSection, number> = {
   news: DIGEST_ITEM_MAX,
+  hackerNews: DIGEST_ITEM_MAX,
   research: DIGEST_ITEM_MAX,
   needsYou: DIGEST_NEEDS_YOU_MAX,
   copenhagen: DIGEST_COPENHAGEN_MAX,
@@ -66,6 +69,7 @@ const LIST_CAPS: Record<ListSection, number> = {
 
 function sectionOf(name: string): Section {
   const key = name.trim().toLowerCase();
+  if (key === 'hacker news') return 'hackerNews';
   if (key === 'news') return 'news';
   if (key === 'ai and research') return 'research';
   if (key === 'needs you') return 'needsYou';
@@ -82,19 +86,23 @@ function cap(value: string, max: number): string {
 export function parseDigestNote(markdown: string): DigestSections {
   try {
     if (typeof markdown !== 'string' || markdown.length === 0) return empty();
-    const lists: Record<ListSection, DigestItem[]> = { news: [], research: [], needsYou: [], copenhagen: [] };
+    const lists: Record<ListSection, DigestItem[]> = { hackerNews: [], news: [], research: [], needsYou: [], copenhagen: [] };
     const oneLines: string[] = [];
     const quoteLines: string[] = [];
     let section: Section = null;
     let recognized = false;
+    let hasHackerNews = false;
+    let hackerNewsUnavailable = false;
 
     for (const raw of markdown.split(/\r?\n/)) {
       const heading = HEADING.exec(raw);
       if (heading) {
         section = sectionOf(heading.groups!.name!);
         if (section !== null) recognized = true;
+        if (section === 'hackerNews') hasHackerNews = true;
         continue;
       }
+      if (section === 'hackerNews' && raw.trim() === 'Source unavailable.') hackerNewsUnavailable = true;
       if (section !== null && section !== 'oneThing') {
         const target = lists[section];
         if (target.length >= LIST_CAPS[section]) continue;
@@ -104,7 +112,15 @@ export function parseDigestNote(markdown: string): DigestSections {
         const line = cap(match.groups!.line!.trim(), DIGEST_LINE_MAX);
         const url = match.groups!.url!;
         if (title.length === 0 || url.length > DIGEST_URL_MAX) continue;
-        target.push({ title, line, url });
+        if (section === 'hackerNews') {
+          try {
+            const link = new URL(url);
+            if (link.protocol !== 'https:' || link.hostname !== 'news.ycombinator.com' || link.pathname !== '/item' || !/^\d+$/.test(link.searchParams.get('id') ?? '') || link.username || link.password || link.port) continue;
+          } catch { continue; }
+          // The producer escapes Markdown; the phone renders plain text.
+          const plain = (value: string) => value.replace(/\\([\\[\]*`_])/g, '$1');
+          target.push({ title: plain(title), line: plain(line), url });
+        } else target.push({ title, line, url });
       } else if (section === 'oneThing') {
         const text = raw.trim();
         if (text.startsWith('>')) quoteLines.push(text.replace(/^>\s?/, ''));
@@ -116,7 +132,7 @@ export function parseDigestNote(markdown: string): DigestSections {
     const quote = cap(quoteLines.join(' ').trim(), DIGEST_TEXT_MAX);
     const oneThing = text.length === 0 && quote.length === 0 ? null
       : { text, ...(quote.length > 0 ? { quote } : {}) };
-    return { news: lists.news, research: lists.research, needsYou: lists.needsYou, copenhagen: lists.copenhagen, oneThing, recognized };
+    return { ...(hasHackerNews ? { hackerNews: hackerNewsUnavailable ? [] : lists.hackerNews, hackerNewsUnavailable } : {}), news: lists.news, research: lists.research, needsYou: lists.needsYou, copenhagen: lists.copenhagen, oneThing, recognized };
   } catch {
     return empty();
   }

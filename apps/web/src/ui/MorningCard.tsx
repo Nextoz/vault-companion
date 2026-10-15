@@ -281,6 +281,7 @@ export function MorningBriefSheet({ state, onOpenTasks, onClose }: {
             <TappableRows heading="Needs you" items={state.digest.needsYou} />
             <TappableRows heading="Copenhagen today" items={state.digest.copenhagen} />
             <DigestSection heading="News" items={state.digest.news} unavailable={state.digest.unavailable === null ? null : `News unavailable: ${state.digest.unavailable}`} />
+            {state.digest.hackerNews && <DigestSection heading="Hacker News" items={state.digest.hackerNews.items} unavailable={state.digest.hackerNews.message} />}
             <DigestSection heading="AI and research" items={state.digest.research} unavailable={state.digest.unavailable === null ? null : `AI and research unavailable: ${state.digest.unavailable}`} />
             {state.digest.oneThing && <div className="morning-line morning-brief-line" style={{ overflowWrap: 'anywhere', minWidth: 0 }}>
               {state.digest.oneThing.text}
