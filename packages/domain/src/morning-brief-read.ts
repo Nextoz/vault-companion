@@ -2,6 +2,7 @@
 // from HEAD, the file is re-validated on every read, and no brief text ever leaves this module in an error or log.
 import { ScoutStatus, type ApiError, type MorningBriefReadResponse } from '@vault-companion/contracts';
 import { parseBriefFile } from './morning-brief-file.ts';
+import { morningDigestPath, parseDigestNote } from './morning-brief-digest.ts';
 import { MORNING_BRIEF_PATH, MORNING_BRIEF_STATUS_PATH } from './paths.ts';
 import { FileTooLarge, StoreUnavailable, StoreUnknownOutcome, type VaultPath, type VaultStore } from './store.ts';
 
@@ -29,7 +30,8 @@ export function createMorningBriefReadService(deps: MorningBriefReadDeps) {
       try {
         const { commitSha: revision } = await deps.store.head();
         // Listed like linked notes: only a regular file can stand in, and its blob proves what was read.
-        const listed = (await deps.store.listFiles(DIR, revision)).find((f) => f.path === MORNING_BRIEF_PATH);
+        const files = await deps.store.listFiles(DIR, revision);
+        const listed = files.find((f) => f.path === MORNING_BRIEF_PATH);
         if (!listed) {
           const status = await deps.store.readFile(STATUS_PATH, revision);
           return { kind: 'missing', revision, statusError: status ? statusError(status.bytes) : null };
@@ -38,6 +40,21 @@ export function createMorningBriefReadService(deps: MorningBriefReadDeps) {
         if (!file || file.blobSha !== listed.blobSha) return { code: 'invalid', message: 'the morning brief could not be read safely', retryable: false };
         const parsed = parseBriefFile(file.bytes);
         if (!parsed) return { code: 'invalid', message: 'the morning brief is not valid JSON', retryable: false };
+        // The desktop digest can arrive after the once-daily brief. Refresh only
+        // HN from the exact same date at the same pinned revision; no writes or model call.
+        let brief = parsed.brief;
+        const digestPath = morningDigestPath(parsed.date);
+        const digestEntry = files.find((f) => f.path === digestPath);
+        if (digestPath && digestEntry) {
+          try {
+            const note = await deps.store.readFile(digestPath, revision);
+            if (!note || note.blobSha !== digestEntry.blobSha) throw new Error('digest-unavailable');
+            const digest = parseDigestNote(new TextDecoder().decode(note.bytes));
+            if (digest.hackerNews !== undefined) brief = { ...brief, hackerNews: digest.hackerNews, hackerNewsUnavailable: digest.hackerNewsUnavailable ?? false };
+          } catch {
+            brief = { ...brief, hackerNews: [], hackerNewsUnavailable: true };
+          }
+        }
         return {
           revision,
           date: parsed.date,
@@ -45,7 +62,7 @@ export function createMorningBriefReadService(deps: MorningBriefReadDeps) {
           source: parsed.source,
           unavailable: parsed.unavailable,
           unavailableReasons: parsed.unavailableReasons,
-          brief: parsed.brief,
+          brief,
         };
       } catch (e) {
         if (e instanceof StoreUnavailable || e instanceof StoreUnknownOutcome || e instanceof FileTooLarge) {

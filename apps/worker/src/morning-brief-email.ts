@@ -3,7 +3,7 @@
 // interpolated string; a fallback brief renders exactly what it contains and invents nothing.
 
 import type { BriefFile } from '@vault-companion/domain';
-import { briefCopenhagen, briefDigestUnavailable, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTimeline, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
+import { briefHackerNews, briefCopenhagen, briefDigestUnavailable, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTimeline, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
 
 /** One rendered message: a plain-text and an HTML body for the same subject. */
 export interface BriefEmail {
@@ -87,6 +87,7 @@ export function renderBriefEmail(file: BriefFile, now: Date = new Date()): Brief
   const needsYou = briefNeedsYou(file);
   const copenhagen = briefCopenhagen(file);
   const news = briefNews(file);
+  const hackerNews = briefHackerNews(file);
   const research = briefResearch(file);
   const oneThing = briefOneThing(file);
   const digestUnavailable = briefDigestUnavailable(file);
@@ -114,6 +115,11 @@ export function renderBriefEmail(file: BriefFile, now: Date = new Date()): Brief
       text.push(`- ${todo.text}${briefTodoAge(todo)}${due}`);
       if (todo.firstStep !== undefined) text.push(`  First step: ${todo.firstStep}`);
     }
+  }
+  if (hackerNews !== null) {
+    text.push('', 'Hacker News');
+    if (hackerNews.message !== null) text.push(hackerNews.message);
+    for (const item of hackerNews.items) text.push(`- ${item.title} - ${item.line} (${item.url})`);
   }
   if (digestUnavailable !== null) {
     text.push('', `News unavailable: ${digestUnavailable}`, `AI and research unavailable: ${digestUnavailable}`);
@@ -169,6 +175,15 @@ export function renderBriefEmail(file: BriefFile, now: Date = new Date()): Brief
       html.push(`<li>${escapeHtml(todo.text)}${briefTodoAge(todo)}${due}${firstStep}</li>`);
     }
     html.push('</ul>');
+  }
+  if (hackerNews !== null) {
+    html.push('<h2>Hacker News</h2>');
+    if (hackerNews.message !== null) html.push(`<p>${escapeHtml(hackerNews.message)}</p>`);
+    if (hackerNews.items.length > 0) {
+      html.push('<ul>');
+      for (const item of hackerNews.items) html.push(`<li>${escapeHtml(item.title)} - ${escapeHtml(item.line)} <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Link</a></li>`);
+      html.push('</ul>');
+    }
   }
   if (digestUnavailable !== null) {
     html.push(`<p>${escapeHtml(`News unavailable: ${digestUnavailable}`)}</p>`, `<p>${escapeHtml(`AI and research unavailable: ${digestUnavailable}`)}</p>`);

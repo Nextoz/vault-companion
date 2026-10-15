@@ -343,6 +343,16 @@ describe('gatherCandidates', () => {
     expect(result.unavailableCodes).toEqual({ calendar: 'google-scope-mismatch', mail: 'upstream-unavailable' });
   });
 
+  it('carries the Hacker News section and its failure flag from the same digest read', async () => {
+    const result = await gatherCandidates(deps({ readDigest: async () => '## Hacker News\n- **Synthetic HN** - 100 points; 20 comments on Hacker News ([link](https://news.ycombinator.com/item?id=123))' }));
+    expect(result.digest.hackerNews).toEqual([{ title: 'Synthetic HN', line: '100 points; 20 comments on Hacker News', url: 'https://news.ycombinator.com/item?id=123' }]);
+    expect(result.digest.hackerNewsUnavailable).toBe(false);
+    const failed = await gatherCandidates(deps({ readDigest: async () => '## Hacker News\nSource unavailable.' }));
+    expect(failed.digest.hackerNews).toEqual([]);
+    expect(failed.digest.hackerNewsUnavailable).toBe(true);
+    expect(failed.unavailable).toEqual([]);
+  });
+
   it('a missing digest note is unavailable (not empty) with a fixed not-found reason', async () => {
     const result = await gatherCandidates(deps({ readDigest: async () => null }));
     expect(result.digest).toEqual({ news: [], research: [], needsYou: [], copenhagen: [], oneThing: null });
