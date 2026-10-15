@@ -88,12 +88,17 @@ describe('readMorningBrief (MB2)', () => {
     const store = await InMemoryStore.create({ [MORNING_BRIEF_PATH]: serializeBriefFile(briefFile('Still usable.')), [path]: '## Hacker News' });
     const { commitSha } = await store.head();
     const originalRead = store.readFile.bind(store);
+    const reads: Array<{ path: string; revision: string | undefined }> = [];
     store.readFile = async (requested, revision) => {
-      expect(revision).toBe(commitSha);
+      reads.push({ path: requested, revision });
       const file = await originalRead(requested, revision);
       return requested === path && file ? { ...file, blobSha: 'f'.repeat(40) } : file;
     };
     const result = MorningBriefResponse.parse(await read(store));
+    expect(reads).toEqual([
+      { path: MORNING_BRIEF_PATH, revision: commitSha },
+      { path, revision: commitSha },
+    ]);
     expect(briefHackerNews(result)).toEqual({ items: [], message: 'Source unavailable.' });
   });
 
