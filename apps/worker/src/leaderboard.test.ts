@@ -1,6 +1,7 @@
 // LB1 tests. Fixtures follow the provider's documented response shape (their published examples: the o3-mini list
 // row and the gpt-oss-20b detail row); extra rows exist only to make ties, nulls and movement testable.
 import { describe, expect, it, vi } from 'vitest';
+import { createLeaderboardStorage, parseStoredLeaderboard, LEADERBOARD_STORAGE_KEY, type StoredLeaderboard } from './leaderboard-storage.ts';
 import {
   applyMovement,
   buildLeaderboard,
@@ -18,7 +19,7 @@ const aaRow = (slug: string, name: string, provider: string, evaluations: Record
   evaluations,
   ...extra,
 });
-const aaBody = (data: unknown[], version = 4.3): unknown => ({ tier: 'free', intelligence_index_version: version, data });
+const aaBody = (data: unknown[], version = 4.3, paging: Record<string, unknown> = {}): unknown => ({ tier: 'free', intelligence_index_version: version, data, pagination: { page: 1, page_size: 200, total_pages: 1, has_more: false, ...paging } });
 const providerJson = (body: unknown): typeof fetch => vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch;
 
 // Values in the two rows below come from the provider's published documentation examples.
@@ -150,80 +151,116 @@ describe('applyMovement', () => {
   });
 });
 
-describe('createLeaderboardSource', () => {
-  it('serves fresh data, then answers from the 24 h cache without another provider call', async () => {
-    const provider = providerJson(aaBody(DAY_ONE));
-    let clock = 0;
-    const source = createLeaderboardSource({ fetch: provider, now: () => clock, apiKey: 'k' });
-    const first = await source.read();
-    expect(first.status).toBe('ok');
-    if (first.status === 'ok') {
-      expect(first.rankings.overall[0]).toBe('claude-x');
-      expect(first.provenance).toContain('Artificial Analysis');
-    }
-    await source.read();
-    expect(provider).toHaveBeenCalledTimes(1);
-    clock += LEADERBOARD_TTL_MS;
-    await source.read();
-    expect(provider).toHaveBeenCalledTimes(2);
+function memoryStorage() {
+  let value: unknown = null;
+  return {
+    storage: { read: vi.fn(async () => structuredClone(value)), write: vi.fn(async (next: StoredLeaderboard) => { value = structuredClone(next); }) },
+    peek: () => value as StoredLeaderboard,
+    seed: (raw: unknown) => { value = raw; },
+  };
+}
+describe('durable leaderboard source', () => {
+  it('reads storage without ever fetching and refreshes at most once per UTC day', async () => {
+    const mem = memoryStorage(), provider = providerJson(aaBody(DAY_ONE)); let clock = Date.parse('2026-10-15T04:30:05Z');
+    const source = createLeaderboardSource({ storage: mem.storage, fetch: provider, now: () => clock, apiKey: 'synthetic' });
+    expect(await source.read()).toMatchObject({ status: 'unavailable', reason: 'no-data' }); expect(provider).not.toHaveBeenCalled();
+    await source.refresh(); await source.read(); await source.refresh(); expect(provider).toHaveBeenCalledTimes(1);
+    // Next day's slightly earlier cron must not be skipped by a strict 24h TTL.
+    clock += LEADERBOARD_TTL_MS - 5000; await source.refresh(); expect(provider).toHaveBeenCalledTimes(2);
   });
-  it('serves the last good snapshot with its ORIGINAL syncedAt when a later refresh fails', async () => {
-    const day: unknown = aaBody(DAY_ONE);
-    let failing = false;
-    let clock = 0;
-    const provider = vi.fn(async () => new Response(JSON.stringify(day), { status: failing ? 503 : 200 })) as unknown as typeof fetch;
-    const source = createLeaderboardSource({ fetch: provider, now: () => clock, apiKey: 'k' });
-    const first = await source.read();
-    if (first.status !== 'ok') throw new Error('first read must succeed');
-    failing = true;
-    clock += LEADERBOARD_TTL_MS + 1;
-    const second = await source.read();
-    expect(second.status).toBe('ok');
-    if (second.status === 'ok') expect(second.syncedAt).toBe(first.syncedAt);
+  it('collects all pages, deduplicates and commits exactly once', async () => {
+    const mem = memoryStorage();
+    const provider = vi.fn(async (url: RequestInfo | URL) => new Response(JSON.stringify(String(url).endsWith('page=1')
+      ? aaBody([CLAUDE_X, GEMINI_Y], 4.3, { page_size: 2, total_pages: 2, has_more: true })
+      : aaBody([GEMINI_Y, O3_MINI], 4.3, { page: 2, page_size: 2, total_pages: 2 })))) as unknown as typeof fetch;
+    const source = createLeaderboardSource({ storage: mem.storage, fetch: provider, now: () => 0, apiKey: 'synthetic' });
+    const result = await source.refresh(); expect(result.status).toBe('ok');
+    expect(provider).toHaveBeenCalledTimes(2); expect(mem.storage.write).toHaveBeenCalledTimes(1);
+    expect(mem.peek().current.models).toHaveLength(3);
+    expect(String(vi.mocked(provider).mock.calls[0]?.[0])).toBe('https://artificialanalysis.ai/api/v2/language/models/free?page=1');
+    expect(String(vi.mocked(provider).mock.calls[1]?.[0])).toContain('page=2');
   });
-  it('answers no-key honestly without calling the provider', async () => {
-    const provider = providerJson(aaBody(DAY_ONE));
-    const source = createLeaderboardSource({ fetch: provider, now: () => 0, apiKey: '' });
-    expect(await source.read()).toMatchObject({ status: 'unavailable', reason: 'no-key' });
-    expect(provider).toHaveBeenCalledTimes(0);
+  it('preserves snapshot and history if a later page fails', async () => {
+    const mem = memoryStorage(); let clock = 0;
+    const source = createLeaderboardSource({ storage: mem.storage, fetch: providerJson(aaBody(DAY_ONE)), now: () => clock, apiKey: 'synthetic' });
+    await source.refresh(); const before = structuredClone(mem.peek()); clock += LEADERBOARD_TTL_MS;
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(aaBody([CLAUDE_X], 4.3, { page_size: 1, total_pages: 2, has_more: true })))).mockResolvedValueOnce(new Response('', { status: 503 }));
+    const restarted = createLeaderboardSource({ storage: mem.storage, fetch: fetcher, now: () => clock, apiKey: 'synthetic' });
+    const result = await restarted.refresh(); expect(result).toMatchObject({ status: 'ok', syncedAt: before.current.syncedAt });
+    expect(mem.peek()).toEqual(before); expect(mem.storage.write).toHaveBeenCalledTimes(1);
   });
-  it('maps an unauthorized key to no-key', async () => {
-    const provider = vi.fn(async () => new Response('denied', { status: 401 })) as unknown as typeof fetch;
-    const source = createLeaderboardSource({ fetch: provider, now: () => 0, apiKey: 'bad' });
-    expect(await source.read()).toMatchObject({ status: 'unavailable', reason: 'no-key' });
+  it('restores history across instances and diffs changed scores, not provider row order', async () => {
+    const mem = memoryStorage();
+    await createLeaderboardSource({ storage: mem.storage, fetch: providerJson(aaBody([CLAUDE_X, GEMINI_Y])), now: () => 0, apiKey: 'synthetic' }).refresh();
+    const changed = { ...GEMINI_Y, evaluations: { artificial_analysis_intelligence_index: 99 } };
+    const second = createLeaderboardSource({ storage: mem.storage, fetch: providerJson(aaBody([CLAUDE_X, changed])), now: () => LEADERBOARD_TTL_MS, apiKey: 'synthetic' });
+    const result = await second.refresh(); if (result.status !== 'ok') throw Error('expected success');
+    expect(result.models.find(m => m.slug === 'gemini-y')?.movement?.rankDelta).toBe(1);
+    expect(mem.peek().previous?.rankings.overall).toEqual(['claude-x', 'gemini-y']);
+    const noFetch = vi.fn(); const third = createLeaderboardSource({ storage: mem.storage, fetch: noFetch, now: () => LEADERBOARD_TTL_MS + 100, apiKey: '' });
+    expect(await third.read()).toMatchObject({ status: 'ok', syncedAt: result.syncedAt }); expect(noFetch).not.toHaveBeenCalled();
   });
-  it('maps a hanging provider to timeout', async () => {
-    const hanging = vi.fn(() => new Promise<Response>(() => {})) as unknown as typeof fetch;
-    const source = createLeaderboardSource({ fetch: hanging, now: () => 0, apiKey: 'k', timeoutMs: 5 });
-    expect(await source.read()).toMatchObject({ status: 'unavailable', reason: 'timeout' });
+  it('does not compare rankings across index versions', async () => {
+    const mem = memoryStorage();
+    await createLeaderboardSource({ storage: mem.storage, fetch: providerJson(aaBody(DAY_ONE)), now: () => 0, apiKey: 'synthetic' }).refresh();
+    const out = await createLeaderboardSource({ storage: mem.storage, fetch: providerJson(aaBody(DAY_ONE, 5)), now: () => LEADERBOARD_TTL_MS, apiKey: 'synthetic' }).refresh();
+    if (out.status !== 'ok') throw Error('expected success'); expect(out.models.every(m => m.movement === null)).toBe(true);
   });
-  it('refuses an oversized body unread', async () => {
-    const provider = providerJson(aaBody(DAY_ONE.concat(DAY_ONE)));
-    const source = createLeaderboardSource({ fetch: provider, now: () => 0, apiKey: 'k', maxBodyBytes: 50 });
-    expect(await source.read()).toMatchObject({ status: 'unavailable', reason: 'malformed' });
+  it('never reports fresh data if the durable write failed', async () => {
+    const mem = memoryStorage(); mem.storage.write.mockRejectedValue(new Error('synthetic outage'));
+    const source = createLeaderboardSource({ storage: mem.storage, fetch: providerJson(aaBody(DAY_ONE)), now: () => 0, apiKey: 'synthetic' });
+    expect(await source.refresh()).toMatchObject({ status: 'unavailable', reason: 'storage-unavailable' }); expect(mem.peek()).toBeNull();
   });
-  it('refuses a response whose every row lacks a headline score', async () => {
-    const provider = providerJson(aaBody([{ slug: 'x', name: 'X', evaluations: {} }]));
-    const source = createLeaderboardSource({ fetch: provider, now: () => 0, apiKey: 'k' });
-    expect(await source.read()).toMatchObject({ status: 'unavailable', reason: 'empty' });
+  it('does not overwrite unreadable or malformed persisted history', async () => {
+    const mem = memoryStorage(), provider = providerJson(aaBody(DAY_ONE)); mem.seed({ version: 1, current: {} });
+    const source = createLeaderboardSource({ storage: mem.storage, fetch: provider, now: () => 0, apiKey: 'synthetic' });
+    expect(await source.refresh()).toMatchObject({ reason: 'malformed' }); expect(provider).not.toHaveBeenCalled();
+    mem.storage.read.mockRejectedValueOnce(new Error('synthetic outage')); expect(await source.read()).toMatchObject({ reason: 'storage-unavailable' });
   });
-  it('diffs movement across two daily snapshots', async () => {
-    let day: unknown[] = [CLAUDE_X, GEMINI_Y, O3_MINI];
-    let clock = 0;
-    const provider = vi.fn(async () => new Response(JSON.stringify(aaBody(day)), { status: 200 })) as unknown as typeof fetch;
-    const source = createLeaderboardSource({ fetch: provider, now: () => clock, apiKey: 'k' });
-    const first = await source.read();
-    if (first.status !== 'ok') throw new Error('first read must succeed');
-    expect(first.models.every((m) => m.movement === null)).toBe(true);
-    day = [{ ...GEMINI_Y, evaluations: { artificial_analysis_intelligence_index: 99 } }, CLAUDE_X, O3_MINI];
-    clock += LEADERBOARD_TTL_MS + 1;
-    const second = await source.read();
-    if (second.status !== 'ok') throw new Error('second read must succeed');
-    const bySlug = new Map(second.models.map((m) => [m.slug, m]));
-    expect(bySlug.get('gemini-y')?.movement).toEqual({ rankDelta: 1, isNew: false });
-    expect(bySlug.get('claude-x')?.movement).toEqual({ rankDelta: -1, isNew: false });
+  it('single-flights overlapping refreshes', async () => {
+    const mem = memoryStorage(), provider = providerJson(aaBody(DAY_ONE));
+    const source = createLeaderboardSource({ storage: mem.storage, fetch: provider, now: () => 0, apiKey: 'synthetic' });
+    await Promise.all([source.refresh(), source.refresh(), source.refresh()]); expect(provider).toHaveBeenCalledTimes(1); expect(mem.storage.write).toHaveBeenCalledTimes(1);
   });
-  it('builds the provider URL from a fixed host only', () => {
-    expect(leaderboardUrl()).toBe('https://artificialanalysis.ai/api/v2/language/models/free');
+  it('missing storage or API key never triggers provider calls', async () => {
+    const provider = vi.fn(), mem = memoryStorage();
+    expect(await createLeaderboardSource({ fetch: provider, now: () => 0, apiKey: 'synthetic' }).refresh()).toMatchObject({ reason: 'storage-unavailable' });
+    expect(await createLeaderboardSource({ storage: mem.storage, fetch: provider, now: () => 0, apiKey: '' }).refresh()).toMatchObject({ reason: 'no-key' });
+    expect(provider).not.toHaveBeenCalled();
+  });
+  it.each([
+    { data: [], pagination: { page: 1, page_size: 200, total_pages: 11, has_more: true } },
+    { data: [CLAUDE_X], pagination: { page: 2, page_size: 200, total_pages: 1, has_more: false } },
+    { data: [CLAUDE_X], pagination: { page: 1, page_size: 200, total_pages: 2, has_more: false } },
+    { data: [CLAUDE_X] },
+  ])('rejects malformed or unbounded pagination', async body => {
+    const mem = memoryStorage(); const result = await createLeaderboardSource({ storage: mem.storage, fetch: providerJson(body), now: () => 0, apiKey: 'synthetic' }).refresh();
+    expect(result).toMatchObject({ reason: 'malformed' }); expect(mem.storage.write).not.toHaveBeenCalled();
+  });
+  it('bounds total response bytes and timeout', async () => {
+    const mem = memoryStorage();
+    expect(await createLeaderboardSource({ storage: mem.storage, fetch: providerJson(aaBody(DAY_ONE)), maxBodyBytes: 20, now: () => 0, apiKey: 'synthetic' }).refresh()).toMatchObject({ reason: 'malformed' });
+    const never = vi.fn(() => new Promise<Response>(() => {}));
+    expect(await createLeaderboardSource({ storage: mem.storage, fetch: never, timeoutMs: 2, now: () => 0, apiKey: 'synthetic' }).refresh()).toMatchObject({ reason: 'timeout' });
+  });
+  it('empty data is unavailable rather than replacing last-good with an empty ranking', async () => {
+    const mem = memoryStorage(); expect(await createLeaderboardSource({ storage: mem.storage, fetch: providerJson(aaBody([])), now: () => 0, apiKey: 'synthetic' }).refresh()).toMatchObject({ reason: 'empty' });
+  });
+  it('retains every category top ten in the payload', () => {
+    const rows = ['overall','coding','agentic','math'].flatMap((key, group) => Array.from({ length: 10 }, (_, i) => parseAaModel(aaRow(`test-${group}-${i}`, `Test ${group} ${i}`, 'Synthetic', { [({overall:'artificial_analysis_intelligence_index',coding:'artificial_analysis_coding_index',agentic:'artificial_analysis_agentic_index',math:'artificial_analysis_math_index'} as Record<string,string>)[key]!]: 100-i }))!));
+    const built = buildLeaderboard(rows); expect(built.models).toHaveLength(40);
+    expect(Object.values(built.rankings).flat().every(slug => built.models.some(m => m.slug === slug))).toBe(true);
+  });
+  it('uses fixed provider URLs', () => { expect(leaderboardUrl()).toBe('https://artificialanalysis.ai/api/v2/language/models/free?page=1'); });
+});
+
+describe('KV adapter and hydration', () => {
+  it('writes current and previous together and reads JSON under one fixed key', async () => {
+    const mem = memoryStorage(); await createLeaderboardSource({ storage: mem.storage, fetch: providerJson(aaBody(DAY_ONE)), now: () => 0, apiKey: 'synthetic' }).refresh();
+    const get = vi.fn(async () => mem.peek()), put = vi.fn(async () => {}), adapter = createLeaderboardStorage({ get, put });
+    await adapter.write(mem.peek()); expect(put).toHaveBeenCalledWith(LEADERBOARD_STORAGE_KEY, JSON.stringify(mem.peek()));
+    await adapter.read(); expect(get).toHaveBeenCalledWith(LEADERBOARD_STORAGE_KEY, 'json');
+    expect(parseStoredLeaderboard(mem.peek(),0)?.current.status).toBe('ok');
+    const invalid = structuredClone(mem.peek()); invalid.current.rankings.overall.push('missing-payload'); expect(parseStoredLeaderboard(invalid,0)).toBeNull();
   });
 });

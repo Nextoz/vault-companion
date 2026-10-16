@@ -1,4 +1,4 @@
-// AI model leaderboard source (LB1, ADR-0065): one Artificial Analysis free-tier read a day, ranked by the
+// AI model leaderboard source (LB1, ADR-0066): one Artificial Analysis free-tier read a day, ranked by the
 // provider's published indices. Cron-warmed and TTL-guarded, so opening the Dashboard never triggers provider
 // calls; the last good snapshot is served honestly stale (original syncedAt) when the provider fails. No vault
 // writes, no invented numbers.
@@ -13,6 +13,8 @@ import {
   type LeaderboardUnavailableReason,
 } from '@vault-companion/contracts';
 
+import { parseStoredLeaderboard, type LeaderboardStorage, type LeaderboardSnapshot, type StoredLeaderboard } from './leaderboard-storage.ts';
+
 const INDEX_KEYS = {
   overall: 'artificial_analysis_intelligence_index',
   coding: 'artificial_analysis_coding_index',
@@ -22,14 +24,13 @@ const INDEX_KEYS = {
 const PROVENANCE = `${LEADERBOARD_PROVIDER} (Intelligence Index)`;
 
 export const LEADERBOARD_BASE_URL = 'https://artificialanalysis.ai/api/v2';
-export const leaderboardUrl = (): string => `${LEADERBOARD_BASE_URL}/language/models/free`;
-/** One sync per 24 h: the scheduled refresh keeps this warm; a cold isolate refetches at most once a day. */
+export const leaderboardUrl = (page = 1): string => `${LEADERBOARD_BASE_URL}/language/models/free?page=${page}`;
+/** Daily window; only the scheduled refresh fetches, with durable UTC calendar-day deduplication. */
 export const LEADERBOARD_TTL_MS = 24 * 60 * 60 * 1000;
 export const LEADERBOARD_TIMEOUT_MS = 10_000;
 /** The free model list runs to a few hundred KB; anything far larger is not a list we can trust. */
 export const LEADERBOARD_MAX_BODY_BYTES = 2 * 1024 * 1024;
 
-class TimedOut extends Error {}
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 const num = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
@@ -54,6 +55,7 @@ export function parseAaModel(raw: unknown): LeaderboardModel | null {
   if (scores.overall === null && scores.coding === null && scores.agentic === null && scores.math === null) return null;
   const benchmarks: { key: string; value: number }[] = [];
   for (const [key, value] of Object.entries(evals)) {
+    if (key.startsWith('artificial_analysis_')) continue; // profession/composite indices are not individual benchmark scores
     if (key === INDEX_KEYS.overall || key === INDEX_KEYS.coding || key === INDEX_KEYS.agentic || key === INDEX_KEYS.math) continue;
     const parsed = num(value);
     if (parsed !== null) benchmarks.push({ key, value: parsed });
@@ -145,96 +147,128 @@ export function applyMovement(models: readonly LeaderboardModel[], currentOveral
 export interface LeaderboardSourceDeps {
   readonly fetch: typeof fetch;
   readonly now: () => number;
-  /** Worker secret AA_API_KEY; empty means the leaderboard answers honestly `no-key` and never calls the provider. */
   readonly apiKey: string;
+  readonly storage?: LeaderboardStorage;
   readonly timeoutMs?: number;
   readonly maxBodyBytes?: number;
 }
 
-async function readProviderJson(fetchImpl: typeof fetch, apiKey: string, timeoutMs: number, maxBodyBytes: number): Promise<{ ok: true; body: unknown } | { ok: false; reason: LeaderboardUnavailableReason }> {
+class ProviderFailure extends Error {
+  constructor(readonly reason: LeaderboardUnavailableReason) { super(reason); }
+}
+const MAX_PAGES = 10;
+async function readBody(response: Response, remaining: number): Promise<string> {
+  const size = Number(response.headers.get('content-length') ?? 0);
+  if (size > remaining || !response.body) throw new ProviderFailure('malformed');
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      bytes += next.value.byteLength;
+      if (bytes > remaining) throw new ProviderFailure('malformed');
+      chunks.push(next.value);
+    }
+  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  const joined = new Uint8Array(bytes);
+  let offset = 0;
+  for (const chunk of chunks) { joined.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder('utf-8', { fatal: true }).decode(joined);
+}
+
+async function fetchAll(deps: LeaderboardSourceDeps): Promise<{ models: LeaderboardModel[]; version: number | null }> {
   const abort = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timedOut = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      abort.abort();
-      reject(new TimedOut());
-    }, timeoutMs);
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => { abort.abort(); reject(new ProviderFailure('timeout')); }, deps.timeoutMs ?? LEADERBOARD_TIMEOUT_MS);
   });
-  try {
-    const response = await Promise.race([
-      fetchImpl(leaderboardUrl(), { signal: abort.signal, headers: { Accept: 'application/json', 'User-Agent': 'vault-companion', 'x-api-key': apiKey } }),
-      timedOut,
-    ]);
-    if (!response.ok) return { ok: false, reason: response.status === 401 || response.status === 403 ? 'no-key' : 'provider-error' };
-    const declared = Number(response.headers.get('content-length') ?? '0');
-    if (Number.isFinite(declared) && declared > maxBodyBytes) return { ok: false, reason: 'malformed' };
-    const text = await Promise.race([response.text(), timedOut]);
-    if (text.length > maxBodyBytes) return { ok: false, reason: 'malformed' };
-    try {
-      return { ok: true, body: JSON.parse(text) };
-    } catch {
-      return { ok: false, reason: 'malformed' };
+  const collect = async () => {
+    const unique = new Map<string, LeaderboardModel>();
+    let remaining = deps.maxBodyBytes ?? LEADERBOARD_MAX_BODY_BYTES;
+    let total = 1, version: number | null = null, pageSize = 0;
+    for (let page = 1; page <= total; page++) {
+      if (abort.signal.aborted) throw new ProviderFailure('timeout');
+      const response = await deps.fetch(leaderboardUrl(page), { redirect: 'error', signal: abort.signal, headers: { Accept: 'application/json', 'x-api-key': deps.apiKey } });
+      if (!response.ok) throw new ProviderFailure(response.status === 401 || response.status === 403 ? 'no-key' : 'provider-error');
+      const text = await readBody(response, remaining);
+      remaining -= new TextEncoder().encode(text).byteLength;
+      let body: unknown;
+      try { body = JSON.parse(text); } catch { throw new ProviderFailure('malformed'); }
+      const parsed = parseAaBody(body);
+      if (!parsed || !isRecord(body) || !isRecord(body.pagination)) throw new ProviderFailure('malformed');
+      const paging = body.pagination;
+      if (paging.page !== page || !Number.isInteger(paging.total_pages) || !Number.isInteger(paging.page_size)
+        || typeof paging.total_pages !== 'number' || paging.total_pages < 1 || paging.total_pages > MAX_PAGES
+        || typeof paging.page_size !== 'number' || paging.page_size < 1 || paging.page_size > 1000
+        || paging.has_more !== (page < paging.total_pages) || !Array.isArray(body.data) || body.data.length > paging.page_size
+        || (paging.has_more && body.data.length !== paging.page_size)) throw new ProviderFailure('malformed');
+      if (page === 1) { total = paging.total_pages; pageSize = paging.page_size; version = parsed.intelligenceIndexVersion; }
+      else if (total !== paging.total_pages || pageSize !== paging.page_size || version !== parsed.intelligenceIndexVersion) throw new ProviderFailure('malformed');
+      for (const model of parsed.models) {
+        const prior = unique.get(model.slug);
+        if (prior && JSON.stringify(prior) !== JSON.stringify(model)) throw new ProviderFailure('malformed');
+        unique.set(model.slug, model);
+      }
     }
-  } catch (error) {
-    return { ok: false, reason: error instanceof TimedOut || abort.signal.aborted ? 'timeout' : 'provider-error' };
-  } finally {
-    clearTimeout(timer);
-  }
+    if (unique.size === 0) throw new ProviderFailure('empty');
+    return { models: [...unique.values()], version };
+  };
+  try { return await Promise.race([collect(), timeout]); }
+  finally { clearTimeout(timer); abort.abort(); }
 }
 
 export function createLeaderboardSource(deps: LeaderboardSourceDeps) {
-  const timeoutMs = deps.timeoutMs ?? LEADERBOARD_TIMEOUT_MS;
-  const maxBodyBytes = deps.maxBodyBytes ?? LEADERBOARD_MAX_BODY_BYTES;
-  let cache: { at: number; response: LeaderboardResponse } | null = null;
-  let previousOverall: string[] = [];
+  let lastGood: StoredLeaderboard | null = null;
   let inflight: Promise<LeaderboardResponse> | null = null;
-
   const unavailable = (reason: LeaderboardUnavailableReason): LeaderboardResponse => ({
-    status: 'unavailable',
-    now: new Date(deps.now()).toISOString(),
-    reason,
-    note: LEADERBOARD_REASON_NOTES[reason],
+    status: 'unavailable', now: new Date(deps.now()).toISOString(), reason, note: LEADERBOARD_REASON_NOTES[reason],
   });
-
-  const refresh = async (): Promise<LeaderboardResponse> => {
-    if (deps.apiKey === '') return unavailable('no-key');
-    const result = await readProviderJson(deps.fetch, deps.apiKey, timeoutMs, maxBodyBytes);
-    if (!result.ok) return unavailable(result.reason);
-    const parsed = parseAaBody(result.body);
-    if (parsed === null) return unavailable('malformed');
-    if (parsed.models.length === 0) return unavailable('empty');
-    const build = buildLeaderboard(parsed.models);
-    const models = applyMovement(build.models, build.rankings.overall, previousOverall);
-    previousOverall = build.rankings.overall;
-    const nowIso = new Date(deps.now()).toISOString();
-    return {
-      status: 'ok',
-      now: nowIso,
-      syncedAt: nowIso,
-      provenance: PROVENANCE,
-      intelligenceIndexVersion: parsed.intelligenceIndexVersion,
-      note: null,
-      models,
-      rankings: build.rankings,
-    };
+  const display = (value: LeaderboardSnapshot, note: string | null = null): LeaderboardResponse => ({ ...value, now: new Date(deps.now()).toISOString(), note });
+  const fallback = (reason: LeaderboardUnavailableReason): LeaderboardResponse => lastGood
+    ? display(lastGood.current, `Last successful snapshot. ${LEADERBOARD_REASON_NOTES[reason]}`) : unavailable(reason);
+  const hydrate = async (): Promise<void> => {
+    if (!deps.storage) throw new ProviderFailure('storage-unavailable');
+    let raw: unknown;
+    try { raw = await deps.storage.read(); } catch { throw new ProviderFailure('storage-unavailable'); }
+    if (raw === null) return;
+    const parsed = parseStoredLeaderboard(raw, deps.now());
+    if (!parsed) throw new ProviderFailure('malformed');
+    // KV is eventually consistent: do not regress a newer local snapshot.
+    if (!lastGood || Date.parse(parsed.current.syncedAt) >= Date.parse(lastGood.current.syncedAt)) lastGood = parsed;
   };
-
+  const update = async (): Promise<LeaderboardResponse> => {
+    try {
+      await hydrate();
+      // Calendar-day gate avoids skipping a day when cron arrives a few seconds early.
+      if (lastGood?.current.syncedAt.slice(0, 10) === new Date(deps.now()).toISOString().slice(0, 10)) return display(lastGood.current);
+      if (!deps.apiKey) return fallback('no-key');
+      const data = await fetchAll(deps);
+      const build = buildLeaderboard(data.models);
+      const previous = lastGood?.current ?? null;
+      const compare = previous?.intelligenceIndexVersion === data.version ? previous.rankings.overall : [];
+      const now = new Date(deps.now()).toISOString();
+      const current: LeaderboardSnapshot = {
+        status: 'ok', now, syncedAt: now, provenance: PROVENANCE, intelligenceIndexVersion: data.version, note: null,
+        models: applyMovement(build.models, build.rankings.overall, compare), rankings: build.rankings,
+      };
+      const next: StoredLeaderboard = { version: 1, current, previous };
+      try { await deps.storage!.write(next); } catch { return fallback('storage-unavailable'); }
+      lastGood = next;
+      return display(current);
+    } catch (error) { return fallback(error instanceof ProviderFailure ? error.reason : 'provider-error'); }
+  };
   return {
-    /** Cached while fresh (24 h), one shared provider fetch otherwise. A failed refresh serves the last good
-     *  snapshot with its ORIGINAL syncedAt — a date is never silently repainted as new. */
+    /** Dashboard reads storage only. They never consume provider quota. */
     async read(): Promise<LeaderboardResponse> {
-      if (cache !== null && deps.now() - cache.at < LEADERBOARD_TTL_MS) return cache.response;
-      if (inflight === null) {
-        inflight = refresh().finally(() => {
-          inflight = null;
-        });
-      }
-      const fresh = await inflight;
-      if (fresh.status === 'ok') {
-        cache = { at: Date.parse(fresh.syncedAt), response: fresh };
-        return fresh;
-      }
-      return cache !== null ? cache.response : fresh;
+      try { await hydrate(); return lastGood ? display(lastGood.current) : unavailable('no-data'); }
+      catch (error) { return fallback(error instanceof ProviderFailure ? error.reason : 'storage-unavailable'); }
+    },
+    /** Cron-only refresh. One atomic durable write after every page succeeds. */
+    refresh(): Promise<LeaderboardResponse> {
+      if (!inflight) inflight = update().finally(() => { inflight = null; });
+      return inflight;
     },
   };
 }

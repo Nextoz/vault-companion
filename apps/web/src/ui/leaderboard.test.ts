@@ -73,7 +73,9 @@ describe('formatScore / formatBenchmark', () => {
     expect(formatScore(null)).toBe('—');
   });
   it('renders mixed-scale benchmark values close to how they are published', () => {
-    expect(formatBenchmark(0.791)).toBe('79%');
+    expect(formatBenchmark(0.791)).toBe('0.791');
+    expect(formatBenchmark(0.5)).toBe('0.5');
+    expect(formatBenchmark(681.25)).toBe('681.25');
     expect(formatBenchmark(681)).toBe('681');
     expect(formatBenchmark(12.5)).toBe('12.5');
     expect(formatBenchmark(50.0)).toBe('50');

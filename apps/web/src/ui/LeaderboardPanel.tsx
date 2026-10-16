@@ -1,4 +1,4 @@
-// LB1 (ADR-0065): the Dashboard's AI model leaderboard. One tab per ranked category, the top 10 rows with score,
+// LB1 (ADR-0066): the Dashboard's AI model leaderboard. One tab per ranked category, the top 10 rows with score,
 // movement and strongest capability, and a detail sheet per model. Read-only, fed from App like AiUsagePanel.
 import { LEADERBOARD_CATEGORY_INFO, LEADERBOARD_METHODOLOGY_URL, type LeaderboardCategoryId, type LeaderboardResponse } from '@vault-companion/contracts';
 import { useState } from 'react';
@@ -8,7 +8,7 @@ import { ModelSheet } from './ModelSheet.tsx';
 import { barRatio, formatScore, leaderboardCategories, leaderboardFresh, leaderboardNote, leaderboardRows, strongestCapability } from './leaderboard.ts';
 
 const updated = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-const formatSynced = (iso: string): string => `${updated.format(Date.parse(iso))} UTC`;
+const formatSynced = (iso: string): string => Number.isFinite(Date.parse(iso)) ? `${updated.format(Date.parse(iso))} UTC` : 'Unavailable';
 const rowClass = (movement: string | null): string =>
   movement === null ? '' : movement === 'New' ? 'lb-row-new' : movement.startsWith('↑') ? 'lb-row-up' : 'lb-row-down';
 
@@ -48,7 +48,7 @@ export function LeaderboardPanel({ view, now }: { view: Fetched<LeaderboardRespo
                   <span className="lb-rank">{row.rank}</span>
                   <span className="lb-main">
                     <span className="lb-name">{row.model.name}</span>
-                    <span className="lb-sub">{row.model.provider ?? 'Unknown provider'}{strongestCapability(row.model) !== null ? ` · strong at ${strongestCapability(row.model)}` : ''}</span>
+                    <span className="lb-sub">{row.model.provider ?? 'Unknown provider'}{strongestCapability(row.model) !== null ? ` · highest index: ${strongestCapability(row.model)}` : ''}</span>
                     <span className="lb-bar"><span style={{ width: `${Math.round(barRatio(row.score, best) * 100)}%` }} /></span>
                   </span>
                   <span className="lb-side">
@@ -64,6 +64,7 @@ export function LeaderboardPanel({ view, now }: { view: Fetched<LeaderboardRespo
             {response.intelligenceIndexVersion !== null ? ` · Intelligence Index v${response.intelligenceIndexVersion}` : ''} ·{' '}
             <a href={LEADERBOARD_METHODOLOGY_URL} target="_blank" rel="noopener noreferrer">{response.provenance}</a>
           </p>
+          {response.note !== null && <p className="lb-note" role="status">{response.note}</p>}
           <p className="lb-note">Benchmarks measure specific tasks under fixed conditions, not overall real-world quality.</p>
         </>
       )}

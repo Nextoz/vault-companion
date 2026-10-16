@@ -1,4 +1,4 @@
-// AI model leaderboard (LB1, ADR-0065). Wire contract and shared presentation constants for the
+// AI model leaderboard (LB1, ADR-0066). Wire contract and shared presentation constants for the
 // Artificial-Analysis-backed leaderboard. Scores are the provider's published values — never merged across
 // providers; missing metrics stay null and render honestly.
 import { z } from 'zod';
@@ -6,7 +6,7 @@ import { z } from 'zod';
 export const LEADERBOARD_PROVIDER = 'Artificial Analysis';
 export const LEADERBOARD_METHODOLOGY_URL = 'https://artificialanalysis.ai/methodology';
 export const LEADERBOARD_TOP_N = 10;
-export const LEADERBOARD_MAX_MODELS = 30;
+export const LEADERBOARD_MAX_MODELS = 40;
 
 export const LEADERBOARD_CATEGORY_IDS = ['overall', 'coding', 'agentic', 'math'] as const;
 export const LeaderboardCategoryId = z.enum(['overall', 'coding', 'agentic', 'math']);
@@ -20,10 +20,12 @@ export const LEADERBOARD_CATEGORY_INFO: Record<LeaderboardCategoryId, { label: s
   math: { label: 'Mathematics', blurb: 'Competition-style mathematical problem solving.' },
 };
 
-export const LeaderboardUnavailableReason = z.enum(['no-key', 'timeout', 'provider-error', 'malformed', 'empty']);
+export const LeaderboardUnavailableReason = z.enum(['no-key', 'timeout', 'provider-error', 'malformed', 'empty', 'storage-unavailable', 'no-data']);
 export type LeaderboardUnavailableReason = z.infer<typeof LeaderboardUnavailableReason>;
 
 export const LEADERBOARD_REASON_NOTES: Record<LeaderboardUnavailableReason, string> = {
+  'storage-unavailable': 'Benchmark storage is unavailable. No new snapshot has been published.',
+  'no-data': 'The first scheduled benchmark sync has not completed yet.',
   'no-key': 'No Artificial Analysis API key is configured, so no benchmark data can be fetched.',
   timeout: 'The benchmark provider did not answer in time.',
   'provider-error': 'The benchmark provider is unavailable right now.',

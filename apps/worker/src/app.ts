@@ -15,6 +15,7 @@ import {
   ResearchRadarDecideCommand,
   ScoutStatus,
   WeatherLocationRequest,
+  type LeaderboardResponse,
   type AiBudgetResponse,
   type AiUsageResponse,
   type AskJevQuestion,
@@ -100,6 +101,7 @@ export interface Services {
   askJev?(path: string, questions: readonly AskJevQuestion[]): Promise<AskJevResponse | ApiError>;
   /** Dashboard (DASH1). Optional: without them the routes answer 404. */
   readDashboard?(range: DashboardRange): Promise<DashboardResponse | ApiError>;
+  readLeaderboard?(): Promise<LeaderboardResponse>;
   readMarketTicker?(): Promise<MarketTickerResponse | ApiError>;
   /** Research Radar (ADR-0032). Optional: without it the route answers 404. */
   readResearchRadar?(): Promise<RadarResponse | ApiError>;
@@ -672,6 +674,13 @@ export function createApp(deps: AppDeps) {
       return c.json(result, statusFor(result.code) as 400);
     }
     return c.json(result);
+  });
+
+  // Authenticated, storage-only: a Dashboard read never spends benchmark quota.
+  app.get('/api/leaderboard', async (c) => {
+    const read = deps.services.readLeaderboard;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    return c.json(await read());
   });
 
   // Weather projection (ADR-0033 W1): read-only default GET uses the fixed coarse Copenhagen fallback. No model/URL

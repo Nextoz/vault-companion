@@ -15,3 +15,7 @@ tools/wait-for-work.sh.started
 
 # Local coordination: briefs, handoffs, worker logs, CodeRabbit/Jev receipts (never committed)
 .agent/
+
+# Generated local reports and private deployment binding
+.vitest/
+apps/worker/wrangler.leaderboard.jsonc

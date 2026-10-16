@@ -1,6 +1,7 @@
 // LB1 pure presentation helpers: rows per category, honest labels for scores/movement/strength, and the stale
 // window. No fetch, no React; mirrors ai-usage.ts.
 import {
+  LEADERBOARD_TOP_N,
   LEADERBOARD_BENCHMARKS,
   LEADERBOARD_CATEGORY_IDS,
   LEADERBOARD_CATEGORY_INFO,
@@ -30,24 +31,23 @@ export function leaderboardCategories(response: LeaderboardResponse): Leaderboar
 export function leaderboardRows(response: LeaderboardResponse, category: LeaderboardCategoryId): LeaderboardRow[] {
   if (response.status !== 'ok') return [];
   const bySlug = new Map(response.models.map((model) => [model.slug, model] as const));
-  return response.rankings[category]
+  return response.rankings[category].slice(0, LEADERBOARD_TOP_N)
     .map((slug, index): LeaderboardRow | null => {
       const model = bySlug.get(slug);
       if (model === undefined) return null; // a ranking entry without payload is skipped, never guessed
-      return { rank: index + 1, model, score: model.scores[category], movement: movementLabel(model.movement) };
+      return { rank: index + 1, model, score: model.scores[category], movement: category === 'overall' ? movementLabel(model.movement) : null };
     })
     .filter((row): row is LeaderboardRow => row !== null);
 }
 
-/** Index scores are 0–100 with one decimal; a missing score is a dash, never a zero. */
+/** Published index scores use one decimal; a missing score is a dash, never a zero. */
 export function formatScore(score: number | null): string {
   return score === null ? '—' : score.toFixed(1);
 }
 
 /** Benchmark values arrive mixed-scale (0–1 accuracies, elo points, raw points); shown close to how published. */
 export function formatBenchmark(value: number): string {
-  if (value >= 0 && value <= 1) return `${Math.round(value * 100)}%`;
-  return value >= 100 ? value.toFixed(0) : value.toFixed(1).replace(/\.0$/, '');
+  return String(value); // A number alone cannot tell us whether the evaluation uses percentages or raw points.
 }
 
 export function movementLabel(movement: LeaderboardMovement | null): string | null {

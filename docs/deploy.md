@@ -247,3 +247,12 @@ pnpm --filter @vault-companion/worker exec wrangler triggers deploy
 The three Cloudflare commands match the historical `versions` workflow: upload first, then deploy that version, then
 apply cron triggers. Do not skip the final `triggers deploy`; `wrangler versions deploy` alone does not apply crons
 (the 4 Oct Morning Brief miss), while the normal CI path uses `wrangler deploy`, which does apply them.
+
+
+## AI leaderboard (ADR-0066)
+
+Before merging this feature, provision one Workers KV namespace named `vault-companion-leaderboard` and add its ID as the GitHub Actions production environment secret `LEADERBOARD_KV_NAMESPACE_ID`. Add the existing Artificial Analysis credential as the Worker secret `AA_API_KEY`. These account/credential changes require owner approval. Do not commit either value or paste the key into chat.
+
+The production job runs `node tools/prepare-leaderboard-deploy.mjs`, which validates the namespace ID and creates the ignored `apps/worker/wrangler.leaderboard.jsonc` beside the base config. Deployment uses that generated config so relative source/assets paths and existing bindings are unchanged. Missing namespace configuration fails before deployment. Local bundle checks continue using the base config and require no cloud account.
+
+The existing 04:30 UTC cron refreshes all provider pages, then publishes current and previous snapshots in one KV write. Before the first successful cron, the Dashboard explicitly shows unavailable data. Missing key, failed refresh, or malformed data never fabricates scores. No new cron, billing plan, public hostname or vault write is introduced. Verify `cron:leaderboard` status 200, then the authenticated `/api/leaderboard` response and mobile model details.

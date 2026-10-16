@@ -1,6 +1,7 @@
-// LB1 (ADR-0065): one model's detail sheet — specs, index bars, and every published evaluation with a plain
+// LB1 (ADR-0066): one model's detail sheet — specs, index bars, and every published evaluation with a plain
 // explanation of what it measures. Read-only; values are the provider's, never derived or invented.
 import { LEADERBOARD_CATEGORY_INFO, LEADERBOARD_METHODOLOGY_URL, type LeaderboardCategoryId, type LeaderboardModel } from '@vault-companion/contracts';
+import { useEffect, useRef } from 'react';
 import { SheetHeader } from './SheetHeader.tsx';
 import './Leaderboard.css';
 import { barRatio, benchmarkMeta, formatBenchmark, formatScore, specRows } from './leaderboard.ts';
@@ -13,6 +14,12 @@ const INDEX_ORDER: { id: LeaderboardCategoryId; key: 'overall' | 'coding' | 'age
 ];
 
 export function ModelSheet({ model, onClose }: { model: LeaderboardModel; onClose: () => void }) {
+  const dialog = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const invoker = document.activeElement;
+    dialog.current?.querySelector<HTMLElement>('button')?.focus();
+    return () => { if (invoker instanceof HTMLElement && invoker.isConnected) invoker.focus(); };
+  }, []);
   const specs = specRows(model);
   const indices = INDEX_ORDER.map(({ id, key }) => ({ id, label: LEADERBOARD_CATEGORY_INFO[id].label, score: model.scores[key] }));
   const best = Math.max(...indices.map((index) => index.score ?? 0), 1);
@@ -25,7 +32,15 @@ export function ModelSheet({ model, onClose }: { model: LeaderboardModel; onClos
 
   return (
     <div className="sheet-backdrop" role="presentation">
-      <section className="sheet model-sheet" role="dialog" aria-modal="true" aria-label={model.name}>
+      <section ref={dialog} className="sheet model-sheet" role="dialog" aria-modal="true" aria-label={model.name}
+        onKeyDown={event => {
+          if (event.key === 'Escape') { event.preventDefault(); onClose(); }
+          if (event.key !== 'Tab') return;
+          const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]')];
+          event.preventDefault();
+          const at = controls.indexOf(document.activeElement as HTMLElement);
+          controls[(at + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
+        }}>
         <SheetHeader title={model.name} onClose={onClose} />
         {model.provider !== null && <p className="muted small">{model.provider}</p>}
         {movement !== null && <p className="muted small">{movement}</p>}
@@ -36,7 +51,7 @@ export function ModelSheet({ model, onClose }: { model: LeaderboardModel; onClos
             ))}
           </div>
         )}
-        <h3>Indices (0–100)</h3>
+        <h3>Published indices</h3>
         {indices.map((index) => (
           <div className="lb-score-line" key={index.id}>
             <span className="lb-score-label">{index.label}</span>
@@ -59,7 +74,7 @@ export function ModelSheet({ model, onClose }: { model: LeaderboardModel; onClos
             })}
             <p className="lb-explain">Values are shown on each evaluation's own scale, so they are listed rather than drawn.</p>
           </>
-        ) : <p className="lb-empty-note">No individual evaluation scores are published for this model on this data tier.</p>}
+        ) : <p className="lb-empty-note">Individual evaluation scores are unavailable in this data feed.</p>}
         <p className="lb-meta">Values published by <a href={LEADERBOARD_METHODOLOGY_URL} target="_blank" rel="noopener noreferrer">Artificial Analysis</a>. Benchmarks measure specific tasks, not overall real-world quality.</p>
       </section>
     </div>

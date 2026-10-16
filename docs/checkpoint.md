@@ -1,5 +1,8 @@
-# AI leaderboard — implementation in progress
-- Preserved existing draft and integrated current main, including recent UI, Reading and Hacker News changes.
-- Standalone worker stopped without final output; local implementation continues with CodeRabbit as final release reviewer.
-- Required: durable paginated source/history, authenticated API, daily refresh, Dashboard and deployment setup.
-- Release gates: full tests, build, E2E, CodeRabbit and CI. Nothing pushed, merged to main or deployed for this feature.
+# AI leaderboard — release verification
+
+- Branch `feat/glm-workflow-leaderboard` in isolated clone `glm-workflow-20261015`; original drafts preserved. Integrated main through `2de19209`.
+- Implemented all-page Artificial Analysis ingestion, bounded refresh, durable current/previous KV snapshots, authenticated storage-only API, daily cron and mobile Dashboard/model details. Existing cron budget includes provider and storage operations. Missing fields remain unavailable.
+- Standalone controller/runner: 58 offline tests passed; independent live GLM infrastructure review passed. Actual detached leaderboard launch stopped safely when OpenCode produced no final answer. State and usage retained outside repository; no worker remains active and no paid repair loop was restarted. Owner requested local repairs and CodeRabbit as release reviewer.
+- Owner approved 2026-10-16: created leaderboard KV namespace, set production GitHub secret `LEADERBOARD_KV_NAMESPACE_ID`, and added Worker secret `AA_API_KEY` from existing local environment. Identifiers/values are not committed. Previous live application tag `2de19209`; setting the secret did not publish feature code.
+- Verification: focused source/API/UI tests, 58 controller tests, lint, typecheck, web/Worker bundle dry run and dependency audit passed. Initial full application run: 3,040 passed, one CSS-token failure fixed and its check passed. Final full run, complete browser suite and screenshot tour are in progress.
+- Next: finish verification, address CodeRabbit/CI findings, then merge and deploy under the owner's existing authorization. Do not restart the GLM implementation job or expose secrets. Durable run receipts remain in the local workspace.
