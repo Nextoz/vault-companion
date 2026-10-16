@@ -1,0 +1,58 @@
+<style>
+/* M5 fragment extras — all selectors prefixed .m5- so they cannot clash with other fragments */
+.m5-fn{display:block;width:100%;margin:3px 0 0}
+.m5-fn text{font-family:system-ui,sans-serif;font-size:10.5px}
+.m5-ct{font-weight:600}
+.m5-am{color:#e8b04a;font-size:11px;font-weight:600;text-align:right}
+.m5-bl{color:#378add;font-size:11px;font-weight:600;text-align:right}
+.m5-gr{color:#5dcaa5;font-size:11px;font-weight:600;text-align:right}
+.m5-stat{display:flex;align-items:center;gap:9px;background:#2c2c2e;border-radius:10px;padding:9px 10px;margin:10px 0 2px}
+.m5-big{font-size:22px;font-weight:650;color:#f2f2f7;line-height:1}
+.m5-lbl{font-size:10px;color:#8e8e93;line-height:1.3}
+.m5-bars{margin-left:auto}
+</style>
+<div>
+<p class="l">M5 · Job radar</p>
+<p class="s">Job search pipeline and follow-ups</p>
+<div class="p">
+<div class="chips"><span class="on">All time</span><span>30 days</span><span>7 days</span></div>
+<div class="sec">PIPELINE</div>
+<svg class="m5-fn" viewBox="0 0 248 104" aria-hidden="true">
+  <!-- funnel: Saved 102 -> Applied 31 -> Interview 4 -> Offer 0 -->
+  <polygon points="60,2 188,2 174,26 74,26" fill="#3a3a3c"/>
+  <polygon points="74,26 174,26 160,50 88,50" fill="#378add"/>
+  <polygon points="88,50 160,50 148,74 100,74" fill="#5dcaa5"/>
+  <polygon points="100,74 148,74 140,98 108,98" fill="#e8b04a"/>
+  <text x="54" y="17" text-anchor="end" fill="#f2f2f7">Saved</text>
+  <text x="54" y="41" text-anchor="end" fill="#f2f2f7">Applied</text>
+  <text x="54" y="65" text-anchor="end" fill="#f2f2f7">Interview</text>
+  <text x="54" y="89" text-anchor="end" fill="#f2f2f7">Offer</text>
+  <text class="m5-ct" x="194" y="17" fill="#b4b2a9">102</text>
+  <text class="m5-ct" x="194" y="41" fill="#378add">31</text>
+  <text class="m5-ct" x="194" y="65" fill="#5dcaa5">4</text>
+  <text class="m5-ct" x="194" y="89" fill="#e8b04a">0</text>
+</svg>
+<p class="m" style="margin:4px 0 0">Apply rate 30% · Interview rate 13% · Offers 0</p>
+<div class="sec">FOLLOW-UPS DUE</div>
+<div class="r"><span>Company A<br><span class="m">Applied 12 days ago · senior backend</span></span><span class="m5-am">nudge</span></div>
+<div class="r"><span>Company B<br><span class="m">Interview Tue · second round</span></span><span class="m5-bl">thank-you</span></div>
+<div class="r" style="border:0"><span>Company C<br><span class="m">Draft saved · deadline Fri</span></span><span class="m5-gr">on track</span></div>
+<div class="m5-stat">
+  <span class="m5-big">6</span>
+  <span class="m5-lbl">days since<br>last reply</span>
+  <svg class="m5-bars" width="96" height="30" viewBox="0 0 96 30" aria-hidden="true">
+    <!-- applications per day, last 7 days -->
+    <rect x="2"  y="18" width="8" height="10" rx="2" fill="#378add" opacity=".45"/>
+    <rect x="16" y="23" width="8" height="5"  rx="2" fill="#378add" opacity=".45"/>
+    <rect x="30" y="13" width="8" height="15" rx="2" fill="#378add" opacity=".55"/>
+    <rect x="44" y="18" width="8" height="10" rx="2" fill="#378add" opacity=".6"/>
+    <rect x="58" y="8"  width="8" height="20" rx="2" fill="#378add" opacity=".75"/>
+    <rect x="72" y="13" width="8" height="15" rx="2" fill="#378add" opacity=".9"/>
+    <rect x="86" y="3"  width="8" height="25" rx="2" fill="#5dcaa5"/>
+  </svg>
+  <span class="m5-lbl">apps<br>7 days</span>
+</div>
+<div class="m" style="margin-top:8px">Scout drafted a nudge for A and a thank-you for B — review to send.</div>
+<p class="m" style="margin-top:6px">Applications board + email threads · Updated 09:41</p>
+</div>
+</div>

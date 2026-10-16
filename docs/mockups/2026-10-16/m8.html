@@ -1,0 +1,85 @@
+<style>
+.m8-days{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:2px 0 6px}
+.m8-d{display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px}
+.m8-wd{font-size:8.5px;color:#8e8e93;letter-spacing:.02em}
+.m8-dt{font-size:11px;font-weight:600;color:#f2f2f7;line-height:1.2}
+.m8-now .m8-wd,.m8-now .m8-dt{color:#5dcaa5}
+.m8-t{font-size:10px;color:#f2f2f7;margin-top:1px}
+.m8-bar{width:100%;height:52px;border-radius:7px;margin-top:4px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:600}
+.m8-free{border:1.5px solid rgba(93,202,165,.8);background:rgba(93,202,165,.07)}
+.m8-busy{background:#378add}
+.m8-ev{background:#a78bfa;color:#fff}
+.m8-leg{display:flex;gap:9px;font-size:10px;color:#8e8e93;margin:0 0 2px}
+.m8-sw{width:9px;height:9px;border-radius:3px;display:inline-block;vertical-align:-1px;margin-right:3px}
+.m8-swf{border:1.2px solid #5dcaa5}.m8-swb{background:#378add}.m8-swe{background:#a78bfa}
+.m8-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:1px}
+.m8-dp{background:#a78bfa}.m8-db{background:#378add}
+.m8-tag{background:rgba(167,139,250,.16);color:#a78bfa;border-radius:6px;padding:0 5px;font-size:11px;white-space:nowrap}
+.m8-sum{display:flex;gap:5px;margin-top:9px}
+.m8-kpi{flex:1;background:#2c2c2e;border-radius:10px;padding:7px 4px;text-align:center}
+.m8-kpi b{display:block;font-size:15px;line-height:1.15;font-weight:600}
+.m8-kpi span{font-size:8.5px;color:#8e8e93}
+.m8-cg{color:#5dcaa5}.m8-cb{color:#378add}.m8-cp{color:#a78bfa}
+</style>
+<div>
+<p class="l">M8 · Week runway</p>
+<p class="s">The next 7 days · evening slots 17–23</p>
+<div class="p">
+<div class="sec">FRI 16 – THU 22 · WEATHER BY DAY</div>
+<div class="m8-days">
+  <div class="m8-d m8-now">
+    <div class="m8-wd">Fri</div><div class="m8-dt">16</div>
+    <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true"><circle cx="7" cy="5.2" r="2.8" fill="#e8b04a"/><g stroke="#e8b04a" stroke-width="1" stroke-linecap="round"><line x1="7" y1="0.7" x2="7" y2="1.9"/><line x1="1.6" y1="5.2" x2="2.8" y2="5.2"/><line x1="3.1" y1="1.8" x2="3.9" y2="2.6"/><line x1="10.6" y1="1.8" x2="9.8" y2="2.6"/></g><path d="M7.6 13.4h8.4a2.9 2.9 0 0 0 .54-5.74 4 4 0 0 0-7.8-1.02A3.4 3.4 0 0 0 7.6 13.4z" fill="#8e8e93"/></svg>
+    <div class="m8-t">12°</div>
+    <div class="m8-bar m8-free"></div>
+  </div>
+  <div class="m8-d">
+    <div class="m8-wd">Sat</div><div class="m8-dt">17</div>
+    <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true"><path d="M5 11h9a3 3 0 0 0 .56-5.94 4.1 4.1 0 0 0-8.42-1.36A3.5 3.5 0 0 0 5 11z" fill="#8e8e93"/><g stroke="#378add" stroke-width="1.2" stroke-linecap="round"><line x1="7.2" y1="12.2" x2="6.6" y2="14.4"/><line x1="10.6" y1="12.2" x2="10" y2="14.4"/><line x1="14" y1="12.2" x2="13.4" y2="14.4"/></g></svg>
+    <div class="m8-t">11°</div>
+    <div class="m8-bar m8-busy"></div>
+  </div>
+  <div class="m8-d">
+    <div class="m8-wd">Sun</div><div class="m8-dt">18</div>
+    <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true"><circle cx="10" cy="8" r="3.4" fill="#e8b04a"/><g stroke="#e8b04a" stroke-width="1.1" stroke-linecap="round"><line x1="10" y1="1.2" x2="10" y2="3.2"/><line x1="10" y1="12.8" x2="10" y2="14.8"/><line x1="2.4" y1="8" x2="4.4" y2="8"/><line x1="15.6" y1="8" x2="17.6" y2="8"/><line x1="4.4" y1="2.4" x2="5.8" y2="3.8"/><line x1="14.2" y1="12.2" x2="15.6" y2="13.6"/><line x1="4.4" y1="13.6" x2="5.8" y2="12.2"/><line x1="14.2" y1="3.8" x2="15.6" y2="2.4"/></g></svg>
+    <div class="m8-t">10°</div>
+    <div class="m8-bar m8-free"></div>
+  </div>
+  <div class="m8-d">
+    <div class="m8-wd">Mon</div><div class="m8-dt">19</div>
+    <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true"><path d="M5 11h9a3 3 0 0 0 .56-5.94 4.1 4.1 0 0 0-8.42-1.36A3.5 3.5 0 0 0 5 11z" fill="#8e8e93"/><g stroke="#378add" stroke-width="1.2" stroke-linecap="round"><line x1="7.2" y1="12.2" x2="6.6" y2="14.4"/><line x1="10.6" y1="12.2" x2="10" y2="14.4"/><line x1="14" y1="12.2" x2="13.4" y2="14.4"/></g></svg>
+    <div class="m8-t">9°</div>
+    <div class="m8-bar m8-busy"></div>
+  </div>
+  <div class="m8-d">
+    <div class="m8-wd">Tue</div><div class="m8-dt">20</div>
+    <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true"><circle cx="7" cy="5.2" r="2.8" fill="#e8b04a"/><g stroke="#e8b04a" stroke-width="1" stroke-linecap="round"><line x1="7" y1="0.7" x2="7" y2="1.9"/><line x1="1.6" y1="5.2" x2="2.8" y2="5.2"/><line x1="3.1" y1="1.8" x2="3.9" y2="2.6"/><line x1="10.6" y1="1.8" x2="9.8" y2="2.6"/></g><path d="M7.6 13.4h8.4a2.9 2.9 0 0 0 .54-5.74 4 4 0 0 0-7.8-1.02A3.4 3.4 0 0 0 7.6 13.4z" fill="#8e8e93"/></svg>
+    <div class="m8-t">11°</div>
+    <div class="m8-bar m8-ev">17–21</div>
+  </div>
+  <div class="m8-d">
+    <div class="m8-wd">Wed</div><div class="m8-dt">21</div>
+    <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true"><path d="M5.4 13h9a3.2 3.2 0 0 0 .6-6.34 4.4 4.4 0 0 0-8.5-1.06A3.7 3.7 0 0 0 5.4 13z" fill="#8e8e93"/></svg>
+    <div class="m8-t">12°</div>
+    <div class="m8-bar m8-free"></div>
+  </div>
+  <div class="m8-d">
+    <div class="m8-wd">Thu</div><div class="m8-dt">22</div>
+    <svg width="20" height="16" viewBox="0 0 20 16" aria-hidden="true"><circle cx="10" cy="8" r="3.4" fill="#e8b04a"/><g stroke="#e8b04a" stroke-width="1.1" stroke-linecap="round"><line x1="10" y1="1.2" x2="10" y2="3.2"/><line x1="10" y1="12.8" x2="10" y2="14.8"/><line x1="2.4" y1="8" x2="4.4" y2="8"/><line x1="15.6" y1="8" x2="17.6" y2="8"/><line x1="4.4" y1="2.4" x2="5.8" y2="3.8"/><line x1="14.2" y1="12.2" x2="15.6" y2="13.6"/><line x1="4.4" y1="13.6" x2="5.8" y2="12.2"/><line x1="14.2" y1="3.8" x2="15.6" y2="2.4"/></g></svg>
+    <div class="m8-t">13°</div>
+    <div class="m8-bar m8-ev">18:30</div>
+  </div>
+</div>
+<div class="m8-leg"><span><span class="m8-sw m8-swf"></span>free</span><span><span class="m8-sw m8-swb"></span>busy</span><span><span class="m8-sw m8-swe"></span>scout pick</span></div>
+<div class="sec">PICKED BY SCOUTS</div>
+<div class="r"><span><span class="m8-dot m8-dp"></span>Tue 20 · 17–21<br><span class="m">Open workshop, Kildevæld · 3D print + laser</span></span><span class="m8-tag">picked</span></div>
+<div class="r"><span><span class="m8-dot m8-dp"></span>Thu 22 · 18:30<br><span class="m">IDA talk</span></span><span class="m8-tag">picked</span></div>
+<div class="r" style="border:0"><span><span class="m8-dot m8-db"></span>Sat 17 &amp; Mon 19<br><span class="m">Busy evenings · blocked in calendar</span></span><span class="m">2</span></div>
+<div class="m8-sum">
+  <div class="m8-kpi"><b class="m8-cg">3</b><span>free evenings</span></div>
+  <div class="m8-kpi"><b class="m8-cb">2</b><span>busy nights</span></div>
+  <div class="m8-kpi"><b class="m8-cp">2</b><span>scout picks</span></div>
+</div>
+<p class="m" style="margin-top:8px">Calendar + DMI forecast · Updated 16:05</p>
+</div>
+</div>

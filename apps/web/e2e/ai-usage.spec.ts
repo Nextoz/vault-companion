@@ -46,3 +46,16 @@ test('AB3b: an unknown provider still gets a tile titled with its id', async ({ 
   await panel.getByRole('button', { name: 'AI usage', exact: true }).click();
   await expect(panel.locator('.ai-usage-tile', { hasText: 'mystery' })).toHaveCount(1);
 });
+
+test('S0: the collapsed AI usage card stays within 340 px; expanding it grows past that bound', async ({ page }) => {
+  const api = new MockApi();
+  await api.install(page);
+  await page.goto('/');
+  await goTo(page, 'Board');
+  const panel = page.getByRole('region', { name: 'AI usage', exact: true });
+  await expect(panel.locator('.ai-usage-row')).toHaveCount(5); // collapsed on the default MockApi's five providers.
+  expect((await panel.boundingBox())!.height).toBeLessThanOrEqual(340);
+  await panel.getByRole('button', { name: 'AI usage', exact: true }).click();
+  await expect(panel.locator('.ai-usage-tile')).toHaveCount(5);
+  expect((await panel.boundingBox())!.height).toBeGreaterThan(340);
+});

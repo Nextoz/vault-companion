@@ -48,8 +48,9 @@
 
 /* AB3b: the AI usage panel. One tile per provider; the sparkline carries the indigo accent, the "left" line the
    budget row's own green/yellow/red tone. */
-.ai-usage .dash-card-head h2 { flex: 1 1 auto; min-width: 0; margin: 0; color: var(--ios-indigo); }
-.ai-usage .dash-card-head { flex-wrap: wrap; }
+.monitor .dash-card-head h2 { flex: 1 1 auto; min-width: 0; margin: 0; }
+.monitor .dash-card-head { flex-wrap: wrap; }
+.ai-usage .dash-card-head h2 { color: var(--ios-indigo); }
 .ai-usage-range { flex-shrink: 0; }
 .ai-usage-range button { min-height: var(--tap); padding: 2px 10px; font-size: var(--t-footnote); white-space: nowrap; }
 .ai-usage-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 10px; }
@@ -68,15 +69,17 @@
 .ai-usage-updated { margin: 0; font-variant-numeric: tabular-nums; }
 .ai-usage-failure { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-/* Owner request: compact by default. The h2 holds the disclosure button (the chevron rotates with aria-expanded);
-   the collapsed body is a one-column list of one-line 36 px summary rows — title (ellipsis when long) left, the
-   budget row's dot and text in the tone the budget row itself carries, tabular value right, hairlines between. */
-.ai-usage-head { display: flex; align-items: center; gap: 6px; min-height: var(--tap); padding: 0; border: 0;
+/* S0: MonitorCard's shared disclosure. The h2 holds the head button (the chevron rotates with aria-expanded) and
+   the body column swaps the collapsed summary for the expanded children. The rules below the monitor block are the
+   AI usage summary: one-column, one-line 36 px rows — title (ellipsis when long) left, the budget row's dot and text
+   in the tone the budget row itself carries, tabular value right, hairlines between. */
+.monitor-head { display: flex; align-items: center; gap: 6px; min-height: var(--tap); padding: 0; border: 0;
   background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: left;
   cursor: pointer; }
-.ai-usage-chevron { flex-shrink: 0; color: var(--ios-indigo); transition: transform var(--dur-fast) var(--ease-ui); }
-.ai-usage-head[aria-expanded='true'] .ai-usage-chevron { transform: rotate(90deg); }
-.ai-usage-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.monitor-chevron { flex-shrink: 0; transition: transform var(--dur-fast) var(--ease-ui); }
+.monitor-head[aria-expanded='true'] .monitor-chevron { transform: rotate(90deg); }
+.monitor-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ai-usage .monitor-chevron { color: var(--ios-indigo); }
 .ai-usage-summary { display: grid; grid-template-columns: 1fr; margin: 0; padding: 0; list-style: none; }
 .ai-usage-row { display: flex; align-items: center; gap: 6px; min-height: 36px; min-width: 0; }
 .ai-usage-row + .ai-usage-row { border-top: .5px solid var(--line); }

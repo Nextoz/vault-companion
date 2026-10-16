@@ -1,11 +1,12 @@
 // AB3b: the Dashboard's one AI usage panel. It only draws what the usage projection and the budget rows hand it; a
 // failed read says so instead of showing a number, and a missing budget row simply means no "left" line.
-// Owner request: compact by default. The heading's button is the disclosure; the collapsed body is one summary row per
-// provider, and every mount starts collapsed (no persistence).
+// Owner request: compact by default. MonitorCard owns the disclosure; this panel owns the range state, the summary
+// rows, the tiles and the freshness footer. Every mount starts collapsed (no persistence).
 import type { AiBudgetResponse, AiUsageResponse } from '@vault-companion/contracts';
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import type { Fetched } from '../api.ts';
 import { aiUsageDayLabel, aiUsageSpark, aiUsageTiles, formatAiUsageValue, type AiUsageMetric, type AiUsageRange, type AiUsageTile } from './ai-usage.ts';
+import { MonitorCard } from './MonitorCard.tsx';
 import './Dashboard.css';
 
 export const AI_USAGE_EMPTY = 'No AI usage has been recorded yet.';
@@ -69,56 +70,41 @@ export function AiUsagePanel({ usage, budget, now, timeZone = 'Europe/Copenhagen
   timeZone?: string;
   onRetry?: (() => void) | undefined;
 }) {
-  const headingId = useId();
-  const bodyId = useId();
   const [range, setRange] = useState<AiUsageRange>(7);
-  const [expanded, setExpanded] = useState(false);
   if (usage === null) return null;
   const view = usage.kind === 'ok'
     ? aiUsageTiles(usage.data, budget?.kind === 'ok' ? budget.data : null, now, timeZone, range)
     : null;
+  const tiles = view?.tiles ?? [];
   return (
-    <section className="dash-card ai-usage" aria-labelledby={headingId}>
-      <header className="dash-card-head">
-        <h2 id={headingId}>
-          <button type="button" className="ai-usage-head" aria-expanded={expanded} aria-controls={bodyId}
-            onClick={() => setExpanded((open) => !open)}>
-            AI usage
-            <svg className="ai-usage-chevron" aria-hidden="true" focusable="false" viewBox="0 0 12 12" width="12" height="12">
-              <path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </h2>
-        {expanded && view && view.tiles.length > 0 && (
-          <div className="segmented ai-usage-range" role="group" aria-label="AI usage range">
-            <button type="button" aria-pressed={range === 7} onClick={() => setRange(7)}>7 d</button>
-            <button type="button" aria-pressed={range === 30} onClick={() => setRange(30)}>30 d</button>
-          </div>
-        )}
-      </header>
-      <div className="ai-usage-body" id={bodyId}>
-        {view === null ? (
-          <div className="ai-usage-failure">
-            <p className="dash-note" role="status">{AI_USAGE_FAILED}</p>
-            {onRetry && <button type="button" className="link" onClick={onRetry}>Retry</button>}
-          </div>
-        ) : view.tiles.length === 0 ? (
-          <p className="dash-note" role="status">{AI_USAGE_EMPTY}</p>
-        ) : expanded ? (
-          <div className="ai-usage-tiles">
-            {view.tiles.map((tile) => <Tile key={tile.id} tile={tile} range={range} />)}
-          </div>
-        ) : (
-          <ul className="ai-usage-summary">
-            {view.tiles.map((tile) => <SummaryRow key={tile.id} tile={tile} />)}
-          </ul>
-        )}
-        {view?.freshness && (
-          <p className={view.freshness.stale ? 'dash-stale ai-usage-updated' : 'muted small ai-usage-updated'} role="status">
-            {view.freshness.text}
-          </p>
-        )}
+    <MonitorCard
+      title="AI usage"
+      className="ai-usage"
+      headerExtra={tiles.length > 0 ? (
+        <div className="segmented ai-usage-range" role="group" aria-label="AI usage range">
+          <button type="button" aria-pressed={range === 7} onClick={() => setRange(7)}>7 d</button>
+          <button type="button" aria-pressed={range === 30} onClick={() => setRange(30)}>30 d</button>
+        </div>
+      ) : undefined}
+      status={view === null ? (
+        <div className="ai-usage-failure">
+          <p className="dash-note" role="status">{AI_USAGE_FAILED}</p>
+          {onRetry && <button type="button" className="link" onClick={onRetry}>Retry</button>}
+        </div>
+      ) : tiles.length === 0 ? (
+        <p className="dash-note" role="status">{AI_USAGE_EMPTY}</p>
+      ) : undefined}
+      summary={<ul className="ai-usage-summary">
+        {tiles.map((tile) => <SummaryRow key={tile.id} tile={tile} />)}
+      </ul>}
+      footer={view?.freshness && (
+        <p className={view.freshness.stale ? 'dash-stale ai-usage-updated' : 'muted small ai-usage-updated'} role="status">
+          {view.freshness.text}
+        </p>
+      )}>
+      <div className="ai-usage-tiles">
+        {tiles.map((tile) => <Tile key={tile.id} tile={tile} range={range} />)}
       </div>
-    </section>
+    </MonitorCard>
   );
 }
