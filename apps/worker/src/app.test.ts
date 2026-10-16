@@ -1,4 +1,4 @@
-import { AiBudgetResponse, AiUsageResponse, MorningBriefResponse } from '@vault-companion/contracts';
+import { AiBudgetResponse, AiUsageResponse, MorningBriefResponse, VaultActivityResponse } from '@vault-companion/contracts';
 import type { ApiError, Command, Receipt } from '@vault-companion/contracts';
 import { AI_USAGE_PATH, createAiUsageReadService } from '@vault-companion/domain';
 import { InMemoryStore } from '@vault-companion/domain/testing';
@@ -379,6 +379,67 @@ describe('GET /api/ai-usage (AB3a)', () => {
     const body = AiUsageResponse.parse(await res.json());
     expect(body.skipped).toBe(0);
     expect(body.providers.claude).not.toHaveProperty('extra');
+  });
+});
+
+describe('GET /api/monitors/vault-activity (M6a)', () => {
+  const sample = (): VaultActivityResponse => VaultActivityResponse.parse({
+    revision: '7'.repeat(40),
+    schema: 1,
+    generatedAt: '2026-10-16T05:40:12+02:00',
+    source: `${SENTINEL} git history`,
+    windowDays: 3,
+    start: '2026-10-14',
+    end: '2026-10-16',
+    days: [
+      { date: '2026-10-14', notes: 11, areas: { Events: 2, '(root)': 3, Health: 3, Learning: 2, Career: 1 } },
+      { date: '2026-10-15', notes: 3, areas: { Health: 2, Projects: 1 } },
+      { date: '2026-10-16', notes: 5, areas: { Events: 1, Learning: 1, '(root)': 1, Health: 2 } },
+    ],
+    currentStreak: 23,
+    notesThisMonth: 79,
+    areas30d: [{ area: 'Projects', notes: 28 }, { area: 'Health', notes: 27 }],
+    excluded: ['Automation/', `${SENTINEL}/`],
+  });
+
+  function app(readVaultActivity?: Services['readVaultActivity']) {
+    const services: Services = {
+      async readTasks() { return { code: 'upstream-unavailable', message: 'x', retryable: true }; },
+      async execute() { return receipt; },
+      ...(readVaultActivity ? { readVaultActivity } : {}),
+    };
+    return createApp({
+      verify: async (t) => (t === 'good' ? { ok: true, email: 'owner@example.com', accountKey: ACCOUNT } : { ok: false }),
+      appOrigin: ORIGIN,
+      services,
+      log: (r) => logs.push(r),
+    });
+  }
+  const get = (readVaultActivity?: Services['readVaultActivity']) =>
+    app(readVaultActivity).request('/api/monitors/vault-activity', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+
+  it('404s without a service, and logs nothing from the activity', async () => {
+    const res = await get();
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+
+  it.each([
+    [{ code: 'not-found', retryable: false }, 404],
+    [{ code: 'invalid', retryable: false }, 400],
+    [{ code: 'upstream-unavailable', retryable: true }, 503],
+  ] as const)('maps %o to %i', async (error, status) => {
+    const res = await get(async () => ({ ...error, message: 'm' }));
+    expect(res.status).toBe(status);
+    expect(logs.at(-1)).toMatchObject({ errorCode: error.code });
+  });
+
+  it('returns the activity and logs only the revision', async () => {
+    const res = await get(async () => sample());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(sample());
+    expect(logs.at(-1)).toMatchObject({ commitSha: '7'.repeat(40) });
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
   });
 });
 

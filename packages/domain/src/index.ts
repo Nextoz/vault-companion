@@ -33,6 +33,7 @@ export * from './morning-brief-read.ts';
 export * from './morning-brief-status.ts';
 export * from './ai-budget-read.ts';
 export * from './ai-usage-read.ts';
+export * from './monitor-files.ts';
 export * from './game/types.ts';
 export * from './game/config.ts';
 export * from './game/catalogue.ts';
