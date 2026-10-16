@@ -161,3 +161,81 @@ describe('createGoogleReader', () => {
     await expect(makeReader(fetchImpl).readMail()).resolves.toEqual({ code: 'upstream-unavailable', message: 'reader unavailable', retryable: true });
   });
 });
+
+describe('readBusy', () => {
+  it('returns intervals for timed events and drops all-day, transparent, self-declined and malformed items', async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.hostname === 'oauth2.googleapis.com') return json({ access_token: TOKEN, scope: GOOD_SCOPE });
+      return json({
+        items: [
+          { start: { dateTime: '2026-10-19T08:00:00+02:00' }, end: { dateTime: '2026-10-19T09:00:00+02:00' } },
+          { attendees: [{ self: true, responseStatus: 'accepted' }], start: { dateTime: '2026-10-19T10:00:00+02:00' }, end: { dateTime: '2026-10-19T10:30:00+02:00' } },
+          { start: { date: '2026-10-19' }, end: { date: '2026-10-20' } },
+          { transparency: 'transparent', start: { dateTime: '2026-10-19T11:00:00+02:00' }, end: { dateTime: '2026-10-19T12:00:00+02:00' } },
+          { attendees: [{ self: true, responseStatus: 'declined' }], start: { dateTime: '2026-10-19T13:00:00+02:00' }, end: { dateTime: '2026-10-19T14:00:00+02:00' } },
+          { attendees: [{ self: false, responseStatus: 'declined' }], start: { dateTime: '2026-10-19T15:00:00+02:00' }, end: { dateTime: '2026-10-19T15:30:00+02:00' } },
+          { start: { dateTime: 'not-a-date' }, end: { dateTime: '2026-10-19T16:00:00+02:00' } },
+          { start: { dateTime: '2026-10-19T17:00:00+02:00' } },
+        ],
+      });
+    }) as typeof fetch;
+
+    const result = await makeReader(fetchImpl).readBusy('2026-10-19T04:00:00.000Z', '2026-10-19T22:00:00.000Z');
+    expect(result).toEqual([
+      { start: '2026-10-19T06:00:00.000Z', end: '2026-10-19T07:00:00.000Z' },
+      { start: '2026-10-19T08:00:00.000Z', end: '2026-10-19T08:30:00.000Z' },
+      { start: '2026-10-19T13:00:00.000Z', end: '2026-10-19T13:30:00.000Z' },
+    ]);
+  });
+
+  it('sends a bodyless GET with the bearer token, opaque fields and verbatim bounds', async () => {
+    let calendarUrl: URL | undefined;
+    let calendarInit: RequestInit | undefined;
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.hostname === 'oauth2.googleapis.com') return json({ access_token: TOKEN, scope: GOOD_SCOPE });
+      calendarUrl = url;
+      calendarInit = init;
+      return json({ items: [] });
+    }) as typeof fetch;
+
+    await makeReader(fetchImpl).readBusy('2026-10-19T05:00:00Z', '2026-10-19T21:30:00Z');
+    expect(calendarUrl?.hostname).toBe('www.googleapis.com');
+    expect(calendarUrl?.pathname).toBe('/calendar/v3/calendars/primary/events');
+    expect(calendarUrl?.searchParams.get('timeMin')).toBe('2026-10-19T05:00:00Z');
+    expect(calendarUrl?.searchParams.get('timeMax')).toBe('2026-10-19T21:30:00Z');
+    expect(calendarUrl?.searchParams.get('singleEvents')).toBe('true');
+    expect(calendarUrl?.searchParams.get('orderBy')).toBe('startTime');
+    expect(calendarUrl?.searchParams.get('maxResults')).toBe('250');
+    // Opaque fields only: requesting summary (or any event text) must fail this test.
+    expect(calendarUrl?.searchParams.get('fields')).toBe('items(start,end,transparency,attendees(self,responseStatus))');
+    // Read-only GET: any non-GET method or request body must fail this test.
+    expect(calendarInit?.method ?? 'GET').toBe('GET');
+    expect(calendarInit?.body).toBeUndefined();
+    expect((calendarInit?.headers as Record<string, string>).Authorization).toBe(`Bearer ${TOKEN}`);
+  });
+
+  it('maps token and upstream failures to typed errors and returns no calendar data', async () => {
+    const invalidGrant = vi.fn(async () => json({ error: 'invalid_grant' }, 400)) as typeof fetch;
+    await expect(makeReader(invalidGrant).readBusy('2026-10-19T05:00:00Z', '2026-10-19T21:00:00Z'))
+      .resolves.toEqual({ code: 'google-reauth-needed', message: 'reader unavailable', retryable: false });
+    expect(invalidGrant).toHaveBeenCalledTimes(1); // no calendar call after a token failure
+
+    const wrongScope = vi.fn(async () => json({ access_token: TOKEN, scope: 'https://www.googleapis.com/auth/calendar.readonly' })) as typeof fetch;
+    await expect(makeReader(wrongScope).readBusy('2026-10-19T05:00:00Z', '2026-10-19T21:00:00Z'))
+      .resolves.toEqual({ code: 'google-scope-mismatch', message: 'reader unavailable', retryable: false });
+    expect(wrongScope).toHaveBeenCalledTimes(1);
+
+    let calendarCalls = 0;
+    const failing = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.hostname === 'oauth2.googleapis.com') return json({ access_token: TOKEN, scope: GOOD_SCOPE });
+      calendarCalls++;
+      return json({ items: [] }, 500);
+    }) as typeof fetch;
+    await expect(makeReader(failing).readBusy('2026-10-19T05:00:00Z', '2026-10-19T21:00:00Z'))
+      .resolves.toEqual({ code: 'upstream-unavailable', message: 'reader unavailable', retryable: true });
+    expect(calendarCalls).toBe(1);
+  });
+});

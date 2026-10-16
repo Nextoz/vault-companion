@@ -14,6 +14,7 @@ export * from './notes.ts';
 export * from './triage.ts';
 export * from './triage-format.ts';
 export * from './weather.ts';
+export * from './week-runway.ts';
 
 export * from './training.ts';
 export * from './learning.ts';
