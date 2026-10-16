@@ -329,6 +329,23 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(region.locator('.m1-other')).toHaveCount(1);
   });
 
+  // M3: the Scout heartbeat monitor on Boards. Collapsed it is the one-line count summary; expanded it is the legend
+  // plus one row per scheduled scout with 14 local-day squares. Same reads and headings as the rest of Boards.
+  await shot('Board - Scout heartbeat', async () => {
+    await goTo(page, 'Board');
+    const panel = page.getByRole('region', { name: 'Scout heartbeat', exact: true });
+    await panel.scrollIntoViewIfNeeded();
+    await expect(panel.locator('.m3-summary')).toBeVisible();
+    await expect(panel.locator('.m3-row')).toHaveCount(0);
+  });
+
+  await shot('Board - Scout heartbeat expanded', async () => {
+    const panel = page.getByRole('region', { name: 'Scout heartbeat', exact: true });
+    await panel.scrollIntoViewIfNeeded();
+    await panel.getByRole('button', { name: 'Scout heartbeat', exact: true }).click();
+    await expect(panel.locator('.m3-row').first()).toBeVisible();
+  });
+
   const index = [
     '# Tour screenshots',
     '',
