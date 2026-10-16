@@ -1,0 +1,49 @@
+<style>
+/* M3 fragment-local styles — every selector prefixed .m3- */
+.m3-chips{display:flex;gap:4px;margin-bottom:8px}
+.m3-chip{background:#2c2c2e;border-radius:7px;padding:2px 7px;font-size:11px;color:#8e8e93}
+.m3-ok{color:#5dcaa5}.m3-deg{color:#e8b04a}.m3-fail{color:#f0997b}
+.m3-leg{display:flex;gap:10px;align-items:center;font-size:10px;color:#8e8e93;margin:0 0 3px}
+.m3-leg i{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:3px}
+.m3-scale{display:flex;justify-content:space-between;width:178px;font-size:9px;color:#8e8e93;margin:0 0 2px}
+.m3-row{padding:6px 0 7px;border-bottom:.5px solid #2c2c2e}
+.m3-nb{border-bottom:0}
+.m3-top{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.m3-name{font-size:12px;color:#f2f2f7}
+.m3-when{font-size:11px;color:#8e8e93;white-space:nowrap}
+.m3-dots{display:flex;gap:4px;margin-top:6px}
+.m3-dots i{width:9px;height:9px;border-radius:50%;display:block}
+.m3-dg{background:#5dcaa5}.m3-da{background:#e8b04a}.m3-dr{background:#f0997b}.m3-dn{background:#3a3a3c}
+</style>
+<div>
+<p class="l">M3 · Scout heartbeat</p>
+<p class="s">11 scheduled jobs · last 14 days</p>
+<div class="p">
+<div class="m3-chips"><span class="m3-chip m3-ok">7 ok</span><span class="m3-chip m3-deg">3 degraded</span><span class="m3-chip m3-fail">1 failed</span></div>
+<div class="m3-leg"><span><i class="m3-dg"></i>ok</span><span><i class="m3-da"></i>degraded</span><span><i class="m3-dr"></i>failed</span><span><i class="m3-dn"></i>no run</span></div>
+<div class="m3-scale"><span>14 d ago</span><span>today</span></div>
+<div class="m3-row"><div class="m3-top"><span class="m3-name">Morning Brief</span><span class="m3-when">06:31</span></div>
+<div class="m3-dots"><i class="m3-da"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i></div></div>
+<div class="m3-row"><div class="m3-top"><span class="m3-name">Daily research</span><span class="m3-when">00:24</span></div>
+<div class="m3-dots"><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-da"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i></div></div>
+<div class="m3-row"><div class="m3-top"><span class="m3-name">Copenhagen events</span><span class="m3-when">00:25</span></div>
+<div class="m3-dots"><i class="m3-dn"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i></div></div>
+<div class="m3-row"><div class="m3-top"><span class="m3-name">Culture and social</span><span class="m3-when m3-deg">09:11</span></div>
+<div class="m3-dots"><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-da"></i><i class="m3-da"></i><i class="m3-dg"></i><i class="m3-da"></i><i class="m3-da"></i><i class="m3-da"></i></div></div>
+<div class="m3-row"><div class="m3-top"><span class="m3-name">Member events</span><span class="m3-when">00:24</span></div>
+<div class="m3-dots"><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dn"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i></div></div>
+<div class="m3-row"><div class="m3-top"><span class="m3-name">Grocery savings</span><span class="m3-when">00:22</span></div>
+<div class="m3-dots"><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-da"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i></div></div>
+<div class="m3-row"><div class="m3-top"><span class="m3-name">Morning digest</span><span class="m3-when m3-deg">09:07</span></div>
+<div class="m3-dots"><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-da"></i><i class="m3-da"></i><i class="m3-da"></i></div></div>
+<div class="m3-row"><div class="m3-top"><span class="m3-name">Research explainer</span><span class="m3-when">06:30</span></div>
+<div class="m3-dots"><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-da"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i></div></div>
+<div class="m3-row"><div class="m3-top"><span class="m3-name">Research library</span><span class="m3-when m3-deg">4 d ago</span></div>
+<div class="m3-dots"><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dn"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dn"></i><i class="m3-dn"></i><i class="m3-dn"></i><i class="m3-dn"></i></div></div>
+<div class="m3-row"><div class="m3-top"><span class="m3-name">Swipe triage</span><span class="m3-when m3-deg">16:11</span></div>
+<div class="m3-dots"><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-da"></i><i class="m3-dg"></i><i class="m3-da"></i></div></div>
+<div class="m3-row m3-nb"><div class="m3-top"><span class="m3-name">AI bill watch</span><span class="m3-when m3-fail">FAILED 12:16</span></div>
+<div class="m3-dots"><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-da"></i><i class="m3-dg"></i><i class="m3-dg"></i><i class="m3-da"></i><i class="m3-da"></i><i class="m3-da"></i><i class="m3-dr"></i></div></div>
+<p class="m" style="margin-top:6px">Scout scheduler · cron log · Updated 09:41</p>
+</div>
+</div>
