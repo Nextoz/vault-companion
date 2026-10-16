@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -6,6 +6,8 @@ export default defineConfig({
     // the 5 s default made CI flaky without catching anything.
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    // These dependency-free controller tests run with node --test, separately from Vitest.
+    exclude: [...configDefaults.exclude, 'tools/glm-workflow.test.mjs', 'tools/glm-supervisor.test.mjs'],
     include: [
       'packages/*/src/**/*.test.ts',
       'apps/*/src/**/*.test.ts',
