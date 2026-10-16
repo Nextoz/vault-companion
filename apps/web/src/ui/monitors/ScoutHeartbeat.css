@@ -1,0 +1,30 @@
+/* M3: the Scout heartbeat monitor on Boards. Every fragment is .m3- prefixed and names a token, never a raw value,
+   so the 14-day squares read the same as the Scouts board. */
+.scout-heartbeat .dash-card-head h2 { color: var(--ios-green); }
+
+/* Collapsed: the count line stays one line at 390 px - it ellipsises rather than wrapping. */
+.m3-summary { margin: 0; font-size: var(--t-footnote); font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m3-sep { color: var(--muted); }
+.m3-dot { display: inline-block; width: 6px; height: 6px; margin-right: 4px; vertical-align: middle;
+  border-radius: var(--r-pill); background: var(--muted); }
+.m3-dot-ok, .m3-square-ok { background: var(--done); }
+.m3-dot-degraded, .m3-square-degraded, .m3-dot-stale, .m3-square-stale { background: var(--warn); }
+.m3-dot-failed, .m3-square-failed { background: var(--danger); }
+.m3-dot-none, .m3-square-none { background: var(--line); }
+
+.m3-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; font-size: var(--t-caption2); color: var(--muted); }
+.m3-legend > span { display: inline-flex; align-items: center; }
+
+.m3-rows { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.m3-row { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 7px; min-width: 0; }
+.m3-row + .m3-row { border-top: .5px solid var(--line); }
+.m3-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; min-width: 0; }
+.m3-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--t-caption); color: var(--text); }
+.m3-when { flex-shrink: 0; font-size: var(--t-caption2); font-variant-numeric: tabular-nums;
+  color: var(--muted); white-space: nowrap; }
+.m3-state-failed .m3-when { color: var(--danger); font-weight: 600; }
+.m3-dots { display: flex; gap: 4px; }
+.m3-square { width: 10px; height: 10px; border-radius: var(--r-tight); }
+.m3-updated { margin: 0; font-variant-numeric: tabular-nums; }
