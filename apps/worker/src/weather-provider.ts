@@ -31,7 +31,7 @@ export function weatherUrl(location: WeatherLocation, model: WeatherModel): stri
 
 class TimedOut extends Error {}
 
-async function readJson(
+export async function readJson(
   fetchImpl: typeof fetch,
   url: string,
   timeoutMs: number,

@@ -3,11 +3,11 @@ import { JSDOM } from 'jsdom';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getDashboard, getHealth, getMarketTicker, type Fetched } from '../api.ts';
+import { getDashboard, getHealth, getMarketTicker, getPower, type Fetched } from '../api.ts';
 import { lastCopies } from '../lastCopy.ts';
 import { DASHBOARD_RANGES, Dashboard, MARKET_STALE_MS, RANGE_LABELS, mergeTicker, overviewTiles, seriesSegments } from './Dashboard.tsx';
 
-vi.mock('../api.ts', () => ({ getJson: vi.fn(() => new Promise(() => {})), getDashboard: vi.fn(), getHealth: vi.fn(), getMarketTicker: vi.fn() }));
+vi.mock('../api.ts', () => ({ getJson: vi.fn(() => new Promise(() => {})), getDashboard: vi.fn(), getHealth: vi.fn(), getMarketTicker: vi.fn(), getPower: vi.fn() }));
 
 const NOW = '2026-09-30T12:00:00Z';
 const TICKER = { base: 'BTC' as const, quote: 'USD' as const, provider: 'coinbase' as const, price: 60123.45, providerTime: NOW };
@@ -48,6 +48,7 @@ beforeEach(() => {
   Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { value: true, configurable: true });
   vi.mocked(getMarketTicker).mockResolvedValue({ kind: 'offline' });
   vi.mocked(getHealth).mockResolvedValue(healthMissing());
+  vi.mocked(getPower).mockResolvedValue({ kind: 'offline' });
 });
 afterEach(async () => {
   if (root) await act(async () => root!.unmount());

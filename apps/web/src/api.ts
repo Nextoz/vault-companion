@@ -5,6 +5,7 @@ import {
   AiBudgetResponse,
   AiUsageResponse,
   LeaderboardResponse,
+  PowerResponse,
   AskJevResponse,
   DashboardResponse,
   GameResponse,
@@ -91,6 +92,7 @@ export const getMorningBrief = () => getJson('/api/morning-brief', z.union(Morni
 export const getAiBudget = () => getJson('/api/ai-budget', AiBudgetResponse.strip());
 export const getAiUsage = () => getJson('/api/ai-usage', AiUsageResponse.strip());
 export const getLeaderboard = () => getJson('/api/leaderboard', LeaderboardResponse);
+export const getPower = () => getJson('/api/power', PowerResponse);
 export const getTriage = () => getJson('/api/triage', TriageResponse.strip());
 export const getRadar = () => getJson('/api/radar', RadarResponse.strip());
 export const getRadarNote = (paperId: string) =>

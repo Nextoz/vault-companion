@@ -141,6 +141,18 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(panel.locator('.m8-d')).toHaveCount(7);
   });
 
+  await shot('Board - Power monitor', async () => {
+    const card = page.getByRole('region', { name: 'Power (DK2)', exact: true });
+    await card.scrollIntoViewIfNeeded();
+    await expect(card.locator('.power-summary')).toContainText('Now 1.96 kr');
+  });
+
+  await shot('Board - Power monitor expanded', async () => {
+    const card = page.getByRole('region', { name: 'Power (DK2)', exact: true });
+    await card.getByRole('button', { name: 'Power (DK2)', exact: true }).click();
+    await expect(card.locator('.power-bar')).toHaveCount(24);
+  });
+
   await shot('Board - AI model leaderboard', async () => {
     const panel = page.getByRole('region', { name: 'AI models', exact: true });
     await panel.evaluate(card => window.scrollBy(0, card.getBoundingClientRect().top - 100));

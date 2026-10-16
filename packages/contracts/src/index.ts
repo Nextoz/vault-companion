@@ -1558,3 +1558,4 @@ export * from './dashboard.ts';
 export * from './weather.ts';
 export * from './week-runway.ts';
 export * from './leaderboard.ts';
+export * from './power.ts';

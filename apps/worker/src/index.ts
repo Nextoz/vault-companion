@@ -10,6 +10,7 @@ import { createGameService } from './game.ts';
 import { createLeaderboardSource } from './leaderboard.ts';
 import { createLeaderboardStorage, type LeaderboardKv } from './leaderboard-storage.ts';
 import { createMarketSource } from './market.ts';
+import { createPowerProvider } from './power-provider.ts';
 import { createWatchlistSource } from './watchlist.ts';
 import { createPrivateValuationsReader } from './private-valuations.ts';
 import { createWeatherProvider } from './weather-provider.ts';
@@ -144,6 +145,8 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
   });
   // The game projection reuses these same read services; it never adds a write target or a third-party call (GAM1-A2).
   const timeZone = env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE;
+  // M4b: one cached power provider per app, beside weatherService; /api/power reuses its cache and single-flight.
+  const readPower = createPowerProvider({ fetch: fetchImpl, now: () => Date.now(), timeZone }).read;
   const training = createTrainingService({ store });
   const learning = createLearningService({ store });
   const books = createBooksService({ store });
@@ -158,6 +161,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     : null;
   const services = {
     readLeaderboard: leaderboard.read,
+    readPower,
     ...createCommandService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createLinkedNoteService({ store }),
     ...createActiveWorkService({ store }),

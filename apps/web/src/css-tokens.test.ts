@@ -21,6 +21,8 @@ const ALLOWED: Record<string, string> = {
   'src/styles.css::root': 'root font size: the base all --t-* rem tokens scale from',
   // The level-up number is deliberately larger than --t-display.
   'src/ui/Rewards.css:.reward-level-number': 'level-up stamp, larger than --t-display by design',
+  // SVG user units, not CSS pixels: the chart scales with its 248-wide viewBox, so a rem token would not track the bars.
+  'src/ui/monitors/Power.css:.power-chart text': 'axis labels in viewBox units, scaled with the chart',
 };
 
 function cssFiles(dir: string): string[] {

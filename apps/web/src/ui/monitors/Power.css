@@ -1,0 +1,25 @@
+/* M4c2: the Power (DK2) monitor. Colours come from the app tokens, never the m4 mockup's raw hexes. */
+
+/* The collapsed summary is exactly one line; a longer one ends in an ellipsis instead of wrapping. */
+.power-summary { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+
+.power-chart { width: 100%; height: auto; }
+.power-chart text { fill: var(--muted); font-size: 8px; }
+
+.power-bar-normal { fill: var(--ios-blue); }
+.power-bar-cheap { fill: var(--done); }
+.power-bar-now { fill: var(--ios-orange); }
+
+/* The dashed day-average line, drawn across the bars. */
+.power-avg { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+
+/* Chart footer row: the cheapest window left, the day average right. */
+.power-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 2px 0 0; }
+
+/* The cheapest window reads green, like its bars. */
+.power-cheapest { color: var(--done); }
+
+/* The failure note and its Retry button share one row, like the AI usage card. */
+.power-failure { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.power-updated { font-variant-numeric: tabular-nums; }
