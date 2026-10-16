@@ -1,5 +1,6 @@
 // ADR-0044 read-only Google adapter for the Morning Brief. The access token is refreshed once per cron run and kept
 // in memory only. Calendar returns BriefEvents; mail returns metadata-only GoogleMailItems for the gatherer to map.
+// readBusy returns opaque CalendarBusyIntervals (instants only; no titles, ids, links or attendees leave the adapter).
 // No token, scope, subject, sender, title or event text is ever logged or put in an error message (typed codes only).
 import type { ApiError } from '@vault-companion/contracts';
 import { localWallToInstant, userDate, type BriefEvent } from '@vault-companion/domain';
@@ -31,6 +32,12 @@ export interface GoogleMailItem {
   readonly sender: string;
 }
 
+/** Opaque busy interval: normalized ISO instants only; no event text or identifiers leave the adapter. */
+export interface CalendarBusyInterval {
+  readonly start: string;
+  readonly end: string;
+}
+
 export interface GoogleReaderDeps {
   readonly clientId: string;
   readonly clientSecret: string;
@@ -42,6 +49,7 @@ export interface GoogleReaderDeps {
 export interface GoogleReader {
   readCalendar(): Promise<readonly BriefEvent[] | ApiError>;
   readMail(): Promise<readonly GoogleMailItem[] | ApiError>;
+  readBusy(timeMin: string, timeMax: string): Promise<readonly CalendarBusyInterval[] | ApiError>;
 }
 
 const apiError = (code: ApiError['code'], retryable: boolean): ApiError => ({
@@ -96,6 +104,34 @@ function parseCalendar(body: unknown): BriefEvent[] {
     events.push({ title: typeof raw.summary === 'string' ? raw.summary : '', start, end, allDay, ...(typeof raw.htmlLink === 'string' ? { link: raw.htmlLink } : {}) });
   }
   return events;
+}
+
+function parseBusy(body: unknown): CalendarBusyInterval[] {
+  const root = asRecord(body);
+  if (!root || !Array.isArray(root.items)) return [];
+  const intervals: CalendarBusyInterval[] = [];
+  for (const item of root.items) {
+    const raw = asRecord(item);
+    if (!raw) continue;
+    const startRaw = asRecord(raw.start);
+    const endRaw = asRecord(raw.end);
+    if (startRaw && 'date' in startRaw) continue; // all-day events are never busy
+    if (raw.transparency === 'transparent') continue; // "free" marker on the owner's calendar
+    const attendees = Array.isArray(raw.attendees) ? raw.attendees : [];
+    const selfDeclined = attendees.some((attendee) => {
+      const record = asRecord(attendee);
+      return record !== null && record.self === true && record.responseStatus === 'declined';
+    });
+    if (selfDeclined) continue;
+    const startValue = typeof startRaw?.dateTime === 'string' ? startRaw.dateTime : null;
+    const endValue = typeof endRaw?.dateTime === 'string' ? endRaw.dateTime : null;
+    if (startValue === null || endValue === null) continue;
+    const start = Date.parse(startValue);
+    const end = Date.parse(endValue);
+    if (Number.isNaN(start) || Number.isNaN(end)) continue;
+    intervals.push({ start: new Date(start).toISOString(), end: new Date(end).toISOString() });
+  }
+  return intervals;
 }
 
 function headerValue(headers: unknown, name: string): string {
@@ -185,6 +221,28 @@ export function createGoogleReader(deps: GoogleReaderDeps): GoogleReader {
       });
       if (!res.ok) return apiError('upstream-unavailable', true);
       return parseCalendar(await res.json().catch(() => null));
+    } catch {
+      return apiError('upstream-unavailable', true);
+    }
+  };
+
+  const readBusy = async (timeMin: string, timeMax: string): Promise<readonly CalendarBusyInterval[] | ApiError> => {
+    const token = await ensureToken();
+    if (isApiError(token)) return token;
+    try {
+      const params = new URLSearchParams({
+        singleEvents: 'true',
+        orderBy: 'startTime',
+        maxResults: '250',
+        timeMin,
+        timeMax,
+        fields: 'items(start,end,transparency,attendees(self,responseStatus))',
+      });
+      const res = await deps.fetch(`${CALENDAR_URL}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return apiError('upstream-unavailable', true);
+      return parseBusy(await res.json().catch(() => null));
     } catch {
       return apiError('upstream-unavailable', true);
     }
@@ -281,5 +339,5 @@ export function createGoogleReader(deps: GoogleReaderDeps): GoogleReader {
     return items;
   };
 
-  return { readCalendar, readMail };
+  return { readCalendar, readMail, readBusy };
 }

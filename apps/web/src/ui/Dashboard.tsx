@@ -8,6 +8,7 @@ import { AiUsagePanel } from './AiUsagePanel.tsx';
 import { LeaderboardPanel } from './LeaderboardPanel.tsx';
 import { CreditBurnMonitor } from './monitors/CreditBurnMonitor.tsx';
 import { ScoutHeartbeatMonitor } from './monitors/ScoutHeartbeatMonitor.tsx';
+import { WeekRunwayMonitor } from './monitors/WeekRunwayMonitor.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 import { formatChange, formatPrivateValuation, formatWatchPrice, formatWatchValue, legacyMarketCard, privateValuationCards, seriesChange, watchCards, watchDelayLabel, watchFresh, watchTitle } from './watchlist.ts';
 import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
@@ -386,6 +387,7 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough, aiUsa
       <AiUsagePanel usage={aiUsage} budget={aiBudget} now={nowMs || Date.now()} />
       <CreditBurnMonitor usage={aiUsage} budget={aiBudget} now={nowMs || Date.now()} />
       <ScoutHeartbeatMonitor refreshKey={refreshKey} accountKey={accountKey} />
+      <WeekRunwayMonitor />
       <LeaderboardPanel view={leaderboard} now={nowMs || Date.now()} />
     </section>
   );

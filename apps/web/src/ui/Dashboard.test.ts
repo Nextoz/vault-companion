@@ -7,7 +7,7 @@ import { getDashboard, getHealth, getMarketTicker, type Fetched } from '../api.t
 import { lastCopies } from '../lastCopy.ts';
 import { DASHBOARD_RANGES, Dashboard, MARKET_STALE_MS, RANGE_LABELS, mergeTicker, overviewTiles, seriesSegments } from './Dashboard.tsx';
 
-vi.mock('../api.ts', () => ({ getDashboard: vi.fn(), getHealth: vi.fn(), getMarketTicker: vi.fn() }));
+vi.mock('../api.ts', () => ({ getJson: vi.fn(() => new Promise(() => {})), getDashboard: vi.fn(), getHealth: vi.fn(), getMarketTicker: vi.fn() }));
 
 const NOW = '2026-09-30T12:00:00Z';
 const TICKER = { base: 'BTC' as const, quote: 'USD' as const, provider: 'coinbase' as const, price: 60123.45, providerTime: NOW };

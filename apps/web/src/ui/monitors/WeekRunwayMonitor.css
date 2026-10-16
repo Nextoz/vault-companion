@@ -1,0 +1,49 @@
+/* M8: Week runway monitor, ported from docs/mockups/2026-10-16/m8.html. The .m8-* rules keep the mockup's
+   layout and colours; the app's tokens stand in for the greys it shares (muted labels, raised KPI tiles).
+   No fixed widths: only the 7-column day grid is fixed, everything else shares the card's width. */
+
+/* Section labels ("FRI 16 – THU 22 · WEATHER BY DAY", "PICKED BY SCOUTS") use the app's card-label style. */
+.m8-sec { margin: 0; font-size: var(--t-footnote); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; overflow-wrap: anywhere; }
+
+/* The 7 day columns. */
+.m8-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin: 2px 0 6px; }
+.m8-d { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
+.m8-wd { font-size: var(--t-caption2); color: var(--muted); letter-spacing: .02em; }
+.m8-dt { font-size: var(--t-footnote); font-weight: 600; color: inherit; line-height: 1.2; }
+.m8-now .m8-wd, .m8-now .m8-dt { color: #5dcaa5; }
+.m8-ic { text-align: center; }
+.m8-ic .icon { width: 18px; height: 18px; vertical-align: middle; }
+.m8-t { font-size: var(--t-caption2); color: inherit; margin-top: 1px; }
+.m8-bar { width: 100%; height: 52px; border-radius: var(--r-tight); margin-top: 4px; display: flex; align-items: center; justify-content: center; font-size: var(--t-caption2); font-weight: 600; }
+.m8-free { border: 1.5px solid rgba(93, 202, 165, .8); background: rgba(93, 202, 165, .07); }
+.m8-busy { background: #378add; }
+.m8-ev { background: #a78bfa; color: #fff; }
+.m8-unknown { border: 1.5px dashed var(--muted); }
+
+/* Legend: free / busy / scout pick. */
+.m8-leg { display: flex; gap: 9px; font-size: var(--t-caption2); color: var(--muted); margin: 0 0 2px; }
+.m8-sw { width: 9px; height: 9px; border-radius: var(--r-skin); display: inline-block; vertical-align: -1px; margin-right: 3px; }
+.m8-swf { border: 1.2px solid #5dcaa5; }
+.m8-swb { background: #378add; }
+.m8-swe { background: #a78bfa; }
+
+/* Pick and busy rows. */
+.m8-rows { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.m8-row { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.m8-row:last-child { border-bottom: none; }
+.m8-row-main { min-width: 0; font-size: var(--t-footnote); }
+.m8-sub { display: block; color: var(--muted); font-size: var(--t-caption2); overflow-wrap: anywhere; }
+.m8-count { color: var(--muted); font-size: var(--t-footnote); font-variant-numeric: tabular-nums; }
+.m8-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: 1px; }
+.m8-dp { background: #a78bfa; }
+.m8-db { background: #378add; }
+.m8-tag { background: rgba(167, 139, 250, .16); color: #a78bfa; border-radius: var(--r-tight); padding: 0 5px; font-size: var(--t-caption2); white-space: nowrap; }
+
+/* KPI tiles: free evenings / busy nights / scout picks. */
+.m8-sum { display: flex; gap: 5px; margin-top: 9px; }
+.m8-kpi { flex: 1; background: var(--raised); border-radius: var(--r-control); padding: 7px 4px; text-align: center; }
+.m8-kpi b { display: block; font-size: var(--t-callout); line-height: 1.15; font-weight: 600; }
+.m8-kpi span { font-size: var(--t-caption2); color: var(--muted); }
+.m8-cg { color: #5dcaa5; }
+.m8-cb { color: #378add; }
+.m8-cp { color: #a78bfa; }

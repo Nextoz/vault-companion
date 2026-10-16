@@ -47,6 +47,7 @@ import {
   type TasksResponse,
   type TriageResponse,
   type WeatherResponse,
+  type WeekRunwayResponse,
 } from '@vault-companion/contracts';
 import { AskJevRequest } from '@vault-companion/contracts';
 import { Hono } from 'hono';
@@ -110,6 +111,8 @@ export interface Services {
   /** Weather projection (ADR-0033 W1). Optional: without it the routes answer 404. */
   readWeather?(): Promise<WeatherResponse | ApiError>;
   readWeatherAtLocation?(request: WeatherLocationRequest): Promise<WeatherResponse | ApiError>;
+  /** M8 week runway. Read-only. Optional: without it the route answers 404. */
+  readWeekRunway?(): Promise<WeekRunwayResponse | ApiError>;
   /** Health daily card (HC1). Read-only. Optional: without it the route answers 404. */
   readHealth?(): Promise<HealthResponse | ApiError>;
   /** Health history view (HC3b). Read-only. Optional: without it the route answers 404. */
@@ -168,7 +171,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | BooksResponse | BookFollowUpResponse | ScoutsResponse | HistoryResponse | GameResponse | NotesResponse | NoteReadResponse | AskJevResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | BooksResponse | BookFollowUpResponse | ScoutsResponse | HistoryResponse | GameResponse | NotesResponse | NoteReadResponse | AskJevResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | WeekRunwayResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -848,6 +851,20 @@ export function createApp(deps: AppDeps) {
     if (isApiError(result)) {
       meta.errorCode = result.code;
       return c.json({ ...result, operationId: parsed.data.operationId }, statusFor(result.code) as 400);
+    }
+    return c.json(result);
+  });
+
+  // Week runway (M8): read-only GET with no request input. Every source degrades to 'unavailable' inside the service,
+  // so the route only maps the result; the calendar busy read stays opaque (no titles or ids leave the reader).
+  app.get('/api/week-runway', async (c) => {
+    const read = deps.services.readWeekRunway;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
     }
     return c.json(result);
   });

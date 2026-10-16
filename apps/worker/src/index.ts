@@ -16,6 +16,7 @@ import { createWeatherProvider } from './weather-provider.ts';
 import { createGoogleReader } from './google-reader.ts';
 import { createCalendarWriter } from './calendar-writer.ts';
 import { createCalendarService } from './calendar-service.ts';
+import { createWeekRunwayService } from './week-runway.ts';
 import { createAccessVerifier, createServiceTokenVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
 import { createScalewayChat } from './scaleway-chat.ts';
@@ -149,7 +150,12 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
   const radar = createResearchRadarService({ store, now: () => new Date(), timeZone });
   const health = createHealthService({ store, now: () => new Date(), timeZone });
   const history = createHistoryService({ store, now: () => new Date(), timeZone });
+  const triage = createTriageService({ store });
   const leaderboard = productionLeaderboard(env, fetchImpl);
+  // Week runway busy-read credentials (M8): when any Google credential is missing the calendar source stays unavailable.
+  const googleBusyCredentials = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_REFRESH_TOKEN
+    ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET, refreshToken: env.GOOGLE_REFRESH_TOKEN }
+    : null;
   const services = {
     readLeaderboard: leaderboard.read,
     ...createCommandService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
@@ -163,7 +169,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
       ...(env.SCALEWAY_API_KEY ? { chat: createScalewayChat({ apiKey: env.SCALEWAY_API_KEY, fetch: fetchImpl, timeoutMs: BOOK_FOLLOW_UP_TIMEOUT_MS }) } : {}),
       now: () => Date.now(),
     }),
-    ...createTriageService({ store }),
+    ...triage,
     ...radar,
     ...createScoutService({ store }),
     ...health,
@@ -194,6 +200,21 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
       now: () => new Date(),
     }),
     ...weatherService,
+    ...createWeekRunwayService({
+      readWeather: () => weatherService.readWeather(),
+      readTriage: () => triage.readTriage(),
+      createReader: googleBusyCredentials
+        ? () => createGoogleReader({
+          clientId: googleBusyCredentials.clientId,
+          clientSecret: googleBusyCredentials.clientSecret,
+          refreshToken: googleBusyCredentials.refreshToken,
+          fetch: fetchImpl,
+          now: () => new Date(),
+        })
+        : null,
+      now: () => new Date(),
+      timeZone: WEATHER_TIME_ZONE,
+    }),
     ...createCalendarService({
       links: createCalendarLinksService({ store, now: () => Date.now() }),
       writer: createCalendarWriter({

@@ -46,11 +46,13 @@ import {
   TasksResponse,
   TriageResponse,
   WeatherResponse,
+  WeekRunwayResponse,
   type TaskView,
 } from '@vault-companion/contracts';
 import type { BrowserContext, Page, Route } from '@playwright/test';
 import { z } from 'zod';
 import { copenhagenDay } from '../src/triage.ts';
+import { weekRunwayFixture } from './week-runway-fixture.ts';
 
 export const ACCOUNT = 'a'.repeat(64);
 const TODAY = '2026-09-24';
@@ -571,6 +573,8 @@ export class MockApi {
       : this.#json(route, 200, AiBudgetResponse.parse(this.aiBudget)));
     await on('**/api/ai-usage', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, AiUsageResponse.parse(this.aiUsage)));
+    await on('**/api/week-runway', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
+      : this.#json(route, 200, WeekRunwayResponse.parse(weekRunwayFixture())));
     await on('**/api/scouts', (route) => this.session === 'signed-out'
       ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, ScoutsResponse.parse(this.scouts)));
