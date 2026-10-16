@@ -1,10 +1,11 @@
 import type { ScoutStatus, ScoutsResponse } from '@vault-companion/contracts';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getScoutOutput, getScouts, type Fetched } from '../api.ts';
 import { attentionCount, displayState, exactTime, lastRun, pluralise, pluralNoun, previewableScouts, scoutsNeedAttention, type DisplayState } from '../scouts.ts';
 import { Insights } from './Insights.tsx';
 import { ScoutTime } from './ScoutTime.tsx';
 import './Scouts.css';
+import { LargeTitle } from './LargeTitle.tsx';
 
 type ScoutEntry = ScoutsResponse['scouts'][number];
 /** The calendar-sync tracker never belongs in the health list; only a failed or stale run deserves a line. */
@@ -55,7 +56,7 @@ function FindingsNote({ id }: { id: string }) {
   }, [id]);
   return 'html' in content ? <article className="note-body scout-findings" data-testid="scout-findings" dangerouslySetInnerHTML={{ __html: content.html }} /> : <p role="status">{content.message}</p>;
 }
-export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar }: {
+export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar, belowTitle }: {
   page: boolean;
   onOpen: () => void;
   refreshKey: number | null;
@@ -63,6 +64,8 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar }: {
   /** Retained for callers; Radar now lives on its own screen, reached from the small link below. */
   blocked: boolean;
   onOpenRadar?: () => void;
+  /** Review #8: what sits under the large title (the triage indicator), so nothing sits above it. */
+  belowTitle?: ReactNode;
 }) {
   const [result, setResult] = useState<Fetched<ScoutsResponse> | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -85,7 +88,7 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar }: {
   const entry = data?.scouts.find((candidate) => candidate.file === selected);
   const detail = entry?.state === 'ok' ? entry.status : null;
   const detailState = detail && data ? displayState(detail, data.now) : null;
-  // The triage-applier is identified by scoutId (never by display name); malformed records keep their file name.
+  // The triage-applier is identified by scoutId (never inferred from a malformed record's file name).
   const triage = data?.scouts.find(isTriageApplier) ?? null;
   const triageState = triage && data ? entryState(triage, data.now) : null;
   const triageAttention = triageState === 'Failed' || triageState === 'Stale';
@@ -100,10 +103,16 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar }: {
   if (problemCount > 0) summary.push(`${problemCount} with problems`);
   if (runningCount > 0) summary.push(`${runningCount} running`);
   return <section aria-label="Scouts" className="scouts">
-    <h1>Scouts</h1>
+    <LargeTitle>Scouts</LargeTitle>
+    {belowTitle}
     {!data && <p role="status">{!result ? 'Loading scouts…' : result.kind === 'error' ? result.message : result.kind === 'signed-out' ? 'Sign in to view scouts.' : 'Scouts unavailable offline.'}</p>}
     {data?.scouts.length === 0 && <p>No status yet</p>}
-    {data && (detail ? <div className="scout-detail">
+    {data && (entry?.state === 'unreadable' ? <div className="scout-detail">
+      <button type="button" className="scout-back" onClick={() => setSelected(null)}>Back to scouts</button>
+      <h2>Unreadable scout</h2>
+      <p role="status">This scout's status could not be read. Its last run and findings are unknown.</p>
+      <details><summary>Source details</summary><p className="scout-source-file">{entry.file}</p></details>
+    </div> : detail ? <div className="scout-detail">
       <button type="button" className="scout-back" onClick={() => setSelected(null)}>Back to scouts</button>
       <h2>{detail.displayName}</h2>
       <p className={stateClass(detailState!)}>{stateLabel(detailState!)}</p>
@@ -132,18 +141,18 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar }: {
           const run = status ? lastRun(status) : null;
           const label = status
             ? `${status.displayName}, ${stateLabel(state)}, ${status.findings === null ? 'findings unknown' : pluralise(status.findings, 'finding')}, last run ${run ? exactTime(run) : 'never'}`
-            : `${candidate.file}, No status yet`;
+            : 'Unreadable scout, Status unavailable, findings unknown, last run unknown';
           return <li key={candidate.file}>
-            <button type="button" className="scout-row" disabled={!status} aria-label={label} onClick={() => setSelected(candidate.file)}>
+            <button type="button" className="scout-row" aria-label={label} onClick={() => setSelected(candidate.file)}>
               <span className={`scout-dot ${stateClass(state)}`} aria-hidden="true" />
               {' '}
-              <span className="scout-row-name">{status?.displayName ?? candidate.file}</span>
+              <span className="scout-row-name">{status?.displayName ?? 'Unreadable scout'}</span>
               {' '}
-              <span className="scout-row-time">{status ? <>Last run <ScoutTime at={run} now={data.now} /></> : 'No run yet'}</span>
+              <span className="scout-row-time">{status ? <>Last run <ScoutTime at={run} now={data.now} /></> : 'Last run unknown'}</span>
               {' '}
               <span className="scout-row-meta">
-                <span className={stateClass(state)}>{stateLabel(state)}</span>
-                <span className="scout-row-findings"><strong className={stateClass(state)}>{status?.findings ?? '—'}</strong> {pluralNoun(status?.findings ?? 0, 'finding')}</span>
+                <span className={stateClass(state)}>{status ? stateLabel(state) : 'Status unavailable'}</span>
+                <span className="scout-row-findings">{status?.findings == null ? 'Findings unknown' : <><strong className={stateClass(state)}>{status.findings}</strong> {pluralNoun(status.findings, 'finding')}</>}</span>
               </span>
               {status && status.history.length > 1 && <span className={`scout-row-spark ${stateClass(state)}`}><Sparkline history={status.history} decorative /></span>}
             </button>
@@ -151,7 +160,7 @@ export function Scouts({ page, onOpen, refreshKey, accountKey, onOpenRadar }: {
         })}
       </ul>
     </>)}
-    {insightsData && <Insights data={insightsData} hidden={!!detail} onSelect={setSelected} />}
+    {insightsData && <Insights data={insightsData} hidden={!!entry} onSelect={setSelected} />}
     {page && accountKey && onOpenRadar && (
       <button type="button" className="link scout-radar-link" onClick={onOpenRadar}>Research Radar</button>
     )}

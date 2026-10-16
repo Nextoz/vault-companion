@@ -12,6 +12,7 @@ import { goTo } from './nav.ts';
 const CLOCK = new Date('2026-09-30T12:00:00Z');
 const TODAY = '2026-09-30';
 const CALENDAR_TASK = 'Draft quarterly notes at 14:00';
+const NEXT_TASK = 'Prepare the quarterly project update and review the outstanding actions before the team meeting';
 const TOUR_DIR = fileURLToPath(new URL('../test-results/tour/', import.meta.url));
 
 const brief = (date: string) => MorningBriefResponse.parse({
@@ -50,7 +51,17 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
 
   const api = new MockApi();
-  api.open = [taskView(10, 'Water the plants'), taskView(11, 'Call the bike shop'), taskView(3, CALENDAR_TASK)];
+  api.open = [taskView(10, NEXT_TASK), taskView(11, 'Call the bike shop'), taskView(3, CALENDAR_TASK)];
+  // R4: Active Work on the Tasks shot (the quest-log cue outside Character).
+  api.activeWork = '## Now';
+  api.activeWorkItems = [
+    { name: 'Garden plan', outcome: null, next: 'Order seeds', review: '2026-09-28', link: null, needsReview: true,
+      locator: { path: 'Tasks/Active Work Now.md', blobSha: '5'.repeat(40), lineIndex: 3,
+        lineText: '- [ ] **Garden plan:** Next: Order seeds ⏳ 2026-09-28', occurrencesAtRead: 1 } },
+    { name: 'Bike repair', outcome: null, next: 'Call the shop about the brake cable', review: '2026-10-07', link: null, needsReview: false,
+      locator: { path: 'Tasks/Active Work Now.md', blobSha: '5'.repeat(40), lineIndex: 4,
+        lineText: '- [ ] **Bike repair:** Next: Call the shop about the brake cable ⏳ 2026-10-07', occurrencesAtRead: 1 } },
+  ];
   api.morning = MockApi.SAMPLE_MORNING;
   api.morningBrief = brief(TODAY);
   api.triage = { ...api.triage, feedState: 'ok', generatedAt: '2026-09-28T06:50:00+02:00',
@@ -66,7 +77,7 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     const file = `${String(shots.length + 1).padStart(2, '0')}-${slug(name)}.png`;
     try {
       await fn();
-      await page.screenshot({ path: join(TOUR_DIR, file) });
+      await page.screenshot({ path: join(TOUR_DIR, file), animations: 'disabled' });
     } catch (error) {
       throw new Error(`tour: could not reach screen "${name}": ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
@@ -79,25 +90,24 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Morning Brief', exact: true })).toBeVisible();
   });
 
-  for (const colorScheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme });
-    await shot(`UX9 Morning Brief ${colorScheme}`, async () => {
-      await page.getByRole('button', { name: 'Morning Brief', exact: true }).click();
-      await expect(page.getByRole('dialog', { name: 'Morning Brief' })).toBeVisible();
-    });
-    await page.getByRole('dialog', { name: 'Morning Brief' }).getByRole('button', { name: 'Close', exact: true }).click();
-  }
+  await shot('Morning Brief', async () => {
+    await page.getByRole('button', { name: 'Morning Brief', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Morning Brief' })).toBeVisible();
+  });
+  await page.getByRole('dialog', { name: 'Morning Brief' }).getByRole('button', { name: 'Close', exact: true }).click();
 
   await shot('Today - Needs You', async () => {
     const needs = page.getByRole('button', { name: /^Needs you/ });
-    await needs.scrollIntoViewIfNeeded();
-    await expect(needs).toBeVisible();
+    await needs.click();
+    await expect(page.getByRole('dialog', { name: 'Needs you', exact: true })).toBeVisible();
   });
+  await page.getByRole('dialog', { name: 'Needs you', exact: true }).getByRole('button', { name: 'Close' }).click();
 
   await shot('Today - Since I was here', async () => {
     const pane = page.getByRole('region', { name: 'Since I was here' });
     await pane.scrollIntoViewIfNeeded();
-    await expect(pane).toBeVisible();
+    await pane.getByRole('button', { name: /^Since I was here/ }).click();
+    await expect(pane.getByRole('button', { name: 'Dismiss all', exact: true })).toBeVisible();
   });
 
   await shot('Today - AI usage panel', async () => {
@@ -126,7 +136,7 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
 
   await shot('Tasks', async () => {
     await goTo(page, 'Tasks');
-    await expect(page.getByRole('region', { name: 'Today', exact: true }).getByText('Water the plants')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Today', exact: true }).getByText(NEXT_TASK)).toBeVisible();
   });
 
   await shot('Scouts', async () => {
@@ -194,6 +204,8 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(page.getByRole('dialog', { name: 'First Flag' })).toBeVisible();
   });
   await page.getByRole('dialog', { name: 'First Flag' }).getByRole('button', { name: 'Close' }).click();
+  // R2: Close slides the sheet out before it closes; Escape must reach the Character sheet, not the leaving detail.
+  await expect(page.getByRole('dialog', { name: 'First Flag' })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await character.getByRole('button', { name: 'Close' }).click();
   await shot('Achievement banner', async () => {
@@ -233,6 +245,43 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(page.getByRole('dialog', { name: 'Report', exact: true })).toBeVisible();
   });
   await page.getByRole('dialog', { name: 'Report', exact: true }).getByRole('button', { name: 'Cancel' }).click();
+
+  // R3a (review #8, C3, D2): the bar title and the compact capture button once a screen scrolls, Capture's
+  // Training/Check-in hand-offs, and a stale vault read as a chip in the bar.
+  await shot('Log - Progress scrolled (bar title, compact capture)', async () => {
+    await goTo(page, 'Progress');
+    await page.evaluate(() => window.scrollTo(0, 420));
+    await expect(page.locator('header.top')).toHaveAttribute('data-collapsed');
+    await expect(page.locator('.fab')).toHaveAttribute('data-compact');
+    await page.waitForTimeout(400); // let the pill finish shrinking for the photo
+  });
+  await shot('Capture - Check-in', async () => {
+    await page.getByRole('button', { name: 'Capture', exact: true }).click();
+    await page.getByRole('group', { name: 'Log instead' }).getByRole('button', { name: 'Check-in', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Check-in' })).toBeVisible();
+  });
+  await page.getByRole('dialog', { name: 'Check-in' }).getByRole('button', { name: 'Close' }).click();
+  await shot('Stale vault chip', async () => {
+    await goTo(page, 'Tasks');
+    await page.clock.fastForward(11 * 60 * 1000);
+    await expect(page.getByRole('button', { name: 'Vault stale: open Status' })).toBeVisible();
+  });
+  // R3b (review #7, #9): the inline check-in's last step, and the Log reopening on the view last shown.
+  await shot('Today - check-in sleep step', async () => {
+    await goTo(page, 'Today');
+    const row = page.getByRole('region', { name: 'Check-in', exact: true });
+    await row.getByRole('button', { name: 'Mood +1', exact: true }).click();
+    await row.getByRole('button', { name: 'Energy 0', exact: true }).click();
+    await expect(row).toContainText('Sleep?');
+  });
+  await shot('Log - Reading remembered', async () => {
+    await goTo(page, 'Log');
+    await page.getByRole('group', { name: 'Log view' }).getByRole('button', { name: 'Reading', exact: true }).click();
+    await goTo(page, 'Today');
+    await goTo(page, 'Log');
+    await expect(page.getByRole('group', { name: 'Log view' }).getByRole('button', { name: 'Reading', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await page.evaluate(() => window.scrollTo(0, 0));
+  });
 
   const index = [
     '# Tour screenshots',

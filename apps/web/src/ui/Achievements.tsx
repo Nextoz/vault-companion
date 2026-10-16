@@ -17,6 +17,8 @@ import {
   totalPoints,
 } from '../achievements.ts';
 import { earnedByText } from '../rewards.ts';
+import { achievementQuality, categoryGlyph, lockedArc, qualityForPoints, qualityLabel, remainingText } from '../character-skin.ts';
+import { Medal } from './CharacterGlyphs.tsx';
 import { CopyNote } from './useLastCopy.tsx';
 import { SheetHeader } from './SheetHeader.tsx';
 import './Achievements.css';
@@ -26,13 +28,20 @@ export interface TogglePinResult {
   readonly reason?: string;
 }
 
+/** The domain sends lower-case profession ids as categories ("athletics"); the detail names them as words. */
+const categoryWord = (category: string): string => category.charAt(0).toUpperCase() + category.slice(1);
+
 function tileLabel(achievement: GameAchievement): string {
   if (isHiddenUnearned(achievement)) return 'Hidden achievement';
   const earned = achievement.earned ? ', earned' : '';
   return `${displayName(achievement)}, ${displayPoints(achievement)} points${earned}`;
 }
 
-/** One tile button in the 4-column grid. A hidden unearned tile shows only ??? (no points, no progress). */
+/**
+ * One tile in the 4-column grid, icon first (R4): the framed category glyph, lit in the tier's quality colour when
+ * earned, grey with a progress arc when not; the name in serif below, then points and the tile's progress. A hidden
+ * unearned tile is a single "?" in the frame: no name, points or progress.
+ */
 function AchievementTile({ achievement, all, onOpen }: {
   achievement: GameAchievement;
   all: readonly GameAchievement[];
@@ -41,13 +50,16 @@ function AchievementTile({ achievement, all, onOpen }: {
   const hidden = isHiddenUnearned(achievement);
   const progress = tileProgress(achievement, all);
   const earned = achievement.earned;
+  const meta = [progress, achievement.type === 'meta' ? 'Meta' : null].filter((part) => part !== null);
   return <button type="button" data-testid="achievement-tile" data-achievement={achievement.id}
+    data-quality={hidden ? undefined : achievementQuality(achievement)}
     className={`achievement-tile${earned ? ' is-earned' : ''}${hidden ? ' is-hidden' : ''}`}
     aria-label={tileLabel(achievement)} onClick={(event) => onOpen(achievement, event.currentTarget)}>
-    <span className="achievement-tile-name">{displayName(achievement)}</span>
-    {!hidden && <span className="achievement-tile-points">{displayPoints(achievement)} pts</span>}
-    {progress !== null && <span className="achievement-tile-progress">{progress}</span>}
-    {achievement.type === 'meta' && !hidden && <span className="achievement-tile-meta">Meta</span>}
+    <Medal glyph={categoryGlyph(achievement.category)} lit={earned} check={earned} arc={lockedArc(achievement)} hidden={hidden} />
+    {!hidden && <>
+      <span className="achievement-tile-name">{displayName(achievement)}</span>
+      <span className="achievement-tile-points">{displayPoints(achievement)} pts{meta.map((part) => <span key={part} className="achievement-tile-progress"> · {part}</span>)}</span>
+    </>}
   </button>;
 }
 
@@ -60,7 +72,7 @@ function CategorySection({ category, earned, total, achievements, all, onOpen }:
   onOpen: (achievement: GameAchievement, from: HTMLElement) => void;
 }) {
   return <section className="achievements-category" data-testid="achievement-category">
-    <h3 className="achievements-heading">{category} · {earned} / {total}</h3>
+    <h3 className="achievements-heading"><span>{categoryWord(category)} <span className="achievements-count">· {earned} / {total}</span></span></h3>
     <div className="achievements-grid">
       {achievements.map((achievement) => <AchievementTile key={achievement.id} achievement={achievement} all={all} onOpen={onOpen} />)}
     </div>
@@ -75,7 +87,7 @@ function FeatsSection({ feats, all, onOpen }: {
 }) {
   if (feats.length === 0) return null;
   return <section className="achievements-category" data-testid="achievement-feats">
-    <h3 className="achievements-heading">Feats of Strength · 0 pts</h3>
+    <h3 className="achievements-heading"><span>Feats of Strength <span className="achievements-count">· 0 pts</span></span></h3>
     <div className="achievements-grid">
       {feats.map((feat) => <AchievementTile key={feat.id} achievement={feat} all={all} onOpen={onOpen} />)}
     </div>
@@ -104,8 +116,9 @@ function WalkingSection({ milestones, today }: { milestones: GameResponse['stepM
     {view.earned.length > 0 && <div className="achievements-earned">
       <h4>EARNED</h4>
       <ul>
-        {view.earned.map((milestone) => <li key={milestone.id}>
-          <span>{milestone.name}</span>
+        {view.earned.map((milestone) => <li key={milestone.id} data-quality={qualityForPoints(milestone.points)}>
+          <Medal glyph={categoryGlyph('journey')} lit className="is-small" />
+          <span className="achievements-earned-name">{milestone.name}</span>
           <span className="achievements-earned-meta">{milestone.points} pts · {shortDate(milestone.earnedDate, today)}</span>
         </li>)}
       </ul>
@@ -146,23 +159,40 @@ function AchievementDetail({ achievement, all, feedback, today, pinned, onToggle
   const progress = hidden ? null : detailProgress(achievement);
   // ADR-0064: what it asks, and what earned it. A hidden achievement keeps its secret until earned.
   const extra = hidden ? undefined : feedback?.achievements[achievement.id];
-  const earnedLine = achievement.earned && achievement.earnedDate !== null
-    ? [shortDate(achievement.earnedDate, today), earnedByText(extra?.earnedBy ?? null)].filter((part) => part !== null).join(' · ')
-    : null;
+  const earnedBy = earnedByText(extra?.earnedBy ?? null);
+  const earnedDate = achievement.earned && achievement.earnedDate !== null ? shortDate(achievement.earnedDate, today) : null;
+  const quality = achievementQuality(achievement);
+  const points = displayPoints(achievement);
+  const left = remainingText(achievement);
+  const kind = [categoryWord(achievement.category), achievement.type === 'meta' ? 'Meta' : null, chain]
+    .filter((part) => part !== null).join(' · ');
+  // R4: the WoW tooltip moment. The name in the tier colour (header), what kind it is, what it asks, how it was
+  // earned or what is left, the points shield and the date. A hidden achievement keeps every secret.
   return <div className="sheet-backdrop" role="presentation">
-    <div ref={sheet} className="sheet achievement-detail" role="dialog" aria-modal="true"
+    <div ref={sheet} className="sheet achievement-detail character-skin" role="dialog" aria-modal="true"
+      data-quality={hidden ? undefined : quality}
       aria-label={hidden ? 'Hidden achievement' : displayName(achievement)} onKeyDown={onKeyDown}>
-      <SheetHeader title={hidden ? '???' : displayName(achievement)} onClose={onClose} />
+      <SheetHeader title={hidden ? '?' : displayName(achievement)} onClose={onClose} />
       <div className="achievement-detail-body">
+        <div className="achievement-detail-head">
+          <Medal glyph={categoryGlyph(achievement.category)} lit={achievement.earned} arc={lockedArc(achievement)} hidden={hidden} className="is-large" />
+          <p className="achievement-detail-kind">{hidden ? 'Hidden achievement' : <><span className="achievement-detail-quality">{qualityLabel(quality)}</span><br />{kind}</>}</p>
+          {!hidden && (achievement.type === 'feat'
+            ? <span className="achievement-detail-feat">Feat of Strength</span>
+            : <span className="achievement-shield">
+              <svg viewBox="0 0 40 44" aria-hidden="true" focusable="false"><path d="M20 2 37 8v13c0 10-7 17.5-17 21C10 38.5 3 31 3 21V8z" /></svg>
+              <span className="achievement-shield-points">{points}</span> <span className="achievement-shield-unit">pts</span>
+            </span>)}
+        </div>
         {extra !== undefined && <p className="achievement-detail-description">{extra.description}</p>}
-        {!hidden && <p className="achievement-detail-points">{displayPoints(achievement)} pts</p>}
-        {chain !== null && <p className="achievement-detail-chain">{chain}</p>}
-        {earnedLine !== null && <p className="achievement-detail-earned" data-testid="achievement-earned-line">{earnedLine}</p>}
+        {earnedDate !== null && <p className="achievement-detail-earned" data-testid="achievement-earned-line">
+          <span>{earnedBy ?? 'Earned'}</span><span className="achievement-detail-date">{earnedDate}</span>
+        </p>}
         {progress !== null && <div className="achievement-detail-progress">
           <span className="achievements-bar" role="img" aria-label={`${achievement.name}: ${progress.label}`}><span style={{ width: `${progress.percent}%` }} /></span>
-          <span className="muted">{progress.label}</span>
+          <span className="achievement-detail-left">{[progress.label, left].filter((part) => part !== null).join(' · ')}</span>
         </div>}
-        {!achievement.earned && achievement.locked && achievement.lockedReason !== null && <p className="achievement-detail-locked muted">{achievement.lockedReason}</p>}
+        {!achievement.earned && achievement.locked && achievement.lockedReason !== null && <p className="achievement-detail-locked">{achievement.lockedReason}</p>}
         <button type="button" className="achievement-pin"
           onClick={() => { const result = onTogglePin(achievement.id); setNote(result.ok ? null : result.reason ?? null); }}>
           {pinned ? 'Unpin' : 'Pin'}

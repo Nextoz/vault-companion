@@ -32,10 +32,10 @@ test('All achievements groups by category with counters, masks hidden ones, mark
   // Every achievement is a tile button in the grid (10 achievements + 1 feat).
   await expect(dialog.getByTestId('achievement-tile')).toHaveCount(11);
 
-  // An unearned hidden achievement shows as ??? with no points and no progress.
+  // An unearned hidden achievement shows a single ? in its frame, with no points and no progress (R4).
   const hidden = dialog.locator('.achievement-tile.is-hidden');
   await expect(hidden).toHaveCount(3);
-  await expect(hidden.first()).toHaveText('???');
+  await expect(hidden.first()).toHaveText('?');
   await expect(hidden.first()).not.toContainText('pts');
 
   // A chain shows its tier, a counter its percent, a meta tile is marked.
@@ -89,6 +89,8 @@ test('a tile opens the badge detail; Pin toggles, a fourth pin is refused, and T
   await refused.getByRole('button', { name: 'Pin', exact: true }).click();
   await expect(refused).toContainText('You can pin up to 3 achievements.');
   await refused.getByRole('button', { name: 'Close' }).click();
+  // R2: Close slides the detail out (inert meanwhile) before it closes; Escape is for the page beneath.
+  await expect(refused).toHaveCount(0);
 
   // Escape leaves the page for the overview, where Tracked lists the pins in pin order.
   await page.keyboard.press('Escape');

@@ -21,18 +21,18 @@
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-control);
   text-align: left;
 }
 .scout-row:disabled { opacity: 1; cursor: default; }
 .scout-row:focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 2px; }
 .scout-dot { grid-area: dot; width: 10px; height: 10px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 25%, transparent); }
-.scout-row-name { grid-area: name; min-width: 0; font-size: .8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; overflow-wrap: anywhere; }
+.scout-row-name { grid-area: name; min-width: 0; font-size: var(--t-footnote); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; overflow-wrap: anywhere; }
 .scout-row-meta { display: contents; }
-.scout-row-meta > :first-child { grid-area: state; font-size: .85rem; font-weight: 600; }
-.scout-row-findings { grid-area: big; font-size: .85rem; color: var(--muted); }
-.scout-row-findings strong { font-size: 2.2rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; margin-right: 4px; }
-.scout-row-time { grid-area: time; font-size: .8rem; color: var(--muted); }
+.scout-row-meta > :first-child { grid-area: state; font-size: var(--t-subhead); font-weight: 600; }
+.scout-row-findings { grid-area: big; font-size: var(--t-subhead); color: var(--muted); }
+.scout-row-findings strong { font-size: var(--t-largetitle); font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; margin-right: 4px; }
+.scout-row-time { grid-area: time; font-size: var(--t-footnote); color: var(--muted); }
 .scout-row-spark { grid-area: spark; display: block; min-width: 0; }
 .scout-row-spark .scout-sparkline { display: block; height: 28px; fill: currentColor; stroke: currentColor; }
 
@@ -46,14 +46,15 @@
   padding: 8px 12px;
   background: var(--surface);
   border: 1px solid currentColor;
-  border-radius: 12px;
+  border-radius: var(--r-control);
   text-align: left;
   font-weight: 650;
 }
 .scout-triage-attention .scout-dot { grid-area: auto; }
 .scout-triage-attention:focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 2px; }
-.scout-triage-more { margin-left: auto; font-size: .85rem; font-weight: 500; opacity: .85; }
+.scout-triage-more { margin-left: auto; font-size: var(--t-subhead); font-weight: 500; opacity: .85; }
 
 .scout-detail .scout-back { min-height: 44px; }
+.scout-source-file { overflow-wrap: anywhere; }
 .scout-detail .scout-sparkline { margin-top: 4px; }
 .scout-chips { margin-bottom: 12px; }

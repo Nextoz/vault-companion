@@ -1,0 +1,143 @@
+/* Design tokens (redesign R1, 2026-10-12; review "Design and Feel" #5, #6, A2). Every colour, text size, radius,
+   space and motion value the app uses comes from here; component CSS names a token, never a raw value. A new value
+   belongs here first. `tokens.test.ts` checks the text/background pairs below against WCAG AA. */
+:root {
+  /* ---- colour: dark iOS palette, permanent dark; one meaning per colour ---- */
+  --ios-bg: #000000;
+  --ios-card: #1c1c1e;
+  --ios-raised: #2c2c2e;
+  --ios-separator: #38383a;
+  --ios-text: #ffffff;
+  --ios-secondary: #8e8e93;
+  --ios-blue: #0a84ff; /* action: buttons, links, selection */
+  --ios-green: #30d158; /* status: done, healthy */
+  --ios-yellow: #ffd60a; /* status: degraded, warning */
+  --ios-red: #ff453a; /* status: failing, overdue */
+  --ios-orange: #ff9f0a; /* weather */
+  --ios-purple: #bf5af2; /* research, Radar */
+  --ios-pink: #ff375f; /* events, triage */
+  --ios-cyan: #64d2ff; /* health */
+  --ios-indigo: #7d7aff; /* markets; lifted from #5e5ce6 (3.4:1 on cards) to 4.9:1 */
+
+  --bg: var(--ios-bg);
+  --surface: var(--ios-card);
+  --raised: var(--ios-raised);
+  --text: var(--ios-text);
+  --muted: var(--ios-secondary);
+  --line: var(--ios-separator);
+  --accent: var(--ios-blue);
+  --accent-soft: rgb(10 132 255 / 18%);
+  --done: var(--ios-green);
+  --warn: var(--ios-yellow);
+  --warn-soft: rgb(255 214 10 / 18%);
+  --danger: var(--ios-red);
+  --danger-soft: rgb(255 69 58 / 18%);
+  --maybe: var(--ios-purple);
+  --maybe-soft: rgb(191 90 242 / 18%);
+
+  /* On the raised sheet grey the card values fail AA (blue 3.8:1, muted 4.3:1, red 4.1:1); `.sheet` swaps these in. */
+  --accent-on-raised: #409cff;
+  --muted-on-raised: #a1a1a6;
+  --danger-on-raised: #ff6961; /* #ff453a is 4.1:1 on raised; every sheet shows .error */
+
+  /* One hue per domain, used for its Today tile, its Log accent and its profession ring (review #10). */
+  --hue-training: #ff7a59; /* Training, Athletics */
+  --hue-learning: #40c8b0; /* Learning, Scholar */
+  --hue-research: #b78cff; /* Research, Lorekeeper */
+  --hue-tasks: #ffb547; /* Tasks, Quartermaster */
+  --hue-health: var(--ios-cyan);
+  --hue-weather: var(--ios-orange);
+  --hue-events: var(--ios-pink);
+  --hue-markets: var(--ios-indigo);
+
+  /* Gold means "reward" and nothing else (review A2). Defined once; rewards and Character read it from here. */
+  --game-gold: #f2c86b;
+  --game-gold-hi: #fff1c2;
+  --game-gold-lo: #8a5a14;
+  --game-well: rgb(255 255 255 / 0.05);
+  --game-track: rgb(255 255 255 / 0.09);
+
+  /* Character skin (redesign R4, review option B2): only Character, Achievements, How XP works, the achievement
+     detail and the reward banner read these. A parchment-tinted dark, gold hairline frames with corner notches, a
+     serif for names. Text pairs are checked on --skin-bg (the lighter end of the gradient) and --skin-raised. */
+  --skin-bg: #1a1712;
+  --skin-bg-deep: #100e0b;
+  --skin-raised: #221e18;
+  --skin-text: #f3ecdd;
+  --skin-muted: #a89f8c;
+  --skin-rested: #5aa2ff;
+  --skin-frame: color-mix(in srgb, var(--game-gold) 30%, transparent);
+  --skin-notch: color-mix(in srgb, var(--game-gold) 85%, transparent);
+  --skin-rule: color-mix(in srgb, var(--game-gold) 22%, transparent);
+  --skin-notch-size: 6px;
+  --r-skin: 2px;
+
+  /* Item quality per achievement tier (5 / 10 / 25 / 50 pts, Feats). WoW hues, lifted until each reads 4.5:1 on the
+     skin; rare (#0070dd) and epic (#a335ee) needed it. Never used outside the Character screens: they clash with the
+     status green and the action blue. */
+  --skin-quality-common: #f4efe4;
+  --skin-quality-uncommon: #3fe04f;
+  --skin-quality-rare: #3a8eff;
+  --skin-quality-epic: #b06cf5;
+  --skin-quality-legendary: #ff8000;
+
+  /* A2 signature: a faint top-lit edge on cards. */
+  --card-sheen: linear-gradient(rgb(255 255 255 / 0.03), transparent 40%);
+  --press-overlay: inset 0 0 0 100vmax rgb(255 255 255 / 0.07);
+
+  /* ---- type: Apple's text styles in rem (root = 17 px body, or the reader's Dynamic Type size) ---- */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-rounded: ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-serif: ui-serif, 'New York', Georgia, 'Times New Roman', serif;
+  --t-largetitle: 2rem; /* 34 */
+  --t-title1: 1.647rem; /* 28 */
+  --t-title2: 1.294rem; /* 22 */
+  --t-title3: 1.176rem; /* 20 */
+  --t-headline: 1rem; /* 17, weight 600 */
+  --t-body: 1rem; /* 17 */
+  --t-callout: 0.941rem; /* 16 */
+  --t-subhead: 0.882rem; /* 15 */
+  --t-footnote: 0.765rem; /* 13 */
+  --t-caption: 0.706rem; /* 12 */
+  --t-caption2: 0.647rem; /* 11 */
+  --t-display: 2.6rem; /* big numbers only: level, steps */
+
+  /* ---- radius ---- */
+  --r-tight: 6px; /* chips, badges, bars */
+  --r-control: 10px;
+  --r-card: 14px;
+  --r-sheet: 20px;
+  --r-pill: 999px;
+
+  /* ---- spacing: 4 pt grid ---- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+
+  /* ---- motion: interface eases never bounce; only rewards overshoot ---- */
+  --ease-ui: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-reward: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-press: 80ms;
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 360ms;
+  --dur-sheet: 280ms; /* a sheet slides in or out (R2) */
+  --dur-fade: 150ms; /* the reduced-motion crossfade; the done ring filling */
+  --dur-draw: 200ms; /* the done tick and line-through drawing */
+  --dur-hold: 600ms; /* a done row stays in place before it collapses */
+
+  /* ---- layout ---- */
+  --tap: 44px;
+  --tabbar-h: 56px;
+}
+
+/* Sheets sit on the raised grey: lift the two colours that fail AA there. Everything inside inherits. */
+.sheet {
+  --accent: var(--accent-on-raised);
+  --muted: var(--muted-on-raised);
+  --danger: var(--danger-on-raised);
+}

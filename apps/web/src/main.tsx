@@ -5,11 +5,18 @@ import { prefs } from './prefs.ts';
 import { openPendingStore } from './queue/db.ts';
 import { PendingQueue } from './queue/queue.ts';
 import { App } from './ui/App.tsx';
+import { installSegmentedPills } from './ui/segmented-pill.ts';
 import { announceUpdateReady } from './update-ready.ts';
+import './tokens.css';
 import './styles.css';
+import './motion.css';
+import './nav.css';
+import './today-log.css';
+import './icons-colour.css';
 
 async function start() {
   const root = createRoot(document.getElementById('root') as HTMLElement);
+  installSegmentedPills(document.body);
   // Ask the browser to keep the queue through storage pressure; the UI says "kept on this device while possible".
   void navigator.storage?.persist?.().catch(() => false);
 

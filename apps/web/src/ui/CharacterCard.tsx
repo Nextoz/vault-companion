@@ -3,40 +3,51 @@ import { CharacterRead } from './CharacterRead.tsx';
 import { CopyNote } from './useLastCopy.tsx';
 
 /**
- * GAM1-B: the Log area's Character card (plan screen 1). A card (not a fifth Log tab) so the 390px segmented switch
- * stays roomy; the gold edge marks it as the way into the Character screen.
+ * GAM1-B, R3b (review #9): the Log area's way into Character, collapsed to one 56 px strip so the Log opens on its
+ * content: a level badge, the title over a thin XP bar with its rested run, the points, and a chevron. The whole strip
+ * is the button; it opens the Character screen.
  */
 export function CharacterCard({ refreshKey, accountKey, onOpen }: {
   refreshKey: number | null;
   accountKey: string | null;
   onOpen: () => void;
 }) {
-  return <section className="group character-card" aria-label="Character">
+  return <section className="character-card" aria-label="Character">
     <CharacterRead refreshKey={refreshKey} accountKey={accountKey}>
       {({ view, data, retry }) => {
-        const label = data ? levelLabel(data.character.levelXp, data.character.levelCost) : '';
-        const bar = data ? xpBar(data.character.levelXp, data.character.levelCost) : null;
-        const rested = data ? restedSegment(data.character.levelXp, data.character.levelCost, data.character.restedXp) : null;
-        const empty = data ? emptyCharacterLine(data.character) : null;
+        if (!data) {
+          return <>
+            <CopyNote view={view} />
+            <div className="character-card-empty">
+              <p className="muted small">{view.res === null ? 'Loading character…' : 'Character could not be loaded.'}</p>
+              {view.res !== null && <button type="button" className="link" onClick={retry}>Retry</button>}
+            </div>
+          </>;
+        }
+        const { character } = data;
+        const label = levelLabel(character.levelXp, character.levelCost);
+        const bar = xpBar(character.levelXp, character.levelCost);
+        const rested = restedSegment(character.levelXp, character.levelCost, character.restedXp);
+        const empty = emptyCharacterLine(character);
         return <>
           <CopyNote view={view} />
-          {!data && <div className="character-card-empty">
-            <p className="muted">{view.res === null ? 'Loading character…' : 'Character could not be loaded.'}</p>
-            {view.res !== null && <button type="button" onClick={retry}>Retry</button>}
-          </div>}
-          {data && <button type="button" className="character-card-button" onClick={onOpen} aria-label={`Open Character: ${data.character.title}, level ${data.character.level}, ${label}, ${data.character.points.total} points`}>
-            <span className="character-card-head">
-              <strong className="character-card-title">{data.character.title}</strong>
-              <span className="character-card-points">{data.character.points.total} pts</span>
+          <button type="button" className="character-card-button" onClick={onOpen}
+            aria-label={`Open Character: ${character.title}, level ${character.level}, ${label}, ${character.points.total} points`}>
+            <span className="character-card-level" aria-hidden="true">{character.level}</span>
+            <span className="character-card-main">
+              <span className="character-card-head">
+                <span className="character-card-title">{character.title}</span>
+                <span className="character-card-xp">{label}</span>
+              </span>
+              <span className="xp-bar" aria-hidden="true">
+                <span className="xp-fill" style={{ width: `${bar.percent}%` }} />
+                {rested.width > 0 && <span className="xp-rested" style={{ left: `${rested.start}%`, width: `${rested.width}%` }} />}
+              </span>
             </span>
-            <span className="character-card-level">Level {data.character.level} · {label}</span>
-            <span className="xp-bar" role="img" aria-label={label}>
-              <span className="xp-fill" style={{ width: `${bar!.percent}%` }} />
-              {rested!.width > 0 && <span className="xp-rested" style={{ left: `${rested!.start}%`, width: `${rested!.width}%` }} />}
-            </span>
-            <span className="character-card-open" aria-hidden="true">Tap for Character ›</span>
-            {empty !== null && <span className="muted small">{empty}</span>}
-          </button>}
+            <span className="character-card-points">{character.points.total}<span className="character-card-unit"> pts</span></span>
+            <span className="character-card-chevron" aria-hidden="true">{'›'}</span>
+          </button>
+          {empty !== null && <p className="muted small character-card-note">{empty}</p>}
         </>;
       }}
     </CharacterRead>

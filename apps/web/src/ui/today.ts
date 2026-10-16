@@ -46,20 +46,36 @@ export function moreTasksText(count: number): string {
   return count === 1 ? '1 more task today' : `${count} more tasks today`;
 }
 
-/** One Overview tile. `label` is the accessible name; it defaults to the visible text unless the title names it. */
+/**
+ * One Overview tile (R3b, review #7): the label carries the noun, the body the fact, never the noun again. A count
+ * tile splits its fact into `stat` (the number, set in rounded numerals) and `body` (its unit): "2" + "items".
+ * `name` is the accessible name: "Needs you · 2 items"; the brief keeps its plain "Morning Brief".
+ */
 export interface TodayTile {
   readonly id: string;
-  readonly title: string;
-  readonly text: string;
   readonly label: string;
+  readonly stat: string | null;
+  readonly body: string;
+  readonly name: string;
 }
 
-/** The facts the grid projects; a null fact drops that tile (never a placeholder). The brief tile is always present. */
+/**
+ * The facts the grid projects; a null fact drops that tile (never a placeholder), and so does a zero Needs you count.
+ * The brief tile is always present. Counts are plain numbers: the tile owns the wording.
+ */
 export interface TodayTileFacts {
   readonly brief: string;
-  readonly needs: string | null;
+  readonly needs: number | null;
   readonly weather: string | null;
-  readonly research: string | null;
+  readonly research: number | null;
+}
+
+const plural = (count: number, one: string, many: string): string => (count === 1 ? one : many);
+
+function countTile(id: string, label: string, count: number, one: string, many: string, none: string): TodayTile {
+  if (count <= 0) return { id, label, stat: null, body: none, name: `${label} · ${none}` };
+  const unit = plural(count, one, many);
+  return { id, label, stat: String(count), body: unit, name: `${label} · ${count} ${unit}` };
 }
 
 /**
@@ -67,19 +83,20 @@ export interface TodayTileFacts {
  * gets, so two more tiles need no layout change. Pure.
  */
 export function todayTiles(facts: TodayTileFacts): TodayTile[] {
-  const tiles: TodayTile[] = [{ id: 'brief', title: 'Morning Brief', text: facts.brief, label: 'Morning Brief' }];
-  if (facts.needs !== null) tiles.push({ id: 'needs', title: 'Needs you', text: facts.needs, label: facts.needs });
-  if (facts.weather !== null) tiles.push({ id: 'weather', title: 'Weather', text: facts.weather, label: facts.weather });
-  if (facts.research !== null) tiles.push({ id: 'research', title: 'Research', text: facts.research, label: facts.research });
+  const tiles: TodayTile[] = [{ id: 'brief', label: 'Morning Brief', stat: null, body: facts.brief, name: 'Morning Brief' }];
+  if (facts.needs !== null && facts.needs > 0) tiles.push(countTile('needs', 'Needs you', facts.needs, 'item', 'items', ''));
+  if (facts.weather !== null) tiles.push({ id: 'weather', label: 'Weather', stat: null, body: facts.weather, name: `Weather · ${facts.weather}` });
+  if (facts.research !== null) tiles.push(countTile('research', 'Research', facts.research, 'highlight', 'highlights', 'No highlights'));
   return tiles;
 }
 
-/** Tile identity owns title colour; future ids get a stable hue without changing the grid. */
-export function tileTitleColors(id: string): { '--tile-title-dark': string } {
-  const colors: Record<string, string> = {
-    brief: '#378ADD', needs: '#DD6036', weather: '#BA7517', research: '#1D9E75',
+/**
+ * The tile's domain hue (tokens.css, review #10) for its 2 px top edge: the brief is the day's calendar, Needs you is
+ * things to do, then weather and research. An unknown id gets the neutral separator, never an invented colour.
+ */
+export function tileHue(id: string): string {
+  const hues: Record<string, string> = {
+    brief: '--hue-events', needs: '--hue-tasks', weather: '--hue-weather', research: '--hue-research',
   };
-  let hash = 0;
-  for (const char of id) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
-  return { '--tile-title-dark': colors[id] ?? `hsl(${hash % 360} 65% 72%)` };
+  return `var(${hues[id] ?? '--line'})`;
 }

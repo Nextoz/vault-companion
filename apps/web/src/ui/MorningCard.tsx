@@ -1,5 +1,6 @@
-// UX2/UX7/UX8: the Today Overview (layout C). A single "Next up" card, then a data-driven two-column tile grid
-// (Morning Brief, Needs you, Weather, Research), the collapsed Since I was here pane above it, and the check-in line.
+// UX2/UX7/UX8, R3b (review #7): the Today Overview, one job per row: the "Next up" card (what do I do now), the inline
+// check-in while today has none (how am I), the data-driven two-column tile grid (Morning Brief, Needs you, Weather,
+// Research), then "Since I was here" as one quiet line at the bottom (what changed).
 // Each tile opens a detail the app already has (the brief sheet, the Needs you sheet, the morning weather panel, the
 // Radar screen); the grid renders the pure `todayTiles` list, so more tiles need no layout change. No new read: the
 // card projects the reads it already holds.
@@ -10,15 +11,17 @@ import { lastCopies } from '../lastCopy.ts';
 import { prefs } from '../prefs.ts';
 import type { PendingQueue, QueueItem } from '../queue/queue.ts';
 import { deriveTriage } from '../triage.ts';
-import { localDate, MoodCard } from './MoodCard.tsx';
+import { CheckinRow } from './CheckinRow.tsx';
+import { CheckinSheet } from './CheckinSheet.tsx';
+import { localDate } from './MoodCard.tsx';
 import { SheetHeader } from './SheetHeader.tsx';
 import { NeedsYouSheet } from './NeedsYouSheet.tsx';
-import { liveDismissals, needsYou, needsYouText, sameDismissals, type NeedsYouFacts, type NeedsYouRow, type NeedsYouTarget } from './needs-you.ts';
+import { liveDismissals, needsYou, sameDismissals, type NeedsYouFacts, type NeedsYouRow, type NeedsYouTarget } from './needs-you.ts';
 import { SinceIWasHere } from './SinceIWasHere.tsx';
 import { sinceIWasHereFacts, type SiwhTarget } from './since-i-was-here.ts';
 import { WeatherMorning } from './WeatherLab.tsx';
-import { checkinDue, isMissingBrief, morningBriefSheet, radarHighlights, researchHighlightsText, weatherLine, type BriefLine, type MorningBriefDigest, type MorningBriefSheetState } from './morning-card.ts';
-import { moreTasksText, selectNextUp, todayTiles, tileTitleColors, type NextUp, type NextUpEvent } from './today.ts';
+import { checkinDue, isMissingBrief, morningBriefSheet, radarHighlights, weatherLine, type BriefLine, type MorningBriefDigest, type MorningBriefSheetState } from './morning-card.ts';
+import { moreTasksText, selectNextUp, tileHue, todayTiles, type NextUp, type NextUpEvent } from './today.ts';
 
 export interface MorningCardProps {
   queue: PendingQueue;
@@ -57,7 +60,8 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   const [triage, setTriage] = useState<TriageResponse | null>(null);
   const [activeWork, setActiveWork] = useState<Fetched<ActiveWorkResponse> | null>(null);
   const [open, setOpen] = useState<'weather' | null>(null);
-  const [checkinOpen, setCheckinOpen] = useState(false);
+  // R3b: the full Check-in sheet behind the inline row's "Other", seeded with the answers given so far.
+  const [checkinSeed, setCheckinSeed] = useState<{ mood: number; energy: number } | null>(null);
   const [today, setToday] = useState(localDate);
   useEffect(() => {
     const update = () => setToday(localDate());
@@ -131,9 +135,9 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   const researchCount = radar?.kind === 'ok' ? radarHighlights(radar.data) : null;
   const tiles = todayTiles({
     brief: briefFile ? briefFile.brief.dayLine : briefSheet.missing ?? 'No brief yet',
-    needs: needsRows.length > 0 ? needsYouText(needsRows.length) : null,
+    needs: needsRows.length,
     weather: weatherTile,
-    research: researchCount === null ? null : researchHighlightsText(researchCount),
+    research: researchCount,
   });
   // SIWH: the same reads the card already holds, narrowed to counts and keys. No read is added for the pane; the health
   // day comes from the app's in-memory last copy (populated when the Health screen has been visited this session).
@@ -172,24 +176,27 @@ export function MorningCard({ queue, items, accountKey, baseRevision, blocked, r
   }
 
   const due = checkinDue(items, today);
-  useEffect(() => { if (!due) setCheckinOpen(false); }, [due]);
+  useEffect(() => { if (!due) setCheckinSeed(null); }, [due]);
   return <>
-    <SinceIWasHere facts={siwhFacts} onOpen={openSiwh} />
     <section className="group morning-card today-overview" aria-label="Today at a glance">
       <NextUpCard pick={pick} moreText={moreTasksText(moreCount)} onStartTask={onStartTask} onStartEvent={() => onOpenScouts()} onOpenTasks={onOpenTasks} onAdd={onAdd} />
-      {due && (!checkinOpen
-        ? <button type="button" className="checkin-line" onClick={() => setCheckinOpen(true)}>How are you today? Check in</button>
-        : <MoodCard queue={queue} items={items} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked} />)}
+      {due && <CheckinRow queue={queue} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked} onOther={setCheckinSeed} />}
       <div className="tile-grid" role="group" aria-label="Today tiles">
         {tiles.map((tile) => (
-          <button key={tile.id} type="button" className={`tile tile-${tile.id}`} aria-label={tile.label} style={tileTitleColors(tile.id) as CSSProperties} onClick={(event) => { event.currentTarget.focus(); openTile(tile.id); }}>
-            <span className="tile-title">{tile.title}</span>
-            <span className="tile-text">{tile.text}</span>
+          <button key={tile.id} type="button" className={`tile tile-${tile.id}`} aria-label={tile.name} style={{ '--tile-hue': tileHue(tile.id) } as CSSProperties}
+            aria-expanded={tile.id === 'weather' ? open === 'weather' : undefined} onClick={(event) => { event.currentTarget.focus(); openTile(tile.id); }}>
+            <span className="tile-label">{tile.label}</span>
+            {tile.stat !== null
+              ? <span className="tile-body tile-count"><span className="tile-stat">{tile.stat}</span> {tile.body}</span>
+              : <span className="tile-body">{tile.body}</span>}
           </button>
         ))}
       </div>
       {open === 'weather' && <WeatherMorning refreshKey={refreshKey} accountKey={accountKey} blocked={blocked} />}
     </section>
+    <SinceIWasHere facts={siwhFacts} onOpen={openSiwh} />
+    {checkinSeed && due && <CheckinSheet queue={queue} items={items} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked}
+      seed={checkinSeed} onClose={() => setCheckinSeed(null)} />}
     {needsOpen && <NeedsYouSheet rows={needsRows} queue={queue} accountKey={accountKey} onNavigate={openNeedsTarget} onDismiss={dismissNeedsRow} onClose={() => setNeedsOpen(false)} />}
     {briefOpen && <MorningBriefSheet state={brief === null ? emptyBriefState('Loading brief…') : brief.kind !== 'ok' ? emptyBriefState('Brief unavailable. Try Refresh in Status.') : briefSheet} onOpenTasks={onOpenTasks}
       onClose={() => setBriefOpen(false)} />}
@@ -202,24 +209,26 @@ function NextUpCard({ pick, moreText, onStartTask, onStartEvent, onOpenTasks, on
   pick: NextUp<TodayTaskRow>; moreText: string; onStartTask: (task: TaskView) => void; onStartEvent: () => void;
   onOpenTasks: () => void; onAdd: () => void;
 }) {
+  // R3b: the action and the "N more" link share one row under the title, so the card ends on its action.
   return (
     <section className="next-up" aria-label="Next up">
+      <p className="next-up-eyebrow">Next up</p>
       {pick.kind === 'none'
-        ? <>
-            <p className="next-up-empty">Nothing planned</p>
-            <button type="button" className="link next-up-add" onClick={onAdd}>Add a task</button>
-          </>
+        ? <p className="next-up-empty">Nothing planned</p>
         : <>
-            <p className="next-up-eyebrow">Next up</p>
             <p className="next-up-title">{pick.kind === 'event' ? pick.event.title : pick.task.description}</p>
             {pick.kind === 'event' && <p className="next-up-time muted small">{eventTime(pick.event.start)}</p>}
-            <button type="button" className="next-up-start" onClick={() => {
+          </>}
+      <div className="next-up-actions">
+        {pick.kind === 'none'
+          ? <button type="button" className="next-up-start next-up-add" onClick={onAdd}>Add a task</button>
+          : <button type="button" className="next-up-start" onClick={() => {
               if (pick.kind === 'event') return onStartEvent();
               // An overlay row has no live TaskView to edit; the Tasks tab is its detail instead.
               return pick.task.task ? onStartTask(pick.task.task) : onOpenTasks();
-            }}>Start</button>
-          </>}
-      <button type="button" className="link next-up-more" onClick={onOpenTasks}>{moreText}</button>
+            }}>Start</button>}
+        <button type="button" className="link next-up-more" onClick={onOpenTasks}>{moreText}</button>
+      </div>
     </section>
   );
 }
@@ -272,6 +281,7 @@ export function MorningBriefSheet({ state, onOpenTasks, onClose }: {
             <TappableRows heading="Needs you" items={state.digest.needsYou} />
             <TappableRows heading="Copenhagen today" items={state.digest.copenhagen} />
             <DigestSection heading="News" items={state.digest.news} unavailable={state.digest.unavailable === null ? null : `News unavailable: ${state.digest.unavailable}`} />
+            {state.digest.hackerNews && <DigestSection heading="Hacker News" items={state.digest.hackerNews.items} unavailable={state.digest.hackerNews.message} />}
             <DigestSection heading="AI and research" items={state.digest.research} unavailable={state.digest.unavailable === null ? null : `AI and research unavailable: ${state.digest.unavailable}`} />
             {state.digest.oneThing && <div className="morning-line morning-brief-line" style={{ overflowWrap: 'anywhere', minWidth: 0 }}>
               {state.digest.oneThing.text}

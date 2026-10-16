@@ -18,7 +18,7 @@ test('production asset policy permits explicit same-origin device location with 
   await page.goto('/');
   // UX2: the weather detail now sits behind the morning card's weather line.
   // UX7: that line is now the plain day glance plus the run window from sampleWeather().
-  await page.getByRole('button', { name: /^Rain all day · 17° · breezy · Run window 08-10, wet/ }).click();
+  await page.getByRole('button', { name: /^Weather · Rain all day · 17° · breezy · Run window 08-10, wet/ }).click();
   const morning = page.getByRole('region', { name: 'This morning weather' });
   await morning.getByRole('button', { name: 'Weather' }).click();
   expect(api.weatherLocationReads).toBe(0);

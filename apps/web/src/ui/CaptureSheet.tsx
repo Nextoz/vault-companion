@@ -23,6 +23,8 @@ interface Props {
   baseRevision: string | null;
   /** Why tasks cannot be captured now (the task list is write-blocked); notes still can. */
   taskBlocked?: string | null;
+  /** C3: the Training and Check-in types hand over to their own sheets (TrainingSheet, the check-in form). */
+  onSwitch?: ((to: 'training' | 'checkin') => void) | undefined;
   onClose: () => void;
 }
 
@@ -31,7 +33,7 @@ interface Props {
  * as this account's draft (P4-C) and restored on reopen; closing keeps it, only "Discard draft" or Save removes it.
  * With several windows open, each draft is saved at most once: see draft.ts.
  */
-export function CaptureSheet({ queue, drafts, accountKey, baseRevision, defaultKind, taskBlocked = null, onClose }: Props) {
+export function CaptureSheet({ queue, drafts, accountKey, baseRevision, defaultKind, taskBlocked = null, onSwitch, onClose }: Props) {
   // Only fresh sheets use the view default; recovery below restores the draft's own kind and fields.
   const [chosen, setKind] = useState<CaptureKind>(() => defaultKind ?? prefs.captureKind());
   // The remembered choice stays; only this sheet falls back to a note while tasks cannot be written.
@@ -160,15 +162,17 @@ export function CaptureSheet({ queue, drafts, accountKey, baseRevision, defaultK
     <div className="sheet-backdrop" role="presentation" onClick={() => text.length === 0 && onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Capture" onClick={(e) => e.stopPropagation()}>
         <SheetHeader title="Capture" onClose={onClose} />
-        <div className="segmented" role="group" aria-label="Capture type">
-          <button type="button" aria-pressed={kind === 'task'} disabled={taskBlocked !== null} onClick={() => choose('task')}>
-            Task
-          </button>
-          <button type="button" aria-pressed={kind === 'note'} onClick={() => choose('note')}>
-            Note
-          </button>
+        {/* R5: what to capture is the shared segmented pill; Training and Check-in open their own sheets, so they
+            stay chips beside it. Text typed here stays as the draft. */}
+        <div className="segmented capture-kind" role="group" aria-label="Capture type">
+          <button type="button" aria-pressed={kind === 'task'} disabled={taskBlocked !== null} onClick={() => choose('task')}>Task</button>
+          <button type="button" aria-pressed={kind === 'note'} onClick={() => choose('note')}>Note</button>
           <button type="button" aria-pressed={kind === 'active-work'} onClick={() => choose('active-work')}>Active Work</button>
         </div>
+        {onSwitch && <div className="chip-row capture-types" role="group" aria-label="Log instead">
+          <button type="button" className="chip-row-item" aria-haspopup="dialog" onClick={() => onSwitch('training')}>Training</button>
+          <button type="button" className="chip-row-item" aria-haspopup="dialog" onClick={() => onSwitch('checkin')}>Check-in</button>
+        </div>}
         <textarea
           aria-label={kind === 'active-work' ? 'Name' : kind === 'task' ? 'Task text' : 'Note text'}
           placeholder={kind === 'active-work' ? 'Name of this work' : kind === 'task' ? 'What needs doing?' : 'What is on your mind?'}

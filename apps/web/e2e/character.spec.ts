@@ -10,8 +10,11 @@ test('card -> Character screen -> ring -> its Log view -> Back returns to Charac
   await goTo(page, 'Log');
 
   const card = page.getByRole('button', { name: 'Open Character' });
-  await expect(card).toContainText('Level 12');
+  // R3b: the card is one 56 px strip (level badge, XP bar, points, chevron); no "Tap for Character" line.
+  await expect(card).toHaveAccessibleName(/level 12, 156 \/ 265 XP, \d+ points$/);
   await expect(card).toContainText('156 / 265 XP');
+  await expect(card).not.toContainText('Tap for Character');
+  expect(Math.round((await card.boundingBox())!.height)).toBe(56);
   await card.click();
 
   const dialog = page.getByRole('dialog', { name: 'Character' });
@@ -71,7 +74,7 @@ test('a failed Character read is honest and Retry re-reads', async ({ page }) =>
   await expect(page.getByText('Character could not be loaded.')).toBeVisible();
   api.gameMode = 'ok';
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Open Character' })).toContainText('Level 12');
+  await expect(page.getByRole('button', { name: 'Open Character' })).toHaveAccessibleName(/level 12/);
 });
 
 test('the sheet header covers nothing at rest and stays flush with the top when scrolled', async ({ page }) => {

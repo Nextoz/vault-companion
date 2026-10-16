@@ -220,7 +220,8 @@ const RICH_ACHIEVEMENTS = [
   { id: 'r5', name: 'Scholar run II', category: 'Learning', type: 'chain', points: 10, earned: false, earnedDate: null, visible: true, locked: false, lockedReason: null, chain: 'scholar-run', tier: 2, progress: { current: 4, target: 7 } },
   { id: 'r6', name: 'Scholar run III', category: 'Learning', type: 'chain', points: 15, earned: false, earnedDate: null, visible: false, locked: false, lockedReason: null, chain: 'scholar-run', tier: 3, progress: { current: 0, target: 14 } },
   { id: 'r7', name: 'Scholar run IV', category: 'Learning', type: 'chain', points: 20, earned: false, earnedDate: null, visible: false, locked: false, lockedReason: null, chain: 'scholar-run', tier: 4, progress: { current: 0, target: 30 } },
-  { id: 'r8', name: 'Secret Pilgrim', category: 'General', type: 'hidden', points: 25, earned: false, earnedDate: null, visible: false, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
+  // Shaped like the domain engine's output for an unearned 'hidden' achievement: visible, named ???, no progress.
+  { id: 'r8', name: '???', category: 'General', type: 'hidden', points: 25, earned: false, earnedDate: null, visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
   { id: 'r9', name: 'Renaissance', category: 'General', type: 'meta', points: 25, earned: true, earnedDate: '2026-06-20', visible: true, locked: false, lockedReason: null, chain: null, tier: null, progress: null },
   { id: 'r10', name: 'Iron Will', category: 'Training', type: 'one-off', points: 30, earned: false, earnedDate: null, visible: true, locked: true, lockedReason: 'Reach level 20 first.', chain: null, tier: null, progress: null },
 ];
@@ -286,7 +287,14 @@ export const sampleGame = (unavailable: string[] = [], rich = false): GameRespon
   feedback: {
     criticals: 0, critical: { every: 8, multiplier: 2 },
     achievements: rich
-      ? { r2: { description: 'Log 10 training sessions.', earnedBy: 'Logging a training session' } }
+      ? {
+        r1: { description: 'Complete your first task.', earnedBy: 'Completing a task' },
+        r2: { description: 'Log 10 training sessions.', earnedBy: 'Logging a training session' },
+        r4: { description: 'Learn three days in a row.', earnedBy: 'Logging a learning session' },
+        r5: { description: 'Learn seven days in a row.', earnedBy: null },
+        r9: { description: 'Reach Journeyman in every profession.', earnedBy: 'Reaching a new rank' },
+        f1: { description: 'Was there when the Character began.', earnedBy: null },
+      }
       : { a4: { description: 'Log 25 training sessions.', earnedBy: null } },
   },
 });
@@ -949,6 +957,14 @@ export class MockApi {
     }
     if (typeof mode === 'object') return this.#json(route, 409, ApiError.parse({ ...mode.refuse, operationId: command.operationId }));
 
+    // Like the domain (ADR-0062): a book without pages cannot take a page.
+    if (command.type === 'LogReading') {
+      const { title } = command.payload;
+      if (this.books.find((book) => book.title === title)?.totalPages === 0) {
+        return this.#json(route, 409, ApiError.parse({ code: 'refused:book-page-invalid', message: 'This book has no page count, so pages cannot be logged', retryable: false, operationId: command.operationId }));
+      }
+    }
+
     // Like the Worker (ADR-0013): an Undo's token must be its completion's commit.
     if ((command.type === 'UndoCompleteTask' || command.type === 'UndoActiveWork' || command.type === 'UndoEditTraining') && this.#receipts.get(command.payload.target.operationId)?.commitSha !== command.payload.targetCommit) {
       return this.#json(route, 400, ApiError.parse({ code: 'invalid', message: 'Undo target does not match.', retryable: false }));
@@ -1170,7 +1186,7 @@ export class MockApi {
       case 'StartBook': {
         const { title, author, totalPages } = command.payload;
         this.#booksBefore.set(command.operationId, structuredClone(this.books));
-        this.books = [...this.books, { title, author, totalPages, currentPage: 0, status: 'reading', lastRead: null, reflections: [] }];
+        this.books = [...this.books, { title, author, totalPages: totalPages ?? 0, currentPage: 0, status: 'reading', lastRead: null, reflections: [] }];
         const path = `Books/${title}.md`;
         return { ...base, path, effect: { kind: 'book', op: 'started', path } };
       }

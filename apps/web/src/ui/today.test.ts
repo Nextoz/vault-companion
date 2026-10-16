@@ -1,6 +1,5 @@
-import { tileTitleColors } from './today.ts';
 import { describe, expect, it } from 'vitest';
-import { moreTasksText, selectNextUp, todayTiles, todaysUpcomingEvents, type TodayTileFacts } from './today.ts';
+import { moreTasksText, selectNextUp, tileHue, todayTiles, todaysUpcomingEvents, type TodayTileFacts } from './today.ts';
 
 // 2026-09-30 is a Wednesday; these instants all sit in the Copenhagen day.
 const TODAY = '2026-09-30';
@@ -51,31 +50,39 @@ describe('moreTasksText', () => {
   });
 });
 
-describe('todayTiles', () => {
-  const facts: TodayTileFacts = { brief: 'A calm synthetic day.', needs: 'Needs you · 2', weather: 'Dry · 17°', research: 'Research · 2 highlights' };
+describe('todayTiles (R3b: the label carries the noun, the body the fact)', () => {
+  const facts: TodayTileFacts = { brief: 'A calm synthetic day.', needs: 2, weather: 'Dry · 17°', research: 2 };
 
   it('returns the four tiles in a fixed order', () => {
     expect(todayTiles(facts).map((tile) => tile.id)).toEqual(['brief', 'needs', 'weather', 'research']);
-    expect(todayTiles(facts)[0]).toMatchObject({ title: 'Morning Brief', text: facts.brief, label: 'Morning Brief' });
-    expect(todayTiles(facts)[2]!.label).toBe(facts.weather);
+    expect(todayTiles(facts)[0]).toMatchObject({ label: 'Morning Brief', stat: null, body: facts.brief, name: 'Morning Brief' });
+  });
+
+  it('never repeats the noun in the body: Needs you · 2 becomes "2" + "items"', () => {
+    const [, needs, weather, research] = todayTiles(facts);
+    expect(needs).toMatchObject({ label: 'Needs you', stat: '2', body: 'items', name: 'Needs you · 2 items' });
+    expect(research).toMatchObject({ label: 'Research', stat: '2', body: 'highlights', name: 'Research · 2 highlights' });
+    expect(weather).toMatchObject({ label: 'Weather', stat: null, body: 'Dry · 17°', name: 'Weather · Dry · 17°' });
+    for (const tile of todayTiles(facts)) if (tile.id !== 'brief') expect(tile.body).not.toContain(tile.label);
+  });
+
+  it('uses the singular for one and words a zero research count', () => {
+    const tiles = todayTiles({ ...facts, needs: 1, research: 1 });
+    expect(tiles[1]).toMatchObject({ stat: '1', body: 'item', name: 'Needs you · 1 item' });
+    expect(tiles[3]).toMatchObject({ stat: '1', body: 'highlight' });
+    expect(todayTiles({ ...facts, research: 0 })[3]).toMatchObject({ stat: null, body: 'No highlights', name: 'Research · No highlights' });
   });
 
   it('drops a source with nothing to say but keeps the brief tile', () => {
-    const ids = todayTiles({ ...facts, needs: null, research: null }).map((tile) => tile.id);
-    expect(ids).toEqual(['brief', 'weather']);
-  });
-
-  it('is data-driven: an extra tile is one more entry, not a layout change', () => {
-    const extra = [...todayTiles(facts), { id: 'later', title: 'Later', text: 'Added later', label: 'Added later' }];
-    expect(extra.map((tile) => tile.id)).toEqual(['brief', 'needs', 'weather', 'research', 'later']);
+    expect(todayTiles({ ...facts, needs: null, research: null }).map((tile) => tile.id)).toEqual(['brief', 'weather']);
+    expect(todayTiles({ ...facts, needs: 0 }).map((tile) => tile.id)).toEqual(['brief', 'weather', 'research']);
   });
 });
 
-describe('tile title colours', () => {
-  it('assigns four distinct colours by id and stable future hues', () => {
-    expect(['brief', 'needs', 'weather', 'research'].map((id) => tileTitleColors(id)['--tile-title-dark']))
-      .toEqual(['#378ADD', '#DD6036', '#BA7517', '#1D9E75']);
-    expect(tileTitleColors('future')).toEqual(tileTitleColors('future'));
-    expect(tileTitleColors('future')).not.toEqual(tileTitleColors('another'));
+describe('tile hue', () => {
+  it('gives each tile its domain token and an unknown id the neutral separator', () => {
+    expect(['brief', 'needs', 'weather', 'research'].map(tileHue))
+      .toEqual(['var(--hue-events)', 'var(--hue-tasks)', 'var(--hue-weather)', 'var(--hue-research)']);
+    expect(tileHue('future')).toBe('var(--line)');
   });
 });

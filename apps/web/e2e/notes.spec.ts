@@ -14,7 +14,7 @@ test('Notes (ADR-0022): list → view → edit offline → saved; frontmatter ne
   const list = page.getByRole('region', { name: 'Notes', exact: true });
   await expect(list.getByTestId('note-row')).toHaveCount(1);
   await expect(list.getByTestId('note-row')).toContainText('Seed order');
-  await expect(list.getByTestId('note-row')).toContainText('2026-09-23');
+  await expect(list.getByTestId('note-row')).toContainText('23 Sep 2026');
   await list.getByTestId('note-row').click();
 
   const note = page.getByRole('region', { name: 'Note', exact: true });

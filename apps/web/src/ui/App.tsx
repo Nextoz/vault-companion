@@ -25,7 +25,6 @@ import { HealthPanel } from './HealthPanel.tsx';
 import { EditSheet } from './EditSheet.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { NoteView, type OpenLink } from './NoteView.tsx';
-import { VaultStatus } from './VaultStatus.tsx';
 import { Progress } from './Progress.tsx';
 import { MorningCard } from './MorningCard.tsx';
 import { ResearchRadar } from './ResearchRadar.tsx';
@@ -40,11 +39,19 @@ import { Learning } from './Learning.tsx';
 import { LearningSheet } from './LearningSheet.tsx';
 import { Reading } from './Reading.tsx';
 import { CharacterCard } from './CharacterCard.tsx';
+import { CharacterRead } from './CharacterRead.tsx';
+import { CaptureFab } from './CaptureFab.tsx';
+import { CheckinSheet } from './CheckinSheet.tsx';
+import { LargeTitle, LargeTitleProvider, useLargeTitleHost } from './LargeTitle.tsx';
+import { TopBar } from './TopBar.tsx';
+import { XpStrip, type StripLanding } from './XpStrip.tsx';
 import { CharacterSheet } from './CharacterSheet.tsx';
 import { RewardLayer } from './RewardLayer.tsx';
 import { Triage } from './Triage.tsx';
 import { TaskList } from './TaskList.tsx';
 import { TabBar, type Tab } from './TabBar.tsx';
+import { LogViewChips } from './LogViewChips.tsx';
+import { isLogView, type LogView } from '../log-view.ts';
 
 interface Toast {
   target: CompleteTaskCommand;
@@ -85,6 +92,14 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const [calendarLinks, setCalendarLinks] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [calendar, setCalendar] = useState<CalendarTarget | null>(null);
   const [captureOpen, setCaptureOpen] = useState(false);
+  // C3: Capture's Training and Check-in types open their own sheets from any screen.
+  const [quickSheet, setQuickSheet] = useState<'training' | 'checkin' | null>(null);
+  // D2: the value the last "+XP" float landed on the XP strip.
+  const [xpLanding, setXpLanding] = useState<StripLanding | null>(null);
+  const barRef = useRef<HTMLElement>(null);
+  const largeTitle = useLargeTitleHost(barRef);
+  // Review #8: every screen opens at its large title, not at the previous screen's scroll position.
+  useEffect(() => { window.scrollTo(0, 0); }, [tab]);
   // ADR-0040: one bug/wish report from any screen; enqueued like every capture, so it works offline.
   const [reportOpen, setReportOpen] = useState(false);
   // The open note is bound to the account it was opened under: signing out or switching account closes it (the
@@ -302,30 +317,36 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
     [queue, tasks],
   );
 
+  // R2: refusals answer `false` synchronously, so the list plays its done moment only for an accepted completion;
+  // the promise says whether the write was kept on the device.
   const complete = useCallback(
-    async (task: TaskView) => {
+    (task: TaskView): boolean | Promise<boolean> => {
       const key = occurrenceKey(task.locator);
-      if (tappedRef.current.has(key)) return;
+      if (tappedRef.current.has(key)) return false;
       if (!accountKey || !tasks) {
         setNotice('Connect once to set up this device.');
-        return;
+        return false;
       }
-      if (tasks.writeBlock) return; // every task-list write would be refused (writeBlock.ts)
+      if (tasks.writeBlock) return false; // every task-list write would be refused (writeBlock.ts)
       // Redoing the action on the task settles a discarded refusal of it.
       setUnresolved((list) => list.filter((u) => notRedoneBy(u, task, tasks.allOpen)));
       tappedRef.current.add(key);
       setTapped(new Set(tappedRef.current));
-      try {
-        const envelope = completeTask({ baseRevision: tasks.revision }, task.locator);
-        const label = plainWikilinks(task.description);
-        await queue.enqueue(envelope, { accountKey, label, taskKey: key });
-        setToast({ target: envelope, label });
-      } catch {
-        setNotice('Could not keep this action on the device.');
-      } finally {
-        tappedRef.current.delete(key);
-        setTapped(new Set(tappedRef.current));
-      }
+      return (async () => {
+        try {
+          const envelope = completeTask({ baseRevision: tasks.revision }, task.locator);
+          const label = plainWikilinks(task.description);
+          await queue.enqueue(envelope, { accountKey, label, taskKey: key });
+          setToast({ target: envelope, label });
+          return true;
+        } catch {
+          setNotice('Could not keep this action on the device.');
+          return false;
+        } finally {
+          tappedRef.current.delete(key);
+          setTapped(new Set(tappedRef.current));
+        }
+      })();
     },
     [accountKey, queue, tasks],
   );
@@ -367,22 +388,24 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   // Calm by default: the actions list sits below the tasks unless something needs the user.
   const needsAttention = snapshot.items.some((i) => i.state === 'attention');
   // GAM1-B: the four Log views share one segmented switch and the Character card above it.
-  const logView = tab === 'training' || tab === 'history' || tab === 'health' || tab === 'learning' || tab === 'reading';
-  const selectLogView = (next: Tab) => { setLogFromCharacter(false); setTab(next); };
+  const logView = isLogView(tab);
+  const selectLogView = (next: LogView) => { setLogFromCharacter(false); setTab(next); };
+  // R3b: the Log tab reopens on the view last shown on this device (a chip, a Character ring or the tab itself).
+  useEffect(() => { if (isLogView(tab)) prefs.setLogView(tab); }, [tab]);
   // ADR-0037 tokens: red = cannot work, yellow = something to see, green = settled.
   const statusDot = signedOut || readFailed || connection === 'error' || connection === 'offline'
     ? 'red'
     : needsAttention || readsInFlight > 0 || snapshot.items.some((i) => i.state !== 'saved')
       ? 'yellow'
       : 'green';
-  // UX8: the compact header line that replaced Today's large sync block; Refresh stays in the Status sheet.
-  const syncedText = checkedAt === null
-    ? 'Not synced yet'
-    : `Synced ${new Date(checkedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
   const openStatus = () => {
     setStatusReturn((prev) => (tab === 'status' ? prev : tab));
     setTab('status');
   };
+  // Review #8: Status and Radar are pushed screens; their Back sits in the bar where the status dot is.
+  const barBack = tab === 'status' ? () => setTab(statusReturn)
+    : tab === 'radar' ? () => { if (logFromCharacter) { setLogFromCharacter(false); setCharacterOpen(true); setTab('training'); } else setTab(radarReturn); }
+    : null;
   // UX7: Research Radar is its own screen (no bottom-bar button), reached from Today or the Scouts link.
   const openRadar = useCallback(() => {
     setRadarReturn((prev) => (tab === 'radar' ? prev : tab));
@@ -390,18 +413,17 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   }, [tab]);
 
   return (
+    <LargeTitleProvider value={largeTitle.register}>
     <div className="app" data-tab={tab}>
-      <header className="top" inert={noteOpen || editing !== null || characterOpen}>
-        <div className="top-actions">
-          <button type="button" className="status-dot" data-state={statusDot} aria-label="Status" onClick={openStatus} />
-          {!signedOut && <span className="sync-line muted small">{syncedText}</span>}
-          <button type="button" className="link" aria-label="Report a bug or wish" disabled={signedOut || writeBlocked || frozen} onClick={() => setReportOpen(true)}>Report</button>
-        </div>
-      </header>
+      {/* Review #8: one bar on every tab. A stale or failed read is a chip there (it opens Status); pull to refresh. */}
+      <TopBar barRef={barRef} back={barBack} dot={statusDot} busy={readsInFlight > 0} checkedAt={checkedAt} failed={readFailed}
+        signedOut={signedOut} title={largeTitle.title} collapsed={largeTitle.collapsed}
+        inert={noteOpen || editing !== null || characterOpen} reportDisabled={signedOut || writeBlocked || frozen}
+        onStatus={openStatus} onReport={() => setReportOpen(true)} onRefresh={() => void refreshTasks()} />
 
       <main className="content" inert={noteOpen || editing !== null || characterOpen}>
+        {(tab === 'tasks' || tab === 'all') && !signedOut && <LargeTitle>{tab === 'all' ? 'All tasks' : 'Tasks'}</LargeTitle>}
         {updateReady && <div className="banner" role="status"><button type="button" onClick={() => window.location.reload()}>New version — tap to reload</button></div>}
-        {tab !== 'status' && tab !== 'today' && <VaultStatus read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0} onRefresh={() => refreshTasks()} />}
         {lock && (
           <div className="banner banner-warn" role="alert">
             {lock.banner}
@@ -471,7 +493,6 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
         {tab === 'status' && !signedOut && (
           <>
-            <Back onBack={() => setTab(statusReturn)} />
             <StatusSheet read={tasks} checkedAt={checkedAt} failed={readFailed} busy={readsInFlight > 0}
               onRefresh={() => refreshTasks()} accountKey={accountKey} queue={queue} items={snapshot.items} onDiscard={discard} />
           </>
@@ -479,7 +500,6 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
         {tab === 'radar' && !signedOut && (
           <>
-            <Back onBack={() => { if (logFromCharacter) { setLogFromCharacter(false); setCharacterOpen(true); setTab('training'); } else setTab(radarReturn); }} />
             <ResearchRadar accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} defaultOpen />
           </>
         )}
@@ -487,18 +507,14 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {logView && !signedOut && (
           <>
             {logFromCharacter && <Back onBack={() => { setLogFromCharacter(false); setCharacterOpen(true); }} />}
+            {/* R3b (review #9): one "Log" title, the Character strip, then the views as chips; no title repeats the chip. */}
+            <LargeTitle className="log-title">Log</LargeTitle>
             <CharacterCard refreshKey={checkedAt} accountKey={accountKey} onOpen={() => setCharacterOpen(true)} />
-            <div className="segmented log-view" role="group" aria-label="Log view">
-              <button type="button" aria-pressed={tab === 'training'} onClick={() => selectLogView('training')}>Training</button>
-              <button type="button" aria-pressed={tab === 'history'} onClick={() => selectLogView('history')}>Progress</button>
-              <button type="button" aria-pressed={tab === 'health'} onClick={() => selectLogView('health')}>Health</button>
-              <button type="button" aria-pressed={tab === 'learning'} onClick={() => selectLogView('learning')}>Learning</button>
-              <button type="button" aria-pressed={tab === 'reading'} onClick={() => selectLogView('reading')}>Reading</button>
-            </div>
+            <LogViewChips view={isLogView(tab) ? tab : null} onSelect={selectLogView} />
           </>
         )}
 
-        {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} />}
+        {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} onAdd={() => setCaptureOpen(true)} />}
         {tab === 'history' && !signedOut && (
           <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
             accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />
@@ -506,7 +522,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
         {tab === 'health' && !signedOut && <HealthPanel key={`health:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
 
-        {tab === 'learning' && !signedOut && <Learning key={`learning:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
+        {tab === 'learning' && !signedOut && <Learning key={`learning:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} onAdd={() => setCaptureOpen(true)} />}
 
         {tab === 'reading' && !signedOut && <Reading key={`reading:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} open={captureOpen} onClose={() => setCaptureOpen(false)} />}
 
@@ -516,8 +532,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {/* Scouts is now also where triage lives (UX2), so its indicator and dialog mount here. */}
         {tab === 'scouts' && !signedOut && (
           <>
-            <Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} />
-            <Scouts key={`scouts:${accountKey}`} page onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} onOpenRadar={openRadar} />
+            <Scouts key={`scouts:${accountKey}`} page onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} onOpenRadar={openRadar}
+              belowTitle={<Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} />} />
           </>
         )}
 
@@ -527,7 +543,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         {tab === 'today' && !signedOut && (
           <>
             <div className="today-head">
-              <h1 className="today-title">Today</h1>
+              <LargeTitle className="today-title">Today</LargeTitle>
               <div className="segmented today-view" role="group" aria-label="Today view">
                 <button type="button" aria-pressed={todayView === 'overview'} onClick={() => setTodayView('overview')}>Overview</button>
                 <button type="button" aria-pressed={todayView === 'boards'} onClick={() => setTodayView('boards')}>Boards</button>
@@ -593,11 +609,17 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         )}
       </main>
 
-      <TabBar tab={tab} onSelect={(next) => { setLogFromCharacter(false); setTab(next); }} inert={noteOpen || editing !== null || characterOpen} />
+      {/* D2: the XP strip rides on the tab bar on every screen, fed by the same /api/game read as the Log card. */}
+      <CharacterRead refreshKey={checkedAt} accountKey={accountKey}>
+        {({ data }) => (
+          <TabBar tab={tab} onSelect={(next) => { setLogFromCharacter(false); setTab(next); }} inert={noteOpen || editing !== null || characterOpen}
+            level={signedOut ? null : data?.character.level ?? null}
+            strip={!signedOut && <XpStrip read={data?.character ?? null} landing={xpLanding} />}
+            onHoldLog={signedOut ? undefined : () => setCharacterOpen(true)} logTo={prefs.logView()} />
+        )}
+      </CharacterRead>
 
-      <button type="button" className="fab" inert={noteOpen || editing !== null || characterOpen} onClick={() => setCaptureOpen(true)} aria-label={tab === 'training' ? 'Add training' : tab === 'learning' ? 'Add session' : tab === 'reading' ? 'Log reading' : 'Capture'}>
-        +
-      </button>
+      <CaptureFab tab={tab} inert={noteOpen || editing !== null || characterOpen} onClick={() => setCaptureOpen(true)} />
 
       {editing && editing.account === accountKey && !signedOut && (
         <EditSheet queue={queue} task={editing.task} accountKey={accountKey} baseRevision={editing.revision}
@@ -608,7 +630,11 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           onClose={() => setCharacterOpen(false)}
           onOpenProfession={(destination) => { setCharacterOpen(false); setLogFromCharacter(true); setTab(destination as Tab); }} />
       )}
-      {captureOpen && tab === 'training' && !signedOut && <TrainingSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} onClose={() => setCaptureOpen(false)} />}
+      {((captureOpen && tab === 'training') || quickSheet === 'training') && !signedOut && <TrainingSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} onClose={() => { setCaptureOpen(false); setQuickSheet(null); }} />}
+      {quickSheet === 'checkin' && !signedOut && (
+        <CheckinSheet key={accountKey} queue={queue} items={snapshot.items} accountKey={accountKey} baseRevision={revision}
+          blocked={writeBlocked || frozen} onClose={() => setQuickSheet(null)} />
+      )}
       {captureOpen && tab === 'learning' && !signedOut && <LearningSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} onClose={() => setCaptureOpen(false)} />}
       {reportOpen && !signedOut && (
         <ReportSheet key={accountKey} queue={queue} accountKey={accountKey} baseRevision={revision} screen={screenName(tab)} onClose={() => setReportOpen(false)} />
@@ -621,6 +647,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           accountKey={accountKey}
           baseRevision={revision}
           taskBlocked={lock ? lock.banner : null}
+          onSwitch={signedOut ? undefined : (to) => { setCaptureOpen(false); setQuickSheet(to); }}
           onClose={() => setCaptureOpen(false)}
         />
       )}
@@ -634,7 +661,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
       {noteOpen && <NoteView link={openLink} onClose={closeNote} />}
 
       {/* GAM1-C: a quiet achievements toast on any tab; it reads /api/game once per open and never takes focus. */}
-      <RewardLayer accountKey={accountKey} signedOut={signedOut} items={snapshot.items} onOpenCharacter={() => setCharacterOpen(true)} />
+      <RewardLayer accountKey={accountKey} signedOut={signedOut} items={snapshot.items} onOpenCharacter={() => setCharacterOpen(true)}
+        onXpLanded={(value) => setXpLanding({ value, at: Date.now() })} />
       {toast && (
         <div className="toast" role="status">
           <span>Done</span>
@@ -649,6 +677,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         </div>
       )}
     </div>
+    </LargeTitleProvider>
   );
 }
 

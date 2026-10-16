@@ -64,7 +64,6 @@ export function Progress({ refreshKey, queue, queued, accountKey, baseRevision, 
   const [week, ...earlier] = loading ? [] : progressWeeks(inputs, today);
   const evidence = { onOpenLink, onOpenNote: setOpenNote };
   return <section aria-label="Progress" className="progress">
-    <h1>Progress</h1>
     <MoodHistory items={queued} queue={queue} accountKey={accountKey} baseRevision={baseRevision} blocked={blocked} />
     <CopyNote view={combineViews([historyView, trainingView, triageView, notesView])} />
     {loading && <p role="status">Loading progress…</p>}

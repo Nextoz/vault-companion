@@ -127,13 +127,13 @@ export function parseBookNote(source: string): ParsedBook | Refusal {
 }
 
 /** The canonical new note: LF, final newline, one empty `## Progress` and one empty `## Reflections`. */
-export function createBookNote(input: { readonly title: string; readonly author: string; readonly totalPages: number }): string {
+export function createBookNote(input: { readonly title: string; readonly author: string; readonly totalPages?: number | undefined }): string {
   return [
     '---',
     'type: book',
     'status: reading',
     input.author === '' ? 'author:' : `author: ${input.author}`,
-    `totalPages: ${input.totalPages}`,
+    ...(input.totalPages === undefined ? [] : [`totalPages: ${input.totalPages}`]),
     '---',
     `# ${input.title}`,
     '',
@@ -149,7 +149,7 @@ export function appendProgress(source: string, entry: { readonly date: string; r
   if (!isDate(entry.date) || !Number.isInteger(entry.page)) return refuse('invalid', 'LogReading needs a YYYY-MM-DD date and a whole page number');
   const parsed = parseBookNote(source);
   if (!parsed.ok) return parsed;
-  if (parsed.frontmatter.totalPages === null) return shape();
+  if (parsed.frontmatter.totalPages === null) return refuse('refused:book-page-invalid', 'This book has no page count, so pages cannot be logged');
   if (!(entry.page > parsed.currentPage && entry.page <= parsed.frontmatter.totalPages)) {
     return refuse('refused:book-page-invalid', `Page must be past ${parsed.currentPage} and at most ${parsed.frontmatter.totalPages}`);
   }

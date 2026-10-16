@@ -13,6 +13,8 @@ beforeEach(async () => {
   dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'https://example.test/' });
   Object.defineProperty(globalThis, 'window', { value: dom.window, configurable: true });
   Object.defineProperty(globalThis, 'document', { value: dom.window.document, configurable: true });
+  // The sheet's slide-out close (sheet-motion.ts) checks focus with `instanceof HTMLElement`.
+  Object.defineProperty(globalThis, 'HTMLElement', { value: dom.window.HTMLElement, configurable: true });
   Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { value: true, configurable: true });
   ({ createRoot } = await import('react-dom/client'));
 });

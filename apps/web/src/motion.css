@@ -1,0 +1,205 @@
+/* Motion and touch (redesign R2, review "Design and Feel" #2 and #3). Interface motion uses --ease-ui / --ease-sheet
+   and never overshoots: a bounce means a reward (Rewards.css). Durations are tokens (tokens.css). Imported after
+   styles.css. JavaScript drives the parts that follow a finger or wait on the app (ui/sheet-motion.ts, the done row
+   in ui/TaskList.tsx, ui/segmented-pill.ts); everything that can be CSS is here. */
+
+/* ---- sheets: slide up on the iOS sheet curve while the scrim fades in ---- */
+@keyframes vc-sheet-in {
+  from { transform: translate3d(0, 100%, 0); }
+}
+
+@keyframes vc-scrim-in {
+  from { background-color: transparent; }
+}
+
+@keyframes vc-fade-in {
+  from { opacity: 0; }
+}
+
+.sheet-backdrop {
+  animation: vc-scrim-in var(--dur-sheet) var(--ease-sheet);
+}
+
+.sheet-backdrop > .sheet {
+  animation: vc-sheet-in var(--dur-sheet) var(--ease-sheet);
+}
+
+/* The grabber lives in the header: dragging it moves the sheet (sheet-motion.ts). Only the header claims the touch,
+   so the sheet's content still scrolls natively. */
+.sheet-header {
+  touch-action: none;
+  cursor: grab;
+}
+
+.sheet-header :is(button, a) {
+  cursor: pointer;
+}
+
+/* ---- segmented controls: one pill slides between segments (segmented-pill.ts measures, CSS moves) ---- */
+.segmented {
+  position: relative;
+  isolation: isolate;
+}
+
+.segmented[data-pill]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: var(--seg-w);
+  height: var(--seg-h);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  transform: translate(var(--seg-x), var(--seg-y));
+  transition: transform var(--dur-base) var(--ease-sheet), width var(--dur-base) var(--ease-sheet);
+  pointer-events: none;
+}
+
+.segmented[data-pill] button[aria-pressed='true'] {
+  background: transparent;
+}
+
+/* On a sheet the track and the pill would both be the sheet's grey: lift the pill one step, as iOS does. */
+.sheet .segmented[data-pill]::before {
+  background: var(--line);
+}
+
+/* ---- the done moment (TaskList.tsx): ring fills from the centre, tick draws, text is struck left to right ---- */
+.check-mark {
+  position: absolute;
+  inset: 11px;
+  width: 22px;
+  height: 22px;
+  overflow: visible;
+}
+
+.check-fill {
+  fill: var(--done);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Black on green meets WCAG AA. pathLength=1 makes the dash a fraction of the stroke. */
+.check-tick {
+  fill: none;
+  stroke: var(--ios-bg);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+.check-on::before,
+.check-done-now::before {
+  border-style: solid;
+  border-color: var(--done);
+}
+
+/* Each animation runs `from` the open state to the resting done state, so with motion off the final state shows. */
+@keyframes vc-check-fill {
+  from { transform: scale(0); }
+}
+
+@keyframes vc-check-tick {
+  from { stroke-dashoffset: 1; }
+}
+
+@keyframes vc-strike {
+  from { background-size: 0% var(--strike); }
+}
+
+@keyframes vc-text-grey {
+  from { color: var(--text); }
+}
+
+.check-done-now .check-fill {
+  animation: vc-check-fill var(--dur-fade) var(--ease-ui) backwards;
+}
+
+.check-done-now .check-tick {
+  animation: vc-check-tick var(--dur-draw) var(--ease-ui) var(--dur-press) backwards;
+}
+
+.task-leaving .task-text {
+  --strike: 1.5px;
+  color: var(--muted);
+  animation: vc-text-grey var(--dur-draw) var(--ease-ui) backwards;
+}
+
+/* A drawn line, not text-decoration, so it can grow from the left across every line of a wrapped task. */
+.task-strike {
+  background: linear-gradient(currentColor, currentColor) no-repeat 0 55% / 100% var(--strike);
+  animation: vc-strike var(--dur-draw) var(--ease-ui) var(--dur-press) backwards;
+}
+
+/* ---- disclosure: one chevron (an inline SVG mask, drawn in the text colour) turns 90° when open ---- */
+:root {
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4.25 2.25 8 6l-3.75 3.75' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+:is(.group-toggle, .active-work-toggle, .progress-week)::after,
+details > summary::before {
+  content: '';
+  display: inline-block;
+  flex: none;
+  width: 0.7em;
+  height: 0.7em;
+  vertical-align: -0.02em;
+  background: currentColor;
+  -webkit-mask: var(--chevron) center / contain no-repeat;
+  mask: var(--chevron) center / contain no-repeat;
+  transition: transform var(--dur-fast) var(--ease-ui);
+}
+
+:is(.group-toggle, .active-work-toggle, .progress-week)::after {
+  margin-left: 0.35em;
+}
+
+:is(.active-work-toggle, .progress-week)::after {
+  color: var(--muted);
+}
+
+:is(.group-toggle, .active-work-toggle, .progress-week)[aria-expanded='true']::after,
+details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+details > summary {
+  list-style: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details > summary::before {
+  margin-right: 0.4em;
+  color: var(--muted);
+}
+
+/* Vault status: two stacked lines; the chevron sits beside both. */
+.vault-status summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.vault-status summary::before {
+  grid-row: span 2;
+}
+
+/* ---- reduced motion: no slides, a short fade instead (styles.css stops every other keyframe animation) ---- */
+@media (prefers-reduced-motion: reduce) {
+  /* The doubled class outranks the global `:not(.motion-fade) { animation: none !important }` rule: the backdrop
+     opts into an opacity-only fade (the sheet inside fades with it), like a `.motion-fade` element. */
+  .sheet-backdrop.sheet-backdrop {
+    animation: vc-fade-in var(--dur-fade) linear !important;
+  }
+}
+
+/* WeatherLab's summaries are flex rows with their own gap. */
+:is(.weather-sources, .weather-day-hours) > summary::before {
+  margin-right: 0;
+}

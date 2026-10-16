@@ -54,6 +54,8 @@ describe('AiUsagePanel', () => {
     expect(document.querySelectorAll('.ai-usage-tile')).toHaveLength(2);
     expect(text()).toContain('Claude');
     expect(text()).toContain('92 % used');
+    expect(document.querySelector('.ai-usage-value')!.textContent).toBe('700 tokens');
+    expect(document.querySelector('.ai-usage-period')!.textContent).toContain('28 Sep–4 Oct · 7 days');
     expect(text()).toContain('Updated 12:30');
     expect(document.querySelector('.ai-usage-spark')!.getAttribute('aria-label')).toBe('Claude: 7 days of tokens');
   });
@@ -65,6 +67,8 @@ describe('AiUsagePanel', () => {
     expect(button('30 d').getAttribute('aria-pressed')).toBe('true');
     expect(button('7 d').getAttribute('aria-pressed')).toBe('false');
     expect(document.querySelector('.ai-usage-spark')!.getAttribute('aria-label')).toBe('Claude: 30 days of tokens');
+    expect(document.querySelector('.ai-usage-value')!.textContent).toBe('1,000 tokens');
+    expect(text()).toContain('10 of 30 days recorded; missing days excluded');
   });
 
   it('titles an unknown provider with its id and never breaks', async () => {
@@ -77,6 +81,19 @@ describe('AiUsagePanel', () => {
     await render({ usage: ok(usage), budget: null, now });
     expect(document.querySelectorAll('.ai-usage-tile')).toHaveLength(2);
     expect(document.querySelector('.ai-usage-left')).toBeNull();
+  });
+
+  it('shows observed zero, unavailable usage and cost currency as distinct headlines', async () => {
+    const sample = (cost: number) => ({ date: '2026-10-04', calls: 0, inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, cost });
+    const data = AiUsageResponse.parse({ ...usage, providers: {
+      jev: { days: [sample(0)] },
+      codex: { days: [] },
+      scaleway: { currency: 'EUR', days: [sample(1.5)] },
+      deepseek: { days: [sample(2)] },
+    } });
+    await render({ usage: ok(data), budget: null, now });
+    expect([...document.querySelectorAll('.ai-usage-value')].map((node) => node.textContent))
+      .toEqual(['0 calls', 'Usage unavailable', '€1.50 cost', '2.00 cost (currency unknown)']);
   });
 
   it('shows no numbers when the read failed, and renders nothing before it is requested', async () => {

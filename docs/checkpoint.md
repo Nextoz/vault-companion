@@ -1,6 +1,5 @@
 # AI leaderboard — implementation in progress
-- Existing draft preserved on feat/glm-workflow-leaderboard; reconciling with current main before completion.
-- Runner/controller offline tests pass (58); existing leaderboard tests pass (32), typecheck/lint pass.
-- Standalone feature worker stopped without final output; no feature completion claimed. Lead continues local implementation.
-- Required: durable paginated snapshots/history, authenticated API, daily refresh, Dashboard integration and deployment setup.
-- Release gates: full tests, build, E2E, CodeRabbit and CI. Nothing merged/deployed for this feature.
+- Preserved existing draft and integrated current main, including recent UI, Reading and Hacker News changes.
+- Standalone worker stopped without final output; local implementation continues with CodeRabbit as final release reviewer.
+- Required: durable paginated source/history, authenticated API, daily refresh, Dashboard and deployment setup.
+- Release gates: full tests, build, E2E, CodeRabbit and CI. Nothing pushed, merged to main or deployed for this feature.

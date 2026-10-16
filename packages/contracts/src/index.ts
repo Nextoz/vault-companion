@@ -398,7 +398,8 @@ const bookAuthor = z.string().max(200).refine((s) => !/[\r\n\u2028\u2029]/.test(
 export const StartBookPayload = z.strictObject({
   title: bookTitle,
   author: bookAuthor,
-  totalPages: z.number().int().min(1).max(100_000),
+  /** Omitted for a book without pages (an audiobook): the note carries no `totalPages`, only reflections can be added. */
+  totalPages: z.number().int().min(1).max(100_000).optional(),
 });
 export type StartBookPayload = z.infer<typeof StartBookPayload>;
 
@@ -866,6 +867,8 @@ export const MorningBriefBody = z.strictObject({
   copenhagen: z.array(z.strictObject({ title: z.string(), line: z.string(), url: z.string() })).max(3).optional(),
   news: z.array(z.strictObject({ title: z.string(), line: z.string(), url: z.string() })).max(3).optional(),
   research: z.array(z.strictObject({ title: z.string(), line: z.string(), url: z.string() })).max(3).optional(),
+  hackerNews: z.array(z.strictObject({ title: z.string(), line: z.string(), url: z.string() })).max(3).optional(),
+  hackerNewsUnavailable: z.boolean().optional(),
   oneThing: z.strictObject({ text: z.string(), quote: z.string().optional() }).optional(),
   encouragement: z.string().optional(),
 });
@@ -883,7 +886,7 @@ export const MorningBriefResponse = z.strictObject({
 });
 export type MorningBriefResponse = z.infer<typeof MorningBriefResponse>;
 export {
-  briefCopenhagen, briefDigestUnavailable, briefDurationText, briefMeetingRows, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTimeline, briefTodoAge, briefUnavailableLines,
+  briefHackerNews, briefCopenhagen, briefDigestUnavailable, briefDurationText, briefMeetingRows, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTimeline, briefTodoAge, briefUnavailableLines,
   type BriefDigestItem, type BriefOneThing, type BriefTimeline, type BriefTimelineRow,
 } from './morning-brief-presentation.ts';
 

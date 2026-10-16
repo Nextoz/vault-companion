@@ -17,7 +17,7 @@
 
 .research-radar .radar-card {
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: var(--r-control);
   padding: 12px 14px;
   margin-bottom: 10px;
 }
@@ -31,7 +31,7 @@
 
 .research-radar .radar-card-head h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--t-body);
   flex: 1;
 }
 
@@ -42,9 +42,9 @@
 }
 
 .research-radar .radar-badge {
-  font-size: 0.75rem;
+  font-size: var(--t-footnote);
   padding: 0.1rem 0.4rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
 }
 
 .research-radar .badge-important { background: var(--danger-soft); color: var(--danger); }

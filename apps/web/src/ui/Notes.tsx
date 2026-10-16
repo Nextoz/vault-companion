@@ -11,6 +11,8 @@ import type { NoteRenderer } from '../note/render.ts';
 import { loadRenderer, REFUSED } from './NoteView.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 import { AskJevSheet } from './AskJevSheet.tsx';
+import { LargeTitle } from './LargeTitle.tsx';
+import { displayDate } from '../time.ts';
 
 type Entry = NotesResponse['notes'][number];
 type OkNote = Extract<NoteReadResponse, { status: 'ok' }>;
@@ -35,7 +37,7 @@ export function Notes({ refreshKey, queue, items, accountKey, baseRevision }: {
   }
   const data = list?.kind === 'ok' ? list.data : null;
   return <section aria-label="Notes" className="notes">
-    <h1>Notes</h1>
+    <LargeTitle>Notes</LargeTitle>
     <CopyNote view={listView} />
     {(!list || list.kind !== 'ok') && <p role="status">{!list ? 'Loading notes…' : unavailable(list, 'notes')}</p>}
     {data?.notes.length === 0 && <p className="muted">No notes in the Inbox yet.</p>}
@@ -43,7 +45,7 @@ export function Notes({ refreshKey, queue, items, accountKey, baseRevision }: {
       {data.notes.map((n) => <li key={n.path}>
         <button type="button" className="note-row" data-testid="note-row" onClick={() => setOpen(n)}>
           <span className="note-row-title">{n.title}</span>
-          {n.date && <span className="muted small">{n.date}</span>}
+          {n.date && <span className="muted small">{displayDate(n.date)}</span>}
         </button>
       </li>)}
     </ul>}

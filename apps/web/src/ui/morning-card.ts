@@ -3,7 +3,7 @@
 // UX7: the weather line is plain day language plus the run window's own wording, and one research entry replaces the
 // old reading-brief line (its content now lives in the Morning Brief sheet). Pure.
 import { effectiveRadarDecisions, WEATHER_TIME_ZONE } from '@vault-companion/contracts';
-import { briefCopenhagen, briefDigestUnavailable, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTimeline, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
+import { briefHackerNews, briefCopenhagen, briefDigestUnavailable, briefNeedsYou, briefNews, briefOneThing, briefResearch, briefTimeline, briefTodoAge, briefUnavailableLines } from '@vault-companion/contracts';
 import type { BriefDigestItem, BriefTimeline } from '@vault-companion/contracts';
 import type { MorningBriefMissingResponse, MorningBriefReadResponse, MorningBriefResponse, RadarResponse, ScoutsResponse, WeatherProjection, WeatherResponse, WeatherRunWindow } from '@vault-companion/contracts';
 import type { QueueItem } from '../queue/queue.ts';
@@ -172,6 +172,7 @@ export interface MorningBriefSheetState {
 }
 
 export interface MorningBriefDigest {
+  readonly hackerNews?: { readonly items: readonly BriefLine[]; readonly message: string | null };
   readonly needsYou: readonly BriefLine[];
   readonly copenhagen: readonly BriefLine[];
   readonly news: readonly BriefLine[];
@@ -191,6 +192,7 @@ export function morningBriefSheet(brief: MorningBriefReadResponse | null, today:
     const lines = briefLines(brief, today, now);
     if (lines !== null) {
       const unavailable = briefDigestUnavailable(brief);
+      const hackerNews = briefHackerNews(brief);
       // MB3b: the digest's One thing closes the sheet; the brief's own encouragement is the fallback closing line.
       const oneThing = briefOneThing(brief) ?? (brief.brief.encouragement === undefined ? null : { text: brief.brief.encouragement });
       return {
@@ -199,6 +201,7 @@ export function morningBriefSheet(brief: MorningBriefReadResponse | null, today:
         timeline: briefTimeline(brief, now),
         todos: briefTodos(brief, today),
         digest: {
+          ...(hackerNews === null ? {} : { hackerNews: { items: digestRows('hacker-news', hackerNews.items), message: hackerNews.message } }),
           needsYou: unavailable === null ? digestRows('needs-you', briefNeedsYou(brief)) : [],
           copenhagen: unavailable === null ? digestRows('copenhagen', briefCopenhagen(brief)) : [],
           news: unavailable === null ? digestRows('news', briefNews(brief)) : [],

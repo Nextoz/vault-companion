@@ -29,13 +29,13 @@ export function Reading({ refreshKey, accountKey, queue, baseRevision, open, onC
   // READ1-B: the one reflection being challenged, with its book and ADR-0063 ordinal, so a refresh that repicks the
   // current book never retargets an open sheet.
   const [challenge, setChallenge] = useState<{ title: string; date: string; ordinal: number; text: string } | null>(null);
-  const sheet: ReadingSheetKind | null = requested ?? (open && read?.status === 'ok' ? (current ? 'log' : 'start') : null);
+  const sheet: ReadingSheetKind | null = requested ?? (open && read?.status === 'ok' ? (current ? (current.totalPages > 0 ? 'log' : 'reflect') : 'start') : null);
   const close = () => { setRequested(null); onClose(); };
+  const paged = (current?.totalPages ?? 0) > 0;
   const percent = current ? progressPercent(current.currentPage, current.totalPages) : 0;
   const shownReflections = current ? reflectionsNewestFirst(current.reflections) : [];
   const ordinals = reflectionOrdinals(shownReflections);
   return <section className="group reading" aria-label="Reading">
-    <h2>Reading</h2>
     <CopyNote view={view} />
     {!res && <p className="muted">Loading reading…</p>}
     {res && !read && <p className="muted">Reading could not be loaded. Refresh when connected.</p>}
@@ -50,13 +50,15 @@ export function Reading({ refreshKey, accountKey, queue, baseRevision, open, onC
       <article className="reading-current" data-testid="reading-current">
         <h3>{current.title}</h3>
         <p className="muted small">{current.author}</p>
-        <p>page {current.currentPage} of {current.totalPages}</p>
-        <div className="reading-bar" role="progressbar" aria-label="Progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}>
-          <span style={{ width: `${percent}%` }} />
-        </div>
+        {paged ? <>
+          <p>page {current.currentPage} of {current.totalPages}</p>
+          <div className="reading-bar" role="progressbar" aria-label="Progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}>
+            <span style={{ width: `${percent}%` }} />
+          </div>
+        </> : <p className="muted small">No page count (audiobook)</p>}
         {isFinishedBook(current) && <p className="reading-finished">Finished</p>}
         <div className="reading-actions">
-          <button type="button" onClick={() => setRequested('log')}>Log pages</button>
+          {paged && <button type="button" onClick={() => setRequested('log')}>Log pages</button>}
           <button type="button" onClick={() => setRequested('reflect')}>Reflect</button>
         </div>
       </article>
@@ -83,14 +85,17 @@ export function Reading({ refreshKey, accountKey, queue, baseRevision, open, onC
         {others.map((book: BookView) => <li key={book.title}>
           <button type="button" onClick={() => setPicked(book.title)}>
             <strong>{book.title}</strong>{' '}
-            <span className="muted small">{book.author} · page {book.currentPage} of {book.totalPages}{book.status === 'reading' ? '' : ` · ${book.status}`}</span>
+            <span className="muted small">{[book.author, book.totalPages > 0 ? `page ${book.currentPage} of ${book.totalPages}` : 'audiobook'].filter(Boolean).join(' · ')}{book.status === 'reading' ? '' : ` · ${book.status}`}</span>
           </button>
         </li>)}
       </ul>
     )}
+    {read?.status === 'ok' && books.length > 0 && (
+      <button type="button" className="reading-start" onClick={() => setRequested('start')}>Start another book</button>
+    )}
     {sheet === 'start' && <ReadingSheet kind="start" queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={close} />}
     {sheet === 'log' && current && <ReadingSheet kind="log" book={current} queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={close} />}
-    {sheet === 'reflect' && current && <ReadingSheet kind="reflect" book={current} draft={reflection} onDraftChange={setReflection} queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={close} />}
+    {sheet === 'reflect' && current && <ReadingSheet kind="reflect" book={current} books={books} draft={reflection} onDraftChange={setReflection} queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={close} />}
     {challenge && <ChallengeSheet title={challenge.title} date={challenge.date} ordinal={challenge.ordinal} text={challenge.text}
       queue={queue} accountKey={accountKey} baseRevision={baseRevision} onClose={() => setChallenge(null)} />}
   </section>;
