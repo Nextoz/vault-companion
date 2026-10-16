@@ -1,0 +1,44 @@
+/* M1b: the Credit burn-down monitor (mockup M1). Collapsed it is one ellipsised summary line whose tone follows the
+   pace; expanded it stacks the voucher ring, the spend-vs-ideal chart, the pace line and the sibling budget rows.
+   All colours come from the app's tokens, never the mockup's own hex values. */
+.credit-burn .dash-card-head h2 { color: var(--ios-indigo); }
+.credit-burn .monitor-chevron { color: var(--ios-indigo); }
+.m1-summary { margin: 0; font-size: var(--t-subhead); font-variant-numeric: tabular-nums; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.m1-summary-ok { color: var(--done); }
+.m1-summary-short { color: var(--warn); }
+.m1-summary-unknown { color: var(--muted); }
+.m1-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.m1-sec { margin: 6px 0 0; font-size: var(--t-footnote); font-weight: 600; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .02em; overflow-wrap: anywhere; }
+.m1-ring { display: flex; justify-content: center; margin: 2px 0 0; }
+.m1-ring-track { fill: none; stroke: var(--line); }
+.m1-ring-arc { fill: none; stroke: var(--done); }
+.m1-ring-value { fill: var(--text); font-size: var(--t-headline); font-weight: 600; font-variant-numeric: tabular-nums; }
+.m1-ring-sub { fill: var(--muted); font-size: var(--t-caption2); }
+.m1-expiry { margin: 4px 0 2px; text-align: center; font-size: var(--t-footnote); color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.m1-chart { display: block; width: 100%; max-width: 246px; height: auto; margin: 0 auto; }
+.m1-chart-base { stroke: var(--line); }
+.m1-chart-ideal { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.m1-chart-line { fill: none; stroke: var(--done); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.m1-chart-dot { fill: var(--done); }
+.m1-chart-label { fill: var(--muted); font-size: var(--t-caption2); }
+.m1-legend { margin: 0; }
+.m1-empty { margin: 0; }
+.m1-pace { margin: 8px 0 2px; font-size: var(--t-footnote); font-weight: 600; }
+.m1-pace-ok { color: var(--done); }
+.m1-pace-warn { color: var(--warn); }
+.m1-pace-unknown { color: var(--muted); }
+.m1-other { padding: 7px 0 6px; border-bottom: .5px solid var(--line); }
+.m1-other:last-child { border-bottom: 0; }
+.m1-other-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.m1-other-label { display: flex; flex-direction: column; min-width: 0; font-size: var(--t-subhead);
+  overflow-wrap: anywhere; }
+.m1-other-reset { font-size: var(--t-footnote); color: var(--warn); }
+.m1-other-value { flex-shrink: 0; text-align: right; font-size: var(--t-subhead); font-variant-numeric: tabular-nums; }
+.m1-bar { height: 3px; border-radius: var(--r-tight); background: var(--line); margin-top: 5px; overflow: hidden; }
+.m1-bar-fill { display: block; height: 3px; border-radius: var(--r-tight); }
+.m1-bar-ok { background: var(--done); }
+.m1-bar-warn { background: var(--warn); }
+.m1-bar-bad { background: var(--danger); }

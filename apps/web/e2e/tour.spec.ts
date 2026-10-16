@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MorningBriefResponse } from '@vault-companion/contracts';
+import { AiBudgetResponse, MorningBriefResponse } from '@vault-companion/contracts';
 import { ACCOUNT, MockApi, taskView } from './mock-api.ts';
 import { seenKey } from '../src/achievements.ts';
 import { goTo } from './nav.ts';
@@ -302,6 +302,31 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await goTo(page, 'Log');
     await expect(page.getByRole('group', { name: 'Log view' }).getByRole('button', { name: 'Reading', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.evaluate(() => window.scrollTo(0, 0));
+  });
+
+  // M1b: the shared mock's Scaleway row carries no expiry, so the monitor would have no ring or pace to photograph.
+  // Hand it a voucher with an expiry on the same frozen clock, reload and shoot last, so the reload cannot disturb the screens above.
+  api.aiBudget = AiBudgetResponse.parse({
+    ...api.aiBudget,
+    providers: api.aiBudget.providers.map((provider) => provider.id === 'scaleway'
+      ? { id: 'scaleway', label: 'Scaleway credits', kind: 'money', value: 63.2, unit: '\u20ac', limit: 100, resetsAt: '2026-11-01T00:59:59+01:00', history: null }
+      : provider),
+  });
+  await page.reload();
+
+  await shot('Board - Credit burn-down', async () => {
+    await goTo(page, 'Board');
+    const region = page.getByRole('region', { name: 'Credit burn-down', exact: true });
+    await region.scrollIntoViewIfNeeded();
+    await expect(region.locator('.m1-summary')).toHaveText(/Scaleway EUR 63\.2 left \u00b7 \d+ d \u00b7 (on pace|short ~EUR)/);
+  });
+
+  await shot('Board - Credit burn-down expanded', async () => {
+    const region = page.getByRole('region', { name: 'Credit burn-down', exact: true });
+    await region.getByRole('button', { name: 'Credit burn-down', exact: true }).click();
+    await region.scrollIntoViewIfNeeded();
+    await expect(region.locator('.m1-chart polyline')).toBeVisible();
+    await expect(region.locator('.m1-other')).toHaveCount(1);
   });
 
   const index = [
