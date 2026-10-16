@@ -128,6 +128,19 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(panel.locator('.ai-usage-tile')).toHaveCount(5);
   });
 
+  // M8: the Week runway monitor under the AI usage panel, collapsed then expanded.
+  await shot('Board - Week runway', async () => {
+    const panel = page.getByRole('region', { name: 'Week runway', exact: true });
+    await panel.scrollIntoViewIfNeeded();
+    await expect(panel).toContainText('3 free evenings · 2 picked');
+  });
+
+  await shot('Board - Week runway expanded', async () => {
+    const panel = page.getByRole('region', { name: 'Week runway', exact: true });
+    await panel.getByRole('button', { name: 'Week runway', exact: true }).click();
+    await expect(panel.locator('.m8-d')).toHaveCount(7);
+  });
+
   await shot('Board - AI model leaderboard', async () => {
     const panel = page.getByRole('region', { name: 'AI models', exact: true });
     await panel.evaluate(card => window.scrollBy(0, card.getBoundingClientRect().top - 100));
