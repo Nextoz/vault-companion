@@ -14,6 +14,9 @@ test('AB3b: the AI usage panel shows one tile per provider with its budget left 
   await goTo(page, 'Board');
   const panel = page.getByRole('region', { name: 'AI usage', exact: true });
   await expect(panel).toBeVisible();
+  // Collapsed by default: one summary row per provider; the header press expands the tiles.
+  await expect(panel.locator('.ai-usage-row')).toHaveCount(5);
+  await panel.getByRole('button', { name: 'AI usage', exact: true }).click();
   await expect(panel.locator('.ai-usage-tile')).toHaveCount(5);
   await expect(panel.locator('.ai-usage-tile', { hasText: 'Claude Code' }).locator('.ai-usage-left')).toHaveText('Budget: 58 % used');
   await expect(panel.locator('.ai-usage-tile', { hasText: 'Scaleway' }).locator('.ai-usage-left')).toHaveText('Budget: $6.14 left');
@@ -39,5 +42,7 @@ test('AB3b: an unknown provider still gets a tile titled with its id', async ({ 
   await page.goto('/');
   await goTo(page, 'Board');
   const panel = page.getByRole('region', { name: 'AI usage', exact: true });
+  await expect(panel.locator('.ai-usage-tile', { hasText: 'mystery' })).toHaveCount(0); // collapsed: rows, not tiles
+  await panel.getByRole('button', { name: 'AI usage', exact: true }).click();
   await expect(panel.locator('.ai-usage-tile', { hasText: 'mystery' })).toHaveCount(1);
 });
