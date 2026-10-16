@@ -7,6 +7,8 @@ import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createApp } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
 import { createGameService } from './game.ts';
+import { createLeaderboardSource } from './leaderboard.ts';
+import { createLeaderboardStorage, type LeaderboardKv } from './leaderboard-storage.ts';
 import { createMarketSource } from './market.ts';
 import { createWatchlistSource } from './watchlist.ts';
 import { createPrivateValuationsReader } from './private-valuations.ts';
@@ -30,6 +32,9 @@ import { EXPLAINER_ROUTE, runExplainerJob } from './research-explainer.ts';
 const MORNING_BRIEF_TIME_ZONE = 'Europe/Copenhagen';
 
 export interface Env {
+  /** Optional leaderboard data source and durable snapshot binding; never used by Dashboard fetches. */
+  AA_API_KEY?: string;
+  LEADERBOARD_KV?: LeaderboardKv;
   AUTH_MODE: string;
   ACCESS_TEAM_DOMAIN: string; // e.g. https://<team>.cloudflareaccess.com
   ACCESS_AUD: string;
@@ -144,7 +149,9 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
   const radar = createResearchRadarService({ store, now: () => new Date(), timeZone });
   const health = createHealthService({ store, now: () => new Date(), timeZone });
   const history = createHistoryService({ store, now: () => new Date(), timeZone });
+  const leaderboard = productionLeaderboard(env, fetchImpl);
   const services = {
+    readLeaderboard: leaderboard.read,
     ...createCommandService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createLinkedNoteService({ store }),
     ...createActiveWorkService({ store }),
@@ -201,6 +208,18 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
   return createApp({ verify, verifyIngest, appOrigin: env.APP_ORIGIN, services, log });
 }
 
+/** Shared production composition: missing KV stays explicitly unavailable. */
+export function productionLeaderboard(env: Pick<Env, 'AA_API_KEY' | 'LEADERBOARD_KV'>, fetchImpl: typeof fetch, now: () => number = Date.now, countStorage: () => void = () => {}) {
+  const kv = env.LEADERBOARD_KV;
+  return createLeaderboardSource({
+    fetch: fetchImpl, now, apiKey: env.AA_API_KEY ?? '',
+    ...(kv ? { storage: createLeaderboardStorage({
+      get: (key, type) => { countStorage(); return kv.get(key, type); },
+      put: (key, value) => { countStorage(); return kv.put(key, value); },
+    }) } : {}),
+  });
+}
+
 /** Read-only view over the same store whose `head()` returns the caller-pinned commit without another fetch. */
 function withPinnedHead(store: VaultStore, commitSha: string): VaultStore {
   return new Proxy(store, {
@@ -234,6 +253,14 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
     fetch: counted,
     token: createInstallationTokenSource({ appId: env.GITHUB_APP_ID, privateKeyPem: env.GITHUB_APP_PRIVATE_KEY, installationId: env.GITHUB_INSTALLATION_ID, fetch: counted }),
   });
+
+  // Share the existing invocation and its quota: provider AND KV calls count
+  // before the explainer decides how much of its 45-subrequest budget remains.
+  if (cron === '30 4 * * *' && env.LEADERBOARD_KV && env.AA_API_KEY) {
+    const result = await productionLeaderboard(env, counted, Date.now, () => { used++; }).refresh();
+    log({ ...base, route: 'cron:leaderboard', status: result.status === 'ok' && result.note === null ? 200 : 503,
+      ...(result.status === 'unavailable' ? { errorCode: result.reason } : {}) });
+  }
 
   if (explainerSlot) {
     if (!env.GEMINI_API_KEY) {

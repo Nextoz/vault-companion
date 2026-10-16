@@ -1,6 +1,6 @@
-import type { AiBudgetResponse, AiUsageResponse, CompleteTaskCommand, TaskView } from '@vault-companion/contracts';
+import type { AiBudgetResponse, AiUsageResponse, CompleteTaskCommand, LeaderboardResponse, TaskView } from '@vault-companion/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { getAiBudget, getAiUsage, getCalendarLinks, getSession, getTasks, type Fetched } from '../api.ts';
+import { getAiBudget, getAiUsage, getCalendarLinks, getLeaderboard, getSession, getTasks, type Fetched } from '../api.ts';
 import type { ActiveWorkItem } from '../active-work.ts';
 import { coalescedRead, type ReadReason } from '../coalescedRead.ts';
 import { notRedoneBy, stillUnresolved, UNRESOLVED_TEXT, unresolvedFrom, type Unresolved } from '../attention.ts';
@@ -120,6 +120,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   // AB3b: the Dashboard's AI usage panel is fed from App, so the Dashboard stays a pure read of what it is handed.
   const [aiUsage, setAiUsage] = useState<Fetched<AiUsageResponse> | null>(null);
   const [aiBudget, setAiBudget] = useState<Fetched<AiBudgetResponse> | null>(null);
+  const [leaderboard, setLeaderboard] = useState<Fetched<LeaderboardResponse> | null>(null);
 
   const signedOut = sessionSignedOut || snapshot.signedOut;
   const noteOpen = openLink !== null && !signedOut && openLink.account === accountKey;
@@ -134,11 +135,12 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   // AB3b: read the usage summary and the budget rows while the Dashboard is on screen; both are read-only. The old
   // answer stays until the new one arrives, so a refresh never blanks the panel.
   useEffect(() => {
-    if (signedOut) { setAiUsage(null); setAiBudget(null); return; }
+    if (signedOut) { setAiUsage(null); setAiBudget(null); setLeaderboard(null); return; }
     if (tab !== 'today') return;
     let live = true;
     void getAiUsage().then((result) => { if (live) setAiUsage(result); });
     void getAiBudget().then((result) => { if (live) setAiBudget(result); });
+    void getLeaderboard().then((result) => { if (live) setLeaderboard(result); });
     return () => { live = false; };
   }, [checkedAt, signedOut, tab]);
   // CAL-b: the calendar affordance exists only on the Tasks screens (Today/All) and only while signed in. The read is
@@ -555,7 +557,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
                   onOpenHealth={() => setTab('health')} onOpenStatus={openStatus} />
               : <>
                   {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
-                  {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} />}
+                  {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} leaderboard={leaderboard} />}
                   <ScoutDiagnostics key={`scout-diagnostics:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} onOpenScouts={() => setTab('scouts')} />
                 </>}
           </>

@@ -1556,3 +1556,4 @@ export const GameResponse = z.strictObject({
 export type GameResponse = z.infer<typeof GameResponse>;
 export * from './dashboard.ts';
 export * from './weather.ts';
+export * from './leaderboard.ts';

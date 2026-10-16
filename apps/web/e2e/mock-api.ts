@@ -544,6 +544,7 @@ export class MockApi {
 
   /** Route a page, or a whole context: only a context route also sees requests made by a service worker. */
   async install(target: Page | BrowserContext): Promise<void> {
+    await target.route('**/api/leaderboard', route => route.fulfill({ json: { status: 'unavailable', now: new Date().toISOString(), reason: 'no-data', note: 'No benchmark snapshot yet.' } }));
     const on = (glob: string, handle: (route: Route) => Promise<void>) =>
       target.route(glob, (route) => (this.network === 'down' ? route.abort('internetdisconnected') : handle(route)));
     await on('**/api/dashboard?**', (route) => this.#dashboard(route));

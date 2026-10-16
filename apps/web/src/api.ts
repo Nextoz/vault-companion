@@ -4,6 +4,7 @@ import {
   ActiveWorkResponse,
   AiBudgetResponse,
   AiUsageResponse,
+  LeaderboardResponse,
   AskJevResponse,
   DashboardResponse,
   GameResponse,
@@ -89,6 +90,7 @@ export const getMorning = () => getJson('/api/morning', MorningResponse.strip())
 export const getMorningBrief = () => getJson('/api/morning-brief', z.union(MorningBriefReadResponse.options.map((option) => option.strip())));
 export const getAiBudget = () => getJson('/api/ai-budget', AiBudgetResponse.strip());
 export const getAiUsage = () => getJson('/api/ai-usage', AiUsageResponse.strip());
+export const getLeaderboard = () => getJson('/api/leaderboard', LeaderboardResponse);
 export const getTriage = () => getJson('/api/triage', TriageResponse.strip());
 export const getRadar = () => getJson('/api/radar', RadarResponse.strip());
 export const getRadarNote = (paperId: string) =>

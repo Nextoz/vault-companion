@@ -6,6 +6,7 @@ import { MorningBriefResponse } from '@vault-companion/contracts';
 import { ACCOUNT, MockApi, taskView } from './mock-api.ts';
 import { seenKey } from '../src/achievements.ts';
 import { goTo } from './nav.ts';
+import { leaderboardFixture } from './leaderboard-fixture.ts';
 
 // PW1: a manual tour that photographs every screen on the mocked app. Test tooling only: it never touches the live
 // vault or a live API. Excluded from the default `pnpm e2e`/CI run unless VC_TOUR=1 (see playwright.config.ts).
@@ -69,6 +70,7 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
       card(3, 'Synthetic event three', '2026-10-03T17:00:00+02:00')] };
   await seedOnce(page, { at: 1, triage: [], scouts: { learning: 1 }, brief: '2026-09-29', papers: [] });
   await api.install(page);
+  await page.route('**/api/leaderboard', route => route.fulfill({ json: leaderboardFixture(CLOCK.toISOString()) }));
   await page.goto('/');
 
   mkdirSync(TOUR_DIR, { recursive: true });
@@ -117,6 +119,17 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await panel.scrollIntoViewIfNeeded();
     await expect(panel.locator('.ai-usage-tile')).toHaveCount(5);
   });
+
+  await shot('Board - AI model leaderboard', async () => {
+    const panel = page.getByRole('region', { name: 'AI models', exact: true });
+    await panel.evaluate(card => window.scrollBy(0, card.getBoundingClientRect().top - 100));
+    await expect(panel.getByRole('listitem')).toHaveCount(10);
+  });
+  await shot('AI model - details', async () => {
+    await page.getByRole('button', { name: /Synthetic Model 00/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Synthetic Model 00' })).toBeVisible();
+  });
+  await page.getByRole('dialog', { name: 'Synthetic Model 00' }).getByRole('button', { name: 'Close', exact: true }).click();
 
   // WX1: the week overview (mockup W3) and one day's meteogram (W1), on the Board's Weather card.
   const weather = page.getByRole('region', { name: 'Dashboard', exact: true }).getByRole('article', { name: 'Weather', exact: true });

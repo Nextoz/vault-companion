@@ -1,0 +1,41 @@
+import { expect, test } from '@playwright/test';
+import type { LeaderboardResponse } from '@vault-companion/contracts';
+import { MockApi } from './mock-api.ts';
+import { goTo } from './nav.ts';
+import { leaderboardFixture as data } from './leaderboard-fixture.ts';
+
+test('Dashboard shows top ten, category-specific rows, source and model details', async ({ page }) => {
+  const api = new MockApi(); await api.install(page);
+  await page.route('**/api/leaderboard', route => route.fulfill({ json: data() }));
+  await page.goto('/'); await goTo(page,'Board');
+  const panel = page.getByRole('region', { name: 'AI models', exact: true });
+  await expect(panel.getByRole('listitem')).toHaveCount(10);
+  await expect(panel.getByRole('button', { name: 'Mathematics', exact: true })).toHaveCount(0);
+  await expect(panel.getByRole('link', { name: /Artificial Analysis/ })).toHaveAttribute('href', 'https://artificialanalysis.ai/methodology');
+  await panel.getByRole('button', { name: /Synthetic Model 00/ }).click();
+  const sheet = page.getByRole('dialog', { name: 'Synthetic Model 00' });
+  await expect(sheet).toBeVisible(); await expect(sheet.getByText('Individual evaluation scores are unavailable in this data feed.')).toBeVisible();
+  const close = sheet.getByRole('button', { name: 'Close', exact: true });
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Shift+Tab'); await expect(sheet.getByRole('link')).toBeFocused();
+  await page.keyboard.press('Tab'); await expect(close).toBeFocused();
+  await page.keyboard.press('Escape'); await expect(sheet).toHaveCount(0);
+  const opener = panel.getByRole('button', { name: /Synthetic Model 00/ });
+  await expect(opener).toBeFocused();
+  await opener.click(); await sheet.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(sheet).toHaveCount(0); await expect(opener).toBeFocused();
+  await panel.getByRole('button', { name: 'Coding', exact: true }).click();
+  await expect(panel.getByRole('listitem').first()).toContainText('Synthetic Model 10');
+  await expect(panel.getByText('↑ 1', { exact: true })).toHaveCount(0);
+});
+test('old snapshot is explicitly stale and unavailable storage invents no scores', async ({ page }) => {
+  const api = new MockApi(); await api.install(page);
+  let response: LeaderboardResponse = data('2020-01-01T00:00:00.000Z');
+  await page.route('**/api/leaderboard', route => route.fulfill({ json: response }));
+  await page.goto('/'); await goTo(page,'Board');
+  const panel = page.getByRole('region', { name: 'AI models', exact: true });
+  await expect(panel.getByText('Stale', { exact: true })).toBeVisible();
+  response = { status:'unavailable', now:new Date().toISOString(), reason:'storage-unavailable', note:'Benchmark storage is unavailable.' };
+  await page.reload(); await goTo(page,'Board');
+  await expect(panel.getByRole('listitem')).toHaveCount(0); await expect(panel.getByRole('status')).toContainText('Benchmark storage is unavailable');
+});
