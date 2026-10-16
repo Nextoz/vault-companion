@@ -46,10 +46,52 @@ const render = async (props: Parameters<typeof AiUsagePanel>[0]) => {
 };
 const text = () => document.getElementById('root')!.textContent ?? '';
 const button = (label: string) => [...document.querySelectorAll('button')].find((entry) => entry.textContent?.trim() === label)!;
+const toggle = async () => { await act(async () => { (button('AI usage') as HTMLElement).click(); }); };
 
 describe('AiUsagePanel', () => {
-  it('draws one tile per provider, the budget left line and the Updated footer', async () => {
+  it('starts collapsed: one summary row per provider, no tiles, sparklines or notes', async () => {
     await render({ usage: ok(usage), budget: ok(budget), now });
+    expect(document.querySelectorAll('.ai-usage-row')).toHaveLength(2);
+    expect(document.querySelectorAll('.ai-usage-tile')).toHaveLength(0);
+    expect(document.querySelector('.ai-usage-spark')).toBeNull();
+    expect(document.querySelector('.ai-usage-period')).toBeNull();
+    expect(document.querySelector('.ai-usage-note')).toBeNull();
+    expect([...document.querySelectorAll('.ai-usage-row-value')].map((node) => node.textContent))
+      .toEqual(['700 tokens', '3 calls']);
+    expect(text()).toContain('Updated 12:30');
+  });
+
+  it('flips aria-expanded on the header button, which controls the body', async () => {
+    await render({ usage: ok(usage), budget: ok(budget), now });
+    const head = button('AI usage');
+    expect(head.getAttribute('aria-expanded')).toBe('false');
+    expect(document.getElementById(head.getAttribute('aria-controls')!)).not.toBeNull();
+    await act(async () => { (head as HTMLElement).click(); });
+    expect(head.getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelectorAll('.ai-usage-row')).toHaveLength(0);
+    expect(document.querySelectorAll('.ai-usage-tile')).toHaveLength(2);
+  });
+
+  it('offers the 7 d / 30 d toggle only once expanded', async () => {
+    await render({ usage: ok(usage), budget: ok(budget), now });
+    expect(document.querySelector('.ai-usage-range')).toBeNull();
+    await toggle();
+    expect(document.querySelector('.ai-usage-range')).not.toBeNull();
+    expect(button('7 d').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('carries the budget tone into the collapsed row as a coloured dot', async () => {
+    await render({ usage: ok(usage), budget: ok(budget), now });
+    const left = document.querySelector('.ai-usage-row .ai-usage-row-left')!;
+    expect(left.className).toContain('ai-usage-left-bad'); // 92 % used is past the 90 threshold.
+    expect(left.textContent).toBe('92 % used');
+    expect(document.querySelector('.ai-usage-row .ai-usage-dot')).not.toBeNull();
+    expect(document.querySelectorAll('.ai-usage-row-left')).toHaveLength(1); // mystery has no budget row.
+  });
+
+  it('expands to one tile per provider, the budget left line and the Updated footer', async () => {
+    await render({ usage: ok(usage), budget: ok(budget), now });
+    await toggle();
     expect(document.querySelector('.ai-usage-tile')).not.toBeNull();
     expect(document.querySelectorAll('.ai-usage-tile')).toHaveLength(2);
     expect(text()).toContain('Claude');
@@ -60,8 +102,9 @@ describe('AiUsagePanel', () => {
     expect(document.querySelector('.ai-usage-spark')!.getAttribute('aria-label')).toBe('Claude: 7 days of tokens');
   });
 
-  it('toggles 7 d / 30 d', async () => {
+  it('toggles 7 d / 30 d, and the collapsed summary follows the chosen range', async () => {
     await render({ usage: ok(usage), budget: ok(budget), now });
+    await toggle();
     expect(button('7 d').getAttribute('aria-pressed')).toBe('true');
     await act(async () => { (button('30 d') as HTMLElement).click(); });
     expect(button('30 d').getAttribute('aria-pressed')).toBe('true');
@@ -69,6 +112,8 @@ describe('AiUsagePanel', () => {
     expect(document.querySelector('.ai-usage-spark')!.getAttribute('aria-label')).toBe('Claude: 30 days of tokens');
     expect(document.querySelector('.ai-usage-value')!.textContent).toBe('1,000 tokens');
     expect(text()).toContain('10 of 30 days recorded; missing days excluded');
+    await toggle();
+    expect(document.querySelector('.ai-usage-row-value')!.textContent).toBe('1,000 tokens');
   });
 
   it('titles an unknown provider with its id and never breaks', async () => {
@@ -79,6 +124,7 @@ describe('AiUsagePanel', () => {
 
   it('does not draw a left line when the budget has no row', async () => {
     await render({ usage: ok(usage), budget: null, now });
+    await toggle();
     expect(document.querySelectorAll('.ai-usage-tile')).toHaveLength(2);
     expect(document.querySelector('.ai-usage-left')).toBeNull();
   });
@@ -92,6 +138,7 @@ describe('AiUsagePanel', () => {
       deepseek: { days: [sample(2)] },
     } });
     await render({ usage: ok(data), budget: null, now });
+    await toggle();
     expect([...document.querySelectorAll('.ai-usage-value')].map((node) => node.textContent))
       .toEqual(['0 calls', 'Usage unavailable', '€1.50 cost', '2.00 cost (currency unknown)']);
   });
@@ -100,6 +147,11 @@ describe('AiUsagePanel', () => {
     await render({ usage: { kind: 'error', message: 'The server answered 503.' }, budget: ok(budget), now });
     expect(text()).toContain('AI usage could not be read.');
     expect(document.querySelectorAll('.ai-usage-tile')).toHaveLength(0);
+    expect(document.querySelectorAll('.ai-usage-row')).toHaveLength(0);
+    await toggle();
+    expect(text()).toContain('AI usage could not be read.');
+    expect(document.querySelectorAll('.ai-usage-tile')).toHaveLength(0);
+    expect(document.querySelectorAll('.ai-usage-row')).toHaveLength(0);
     await act(async () => root!.unmount());
     root = null;
     await render({ usage: null, budget: null, now });
@@ -112,7 +164,8 @@ describe('AiUsagePanel', () => {
     const footer = document.querySelector('.ai-usage-updated')!;
     expect(footer.className).toContain('dash-stale');
     expect(footer.textContent).toContain('stale (> 2 h)');
-    expect(document.querySelectorAll('.ai-usage-tile')).toHaveLength(2);
     expect(text()).toContain('92 % used');
+    await toggle();
+    expect(document.querySelectorAll('.ai-usage-tile')).toHaveLength(2);
   });
 });

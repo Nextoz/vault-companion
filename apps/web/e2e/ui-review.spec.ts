@@ -127,6 +127,9 @@ test('AI usage gives values with units and keeps range labels on one line', asyn
   await openToday(page, 'empty');
   await goTo(page, 'Board');
   const panel = page.getByRole('region', { name: 'AI usage', exact: true });
+  await panel.scrollIntoViewIfNeeded();
+  // The range toggle only exists once the collapsed panel is expanded from its header.
+  await panel.getByRole('button', { name: 'AI usage', exact: true }).click();
   for (const name of ['7 d', '30 d']) {
     const button = panel.getByRole('button', { name, exact: true });
     await expect(button).toHaveCSS('white-space', 'nowrap');
