@@ -19,6 +19,7 @@ import {
   type AiBudgetResponse,
   type AiUsageResponse,
   type VaultActivityResponse,
+  type AgentActivityResponse,
   type JobRadarResponse,
   type AskJevQuestion,
   type AskJevResponse,
@@ -97,6 +98,8 @@ export interface Services {
   readVaultActivity?(): Promise<VaultActivityResponse | ApiError>;
   /** Job radar (M5a). Optional: without it the route answers 404. */
   readJobRadar?(): Promise<JobRadarResponse | ApiError>;
+  /** Agent activity (M2a). Optional: without it the route answers 404. */
+  readAgentActivity?(): Promise<AgentActivityResponse | ApiError>;
   /** "This morning" (ADR-0029 Part 2). Optional: without it the route answers 404. */
   readMorning?(): Promise<MorningResponse | ApiError>;
   /** Completion history (ADR-0021). Optional: without it the route answers 404. */
@@ -186,7 +189,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | BooksResponse | BookFollowUpResponse | ScoutsResponse | HistoryResponse | GameResponse | NotesResponse | NoteReadResponse | AskJevResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | VaultActivityResponse | JobRadarResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | WeekRunwayResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
+const isApiError = (x: Receipt | ApiError | TasksResponse | LinkedNoteResponse | ActiveWorkResponse | TrainingResponse | LearningResponse | BooksResponse | BookFollowUpResponse | ScoutsResponse | HistoryResponse | GameResponse | NotesResponse | NoteReadResponse | AskJevResponse | TriageResponse | MorningResponse | MorningBriefResponse | MorningBriefReadResponse | AiBudgetResponse | AiUsageResponse | VaultActivityResponse | JobRadarResponse | AgentActivityResponse | DashboardResponse | MarketTickerResponse | RadarResponse | RadarNoteResponse | WeatherResponse | WeekRunwayResponse | HealthResponse | HealthHistoryResponse | CalendarEventCreateResponse | CalendarEventRemoveResponse | CalendarLinksResponse): x is ApiError => 'code' in x && 'retryable' in x;
 
 type Vars = { identity: Extract<Identity, { ok: true }>; logMeta: Record<string, string> };
 
@@ -493,6 +496,21 @@ export function createApp(deps: AppDeps) {
   // carry only the commit SHA, never any application title, status, file path or follow-up date.
   app.get('/api/monitors/job-radar', async (c) => {
     const read = deps.services.readJobRadar;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    const result = await read();
+    const meta = c.get('logMeta');
+    if (isApiError(result)) {
+      meta.errorCode = result.code;
+      return c.json(result, statusFor(result.code) as 400);
+    }
+    meta.commitSha = result.revision;
+    return c.json(result);
+  });
+
+  // Agent activity (M2a): ONE fixed read-only JSON file written by the vault-side PC script. No request input; logs
+  // carry only the commit SHA, never any PR title, branch, token count, spend value or needs-you text.
+  app.get('/api/monitors/agent-activity', async (c) => {
+    const read = deps.services.readAgentActivity;
     if (!read) return c.json(err('invalid', 'not found'), 404);
     const result = await read();
     const meta = c.get('logMeta');
