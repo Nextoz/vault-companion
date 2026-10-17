@@ -180,6 +180,21 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(panel.locator('.vh-cell')).toHaveCount(182);
   });
 
+  await shot('Board - Job radar', async () => {
+    // The Vault heatmap above is still open from its own shot; closing it brings this card up into view.
+    await page.getByRole('region', { name: 'Vault heatmap', exact: true }).getByRole('button', { name: 'Vault heatmap', exact: true }).click();
+    const panel = page.getByRole('region', { name: 'Job radar', exact: true });
+    await panel.scrollIntoViewIfNeeded();
+    await expect(panel.getByText(/applied · /)).toBeVisible();
+  });
+
+  await shot('Board - Job radar expanded', async () => {
+    const panel = page.getByRole('region', { name: 'Job radar', exact: true });
+    await panel.getByRole('button', { name: 'Job radar', exact: true }).click();
+    await expect(panel.locator('.jr-stage')).toHaveCount(5);
+    await panel.scrollIntoViewIfNeeded();
+  });
+
   await shot('Board - AI model leaderboard', async () => {
     const panel = page.getByRole('region', { name: 'AI models', exact: true });
     await panel.evaluate(card => window.scrollBy(0, card.getBoundingClientRect().top - 100));
