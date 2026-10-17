@@ -10,7 +10,7 @@ import {
 } from '@vault-companion/contracts';
 import { useEffect, useRef, useState } from 'react';
 import { getRadar, getRadarNote, postRadarDecision, type Fetched } from '../api.ts';
-import { createNoteRenderer } from '../note/render.ts';
+import { loadRenderer } from './NoteView.tsx';
 import { classify } from '../queue/classify.ts';
 import { dateIn, isoWithOffset } from '../time.ts';
 import './ResearchRadar.css';
@@ -416,7 +416,7 @@ export function ResearchRadar({ accountKey, refreshKey, blocked, defaultOpen = f
       return;
     }
     try {
-      const html = createNoteRenderer(window)(result.data.markdown);
+      const html = (await loadRenderer())(result.data.markdown);
       setNoteView({ paperId, title, html, message: null });
     } catch {
       setNoteView({ paperId, title, html: null, message: 'The Radar note could not be displayed.' });
