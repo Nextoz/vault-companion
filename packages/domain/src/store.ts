@@ -162,6 +162,33 @@ export interface VaultStore {
   commitsSince(base: string, until: string): Promise<CommitsSinceResult>;
 }
 
+/**
+ * A read-only view of `store` whose `head()` answers `commitSha` without a request. One composed read (GET /api/game)
+ * resolves the branch once and hands this view to every read service it calls, so each skips its own `head` lookup and
+ * all of them see the same commit. No TTL and nothing shared beyond that one call. Writes throw: a pinned head is never
+ * the base of a write.
+ */
+export function readOnlyAt(store: VaultStore, commitSha: string): VaultStore {
+  const refuse = (): never => {
+    throw new Error('read-only view: writes are not allowed');
+  };
+  return {
+    head: async () => ({ commitSha }),
+    commitMeta: (sha) => store.commitMeta(sha),
+    readFile: (path, atCommit) => store.readFile(path, atCommit),
+    listDir: (dir, atCommit) => store.listDir(dir, atCommit),
+    listFiles: (dir, atCommit) => store.listFiles(dir, atCommit),
+    writeFile: refuse,
+    deleteFile: refuse,
+    writeFiles: refuse,
+    findOperation: (base, until, value, key) => store.findOperation(base, until, value, key),
+    isAncestor: (commit, head) => store.isAncestor(commit, head),
+    parentOf: (sha) => store.parentOf(sha),
+    readCommit: (sha) => store.readCommit(sha),
+    commitsSince: (base, until) => store.commitsSince(base, until),
+  };
+}
+
 /** Git blob SHA-1 of `bytes` (= the GitHub Contents API `sha`). */
 export async function gitBlobSha(bytes: Uint8Array): Promise<string> {
   const header = new TextEncoder().encode(`blob ${bytes.length}\0`);
