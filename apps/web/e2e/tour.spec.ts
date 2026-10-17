@@ -182,6 +182,20 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(panel.locator('.m8-d')).toHaveCount(7);
   });
 
+  // Barometer: the classic dial at Trianglen, collapsed then expanded.
+  await shot('Board - Barometer', async () => {
+    const card = page.getByRole('region', { name: 'Barometer', exact: true });
+    await card.scrollIntoViewIfNeeded();
+    await expect(card.locator('.baro-summary')).toContainText('1020.2 hPa');
+  });
+
+  await shot('Board - Barometer expanded', async () => {
+    const card = page.getByRole('region', { name: 'Barometer', exact: true });
+    await card.getByRole('button', { name: 'Barometer', exact: true }).click();
+    await expect(card.locator('.baro-needle')).toHaveCount(1);
+    await card.scrollIntoViewIfNeeded();
+  });
+
   await shot('Board - Power monitor', async () => {
     const card = page.getByRole('region', { name: 'Power (DK2)', exact: true });
     await card.scrollIntoViewIfNeeded();

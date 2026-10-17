@@ -4,6 +4,7 @@ import {
   ActiveWorkResponse,
   AiBudgetResponse,
   AiUsageResponse,
+  BarometerResponse,
   LeaderboardResponse,
   PowerResponse,
   SkyResponse,
@@ -94,6 +95,7 @@ export const getAiBudget = () => getJson('/api/ai-budget', AiBudgetResponse.stri
 export const getAiUsage = () => getJson('/api/ai-usage', AiUsageResponse.strip());
 export const getLeaderboard = () => getJson('/api/leaderboard', LeaderboardResponse);
 export const getPower = () => getJson('/api/power', PowerResponse);
+export const getBarometer = () => getJson('/api/barometer', BarometerResponse);
 export const getSky = () => getJson('/api/sky', SkyResponse);
 export const getTriage = () => getJson('/api/triage', TriageResponse.strip());
 export const getRadar = () => getJson('/api/radar', RadarResponse.strip());

@@ -1560,5 +1560,6 @@ export * from './week-runway.ts';
 export * from './leaderboard.ts';
 export * from './power.ts';
 export * from './sky.ts';
+export * from './barometer.ts';
 export * from './sun.ts';
 export * from './monitors.ts';

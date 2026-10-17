@@ -1,0 +1,35 @@
+/* w7: the Barometer card. Colours come from the app tokens, never the mockup's raw hexes. */
+
+/* The Barometer reads as weather: the title and chevron take the weather orange, like the dial's needle. */
+.barometer .dash-card-head h2,
+.barometer .monitor-chevron { color: var(--ios-orange); }
+
+/* The collapsed summary is exactly one line; a longer one ends in an ellipsis instead of wrapping. */
+.baro-summary { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+
+/* The trend colours, shared by the summary's arrow clause and the caption's trend words. */
+.baro-rising { color: var(--done); }
+.baro-falling { color: var(--danger); }
+.baro-steady { color: var(--muted); }
+
+/* The caption sits under the dial, outside its viewBox, so it never clips the arc. */
+.baro-caption { margin: 2px 0 0; text-align: center; font-size: var(--t-footnote); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.baro-footer { text-align: center; font-variant-numeric: tabular-nums; }
+
+/* A model stand-in is labelled as one and coloured as a warning, never like a measurement. */
+.baro-source-model { color: var(--warn); }
+
+/* The failure note and its Retry button share one row, like the Power card. */
+.baro-failure { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* The dial. Text sizes are SVG user units inside the 300x184 viewBox, so they scale with the card, not the type scale. */
+.baro-dial { display: block; width: 100%; max-width: 320px; height: auto; margin: 0 auto; }
+.baro-zone { fill: none; stroke-width: 6; }
+.baro-tick { stroke: var(--muted); stroke-opacity: .6; }
+.baro-word { font-size: 11px; fill: var(--muted); dominant-baseline: central; }
+.baro-word-on { fill: var(--text); font-weight: 600; }
+.baro-set { stroke: var(--muted); stroke-width: 2; stroke-opacity: .6; stroke-linecap: round; }
+.baro-needle { stroke: var(--ios-orange); stroke-width: 3; stroke-linecap: round; }
+.baro-hub { fill: var(--surface); stroke: var(--ios-orange); stroke-width: 2; }
+.baro-value { font-size: 26px; font-weight: 600; fill: var(--text); text-anchor: middle; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--surface); stroke-width: 4; stroke-linejoin: round; }

@@ -10,6 +10,7 @@ import { createGameService } from './game.ts';
 import { createLeaderboardSource } from './leaderboard.ts';
 import { createLeaderboardStorage, type LeaderboardKv } from './leaderboard-storage.ts';
 import { createMarketSource } from './market.ts';
+import { createBarometerProvider } from './barometer-provider.ts';
 import { createPowerProvider } from './power-provider.ts';
 import { createSkyProvider } from './sky-provider.ts';
 import { createWatchlistSource } from './watchlist.ts';
@@ -163,6 +164,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
   const services = {
     readLeaderboard: leaderboard.read,
     readPower,
+    readBarometer: createBarometerProvider({ fetch: fetchImpl, now: () => Date.now() }).read,
     readSky: createSkyProvider({ fetch: fetchImpl, now: () => Date.now() }).read,
     ...createCommandService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createLinkedNoteService({ store }),
