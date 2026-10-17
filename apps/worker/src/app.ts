@@ -25,6 +25,7 @@ import {
   type MorningBriefResponse,
   type MorningResponse,
   type PowerResponse,
+  type SkyResponse,
   type ScoutsResponse,
   type ActiveWorkResponse,
   type TrainingResponse,
@@ -106,6 +107,8 @@ export interface Services {
   readLeaderboard?(): Promise<LeaderboardResponse>;
   /** Power monitor (M4): DK2 spot prices and CO2 from the cached provider. Optional: without it the route answers 404. */
   readPower?(): Promise<PowerResponse>;
+  /** Sky monitor (M7): NOAA Kp index from the cached provider. Optional: without it the route answers 404. */
+  readSky?(): Promise<SkyResponse>;
   readMarketTicker?(): Promise<MarketTickerResponse | ApiError>;
   /** Research Radar (ADR-0032). Optional: without it the route answers 404. */
   readResearchRadar?(): Promise<RadarResponse | ApiError>;
@@ -692,6 +695,13 @@ export function createApp(deps: AppDeps) {
   // Authenticated, provider-cached: a power read hits Energi Data Service at most once per cache TTL, never per request.
   app.get('/api/power', async (c) => {
     const read = deps.services.readPower;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    return c.json(await read());
+  });
+
+  // Authenticated, provider-cached: a sky read hits NOAA at most once per cache TTL, never per request.
+  app.get('/api/sky', async (c) => {
+    const read = deps.services.readSky;
     if (!read) return c.json(err('invalid', 'not found'), 404);
     return c.json(await read());
   });

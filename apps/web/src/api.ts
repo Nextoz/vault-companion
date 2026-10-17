@@ -6,6 +6,7 @@ import {
   AiUsageResponse,
   LeaderboardResponse,
   PowerResponse,
+  SkyResponse,
   AskJevResponse,
   DashboardResponse,
   GameResponse,
@@ -93,6 +94,7 @@ export const getAiBudget = () => getJson('/api/ai-budget', AiBudgetResponse.stri
 export const getAiUsage = () => getJson('/api/ai-usage', AiUsageResponse.strip());
 export const getLeaderboard = () => getJson('/api/leaderboard', LeaderboardResponse);
 export const getPower = () => getJson('/api/power', PowerResponse);
+export const getSky = () => getJson('/api/sky', SkyResponse);
 export const getTriage = () => getJson('/api/triage', TriageResponse.strip());
 export const getRadar = () => getJson('/api/radar', RadarResponse.strip());
 export const getRadarNote = (paperId: string) =>

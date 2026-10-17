@@ -1,5 +1,6 @@
-import { type PowerResponse, TrainingResponse, type TrainingRow } from '@vault-companion/contracts';
+import { type PowerResponse, type SkyResponse, TrainingResponse, type TrainingRow } from '@vault-companion/contracts';
 import { powerFixture } from './power-fixture.ts';
+import { skyFixture } from './sky-fixture.ts';
 // In-page API mock for Playwright. Every response is parsed through the contract schema before it is served,
 // so a mock that drifts from packages/contracts fails loudly instead of testing a fiction.
 import {
@@ -523,6 +524,7 @@ export class MockApi {
   };
   /** AB3b: a synthetic per-provider usage summary ending on the Dashboard's own day. */
   power: PowerResponse = powerFixture();
+  sky: SkyResponse = skyFixture();
   aiUsage: AiUsageResponse = {
     revision: 'd'.repeat(40), generatedAt: '2026-09-30T11:45:00Z', skipped: 0,
     providers: {
@@ -577,6 +579,8 @@ export class MockApi {
       : this.#json(route, 200, AiUsageResponse.parse(this.aiUsage)));
     await on('**/api/week-runway', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, WeekRunwayResponse.parse(weekRunwayFixture())));
+    await on('**/api/sky', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
+      : this.#json(route, 200, this.sky));
     await on('**/api/power', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, this.power));
     await on('**/api/scouts', (route) => this.session === 'signed-out'
