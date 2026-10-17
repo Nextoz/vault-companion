@@ -84,7 +84,7 @@ describe('creditBurn', () => {
     expect(missingRow.freshness).not.toBeNull();
     expect(creditBurn(null, null, NOW, TZ)).toMatchObject({ kind: 'unavailable', reason: 'AI budget could not be read.', freshness: null });
     const noExpiry = creditBurn(budgetOf([scaleway(63, null)]), usageOf(week(2)), NOW, TZ);
-    expect(noExpiry).toMatchObject({ kind: 'unavailable', reason: 'The Scaleway voucher has no expiry date in the budget file.' });
+    expect(noExpiry).toMatchObject({ kind: 'unavailable', reason: 'Scaleway voucher has no expiry date.' });
     const expired = creditBurn(budgetOf([scaleway(63, '2026-10-15T00:59:59+02:00')]), usageOf(week(2)), NOW, TZ);
     expect(expired).toMatchObject({ kind: 'unavailable', reason: 'The Scaleway voucher has expired.' });
   });
