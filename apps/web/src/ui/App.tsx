@@ -72,6 +72,9 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot);
   const [rendered, setRendered] = useState<RenderedRead | null>(null);
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  // The first clean task read does not re-run the reads screens started on mount.
+  const [readKey, setReadKey] = useState(0);
+  const readSettled = useRef(false);
   const [readFailed, setReadFailed] = useState(false);
   const [readsInFlight, setReadsInFlight] = useState(0);
   const [connection, setConnection] = useState<Connection>('loading');
@@ -143,10 +146,10 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
     void getAiBudget().then((result) => { if (live) setAiBudget(result); });
     void getLeaderboard().then((result) => { if (live) setLeaderboard(result); });
     return () => { live = false; };
-  }, [checkedAt, signedOut, tab, todayView]);
+  }, [readKey, signedOut, tab, todayView]);
   // PERF-B: the Overview card stays mounted while Boards shows; it holds the last refresh it displayed, so a hidden
   // Overview re-reads once when shown again (if the refresh moved meanwhile), never on refreshes it never displayed.
-  const overviewRefresh = useHeldWhileHidden(checkedAt, todayView === 'overview');
+  const overviewRefresh = useHeldWhileHidden(readKey, todayView === 'overview');
   // CAL-b: the calendar affordance exists only on the Tasks screens (Today/All) and only while signed in. The read is
   // re-checked whenever the task read is, so a link written elsewhere appears after the next refresh.
   const refreshCalendarLinks = useCallback(async () => {
@@ -156,7 +159,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   useEffect(() => {
     if (!accountKey || signedOut || (tab !== 'tasks' && tab !== 'all')) return;
     void refreshCalendarLinks();
-  }, [accountKey, signedOut, tab, checkedAt, refreshCalendarLinks]);
+  }, [accountKey, signedOut, tab, readKey, refreshCalendarLinks]);
   const openCalendarForTask = useCallback((task: TaskView) => {
     const itemKey = taskCalendarKey(task.locator);
     setCalendar({ itemKey, text: task.description, due: task.due, scheduled: task.scheduled, linked: calendarLinks.has(itemKey) });
@@ -209,6 +212,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
         switch (out.kind) {
           case 'apply': {
             setCheckedAt(Date.now());
+            if (readSettled.current) setReadKey((key) => key + 1);
+            readSettled.current = true;
             setReadFailed(false);
             prefs.setLastRevision(out.read.data.revision);
             prefetcher.maybePrefetch(prefs.lastAccountKey() ?? '', out.read.data.revision);
@@ -227,6 +232,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             return;
           case 'stale':
             setReadFailed(true);
+            readSettled.current = true;
             staleRef.current += 1;
             setStaleStreak(staleRef.current);
             setConnection('refreshing');
@@ -234,17 +240,20 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             return;
           case 'signed-out':
             setReadFailed(true);
+            readSettled.current = true;
             setSessionSignedOut(true);
             queue.setSignedOut();
             return;
           default:
             setReadFailed(true);
+            readSettled.current = true;
             setConnection(out.kind === 'offline' ? 'offline' : 'error');
             return;
         }
       }
     } catch {
       setReadFailed(true);
+      readSettled.current = true;
       setConnection('error');
     } finally {
       setReadsInFlight((n) => n - 1);
@@ -504,7 +513,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
 
         {tab === 'radar' && !signedOut && (
           <>
-            <ResearchRadar accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} defaultOpen />
+            <ResearchRadar accountKey={accountKey} refreshKey={readKey} blocked={writeBlocked || frozen} defaultOpen />
           </>
         )}
 
@@ -513,31 +522,31 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             {logFromCharacter && <Back onBack={() => { setLogFromCharacter(false); setCharacterOpen(true); }} />}
             {/* R3b (review #9): one "Log" title, the Character strip, then the views as chips; no title repeats the chip. */}
             <LargeTitle className="log-title">Log</LargeTitle>
-            <CharacterCard refreshKey={checkedAt} accountKey={accountKey} onOpen={() => setCharacterOpen(true)} />
+            <CharacterCard refreshKey={readKey} accountKey={accountKey} onOpen={() => setCharacterOpen(true)} />
             <LogViewChips view={isLogView(tab) ? tab : null} onSelect={selectLogView} />
           </>
         )}
 
-        {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} onAdd={() => setCaptureOpen(true)} />}
+        {tab === 'training' && !signedOut && <Training key={`training:${accountKey}`} refreshKey={readKey} accountKey={accountKey} queue={queue} baseRevision={revision} onAdd={() => setCaptureOpen(true)} />}
         {tab === 'history' && !signedOut && (
-          <Progress key={`history:${accountKey}`} refreshKey={checkedAt} queue={queue} queued={snapshot.items}
+          <Progress key={`history:${accountKey}`} refreshKey={readKey} queue={queue} queued={snapshot.items}
             accountKey={accountKey} baseRevision={revision} blocked={writeBlocked} onReopen={(target, label) => void undo(target, label)} onOpenLink={openNote} />
         )}
 
-        {tab === 'health' && !signedOut && <HealthPanel key={`health:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} />}
+        {tab === 'health' && !signedOut && <HealthPanel key={`health:${accountKey}`} refreshKey={readKey} accountKey={accountKey} />}
 
-        {tab === 'learning' && !signedOut && <Learning key={`learning:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} onAdd={() => setCaptureOpen(true)} />}
+        {tab === 'learning' && !signedOut && <Learning key={`learning:${accountKey}`} refreshKey={readKey} accountKey={accountKey} onAdd={() => setCaptureOpen(true)} />}
 
-        {tab === 'reading' && !signedOut && <Reading key={`reading:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} queue={queue} baseRevision={revision} open={captureOpen} onClose={() => setCaptureOpen(false)} />}
+        {tab === 'reading' && !signedOut && <Reading key={`reading:${accountKey}`} refreshKey={readKey} accountKey={accountKey} queue={queue} baseRevision={revision} open={captureOpen} onClose={() => setCaptureOpen(false)} />}
 
-        {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={checkedAt} queue={queue} items={snapshot.items}
+        {tab === 'notes' && !signedOut && <Notes key={`notes:${accountKey}`} refreshKey={readKey} queue={queue} items={snapshot.items}
           accountKey={accountKey} baseRevision={revision} />}
 
         {/* Scouts is now also where triage lives (UX2), so its indicator and dialog mount here. */}
         {tab === 'scouts' && !signedOut && (
           <>
-            <Scouts key={`scouts:${accountKey}`} page onOpen={() => setTab('scouts')} refreshKey={checkedAt} accountKey={accountKey} blocked={writeBlocked || frozen} onOpenRadar={openRadar}
-              belowTitle={<Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={checkedAt} blocked={writeBlocked || frozen} />} />
+            <Scouts key={`scouts:${accountKey}`} page onOpen={() => setTab('scouts')} refreshKey={readKey} accountKey={accountKey} blocked={writeBlocked || frozen} onOpenRadar={openRadar}
+              belowTitle={<Triage key={`triage:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey} refreshKey={readKey} blocked={writeBlocked || frozen} />} />
           </>
         )}
 
@@ -565,8 +574,8 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             {todayView === 'boards' && (
               <>
                 {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
-                {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} leaderboard={leaderboard} />}
-                <ScoutDiagnostics key={`scout-diagnostics:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} onOpenScouts={() => setTab('scouts')} />
+                {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={readKey} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} leaderboard={leaderboard} />}
+                <ScoutDiagnostics key={`scout-diagnostics:${accountKey}`} refreshKey={readKey} accountKey={accountKey} onOpenScouts={() => setTab('scouts')} />
               </>
             )}
           </>
@@ -619,7 +628,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
       </main>
 
       {/* D2: the XP strip rides on the tab bar on every screen, fed by the same /api/game read as the Log card. */}
-      <CharacterRead refreshKey={checkedAt} accountKey={accountKey}>
+      <CharacterRead refreshKey={readKey} accountKey={accountKey}>
         {({ data }) => (
           <TabBar tab={tab} onSelect={(next) => { setLogFromCharacter(false); setTab(next); }} inert={noteOpen || editing !== null || characterOpen}
             level={signedOut ? null : data?.character.level ?? null}
@@ -635,7 +644,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
           blocked={writeBlocked} onClose={() => setEditing(null)} />
       )}
       {characterOpen && !signedOut && (
-        <CharacterSheet refreshKey={checkedAt} accountKey={accountKey}
+        <CharacterSheet refreshKey={readKey} accountKey={accountKey}
           onClose={() => setCharacterOpen(false)}
           onOpenProfession={(destination) => { setCharacterOpen(false); setLogFromCharacter(true); setTab(destination as Tab); }} />
       )}
