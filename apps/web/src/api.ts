@@ -89,6 +89,20 @@ export async function getJson<S extends z.ZodType>(url: string, schema: S, heade
 
 export const getSession = () => getJson('/api/session', SessionResponse);
 export const getScouts = () => getJson('/api/scouts', ScoutsResponse.strip());
+
+/** PERF-B: keeps one in-flight read until the end of the current task (a `setTimeout(0)` clears it); the next caller reads fresh. */
+function sharedThisTask<T>(read: () => Promise<T>): () => Promise<T> {
+  let inFlight: Promise<T> | null = null;
+  return () => {
+    if (inFlight !== null) return inFlight;
+    inFlight = read();
+    setTimeout(() => { inFlight = null; }, 0);
+    return inFlight;
+  };
+}
+
+/** One /api/scouts read shared by callers in the same task (one render's effects); later callers read fresh. */
+export const getScoutsShared = sharedThisTask(getScouts);
 export const getMorning = () => getJson('/api/morning', MorningResponse.strip());
 export const getMorningBrief = () => getJson('/api/morning-brief', z.union(MorningBriefReadResponse.options.map((option) => option.strip())));
 export const getAiBudget = () => getJson('/api/ai-budget', AiBudgetResponse.strip());

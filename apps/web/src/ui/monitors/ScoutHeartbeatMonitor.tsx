@@ -1,9 +1,9 @@
-// M3: the collapsible Scout heartbeat monitor on Boards. It reads the same /api/scouts the Overview holds - one read,
-// no write - and draws one row per scheduled scout. MonitorCard owns the disclosure; this file owns the summary line
-// (coloured dots, one line at 390 px), the legend and the 14-day rows.
+// M3: the collapsible Scout heartbeat monitor on Boards. PERF-B: it shares the one /api/scouts read Boards' diagnostics
+// entry makes in the same task - one read, no write - and draws one row per scheduled scout. MonitorCard owns the
+// disclosure; this file owns the summary line (coloured dots, one line at 390 px), the legend and the 14-day rows.
 import type { ScoutsResponse } from '@vault-companion/contracts';
 import { useEffect, useState } from 'react';
-import { getScouts, type Fetched } from '../../api.ts';
+import { getScoutsShared, type Fetched } from '../../api.ts';
 import { MonitorCard } from '../MonitorCard.tsx';
 import { scoutHeartbeat, type HeartbeatState, type ScoutHeartbeat } from './scout-heartbeat.ts';
 import './ScoutHeartbeat.css';
@@ -68,7 +68,7 @@ export function ScoutHeartbeatMonitor({ refreshKey, accountKey, timeZone = 'Euro
     let live = true;
     // A read that throws is a failed read, never a blanked dashboard: the card shows its own status line instead.
     void Promise.resolve()
-      .then(() => getScouts())
+      .then(() => getScoutsShared())
       .then((value) => { if (live) setScouts(value); })
       .catch(() => { if (live) setScouts({ kind: 'error', message: SCOUT_HEARTBEAT_FAILED }); });
     return () => { live = false; };
