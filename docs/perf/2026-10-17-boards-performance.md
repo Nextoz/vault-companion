@@ -79,3 +79,36 @@ head/tree 100 ms, blob 150 ms, cold isolate:
 
 Production p50 after deploy: see the PR. Guard tests: `bounded.test.ts`, the concurrency tests in `scouts.test.ts`
 and `research-radar.test.ts` fail when reads are sequential again (checked with the limit set to 1).
+
+Production after the #221 deploy (17 Oct 17:24 UTC), first owner visit, n=1 each: `/api/scouts` 1053 ms (was 3299 p50),
+`/api/game` 3456 ms (was 5309 p50). Re-query the same way (Workers Logs, `route`/`durationMs`) once a day of traffic
+has accrued.
+
+### Fix 2 — the view switch stops re-reading (#222)
+
+Overview stays mounted (hidden) while Boards shows and re-reads once when shown again if a refresh happened
+meanwhile (`useHeldWhileHidden`); Boards' two scouts readers share one same-task read; the AI usage/budget/leaderboard
+reads run while Boards shows. `/api/*` calls (mock app): back to Overview 7 → 0, cold open 31 → 25, Boards open
+10 → 12 (the AI reads moved there).
+
+### Fix 3 — one read per screen on a cold open (#223)
+
+Screens get `readKey`, which the first clean task read leaves alone. Cold open 25 → 17 calls; `/api/game` 4 → 3.
+
+### Fix 4 — Boards and the note renderer load on demand
+
+`Dashboard` is a lazy chunk under one Suspense with the scout diagnostics (so they still share one scouts read);
+Research Radar uses NoteView's lazy renderer. Main chunk 878.7 → 782.4 kB (gzip 272.7 → 242.9 kB); Boards 67.9 kB
+and render 29.5 kB load when needed and are precached for offline. `markdown-it` stays in the main chunk because
+`insights.ts` parses scout notes with it; splitting that is the next candidate.
+
+### Totals (mock app, one session: open, Boards, back, focus, Boards, focus)
+
+| | before | after |
+| --- | --- | --- |
+| `/api/*` calls | 80 | 59 |
+| cold-open calls | 31 | 17 |
+| main JS (gzip) | 272.7 kB | 242.9 kB |
+
+Follow-ups not done: `/api/game` still calls `head` 7× per request (one per composed read; single-flight per
+request would remove 6 GitHub round trips), and the `insights.ts` Markdown split.
