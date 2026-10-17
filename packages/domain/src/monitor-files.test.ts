@@ -1,6 +1,6 @@
-import { VaultActivityResponse } from '@vault-companion/contracts';
+import { JobRadarResponse, VaultActivityResponse } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
-import { createVaultActivityReadService, VAULT_ACTIVITY_PATH } from './monitor-files.ts';
+import { createJobRadarReadService, createVaultActivityReadService, JOB_RADAR_PATH, VAULT_ACTIVITY_PATH } from './monitor-files.ts';
 import { StoreUnavailable, type VaultStore } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
@@ -89,5 +89,83 @@ describe('readVaultActivity (M6a)', () => {
     const store = await InMemoryStore.create({ [VAULT_ACTIVITY_PATH]: fileBytes() });
     const { commitSha } = await store.head();
     expect(await read(store)).toMatchObject({ revision: commitSha, currentStreak: 23 });
+  });
+});
+
+// Synthetic values, real job-radar schema (M5a): a two-application slice of the fixture shape.
+const radarFile = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  schema: 1,
+  generatedAt: '2026-10-16T06:10:05+02:00',
+  source: 'Job Search 2026 frontmatter',
+  total: 2,
+  counts: { saved: 1, applied: 1, interview: 0, offer: 0, closed: 0, other: 0 },
+  otherStatuses: [],
+  inFlight: [
+    {
+      title: 'Acme Platform',
+      file: 'Job Search 2026/50 Acme Platform - 2026-09-01.md',
+      status: 'submitted',
+      stage: 'applied',
+      updated: '2026-10-12',
+      daysSinceUpdate: 4,
+    },
+    {
+      title: 'Iota Infra',
+      file: 'Job Search 2026/58 Iota Infra - 2026-09-09.md',
+      status: null,
+      stage: 'interview',
+      updated: null,
+      daysSinceUpdate: null,
+    },
+  ],
+  followUps: [{ title: 'Acme Platform', stage: 'applied', due: '2026-10-14', field: 'follow_up', overdue: true }],
+  stageTable: { submitted: 'applied' },
+  applicationTypes: ['job-application'],
+  ...over,
+});
+
+const radarFileBytes = (over: Record<string, unknown> = {}): Uint8Array => new TextEncoder().encode(JSON.stringify(radarFile(over)));
+
+const readRadar = (store: VaultStore) => createJobRadarReadService({ store }).readJobRadar();
+
+describe('readJobRadar (M5a)', () => {
+  it('projects the one radar file at the fixed path, and only that file', async () => {
+    const store = await InMemoryStore.create({
+      [JOB_RADAR_PATH]: radarFileBytes(),
+      'Automation/Monitors/decoy.json': radarFileBytes({ total: 999 }),
+    });
+    const result = await readRadar(store);
+    expect(JobRadarResponse.parse(result)).toEqual({
+      revision: await store.head().then((h) => h.commitSha),
+      ...radarFile(),
+    });
+  });
+
+  it('an absent file is a typed not-found, never a throw', async () => {
+    const store = await InMemoryStore.create({ 'Automation/Monitors/decoy.json': radarFileBytes() });
+    await expect(readRadar(store)).resolves.toMatchObject({ code: 'not-found', retryable: false });
+  });
+
+  it('invalid JSON and a wrong envelope are typed invalid errors, never a throw', async () => {
+    for (const raw of [
+      'not json at all',
+      JSON.stringify(radarFile({ schema: 2 })),
+      JSON.stringify(radarFile({ total: 'many' })),
+      JSON.stringify(radarFile({ inFlight: [{ title: 'x', file: 'y', status: null, stage: 'dreaming', updated: null, daysSinceUpdate: null }] })),
+      JSON.stringify(radarFile({ followUps: [{ title: 'x', stage: 'applied', due: '14-10-2026', field: 'follow_up', overdue: true }] })),
+      JSON.stringify({ ...radarFile(), extra: true }),
+    ]) {
+      const store = await InMemoryStore.create({ [JOB_RADAR_PATH]: raw });
+      await expect(readRadar(store)).resolves.toMatchObject({ code: 'invalid', retryable: false });
+    }
+  });
+
+  it('a store outage is a retryable upstream-unavailable, never a throw', async () => {
+    const down = {
+      head: async () => { throw new StoreUnavailable('down'); },
+      listFiles: async () => [],
+      readFile: async () => null,
+    } as unknown as VaultStore;
+    await expect(readRadar(down)).resolves.toMatchObject({ code: 'upstream-unavailable', retryable: true });
   });
 });

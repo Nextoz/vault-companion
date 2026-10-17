@@ -1,0 +1,18 @@
+.job-radar .dash-card-head h2 { color: var(--ios-blue); }
+.jr-summary { margin: 0; font-size: var(--t-footnote); font-variant-numeric: tabular-nums; }
+.jr-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.jr-section { margin: 4px 0 0; font-size: var(--t-caption2); letter-spacing: 0.04em; color: var(--muted); }
+.jr-stages, .jr-followups, .jr-flight { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.jr-stage { display: grid; grid-template-columns: 4.5rem 1fr 2rem; align-items: center; gap: 8px; font-size: var(--t-footnote); }
+.jr-label { color: var(--text); }
+.jr-track { height: 8px; border-radius: var(--r-tight); background: var(--raised); overflow: hidden; }
+.jr-bar { display: block; height: 8px; border-radius: var(--r-tight); background: var(--ios-blue); }
+.jr-count { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.jr-other { margin: 0; overflow-wrap: anywhere; }
+.jr-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; font-size: var(--t-footnote); }
+.jr-title { min-width: 0; overflow-wrap: anywhere; }
+.jr-age { flex-shrink: 0; text-align: right; }
+.jr-chip { flex-shrink: 0; font-size: var(--t-caption2); font-weight: 600; }
+.jr-chip-overdue { color: var(--warn); }
+.jr-chip-soon { color: var(--ios-green); }
+.jr-foot { margin: 0; font-variant-numeric: tabular-nums; }
