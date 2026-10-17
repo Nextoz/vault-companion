@@ -3,11 +3,11 @@ import { JSDOM } from 'jsdom';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getDashboard, getHealth, getMarketTicker, getPower, getSky, getWeather, type Fetched } from '../api.ts';
+import { getBarometer, getDashboard, getHealth, getMarketTicker, getPower, getSky, getWeather, type Fetched } from '../api.ts';
 import { lastCopies } from '../lastCopy.ts';
 import { DASHBOARD_RANGES, Dashboard, MARKET_STALE_MS, RANGE_LABELS, mergeTicker, overviewTiles, seriesSegments } from './Dashboard.tsx';
 
-vi.mock('../api.ts', () => ({ getJson: vi.fn(() => new Promise(() => {})), getDashboard: vi.fn(), getHealth: vi.fn(), getMarketTicker: vi.fn(), getPower: vi.fn(), getSky: vi.fn(), getWeather: vi.fn() }));
+vi.mock('../api.ts', () => ({ getJson: vi.fn(() => new Promise(() => {})), getBarometer: vi.fn(), getDashboard: vi.fn(), getHealth: vi.fn(), getMarketTicker: vi.fn(), getPower: vi.fn(), getSky: vi.fn(), getWeather: vi.fn() }));
 
 const NOW = '2026-09-30T12:00:00Z';
 const TICKER = { base: 'BTC' as const, quote: 'USD' as const, provider: 'coinbase' as const, price: 60123.45, providerTime: NOW };
@@ -50,6 +50,7 @@ beforeEach(() => {
   vi.mocked(getHealth).mockResolvedValue(healthMissing());
   vi.mocked(getPower).mockResolvedValue({ kind: 'offline' });
   vi.mocked(getSky).mockResolvedValue({ kind: 'offline' });
+  vi.mocked(getBarometer).mockResolvedValue({ kind: 'offline' });
   vi.mocked(getWeather).mockResolvedValue({ kind: 'offline' });
 });
 afterEach(async () => {

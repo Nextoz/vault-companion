@@ -1,4 +1,5 @@
-import { type PowerResponse, type SkyResponse, TrainingResponse, type TrainingRow } from '@vault-companion/contracts';
+import { type BarometerResponse, type PowerResponse, type SkyResponse, TrainingResponse, type TrainingRow } from '@vault-companion/contracts';
+import { barometerFixture } from './barometer-fixture.ts';
 import { powerFixture } from './power-fixture.ts';
 import { skyFixture } from './sky-fixture.ts';
 import { readFileSync } from 'node:fs';
@@ -531,6 +532,7 @@ export class MockApi {
   };
   /** AB3b: a synthetic per-provider usage summary ending on the Dashboard's own day. */
   power: PowerResponse = powerFixture();
+  barometer: BarometerResponse = barometerFixture();
   sky: SkyResponse = skyFixture();
   aiUsage: AiUsageResponse = {
     revision: 'd'.repeat(40), generatedAt: '2026-09-30T11:45:00Z', skipped: 0,
@@ -588,6 +590,8 @@ export class MockApi {
       : this.#json(route, 200, WeekRunwayResponse.parse(weekRunwayFixture())));
     await on('**/api/sky', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, this.sky));
+    await on('**/api/barometer', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
+      : this.#json(route, 200, this.barometer));
     await on('**/api/power', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, this.power));
     await on('**/api/monitors/vault-activity', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })

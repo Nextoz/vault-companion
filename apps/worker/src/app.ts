@@ -25,6 +25,7 @@ import {
   type MorningBriefReadResponse,
   type MorningBriefResponse,
   type MorningResponse,
+  type BarometerResponse,
   type PowerResponse,
   type SkyResponse,
   type ScoutsResponse,
@@ -110,6 +111,8 @@ export interface Services {
   readLeaderboard?(): Promise<LeaderboardResponse>;
   /** Power monitor (M4): DK2 spot prices and CO2 from the cached provider. Optional: without it the route answers 404. */
   readPower?(): Promise<PowerResponse>;
+  /** Barometer monitor: sea-level pressure at Trianglen from the cached DMI/Open-Meteo provider. Optional: without it the route answers 404. */
+  readBarometer?(): Promise<BarometerResponse>;
   /** Sky monitor (M7): NOAA Kp index from the cached provider. Optional: without it the route answers 404. */
   readSky?(): Promise<SkyResponse>;
   readMarketTicker?(): Promise<MarketTickerResponse | ApiError>;
@@ -713,6 +716,13 @@ export function createApp(deps: AppDeps) {
   // Authenticated, provider-cached: a power read hits Energi Data Service at most once per cache TTL, never per request.
   app.get('/api/power', async (c) => {
     const read = deps.services.readPower;
+    if (!read) return c.json(err('invalid', 'not found'), 404);
+    return c.json(await read());
+  });
+
+  // Authenticated, provider-cached: a barometer read hits DMI at most once per cache TTL, never per request.
+  app.get('/api/barometer', async (c) => {
+    const read = deps.services.readBarometer;
     if (!read) return c.json(err('invalid', 'not found'), 404);
     return c.json(await read());
   });

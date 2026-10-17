@@ -14,6 +14,7 @@ import { ScoutHeartbeatMonitor } from './monitors/ScoutHeartbeatMonitor.tsx';
 import { WeekRunwayMonitor } from './monitors/WeekRunwayMonitor.tsx';
 import { PowerMonitor } from './monitors/PowerMonitor.tsx';
 import { SkyMonitor } from './monitors/SkyMonitor.tsx';
+import { BarometerMonitor } from './monitors/BarometerMonitor.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 import { legacyMarketCard, privateValuationCards, watchCards, watchFresh } from './watchlist.ts';
 import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
@@ -177,6 +178,7 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough, aiUsa
       <WeekRunwayMonitor />
       <PowerMonitor />
       <SkyMonitor />
+      <BarometerMonitor />
       <VaultHeatmapMonitor nowMs={nowMs || undefined} />
       <LeaderboardPanel view={leaderboard} now={nowMs || Date.now()} />
     </section>

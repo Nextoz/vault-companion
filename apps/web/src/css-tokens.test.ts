@@ -25,6 +25,9 @@ const ALLOWED: Record<string, string> = {
   'src/ui/monitors/Power.css:.power-chart text': 'axis labels in viewBox units, scaled with the chart',
   'src/ui/monitors/VaultHeatmapMonitor.css:.vh-grid text': 'month labels in viewBox units, scaled with the grid',
   'src/ui/monitors/Sky.css:.sky-arc text': 'sunrise and sunset labels in viewBox units, scaled with the arc',
+  // SVG user units, not CSS pixels: the dial scales with its 300-wide viewBox, so a rem token would not track the needle.
+  'src/ui/monitors/Barometer.css:.baro-word': 'zone words in viewBox units, scaled with the dial',
+  'src/ui/monitors/Barometer.css:.baro-value': 'dial value in viewBox units, scaled with the dial',
 };
 
 function cssFiles(dir: string): string[] {
