@@ -1,4 +1,4 @@
-import { AiBudgetResponse, AiUsageResponse, MorningBriefResponse, VaultActivityResponse } from '@vault-companion/contracts';
+import { AiBudgetResponse, AiUsageResponse, JobRadarResponse, MorningBriefResponse, VaultActivityResponse } from '@vault-companion/contracts';
 import type { ApiError, Command, Receipt } from '@vault-companion/contracts';
 import { AI_USAGE_PATH, createAiUsageReadService } from '@vault-companion/domain';
 import { InMemoryStore } from '@vault-companion/domain/testing';
@@ -435,6 +435,79 @@ describe('GET /api/monitors/vault-activity (M6a)', () => {
   });
 
   it('returns the activity and logs only the revision', async () => {
+    const res = await get(async () => sample());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(sample());
+    expect(logs.at(-1)).toMatchObject({ commitSha: '7'.repeat(40) });
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+});
+
+describe('GET /api/monitors/job-radar (M5a)', () => {
+  const sample = (): JobRadarResponse => JobRadarResponse.parse({
+    revision: '7'.repeat(40),
+    schema: 1,
+    generatedAt: '2026-10-16T06:10:05+02:00',
+    source: `${SENTINEL} frontmatter`,
+    total: 2,
+    counts: { saved: 1, applied: 1, interview: 0, offer: 0, closed: 0, other: 0 },
+    otherStatuses: [`${SENTINEL}-status`],
+    inFlight: [
+      {
+        title: `${SENTINEL} Platform`,
+        file: `Job Search 2026/50 ${SENTINEL} Platform - 2026-09-01.md`,
+        status: 'submitted',
+        stage: 'applied',
+        updated: '2026-10-12',
+        daysSinceUpdate: 4,
+      },
+      {
+        title: `${SENTINEL} Infra`,
+        file: 'Job Search 2026/58 Iota Infra - 2026-09-09.md',
+        status: null,
+        stage: 'interview',
+        updated: null,
+        daysSinceUpdate: null,
+      },
+    ],
+    followUps: [{ title: `${SENTINEL} Platform`, stage: 'applied', due: '2026-10-14', field: 'follow_up', overdue: true }],
+    stageTable: { submitted: 'applied' },
+    applicationTypes: ['job-application'],
+  });
+
+  function app(readJobRadar?: Services['readJobRadar']) {
+    const services: Services = {
+      async readTasks() { return { code: 'upstream-unavailable', message: 'x', retryable: true }; },
+      async execute() { return receipt; },
+      ...(readJobRadar ? { readJobRadar } : {}),
+    };
+    return createApp({
+      verify: async (t) => (t === 'good' ? { ok: true, email: 'owner@example.com', accountKey: ACCOUNT } : { ok: false }),
+      appOrigin: ORIGIN,
+      services,
+      log: (r) => logs.push(r),
+    });
+  }
+  const get = (readJobRadar?: Services['readJobRadar']) =>
+    app(readJobRadar).request('/api/monitors/job-radar', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+
+  it('404s without a service, and logs nothing from the radar', async () => {
+    const res = await get();
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+
+  it.each([
+    [{ code: 'not-found', retryable: false }, 404],
+    [{ code: 'invalid', retryable: false }, 400],
+    [{ code: 'upstream-unavailable', retryable: true }, 503],
+  ] as const)('maps %o to %i', async (error, status) => {
+    const res = await get(async () => ({ ...error, message: 'm' }));
+    expect(res.status).toBe(status);
+    expect(logs.at(-1)).toMatchObject({ errorCode: error.code });
+  });
+
+  it('returns the radar and logs only the revision', async () => {
     const res = await get(async () => sample());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(sample());
