@@ -44,6 +44,7 @@ import { CaptureFab } from './CaptureFab.tsx';
 import { CheckinSheet } from './CheckinSheet.tsx';
 import { LargeTitle, LargeTitleProvider, useLargeTitleHost } from './LargeTitle.tsx';
 import { TopBar } from './TopBar.tsx';
+import { useHeldWhileHidden } from './useHeldWhileHidden.ts';
 import { XpStrip, type StripLanding } from './XpStrip.tsx';
 import { CharacterSheet } from './CharacterSheet.tsx';
 import { RewardLayer } from './RewardLayer.tsx';
@@ -132,17 +133,20 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
   }, [editing, signedOut, accountKey]);
   // SP3 (ADR-0038): any signed-out answer, not only one a read-only screen saw, drops every last copy.
   useEffect(() => { if (signedOut) lastCopies.clear(); }, [signedOut]);
-  // AB3b: read the usage summary and the budget rows while the Dashboard is on screen; both are read-only. The old
-  // answer stays until the new one arrives, so a refresh never blanks the panel.
+  // AB3b: read the usage summary and the budget rows while the Boards view is on screen (only Boards shows them);
+  // both are read-only. The old answer stays until the new one arrives, so a refresh never blanks the panel.
   useEffect(() => {
     if (signedOut) { setAiUsage(null); setAiBudget(null); setLeaderboard(null); return; }
-    if (tab !== 'today') return;
+    if (tab !== 'today' || todayView !== 'boards') return;
     let live = true;
     void getAiUsage().then((result) => { if (live) setAiUsage(result); });
     void getAiBudget().then((result) => { if (live) setAiBudget(result); });
     void getLeaderboard().then((result) => { if (live) setLeaderboard(result); });
     return () => { live = false; };
-  }, [checkedAt, signedOut, tab]);
+  }, [checkedAt, signedOut, tab, todayView]);
+  // PERF-B: the Overview card stays mounted while Boards shows; it holds the last refresh it displayed, so a hidden
+  // Overview re-reads once when shown again (if the refresh moved meanwhile), never on refreshes it never displayed.
+  const overviewRefresh = useHeldWhileHidden(checkedAt, todayView === 'overview');
   // CAL-b: the calendar affordance exists only on the Tasks screens (Today/All) and only while signed in. The read is
   // re-checked whenever the task read is, so a link written elsewhere appears after the next refresh.
   const refreshCalendarLinks = useCallback(async () => {
@@ -549,17 +553,22 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
                 <button type="button" aria-pressed={todayView === 'boards'} onClick={() => setTodayView('boards')}>Boards</button>
               </div>
             </div>
-            {todayView === 'overview'
-              ? <MorningCard key={`morning-card:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey}
-                  baseRevision={revision} blocked={writeBlocked || frozen} refreshKey={checkedAt} tasks={view.today}
-                  onStartTask={startTask} onAdd={() => setCaptureOpen(true)}
-                  onOpenTasks={() => setTab('tasks')} onOpenScouts={() => setTab('scouts')} onOpenRadar={openRadar}
-                  onOpenHealth={() => setTab('health')} onOpenStatus={openStatus} />
-              : <>
-                  {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
-                  {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} leaderboard={leaderboard} />}
-                  <ScoutDiagnostics key={`scout-diagnostics:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} onOpenScouts={() => setTab('scouts')} />
-                </>}
+            {/* PERF-B: always mounted, hidden while Boards shows - switching back does not remount it; the held refresh
+                key re-reads it once when it is shown again. */}
+            <div hidden={todayView !== 'overview'}>
+              <MorningCard key={`morning-card:${accountKey}`} queue={queue} items={snapshot.items} accountKey={accountKey}
+                baseRevision={revision} blocked={writeBlocked || frozen} refreshKey={overviewRefresh} tasks={view.today}
+                onStartTask={startTask} onAdd={() => setCaptureOpen(true)}
+                onOpenTasks={() => setTab('tasks')} onOpenScouts={() => setTab('scouts')} onOpenRadar={openRadar}
+                onOpenHealth={() => setTab('health')} onOpenStatus={openStatus} />
+            </div>
+            {todayView === 'boards' && (
+              <>
+                {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
+                {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} leaderboard={leaderboard} />}
+                <ScoutDiagnostics key={`scout-diagnostics:${accountKey}`} refreshKey={checkedAt} accountKey={accountKey} onOpenScouts={() => setTab('scouts')} />
+              </>
+            )}
           </>
         )}
 

@@ -1,6 +1,6 @@
 import { SessionResponse } from '@vault-companion/contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { askFollowUp, FOLLOW_UP_TIMEOUT_MS, getJson, getTasks, READ_TIMEOUT_MS } from './api.ts';
+import { askFollowUp, FOLLOW_UP_TIMEOUT_MS, getJson, getScoutsShared, getTasks, READ_TIMEOUT_MS } from './api.ts';
 import { clearReadTimings, readTimings } from './timings.ts';
 
 const ok = { accountKey: 'a'.repeat(64) };
@@ -89,6 +89,24 @@ describe('getTasks: forward compatible with a newer server', () => {
       writeBlock: null, known: {}, todayTasks: [], overdue: [], allOpen: [], doneToday: [] };
     vi.stubGlobal('fetch', vi.fn(async () => json({ ...read, addedLater: { any: 1 } })));
     await expect(getTasks([])).resolves.toEqual({ kind: 'ok', data: read });
+  });
+});
+
+describe('getScoutsShared: one scouts read shared by callers in the same task (PERF-B)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('makes one fetch for same-task callers and a second for a caller after a task boundary', async () => {
+    const fetchMock = vi.fn(async () => json({ revision: 'a'.repeat(40), now: '2026-10-16T09:41:00Z', scouts: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const first = getScoutsShared();
+    const second = getScoutsShared();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const answers = await Promise.all([first, second]);
+    expect(answers[0]).toEqual(answers[1]);
+    expect(answers[0]).toMatchObject({ kind: 'ok' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await getScoutsShared();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 
