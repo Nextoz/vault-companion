@@ -31,7 +31,7 @@ function dayMonthLabel(at: string): string {
 }
 
 function needsYouLabel(at: string): string {
-  return new Intl.DateTimeFormat('en-GB', { timeZone: ZONE, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(at));
+  return `${dayMonthLabel(at)} ${timeLabel(at)}`;
 }
 
 /** CI as one word: running, green, failing or unknown (no run, or a conclusion we do not name). */

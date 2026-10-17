@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import { getDashboard, getMarketTicker, type Fetched } from '../api.ts';
 import './Dashboard.css';
 import { AiUsagePanel } from './AiUsagePanel.tsx';
+import { AgentActivityMonitor } from './monitors/AgentActivityMonitor.tsx';
 import { JobRadarMonitor } from './monitors/JobRadarMonitor.tsx';
 import { VaultHeatmapMonitor } from './monitors/VaultHeatmapMonitor.tsx';
 import { LeaderboardPanel } from './LeaderboardPanel.tsx';
@@ -182,6 +183,7 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough, aiUsa
       <BarometerMonitor />
       <VaultHeatmapMonitor nowMs={nowMs || undefined} />
       <JobRadarMonitor nowMs={nowMs || undefined} />
+      <AgentActivityMonitor nowMs={nowMs || undefined} />
       <LeaderboardPanel view={leaderboard} now={nowMs || Date.now()} />
     </section>
   );
