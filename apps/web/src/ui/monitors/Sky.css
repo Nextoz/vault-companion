@@ -1,0 +1,23 @@
+/* M7c2: the Daylight & sky monitor. Colours come from the app tokens, never the m7 mockup's raw hexes. */
+
+/* The collapsed summary is exactly one line; a longer one ends in an ellipsis instead of wrapping. */
+.sky-summary { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+
+/* The expanded headline: today's daylight, or the polar special case. */
+.sky-big { margin: 0; font-size: var(--t-title3); font-weight: 600; }
+
+/* The sun path scales with its 246x162 viewBox, not the viewport. The walk window reads green, like Power's cheapest. */
+.sky-arc { width: 100%; height: auto; }
+.sky-arc-line { fill: none; stroke: var(--muted); stroke-width: 2; }
+.sky-arc-walk { fill: none; stroke: var(--done); stroke-width: 3; stroke-linecap: round; }
+.sky-sun { fill: var(--ios-orange); }
+.sky-sun-set { fill: var(--muted); }
+.sky-arc text { fill: var(--muted); font-size: 8px; }
+
+/* Label/value rows: the best daylight walk and the golden hour. */
+.sky-row { display: flex; justify-content: space-between; gap: 8px; }
+
+/* The three stat tiles: Kp, moon and sunset-in. */
+.sky-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.sky-tile { padding: 7px 8px; border-radius: var(--r-control); background: var(--ios-fill, rgba(120,120,128,.24)); }
+.sky-v { display: block; font-weight: 600; white-space: nowrap; }

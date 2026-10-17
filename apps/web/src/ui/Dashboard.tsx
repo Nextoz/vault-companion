@@ -10,6 +10,7 @@ import { CreditBurnMonitor } from './monitors/CreditBurnMonitor.tsx';
 import { ScoutHeartbeatMonitor } from './monitors/ScoutHeartbeatMonitor.tsx';
 import { WeekRunwayMonitor } from './monitors/WeekRunwayMonitor.tsx';
 import { PowerMonitor } from './monitors/PowerMonitor.tsx';
+import { SkyMonitor } from './monitors/SkyMonitor.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 import { formatChange, formatPrivateValuation, formatWatchPrice, formatWatchValue, legacyMarketCard, privateValuationCards, seriesChange, watchCards, watchDelayLabel, watchFresh, watchTitle } from './watchlist.ts';
 import { WeatherLab, weatherFresh } from './WeatherLab.tsx';
@@ -390,6 +391,7 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough, aiUsa
       <ScoutHeartbeatMonitor refreshKey={refreshKey} accountKey={accountKey} />
       <WeekRunwayMonitor />
       <PowerMonitor />
+      <SkyMonitor />
       <LeaderboardPanel view={leaderboard} now={nowMs || Date.now()} />
     </section>
   );

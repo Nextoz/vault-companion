@@ -153,6 +153,21 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await expect(card.locator('.power-bar')).toHaveCount(24);
   });
 
+  await shot('Board - Daylight and sky monitor', async () => {
+    const card = page.getByRole('region', { name: 'Daylight & sky', exact: true });
+    await card.scrollIntoViewIfNeeded();
+    await expect(card.locator('.sky-summary')).toContainText('daylight');
+  });
+
+  await shot('Board - Daylight and sky monitor expanded', async () => {
+    // The Power card above is still open from its own shot; closing it brings this card up into view.
+    await page.getByRole('region', { name: 'Power (DK2)', exact: true }).getByRole('button', { name: 'Power (DK2)', exact: true }).click();
+    const card = page.getByRole('region', { name: 'Daylight & sky', exact: true });
+    await card.getByRole('button', { name: 'Daylight & sky', exact: true }).click();
+    await expect(card.locator('.sky-tile')).toHaveCount(3);
+    await card.scrollIntoViewIfNeeded();
+  });
+
   await shot('Board - AI model leaderboard', async () => {
     const panel = page.getByRole('region', { name: 'AI models', exact: true });
     await panel.evaluate(card => window.scrollBy(0, card.getBoundingClientRect().top - 100));
