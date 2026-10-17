@@ -23,6 +23,7 @@ const ALLOWED: Record<string, string> = {
   'src/ui/Rewards.css:.reward-level-number': 'level-up stamp, larger than --t-display by design',
   // SVG user units, not CSS pixels: the chart scales with its 248-wide viewBox, so a rem token would not track the bars.
   'src/ui/monitors/Power.css:.power-chart text': 'axis labels in viewBox units, scaled with the chart',
+  'src/ui/monitors/VaultHeatmapMonitor.css:.vh-grid text': 'month labels in viewBox units, scaled with the grid',
   'src/ui/monitors/Sky.css:.sky-arc text': 'sunrise and sunset labels in viewBox units, scaled with the arc',
 };
 
