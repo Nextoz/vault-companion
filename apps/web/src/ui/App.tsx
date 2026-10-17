@@ -576,8 +576,11 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             {todayView === 'boards' && (
               <>
                 {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
-                {(checkedAt !== null || readFailed) && <Suspense fallback={<p className="muted" role="status">Loading…</p>}><Dashboard key={`dashboard:${accountKey}`} refreshKey={readKey} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} leaderboard={leaderboard} /></Suspense>}
-                <ScoutDiagnostics key={`scout-diagnostics:${accountKey}`} refreshKey={readKey} accountKey={accountKey} onOpenScouts={() => setTab('scouts')} />
+                {/* One boundary: the lazy Dashboard and the diagnostics mount in the same task, so they share one scouts read. */}
+                <Suspense fallback={<p className="muted" role="status">Loading…</p>}>
+                  {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={readKey} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} leaderboard={leaderboard} />}
+                  <ScoutDiagnostics key={`scout-diagnostics:${accountKey}`} refreshKey={readKey} accountKey={accountKey} onOpenScouts={() => setTab('scouts')} />
+                </Suspense>
               </>
             )}
           </>
