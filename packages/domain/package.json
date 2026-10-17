@@ -10,7 +10,7 @@
   "dependencies": {
     "@vault-companion/contracts": "workspace:*",
     "@vault-companion/vault-markdown": "workspace:*",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@vault-companion/test-vault": "workspace:*"
