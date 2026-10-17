@@ -20,12 +20,16 @@ Private mobile execution layer over an Obsidian vault. **Markdown + Git are auth
 6. No secrets in code; no task/note text in logs.
 7. A test must fail when the production guard it covers is broken.
 8. Consequential choices ⇒ ADR in `docs/decisions/`. Current state lives only in `docs/checkpoint.md`.
+9. A layout fix in a shared UI part (sheet, sheet header, tab bar, card shell) ships with an e2e **geometry** test
+   (bounding boxes at phone size in WebKit) that fails on the old CSS; text assertions cannot see overlap. No
+   never-ending CSS animations (scroll timelines, `infinite`): WebKit's click stability wait stalls on them.
 
 ## Worker token economy (every delegated agent)
 
 Tokens are a hard budget. The Lead runs the full `pnpm check` and e2e before merging; workers do not.
 - Read only the files your brief names, and only the needed ranges (`rg -n`, then a line window) — never whole docs.
-- Tests: run only the touched test files (`pnpm exec vitest run <files> --reporter=dot`), plus `pnpm -r exec tsc --noEmit`.
+- Tests: run only the touched test files (`pnpm exec vitest run <files> --reporter=dot`), plus `pnpm typecheck`
+  (`pnpm -r exec tsc` fails on unbuilt project references).
   Never run the full `pnpm check`/e2e unless the brief says so. Pipe long output: `… 2>&1 | Select-Object -Last 30`.
 - Don't re-read files you just edited; don't repeat a passing command. Stop when the acceptance checks pass.
 - Handoff ≤ 15 lines.

@@ -17,9 +17,11 @@ appending amendments. History: Git and branch `archive/codex-lead-2026-10-01`.
 
 ## Roles
 
-- **Lead: Claude Sonnet 5.5, effort medium** (`tools/start-lead.ps1`; `-Overnight` = auto mode, no prompts). An engineer, not a dispatcher: owns understanding the relevant code,
+- **Lead: Claude Sonnet 5.5, effort medium** (`tools/start-lead.ps1`; `-Overnight` = auto mode, no prompts, after
+  `tools/preflight.ps1` passes). An engineer, not a dispatcher: owns understanding the relevant code,
   slicing, briefs, integration, acceptance, PRs and merges. **Delegates implementation by default** (Claude usage
   is the scarcest budget); writes code itself only for fixes of about 20 lines or after a worker failed twice.
+  The overnight queue is backend, tooling and docs slices; screens follow **Screens** below.
 - **Workers:** implement one bounded slice each in a disposable full clone under `C:\Dev\vault-companion-clones\`.
   They never merge, push to `main`, deploy, read the live vault or edit `docs/plan.md` / `docs/checkpoint.md`.
 - **Owner:** product priorities (vault *Ready Backlog*, read-only for the Lead), deploys, phone acceptance.
@@ -64,7 +66,7 @@ public-repo questions over the plain API, not for edits: it is the **second code
 Launch every worker with **one command**, from inside Herdr (it opens a visible pane in the Agents tab):
 
 ```sh
-pwsh -NoProfile -File tools/launch-worker.ps1 -Tier scw [-ScwModel <m>]|flash|codex [-Effort low|medium]|pro|gemini|glm -Files a,b -Clone <clone> -Task <task> -Base <base> -TestCmd '<touched tests>' [-Reviewer both] [-Intent on|off]
+pwsh -NoProfile -File tools/launch-worker.ps1 -Tier scw [-ScwModel <m>]|flash|codex [-Effort low|medium]|pro|gemini|glm -Files a,b -Clone <clone> -Task <task> -Kind ui|backend|tooling|docs -Base <base> -TestCmd '<touched tests>' [-Reviewer both] [-Intent on|off]
 ```
 
 DeepSeek workers run **sandboxed** (Codex `workspace-write` + elevated Windows sandbox, set up by the owner
@@ -92,6 +94,27 @@ Do not poll. The registry is `.agent/workers/<task>.json` (state running, checki
 6. **Lead acceptance:** read the diff (not the logs), run `pnpm check` + e2e **once** on the final candidate, push the
    branch, open the PR, merge when CI is green. One PR per slice; small fixes/docs batch into one PR per round.
 
+## Screens (owner 2026-10-11)
+
+A slice that changes what a screen shows (`-Kind ui`) is checked by looking at it. Text-only builds and checks let
+screen bugs through: GAM1-B, built overnight from text, needed a full redo, and a sheet header hid content for weeks
+while every e2e test passed. CodeRabbit and GLM read code only and cannot catch this.
+
+- **Where:** in a daytime session with a model that can see images (the owner uses Opus 5.5 for these), working from
+  the chosen mockup and screenshots. The overnight Lead builds a screen slice only when the owner asks, then follows
+  the rest of this section.
+- **Opus at two moments, not as Lead.** The Lead stays Sonnet: most Lead cost is rereading context all night, and a
+  pricier Lead would not close the gap, which is seeing. For a screen slice the Lead spawns an Opus 5.5 subagent
+  (Agent tool, `model: opus`) twice, each a single bounded task given file paths, not the conversation:
+  1. **Brief:** from the mockup image the Ready Backlog item names, write the brief's Outcome, Acceptance and Quality bar
+     and list the screen states to photograph.
+  2. **Screenshot review before the PR:** compare the candidate's tour screenshots with the mockup; return
+     match / mismatch per state with the concrete differences. A mismatch goes into the single correction round.
+- **The screenshot check is part of done.** The slice adds its screens to `pnpm tour` (sheets at rest and scrolled;
+  light and dark where colours change); the PR carries the 390x844 shots, about four images. Copy them out of
+  `apps/web/test-results/` before a full e2e run, which clears that folder.
+- **Shared parts get geometry tests** (AGENTS.md rule 9): one test on a shared part guards every screen using it.
+
 ## Review by risk
 
 - **Ordinary** (UI, read-only views, tests, docs): handoff-check + Lead diff read + CI. PR-level CodeRabbit is
@@ -112,7 +135,7 @@ question is a typed choice/score/yes-no over **public repo** material. Owner wan
 - **Before every dispatch (required):** choose the worker tier; state the brief's outcome, size and risk in a few
   lines. Follow Jev's pick unless the deterministic floor says otherwise (high-risk ⇒ Pro or Lead review), and say
   which in the STATUS line:
-  `timeout 60 pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,scw,flash,sol-medium,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks? gemini = tiny docs/copy, scw = default implementation incl. UI, flash = scw already failed once, sol-medium = Flash already failed once or design-heavy UI / Morning Brief / data integrity" -Json < /dev/null`
+  `timeout 60 pwsh -NoProfile -File "$USERPROFILE/Obsidian Vault/Second Brain/Tools/jev.ps1" -State "<facts>" -Choose gemini,scw,flash,sol-medium,unresolved -Instructions "Cheapest worker that will likely pass the acceptance checks? gemini = tiny docs/copy, scw = default implementation, flash = scw already failed once, sol-medium = Flash already failed once or design-heavy UI / Morning Brief / data integrity" -Json < /dev/null`
 - **Instead of deliberating:** "is this in scope?", "is this handoff claim supported by the test output?", "real
   failure or flaky?", "which backlog item is smallest?" — ask Jev (`-Ask` / `-Choose` / `-Rate`) first.
 - **Test tier (advisory):** `tools/select-tests.ps1 -Paths <paths> [-HighRisk] [-NoJev]` prints `{tier, reason, source}`; the floor decides first.
@@ -124,6 +147,8 @@ notable misses in the checkpoint. Jev never accepts work, waives a check or auth
 ## Budget and stop rules
 
 - **One implementation worker at a time** (a free Gemini task may run beside it). One browser/e2e job at a time.
+  If two clones must run e2e anyway, give each its own `PW_PREVIEW_PORT`: locally Playwright reuses whatever
+  server holds port 4173, and silently tests the other clone's build (seen 2026-10-11).
 - A worker run above ~300k tokens, or two failed attempts on one slice ⇒ stop, re-slice or Lead takes over.
 - Quota/credit/tooling failure ⇒ reroute to another approved worker or record a blocker. Never raise effort for it.
 - DeepSeek: prefer off-peak (peak 03–06 and 08–12 Copenhagen, Mon–Fri). The Lead may read the balance endpoint
@@ -168,11 +193,19 @@ line: free RAM, DeepSeek balance, Scaleway GLM estimate) and post a short update
   planned work, and switch to Gemini where the risk allows. After a GLM run, append `{"tokens":N}` (from its
   log) to `.agent/budget/scaleway.jsonl` (bookkeeping only). The Scaleway voucher limit is in EUR (owner instructions: tell the owner at EUR 20 left, stop at EUR 5), not tokens.
 - **CodeRabbit:** at 0 reviews left in the hour, `handoff-check.ps1 -Reviewer auto` switches to GLM-5.2; say so in the STATUS line.
+- **Rework (owner 2026-10-11):** every launch carries `-Kind`. On Sundays, and when the owner asks, run
+  `pwsh -NoProfile -File tools/rework-report.ps1` and post its first line plus the worst tier or kind as a STATUS line.
+  When the owner sends a merged slice back after review, record it the same turn:
+  `tools/rework-report.ps1 -Reopen <task> -Reason "<one line>"`. Use the numbers to change tiers or brief style,
+  not to argue about one slice.
 - Lines starting `ACTION NEEDED:` are the only ones that require the owner to act; everything else is information.
 
 ## Herdr
 
-Start the Lead inside Herdr with `pwsh -NoProfile -File tools/start-lead.ps1` (optional `-Focus "<task>"`), then
+Start the Lead inside Herdr with `pwsh -NoProfile -File tools/start-lead.ps1` (optional `-Focus "<task>"`; with
+`-Overnight` it first runs `tools/preflight.ps1`: Herdr, CLIs, one bounded Jev call, Codex login, the elevated
+sandbox for both Codex homes, DeepSeek balance and Scaleway models, ~2 minutes, no model tokens; a FAIL stops the
+start while the owner is still awake, `-SkipPreflight` overrides), then
 `pwsh -NoProfile -File tools/lead-watch.ps1` in a second pane; workers appear in the **Agents** tab via `tools/agent-pane.sh`. Never navigate
 or close panes the Lead did not create. Never end a Claude agent with `/exit`; close its pane instead.
 Git Bash rewrites `/word` arguments: prefix slash commands with `MSYS_NO_PATHCONV=1`.
