@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Markets pane and barometer</title>
+<!-- Owner picked 2026-10-17: Markets option B (compact rows) and Barometer option 1 (classic full dial).
+     Values are illustrative. App tokens: card #1c1c1e, raised #2c2c2e, separator #38383a, muted #8e8e93,
+     markets indigo #7d7aff, weather orange #ff9f0a, up #30d158, down #ff453a. -->
+<style>
+body{margin:0;background:#000;color:#fff;font:14px/1.4 -apple-system,system-ui,sans-serif;padding:16px;display:flex;gap:24px;flex-wrap:wrap}
+.ph{width:358px}.cd{background:#1c1c1e;border-radius:12px;padding:12px;margin-bottom:12px}
+.hd{display:flex;justify-content:space-between;align-items:center;font-weight:600}
+.mu{color:#8e8e93}.up{color:#30d158}.dn{color:#ff453a}
+.row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:.5px solid #38383a;min-height:28px}
+h3{font-size:12px;color:#8e8e93;font-weight:400;margin:0 0 6px}
+</style></head><body>
+<div class="ph">
+ <h3>Markets, collapsed</h3>
+ <div class="cd"><div class="hd"><span style="color:#7d7aff">Markets</span><span class="mu">›</span></div>
+  <div style="margin-top:6px">BTC <span class="up">+2.1%</span> · NVDA <span class="dn">−0.4%</span> <span class="mu">· +3 more</span></div></div>
+ <h3>Markets, open (option B, compact rows; tap a row to open its full chart in place)</h3>
+ <div class="cd"><div class="hd"><span style="color:#7d7aff">Markets</span><span class="mu">⌄</span></div>
+  <div class="row"><span>BTC</span><svg width="64" height="16"><polyline points="0,13 13,10 26,11 39,7 52,6 64,2" fill="none" stroke="#30d158" stroke-width="1.5"/></svg><span>$67,210 <span class="up">+2.1%</span></span></div>
+  <div class="row"><span>NVDA</span><svg width="64" height="16"><polyline points="0,4 13,6 26,5 39,9 52,10 64,12" fill="none" stroke="#ff453a" stroke-width="1.5"/></svg><span>$131.40 <span class="dn">−0.4%</span></span></div>
+  <div class="row"><span>Private co.</span><span class="mu">last round</span><span>$2.1B</span></div>
+  <div class="row"><span>ETH</span><span class="mu">unavailable</span><span class="mu">—</span></div></div>
+</div>
+<div class="ph">
+ <h3>Barometer, collapsed</h3>
+ <div class="cd"><div class="hd"><span style="color:#ff9f0a">Barometer</span><span class="mu">›</span></div>
+  <div style="margin-top:6px">1020.2 hPa · <span class="up">↑ 2.1</span> in 3 h · Fair</div></div>
+ <h3>Barometer, open (option 1, classic full dial)</h3>
+ <div class="cd" style="text-align:center"><div class="hd"><span style="color:#ff9f0a">Barometer</span><span class="mu">⌄</span></div><div id="dial"></div>
+  <div class="mu">DMI measured · Trianglen · 07:40</div></div>
+</div>
+<script>
+const P=1020.2,SET=1018.1,MIN=950,MAX=1050,A0=-135,SW=270;
+const ang=v=>A0+(v-MIN)/(MAX-MIN)*SW;
+const pt=(c,r,a)=>{const t=(a-90)*Math.PI/180;return[c+r*Math.cos(t),c+r*Math.sin(t)]};
+function arc(c,r,a1,a2,col){const[x1,y1]=pt(c,r,a1),[x2,y2]=pt(c,r,a2);return`<path d="M${x1} ${y1} A${r} ${r} 0 ${a2-a1>180?1:0} 1 ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="4"/>`}
+const Z=[[950,980,'#ff453a'],[980,1000,'#ff9f0a'],[1000,1020,'#8e8e93'],[1020,1040,'#64d2ff'],[1040,1050,'#30d158']];
+const S=240,c=S/2,r=S*0.4;let s=`<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">`;
+Z.forEach(z=>s+=arc(c,r,ang(z[0]),ang(z[1]),z[2]));
+for(let v=MIN;v<=MAX;v+=5){const a=ang(v),[x1,y1]=pt(c,r-6,a),[x2,y2]=pt(c,r-(v%25?11:16),a);s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#636366" stroke-width="${v%25?1:2}"/>`}
+[['Stormy',965],['Rain',990],['Change',1010],['Fair',1030],['Very dry',1045]].forEach(w=>{const[x,y]=pt(c,r+16,ang(w[1]));s+=`<text x="${x}" y="${y+4}" font-size="11" fill="#8e8e93" text-anchor="middle">${w[0]}</text>`});
+const[sx,sy]=pt(c,r-8,ang(SET));s+=`<line x1="${c}" y1="${c}" x2="${sx}" y2="${sy}" stroke="#636366" stroke-width="2" stroke-linecap="round"/>`;
+const[nx,ny]=pt(c,r-4,ang(P)),[tx,ty]=pt(c,-r*0.18,ang(P));
+s+=`<line x1="${tx}" y1="${ty}" x2="${nx}" y2="${ny}" stroke="#ff9f0a" stroke-width="3" stroke-linecap="round"/><circle cx="${c}" cy="${c}" r="5" fill="#1c1c1e" stroke="#ff9f0a" stroke-width="2"/>`;
+s+=`<text x="${c}" y="${c+50}" font-size="22" font-weight="600" fill="#fff" text-anchor="middle">${P.toFixed(1)}</text><text x="${c}" y="${c+68}" font-size="12" fill="#8e8e93" text-anchor="middle">hPa · ↑ 2.1 in 3 h · Fair</text></svg>`;
+document.getElementById('dial').innerHTML=s;
+</script>
+</body></html>

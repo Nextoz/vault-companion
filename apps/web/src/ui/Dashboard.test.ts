@@ -61,11 +61,26 @@ afterEach(async () => {
   lastCopies.clear();
 });
 
-const render = async (cards?: DashboardCard[], onDrillthrough?: (view: string) => void) => {
+// S-markets: the Markets card is collapsed on every mount. `render` opens it and its first row (the chart) unless a
+// test passes `{ open: false }`; `openRow` opens another row by its label.
+const render = async (cards?: DashboardCard[], onDrillthrough?: (view: string) => void, options: { open?: boolean } = {}) => {
   vi.mocked(getDashboard).mockResolvedValue(ok(cards));
   root = createRoot(document.getElementById('root')!);
   await act(async () => { root!.render(createElement(Dashboard, { refreshKey: 0, onDrillthrough })); });
+  if (options.open !== false) await openMarkets();
   return root;
+};
+const openMarkets = async () => {
+  const head = document.querySelector('.markets .monitor-head') as HTMLElement | null;
+  if (head && head.getAttribute('aria-expanded') !== 'true') await act(async () => { head.click(); });
+  const row = document.querySelector('.markets-row') as HTMLElement | null;
+  if (row && row.getAttribute('aria-expanded') !== 'true') await act(async () => { row.click(); });
+};
+const labels = () => [...document.querySelectorAll('.markets-label')].map((el) => el.textContent);
+const item = (label: string) => [...document.querySelectorAll('.markets-item')].find((el) => el.querySelector('.markets-label')?.textContent === label)!;
+const openRow = async (label: string) => {
+  const row = [...document.querySelectorAll('.markets-row')].find((r) => r.querySelector('.markets-label')?.textContent === label) as HTMLElement;
+  if (row.getAttribute('aria-expanded') !== 'true') await act(async () => { row.click(); });
 };
 const text = () => document.getElementById('root')!.textContent ?? '';
 const button = (label: string) => [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === label)!;
@@ -105,9 +120,10 @@ describe('BTC/USD market card (DASH1)', () => {
   it('renders a market failure as unavailable without erasing the other cards', async () => {
     const down: DashboardCard = { id: 'market', status: 'unavailable', title: 'BTC / USD', provenance: 'Coinbase Exchange (public)', observedAt: null, fetchedAt: null, note: 'The market provider is unavailable right now.', drillthrough: null, reason: 'provider-error' };
     await render([down, ...overviewCards]);
-    expect(text()).toContain('Unavailable');
+    expect(document.querySelector('.markets-row')!.textContent).toContain('unavailable');
     expect(text()).toContain('The market provider is unavailable right now.');
-    expect(document.querySelector('.dash-market')).not.toBeNull();
+    expect(document.querySelector('.markets-value')!.textContent).toBe('—'); // never a number
+    expect(document.querySelector('.markets')).not.toBeNull();
   });
 });
 
@@ -123,26 +139,22 @@ describe('watchlist cards (WL2)', () => {
   it('renders one card per watched item and hides the legacy market card, so BTC is not shown twice', async () => {
     const fx = watch({ item: { symbol: 'RUB/DKK', type: 'fx' }, title: 'ignored', ticker: { base: 'RUB', quote: 'DKK', provider: 'frankfurter', price: 0.0712, providerTime: NOW }, series: watchSeries([0.07, 0.0712]) });
     await render([market(), watch(), fx, ...overviewCards]);
-    expect(document.querySelector('.dash-market')).toBeNull();
-    expect(document.querySelectorAll('.dash-watch').length).toBe(2);
-    expect(text()).toContain('BTC / USD');
-    expect(text()).toContain('RUB / DKK');
+    expect(labels()).toEqual(['BTC', 'RUB/DKK']); // the legacy market card is not a third row
     expect(text()).toContain('$60,123.45');
     expect(text()).toContain('DKK 0.0712');
   });
 
   it('renders the legacy market card as before when the response has no watchlist cards', async () => {
     await render();
-    expect(document.querySelector('.dash-market')).not.toBeNull();
-    expect(document.querySelectorAll('.dash-watch').length).toBe(0);
+    expect(labels()).toEqual(['BTC']);
   });
 
   it('shows an unavailable card as its reason note, never a stale number', async () => {
     const down: DashboardCard = { id: 'watchlist', status: 'unavailable', title: 'ETH / USD', provenance: 'Coinbase Exchange (public)', observedAt: null, fetchedAt: null, note: 'The market provider is unavailable right now.', drillthrough: null, item: { symbol: 'ETH-USD', type: 'crypto' }, reason: 'provider-error' };
     await render([down, ...overviewCards]);
-    const card = document.querySelector('.dash-watch')!;
-    expect(card.getAttribute('aria-busy')).toBe('true');
-    expect(card.querySelector('.dash-price')).toBeNull();
+    const card = document.querySelector('.markets-item')!;
+    expect(card.querySelector('.markets-row')!.textContent).toContain('unavailable');
+    expect(card.querySelector('.markets-price')).toBeNull();
     expect(card.textContent).toContain('The market provider is unavailable right now.');
     expect(card.textContent).not.toContain('$');
   });
@@ -150,8 +162,8 @@ describe('watchlist cards (WL2)', () => {
   it('shows a signed, coloured change over the range: a rise up, a fall down', async () => {
     const falling = watch({ item: { symbol: 'ETH-USD', type: 'crypto' }, ticker: { base: 'ETH', quote: 'USD', provider: 'coinbase', price: 2970, providerTime: NOW }, series: watchSeries([3_000, 2_970]) });
     await render([watch({ series: watchSeries([60_000, 60_600]) }), falling, ...overviewCards]);
-    expect(document.querySelector('.dash-change-up')!.textContent).toContain('+1.00%');
-    expect(document.querySelector('.dash-change-down')!.textContent).toContain('-1.00%');
+    expect(document.querySelector('.markets-change.markets-up')!.textContent).toContain('+1.00%');
+    expect(document.querySelector('.markets-change.markets-down')!.textContent).toContain('-1.00%');
   });
 
   it('says the current value stands alone when the history read failed', async () => {
@@ -170,15 +182,14 @@ describe('watchlist cards (WL2)', () => {
   it('shows a stock as "Delayed" with its provider time, while crypto/fx stay unlabelled', async () => {
     const nvidia = watch({ item: { symbol: 'NVDA', type: 'stock' }, title: 'NVIDIA', provenance: 'Yahoo Finance', ticker: { base: 'NVDA', quote: 'USD', provider: 'Yahoo Finance', price: 229.28, providerTime: NOW }, series: watchSeries([183.16, 229.28]) });
     await render([nvidia, watch(), ...overviewCards]);
-    const cards = [...document.querySelectorAll('.dash-watch')];
-    const stockCard = cards.find((card) => card.textContent?.includes('NVIDIA'))!;
-    expect(stockCard.textContent).toContain('NVIDIA (NVDA)');
+    const stockCard = item('NVDA');
+    expect(stockCard.querySelector('.dash-svg')!.getAttribute('aria-label')).toContain('NVIDIA (NVDA)');
     expect(stockCard.querySelector('.dash-chip-delayed')!.textContent).toBe('Delayed');
     expect(stockCard.textContent).toContain('Market time');
     expect(stockCard.textContent).toContain('12:00 UTC');
     expect(stockCard.textContent).toContain('$229.28');
-    const cryptoCard = cards.find((card) => card.textContent?.includes('BTC / USD'))!;
-    expect(cryptoCard.querySelector('.dash-chip-delayed')).toBeNull();
+    await openRow('BTC');
+    expect(item('BTC').querySelector('.dash-chip-delayed')).toBeNull();
   });
 });
 
@@ -196,6 +207,7 @@ describe('range and freshness (DASH1)', () => {
     vi.mocked(getDashboard).mockResolvedValue(ok());
     await click(button('Retry dashboard'));
     expect(getDashboard).toHaveBeenCalledTimes(2);
+    await openMarkets();
     expect(text()).toContain('$60,123.45');
     expect(document.querySelector('.dash-svg')).not.toBeNull();
     expect(text()).not.toContain('The dashboard could not be loaded.');
@@ -213,6 +225,7 @@ describe('range and freshness (DASH1)', () => {
     expect(button('Retry dashboard')).toBeDefined();
     vi.mocked(getDashboard).mockResolvedValue(ok());
     await click(button('Retry dashboard'));
+    await openMarkets();
     expect(document.querySelector('.dash-svg')).not.toBeNull();
     expect(getDashboard).toHaveBeenCalledTimes(2);
   });
@@ -222,8 +235,10 @@ describe('range and freshness (DASH1)', () => {
     vi.mocked(getDashboard).mockImplementation((range) => (range === '1W' ? oneWeek.promise : Promise.resolve(ok([market({ series: { range: '1M', granularitySeconds: 21_600, points: [point(0), point(1)], missingIntervals: 0 } }), ...overviewCards]))));
     root = createRoot(document.getElementById('root')!);
     await act(async () => { root!.render(createElement(Dashboard, { refreshKey: 0 })); });
+    await openMarkets(); // the card is mounted (loading) and its range buttons are in its open header
     await click(button('1M'));
     await flush();
+    await openMarkets();
     expect(document.querySelector('.dash-svg')!.getAttribute('aria-label')).toContain('1 month');
     await act(async () => { oneWeek.resolve(ok()); await Promise.resolve(); });
     expect(document.querySelector('.dash-svg')!.getAttribute('aria-label')).toContain('1 month'); // the stale 1W reply changed nothing
@@ -235,9 +250,10 @@ describe('range and freshness (DASH1)', () => {
     vi.mocked(getDashboard).mockResolvedValue({ kind: 'error', message: 'boom' });
     await click(button('1M'));
     await flush();
+    await openMarkets();
     expect(text()).toContain('Stale');
     expect(text()).toContain('$60,123.45'); // the known value is still shown, labelled
-    expect(document.querySelector('.dash-market')).not.toBeNull(); // the other cards are still there
+    expect(document.querySelector('.markets')).not.toBeNull(); // the other cards are still there
   });
 
   it('marks data stale once it is older than the freshness window', async () => {
@@ -301,6 +317,7 @@ describe('last copy per range (SP3c, ADR-0038)', () => {
     const pending = deferred<Fetched<DashboardResponse>>();
     vi.mocked(getDashboard).mockReturnValue(pending.promise);
     await remount('account-a');
+    await openMarkets();
     expect(text()).toContain('$60,123.45');
     expect(document.querySelector('[data-testid="copy-note"]')!.textContent).toMatch(/^Showing the copy from \d\d:\d\d · refreshing…$/);
     expect(text()).toContain('Stale'); // a copy is never labelled Live
@@ -322,10 +339,12 @@ describe('last copy per range (SP3c, ADR-0038)', () => {
     vi.mocked(getDashboard).mockResolvedValue(ok());
     await mount('account-a');
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    await openMarkets();
     expect(text()).toContain('$61,000.00');
     vi.mocked(getDashboard).mockResolvedValue({ kind: 'error', message: 'synthetic failure' });
     await remount('account-a');
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    await openMarkets();
     expect(text()).toContain('$60,123.45');
     expect(text()).not.toContain('$61,000.00');
   });
@@ -402,8 +421,10 @@ describe('private-valuation card (WL4b)', () => {
 
   it('renders the labelled private line and an https source link, with no chart, price or delayed chip', async () => {
     await render([privateOk, ...overviewCards]);
-    const card = document.querySelector('.dash-private')!;
-    expect(card).not.toBeNull();
+    const card = item('OpenAI');
+    expect(card.querySelector('.markets-row')!.textContent).toContain('last round');
+    expect(card.querySelector('.markets-row')!.textContent).toContain('$500 B');
+    expect(card.querySelector('.markets-spark')).toBeNull();
     expect(card.textContent).toContain('OpenAI');
     expect(card.textContent).toContain('private · last round ~USD 500 B · 12 Mar 2026');
     const link = card.querySelector('.dash-private-source') as HTMLAnchorElement;
@@ -421,11 +442,66 @@ describe('private-valuation card (WL4b)', () => {
       observedAt: null, fetchedAt: null, note: 'No private-valuation file exists yet.', drillthrough: null, reason: 'not-found',
     };
     await render([down, ...overviewCards]);
-    const card = document.querySelector('.dash-private')!;
+    const card = item('Private valuations');
+    expect(card.querySelector('.markets-value')!.textContent).toBe('—');
     expect(card.textContent).toContain('No private-valuation file exists yet.');
     expect(card.textContent).not.toContain('USD');
     expect(card.querySelector('.dash-private-value')).toBeNull();
     expect(card.querySelector('.dash-svg')).toBeNull();
+  });
+});
+
+describe('Markets card (compact rows)', () => {
+  const eth = () => watch({ item: { symbol: 'ETH-USD', type: 'crypto' }, ticker: { base: 'ETH', quote: 'USD', provider: 'coinbase', price: 2970, providerTime: NOW }, series: watchSeries([3_000, 2_970]) });
+  const fx = () => watch({ item: { symbol: 'RUB/DKK', type: 'fx' }, ticker: { base: 'RUB', quote: 'DKK', provider: 'frankfurter', price: 0.0712, providerTime: NOW }, series: watchSeries([0.07, 0.0712]) });
+
+  it('is collapsed by default with a one-line summary of the first two markets and "+N more"', async () => {
+    await render([watch({ series: watchSeries([60_000, 60_600]) }), eth(), fx(), ...overviewCards], undefined, { open: false });
+    expect(document.querySelector('.markets .monitor-head')!.getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelector('.markets-summary')!.textContent).toBe('BTC +1.00% · ETH -1.00% · +1 more');
+    expect(document.querySelector('.markets-list')).toBeNull();
+    expect(document.querySelector('.markets-range')).toBeNull(); // the range buttons belong to the open card
+  });
+
+  it('opens one compact row per market and only one chart at a time', async () => {
+    await render([watch(), eth(), fx(), ...overviewCards], undefined, { open: false });
+    await openMarkets();
+    expect(labels()).toEqual(['BTC', 'ETH', 'RUB/DKK']);
+    expect(document.querySelectorAll('.markets-spark')).toHaveLength(3);
+    expect(document.querySelectorAll('.dash-svg')).toHaveLength(1); // the first row is open (render helper)
+    await openRow('ETH');
+    expect(document.querySelectorAll('.dash-svg')).toHaveLength(1);
+    expect(item('ETH').querySelector('.dash-svg')).not.toBeNull();
+    expect(item('BTC').querySelector('.markets-row')!.getAttribute('aria-expanded')).toBe('false');
+    await click(item('ETH').querySelector('.markets-row')!);
+    expect(document.querySelectorAll('.dash-svg')).toHaveLength(0);
+  });
+
+  it('keeps the card open and its range buttons usable while another range loads', async () => {
+    await render([watch(), ...overviewCards]);
+    const pending = deferred<Fetched<DashboardResponse>>();
+    vi.mocked(getDashboard).mockReturnValue(pending.promise);
+    await click(button('1M'));
+    expect(document.querySelector('.markets .monitor-head')!.getAttribute('aria-expanded')).toBe('true');
+    expect(text()).toContain('Loading markets…');
+    expect(button('1M').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('marks a stale row in words and never as live, and keeps its last number labelled', async () => {
+    const old = watch({ fetchedAt: new Date(Date.parse(NOW) - MARKET_STALE_MS - 1).toISOString() });
+    await render([old, ...overviewCards], undefined, { open: false });
+    expect(document.querySelector('.markets-summary')!.textContent).toContain('(stale)');
+    await openMarkets();
+    expect(document.querySelector('.markets-row .visually-hidden')!.textContent).toContain('stale');
+    expect(document.querySelector('.markets-price')!.className).toContain('muted');
+    expect(text()).toContain('not fresh');
+  });
+
+  it('keeps the drillthrough link of the open market', async () => {
+    const onDrillthrough = vi.fn();
+    await render([watch({ drillthrough: { label: 'Open BTC detail', view: 'btc' } }), ...overviewCards], onDrillthrough);
+    await click(button('Open BTC detail'));
+    expect(onDrillthrough).toHaveBeenCalledWith('btc');
   });
 });
 

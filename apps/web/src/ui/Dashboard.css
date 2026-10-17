@@ -13,8 +13,6 @@
 .dash-chip-not-configured { color: var(--muted); }
 .dash-chip-unavailable { color: var(--danger); }
 .dash-chip-delayed { color: var(--warn); }
-.dash-market .dash-price, .dash-watch .dash-price { color: var(--ios-indigo); }
-.dash-watches { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
 .dash-change { margin: 0; font-size: var(--t-callout); font-weight: 600; font-variant-numeric: tabular-nums; }
 .dash-change-up { color: var(--done); }
 .dash-change-down { color: var(--danger); }
@@ -24,8 +22,6 @@
 .dash-times { margin: 0; font-variant-numeric: tabular-nums; }
 .dash-note { margin: 0; font-size: var(--t-subhead); overflow-wrap: anywhere; }
 .dash-stale { margin: 0; color: var(--warn); font-size: var(--t-subhead); }
-.dash-ranges { background: var(--surface); border-radius: var(--r-control); padding: 2px; }
-.dash-ranges button { min-height: var(--tap); }
 .dash-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 10px; }
 .dash-tiles .dash-card-head { flex-wrap: wrap; }
 .health-tile { display: flex; flex-direction: column; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-control); padding: 10px; min-width: 0; }
@@ -93,7 +89,5 @@
 
 /* WL4b: the private-valuation card. No chart/price: the labelled last-round line and an https source link, with a
    44 px link target so the phone can tap it. */
-.dash-private { border-left: 3px solid var(--ios-indigo); }
-.dash-chip-private { color: var(--ios-indigo); }
 .dash-private-value { margin: 0; font-size: var(--t-headline); font-weight: 600; overflow-wrap: anywhere; }
 .dash-private-source { display: inline-flex; align-items: center; min-height: var(--tap); color: var(--ios-indigo); overflow-wrap: anywhere; }

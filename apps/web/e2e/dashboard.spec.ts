@@ -3,6 +3,14 @@ import { HealthResponse } from '@vault-companion/contracts';
 import { MockApi } from './mock-api.ts';
 import { goTo } from './nav.ts';
 
+/** The Markets card starts collapsed: open it and its first row (the chart), unless they are already open. */
+async function openMarkets(dashboard: Locator) {
+  const head = dashboard.getByRole('button', { name: 'Markets', exact: true });
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  const row = dashboard.locator('.markets-row').first();
+  if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click();
+}
+
 /** UX4: a card that only said "Not configured" is hidden on the Dashboard, so nothing is rendered for it here. */
 async function expectUnconfigured(dashboard: Locator) {
   for (const title of ['AI usage'] as const) {
@@ -28,9 +36,10 @@ test('Dashboard keeps Today default and supports mobile ranges, touch and keyboa
   // UX8 layout C: the Dashboard stack lives on the Today screen's Boards view (Overview is the default).
   await goTo(page, 'Board');
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
-  const market = dashboard.getByRole('article', { name: 'BTC / USD', exact: true });
-  await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
-  await expect(market.locator('.dash-chip')).toHaveText('Live');
+  const market = dashboard.locator('.markets');
+  await openMarkets(dashboard);
+  await expect(market.locator('.markets-price')).toHaveText('$60,123.45');
+  await expect(market.locator('.markets-detail .dash-chip')).toHaveText('Live');
   await expect(market).toContainText('Coinbase Exchange (public)');
   await expect(market.locator('.dash-times')).toContainText(/Market time .*11:59 UTC/);
   await expect(market.locator('.dash-times')).toContainText(/fetched .*12:00 UTC/);
@@ -116,23 +125,24 @@ test('stale market times stay honest and ticker-only polling preserves history o
   await page.goto('/');
   await goTo(page, 'Board');
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
-  const market = dashboard.getByRole('article', { name: 'BTC / USD' });
-  await expect(market.locator('.dash-chip')).toHaveText('Stale');
+  const market = dashboard.locator('.markets');
+  await openMarkets(dashboard);
+  await expect(market.locator('.markets-detail .dash-chip')).toHaveText('Stale');
   await expect(market).toContainText('This value is not fresh');
   await expect(market.locator('.dash-times time').last()).toHaveAttribute('datetime', api.dashboardFetchedAt);
   const historyReads = api.dashboardRanges.length;
   await page.clock.fastForward(60_000);
-  await expect(market.locator('.dash-price')).toHaveText('$60,234.56');
-  await expect(market.locator('.dash-chip')).toHaveText('Live');
+  await expect(market.locator('.markets-price')).toHaveText('$60,234.56');
+  await expect(market.locator('.markets-detail .dash-chip')).toHaveText('Live');
   await expect(market.locator('.dash-times time').first()).toHaveAttribute('datetime', '2026-09-30T12:00:30Z');
   await expect(market.locator('.dash-times time').last()).toHaveAttribute('datetime', '2026-09-30T12:01:00Z');
   expect(api.tickerReads).toBe(1);
   expect(api.dashboardRanges).toHaveLength(historyReads);
   api.marketTicker = { status: 'unavailable', now: '2026-09-30T12:02:00Z', reason: 'provider-error' };
   await page.clock.fastForward(60_000);
-  await expect(market.locator('.dash-chip')).toHaveText('Stale');
+  await expect(market.locator('.markets-detail .dash-chip')).toHaveText('Stale');
   await expect(dashboard).toContainText('Not refreshed — the times below are from the last success.');
-  await expect(market.locator('.dash-price')).toHaveText('$60,234.56');
+  await expect(market.locator('.markets-price')).toHaveText('$60,234.56');
   await expect(market.locator('.dash-times time').last()).toHaveAttribute('datetime', '2026-09-30T12:01:00Z');
   await expect(market.getByRole('img')).toBeVisible();
   expect(api.dashboardRanges).toHaveLength(historyReads);
@@ -146,17 +156,19 @@ test('partial history failure and unavailable market leave honest overview cards
   await page.goto('/');
   await goTo(page, 'Board');
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
-  const market = dashboard.getByRole('article', { name: 'BTC / USD' });
-  await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
+  const market = dashboard.locator('.markets');
+  await openMarkets(dashboard);
+  await expect(market.locator('.markets-price')).toHaveText('$60,123.45');
   await expect(market).toContainText('History is unavailable.');
   await expect(market.getByRole('img')).toHaveCount(0);
   await expect(market.getByRole('slider')).toHaveCount(0);
   await expectUnconfigured(dashboard);
   api.dashboardMode = 'unavailable';
   await dashboard.getByRole('button', { name: '1M', exact: true }).click();
-  await expect(market.locator('.dash-chip')).toHaveText('Unavailable');
+  await expect(market.locator('.markets-row').first()).toContainText('unavailable');
+  await market.locator('.markets-row').first().click(); // the row opens to its honest reason
   await expect(market).toContainText('Market data is unavailable.');
-  await expect(market.locator('.dash-price, time, svg')).toHaveCount(0);
+  await expect(market.locator('.markets-price, time, .markets-list svg')).toHaveCount(0); // never an old number
   await expectUnconfigured(dashboard);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await goTo(page, 'Board');
@@ -172,22 +184,24 @@ test('SP3c (ADR-0038): a range seen before reopens from its labelled copy when t
   await session;
   await goTo(page, 'Board');
   const dashboard = page.getByRole('region', { name: 'Dashboard', exact: true });
-  const market = dashboard.getByRole('article', { name: 'BTC / USD', exact: true });
+  const market = dashboard.locator('.markets');
   // The Health panel keeps its own copy note; this test is about the Dashboard's.
   const dashNote = dashboard.locator(':scope > [data-testid="copy-note"]');
-  await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
+  await openMarkets(dashboard);
+  await expect(market.locator('.markets-price')).toHaveText('$60,123.45');
   await expect(dashNote).toHaveCount(0);
 
   await goTo(page, 'Tasks');
   api.network = 'down';
   await goTo(page, 'Board');
   await expect(dashNote).toHaveText(/^Could not refresh · showing the copy from \d\d:\d\d$/);
-  await expect(market.locator('.dash-price')).toHaveText('$60,123.45');
-  await expect(market.locator('.dash-chip')).toHaveText('Stale');
+  await openMarkets(dashboard); // a fresh mount of the Boards view: the card starts collapsed again
+  await expect(market.locator('.markets-price')).toHaveText('$60,123.45');
+  await expect(market.locator('.markets-detail .dash-chip')).toHaveText('Stale');
   await expect(market.locator('svg.dash-svg')).toHaveCount(1);
   await page.screenshot({ path: test.info().outputPath('sp3c-dashboard-copy-390x844.png') });
   // A range never seen has no copy: the failure is said plainly, the 1W copy stays labelled as stale.
   await dashboard.getByRole('button', { name: '1M', exact: true }).click();
   await expect(dashNote).toHaveCount(0);
-  await expect(market.locator('.dash-chip')).toHaveText('Stale');
+  await expect(market.locator('.markets-detail .dash-chip')).toHaveText('Stale');
 });

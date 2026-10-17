@@ -44,6 +44,24 @@ const seedOnce = (page: Page, snapshot: unknown) =>
     window.localStorage.setItem(value.seenKey, JSON.stringify(['a1', 'a2', 'a3']));
   }, { snapshot, seenKey: seenKey(ACCOUNT) });
 
+// Synthetic Markets rows for the tour: two live markets with history, a private valuation and an unavailable market.
+function marketCards(): unknown[] {
+  const spark = (closes: number[]) => ({ range: '1W', granularitySeconds: 86_400, missingIntervals: 0,
+    points: closes.map((close, index) => ({ time: new Date(Date.parse('2026-09-24T12:00:00Z') + index * 86_400_000).toISOString(), open: close, high: close, low: close, close })) });
+  const meta = (title: string, provenance: string) => ({ title, provenance, observedAt: '2026-09-30T11:59:00Z', fetchedAt: '2026-09-30T12:00:00Z', note: null, drillthrough: null });
+  const watch = (symbol: string, type: string, base: string, title: string, price: number, closes: number[]) => ({
+    id: 'watchlist', status: 'ok', ...meta(title, 'Synthetic provider'), item: { symbol, type },
+    ticker: { base, quote: 'USD', provider: 'synthetic', price, providerTime: '2026-09-30T11:59:00Z' }, series: spark(closes) });
+  return [
+    watch('BTC-USD', 'crypto', 'BTC', 'BTC / USD', 67210, [65_800, 66_100, 66_000, 66_700, 66_900, 67_210, 67_210]),
+    watch('NVDA', 'stock', 'NVDA', 'NVIDIA', 131.4, [132.0, 131.8, 131.9, 131.1, 130.9, 130.6, 131.4]),
+    { id: 'private-valuation', status: 'ok', ...meta('Private co.', 'Synthetic list'), observedAt: null,
+      item: { id: 'private-co', name: 'Private co.', valueUsdBillions: 2.1, asOf: '2026-03-12', source: { label: 'Synthetic round report', url: 'https://example.test/round' } } },
+    { id: 'watchlist', status: 'unavailable', ...meta('ETH / USD', 'Synthetic provider'), observedAt: null, fetchedAt: null,
+      note: 'The market provider is unavailable right now.', item: { symbol: 'ETH-USD', type: 'crypto' }, reason: 'provider-error' },
+  ];
+}
+
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 test('tour: photograph every screen on the mock app', async ({ page }) => {
@@ -52,6 +70,7 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
 
   const api = new MockApi();
+  api.dashboardExtraCards = marketCards();
   api.open = [taskView(10, NEXT_TASK), taskView(11, 'Call the bike shop'), taskView(3, CALENDAR_TASK)];
   // R4: Active Work on the Tasks shot (the quest-log cue outside Character).
   api.activeWork = '## Now';
@@ -126,6 +145,28 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await panel.scrollIntoViewIfNeeded();
     await panel.getByRole('button', { name: 'AI usage', exact: true }).click();
     await expect(panel.locator('.ai-usage-tile')).toHaveCount(5);
+  });
+
+  // Markets: one collapsed card with a one-line summary, then compact rows with the first chart open in place.
+  await shot('Board - Markets', async () => {
+    const card = page.getByRole('region', { name: 'Markets', exact: true });
+    await card.scrollIntoViewIfNeeded();
+    await expect(card.locator('.markets-summary')).toContainText('+2 more');
+  });
+
+  await shot('Board - Markets expanded', async () => {
+    const card = page.getByRole('region', { name: 'Markets', exact: true });
+    await card.getByRole('button', { name: 'Markets', exact: true }).click();
+    await expect(card.locator('.markets-row')).toHaveCount(4);
+    await card.locator('.markets-row').first().click();
+    await expect(card.locator('.dash-svg')).toHaveCount(1);
+  });
+
+  await shot('Board - Markets rows', async () => {
+    const card = page.getByRole('region', { name: 'Markets', exact: true });
+    await card.locator('.markets-row').first().click(); // closes the open chart: every row is compact
+    await expect(card.locator('.dash-svg')).toHaveCount(0);
+    await card.scrollIntoViewIfNeeded();
   });
 
   // M8: the Week runway monitor under the AI usage panel, collapsed then expanded.

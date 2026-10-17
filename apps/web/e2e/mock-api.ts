@@ -314,6 +314,8 @@ export class MockApi {
   dashboardNow = '2026-09-30T12:00:00Z';
   dashboardFetchedAt = '2026-09-30T12:00:00Z';
   readonly dashboardRanges: DashboardRange[] = [];
+  /** Extra dashboard cards (watchlist, private valuation, ...) appended to the answer; the tour fills the Markets card. */
+  dashboardExtraCards: unknown[] = [];
   tickerReads = 0;
   marketTicker: MarketTickerResponse = MarketTickerResponse.parse({
     status: 'ok', now: '2026-09-30T12:01:00Z', fetchedAt: '2026-09-30T12:01:00Z',
@@ -745,7 +747,7 @@ export class MockApi {
           drillthrough: null, projection: this.weather.projection }
       : { id: 'weather', status: 'unavailable', title: 'Weather', provenance: 'Open-Meteo (DMI + ECMWF)',
           observedAt: null, fetchedAt: null, note: 'Weather is unavailable.', drillthrough: null, reason: this.weather.reason };
-    return this.#json(route, 200, DashboardResponse.parse({ now: this.dashboardNow, cards: [market, weather,
+    return this.#json(route, 200, DashboardResponse.parse({ now: this.dashboardNow, cards: [market, weather, ...this.dashboardExtraCards,
       { id: 'ai-usage', status: 'not-configured', title: 'AI usage', provenance: 'Not configured',
         observedAt: null, fetchedAt: null, drillthrough: null, note: 'No approved usage source is connected yet.' },
     ] }));
