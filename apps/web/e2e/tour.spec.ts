@@ -168,6 +168,18 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await card.scrollIntoViewIfNeeded();
   });
 
+  await shot('Board - Vault heatmap', async () => {
+    const panel = page.getByRole('region', { name: 'Vault heatmap', exact: true });
+    await panel.scrollIntoViewIfNeeded();
+    await expect(panel.getByText(/day streak/)).toBeVisible();
+  });
+
+  await shot('Board - Vault heatmap expanded', async () => {
+    const panel = page.getByRole('region', { name: 'Vault heatmap', exact: true });
+    await panel.getByRole('button', { name: 'Vault heatmap', exact: true }).click();
+    await expect(panel.locator('.vh-cell')).toHaveCount(182);
+  });
+
   await shot('Board - AI model leaderboard', async () => {
     const panel = page.getByRole('region', { name: 'AI models', exact: true });
     await panel.evaluate(card => window.scrollBy(0, card.getBoundingClientRect().top - 100));

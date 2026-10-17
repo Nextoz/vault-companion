@@ -1,12 +1,14 @@
 import { type PowerResponse, type SkyResponse, TrainingResponse, type TrainingRow } from '@vault-companion/contracts';
 import { powerFixture } from './power-fixture.ts';
 import { skyFixture } from './sky-fixture.ts';
+import { readFileSync } from 'node:fs';
 // In-page API mock for Playwright. Every response is parsed through the contract schema before it is served,
 // so a mock that drifts from packages/contracts fails loudly instead of testing a fiction.
 import {
   ActiveWorkResponse,
   AiBudgetResponse,
   AiUsageResponse,
+  VaultActivityResponse,
   ApiError,
   AskJevResponse,
   BookFollowUpRequest,
@@ -303,6 +305,9 @@ export const sampleGame = (unavailable: string[] = [], rich = false): GameRespon
   },
 });
 
+/** Synthetic values, the real producer schema (apps/web/src/ui/monitors/fixtures). */
+const vaultActivityFixture: object = JSON.parse(readFileSync(new URL('../src/ui/monitors/fixtures/vault-activity.json', import.meta.url), 'utf8'));
+
 export class MockApi {
   // Public-market fixtures only; never contact a provider from a browser test.
   dashboardMode: 'ok' | 'no-history' | 'unavailable' = 'ok';
@@ -583,6 +588,8 @@ export class MockApi {
       : this.#json(route, 200, this.sky));
     await on('**/api/power', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, this.power));
+    await on('**/api/monitors/vault-activity', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
+      : this.#json(route, 200, VaultActivityResponse.parse({ revision: 'a'.repeat(40), ...vaultActivityFixture })));
     await on('**/api/scouts', (route) => this.session === 'signed-out'
       ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, ScoutsResponse.parse(this.scouts)));

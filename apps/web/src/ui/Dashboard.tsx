@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useMemo, useState, type PointerEvent } f
 import { getDashboard, getMarketTicker, type Fetched } from '../api.ts';
 import './Dashboard.css';
 import { AiUsagePanel } from './AiUsagePanel.tsx';
+import { VaultHeatmapMonitor } from './monitors/VaultHeatmapMonitor.tsx';
 import { LeaderboardPanel } from './LeaderboardPanel.tsx';
 import { CreditBurnMonitor } from './monitors/CreditBurnMonitor.tsx';
 import { ScoutHeartbeatMonitor } from './monitors/ScoutHeartbeatMonitor.tsx';
@@ -392,6 +393,7 @@ export function Dashboard({ refreshKey, accountKey = null, onDrillthrough, aiUsa
       <WeekRunwayMonitor />
       <PowerMonitor />
       <SkyMonitor />
+      <VaultHeatmapMonitor nowMs={nowMs || undefined} />
       <LeaderboardPanel view={leaderboard} now={nowMs || Date.now()} />
     </section>
   );

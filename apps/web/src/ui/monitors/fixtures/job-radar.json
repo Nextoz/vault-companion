@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-10-16T06:10:05+02:00",
+  "source": "Job Search 2026 frontmatter",
+  "total": 40,
+  "counts": {
+    "saved": 19,
+    "applied": 9,
+    "interview": 1,
+    "offer": 0,
+    "closed": 11,
+    "other": 0
+  },
+  "otherStatuses": [],
+  "inFlight": [
+    {
+      "title": "Acme Platform",
+      "file": "Job Search 2026/50 Acme Platform - 2026-09-01.md",
+      "status": "submitted",
+      "stage": "applied",
+      "updated": "2026-10-12",
+      "daysSinceUpdate": 4
+    },
+    {
+      "title": "Beta Backend",
+      "file": "Job Search 2026/51 Beta Backend - 2026-09-02.md",
+      "status": "submitted",
+      "stage": "applied",
+      "updated": "2026-09-20",
+      "daysSinceUpdate": 26
+    },
+    {
+      "title": "Gamma DevOps",
+      "file": "Job Search 2026/52 Gamma DevOps - 2026-09-03.md",
+      "status": "submitted-waiting",
+      "stage": "applied",
+      "updated": "2026-09-17",
+      "daysSinceUpdate": 29
+    },
+    {
+      "title": "Delta Cloud",
+      "file": "Job Search 2026/53 Delta Cloud - 2026-09-04.md",
+      "status": "follow-up-needed",
+      "stage": "applied",
+      "updated": "2026-08-31",
+      "daysSinceUpdate": 46
+    },
+    {
+      "title": "Epsilon Data",
+      "file": "Job Search 2026/54 Epsilon Data - 2026-09-05.md",
+      "status": "applied",
+      "stage": "applied",
+      "updated": "2026-08-23",
+      "daysSinceUpdate": 54
+    },
+    {
+      "title": "Zeta SRE",
+      "file": "Job Search 2026/55 Zeta SRE - 2026-09-06.md",
+      "status": "applied",
+      "stage": "applied",
+      "updated": "2026-08-23",
+      "daysSinceUpdate": 54
+    },
+    {
+      "title": "Eta Platform",
+      "file": "Job Search 2026/56 Eta Platform - 2026-09-07.md",
+      "status": "submitted",
+      "stage": "applied",
+      "updated": "2026-08-11",
+      "daysSinceUpdate": 66
+    },
+    {
+      "title": "Theta API",
+      "file": "Job Search 2026/57 Theta API - 2026-09-08.md",
+      "status": "awaiting-contact-response",
+      "stage": "applied",
+      "updated": "2026-07-28",
+      "daysSinceUpdate": 80
+    },
+    {
+      "title": "Iota Infra",
+      "file": "Job Search 2026/58 Iota Infra - 2026-09-09.md",
+      "status": "first-interview-scheduled",
+      "stage": "interview",
+      "updated": "2026-06-11",
+      "daysSinceUpdate": 127
+    },
+    {
+      "title": "Kappa Tools",
+      "file": "Job Search 2026/59 Kappa Tools - 2026-09-01.md",
+      "status": "applied",
+      "stage": "applied",
+      "updated": "2026-06-02",
+      "daysSinceUpdate": 136
+    }
+  ],
+  "followUps": [
+    {
+      "title": "Acme Platform",
+      "stage": "applied",
+      "due": "2026-10-14",
+      "field": "follow_up",
+      "overdue": true
+    },
+    {
+      "title": "Beta Backend",
+      "stage": "interview",
+      "due": "2026-10-18",
+      "field": "review_due",
+      "overdue": false
+    }
+  ],
+  "stageTable": {
+    "applied": "applied",
+    "awaiting-contact-response": "applied",
+    "client-rejected-recruiter-pool": "closed",
+    "closed": "closed",
+    "closed-no-vacancy": "closed",
+    "closed-rejected": "closed",
+    "draft": "saved",
+    "first-interview-scheduled": "interview",
+    "follow-up-needed": "applied",
+    "interview": "interview",
+    "interview-scheduled": "interview",
+    "investigate": "saved",
+    "lead": "saved",
+    "location-qualification-needed": "saved",
+    "low-priority-qualification": "saved",
+    "not-selected": "closed",
+    "offer": "offer",
+    "offer-received": "offer",
+    "on-hold-user-decision": "saved",
+    "ready": "saved",
+    "ready-to-apply": "saved",
+    "ready-to-apply-browser-confirm": "saved",
+    "ready-to-send": "saved",
+    "rejected": "closed",
+    "rejected-automated-awaiting-confirmation": "closed",
+    "second-interview-scheduled": "interview",
+    "sent": "applied",
+    "submitted": "applied",
+    "submitted-waiting": "applied",
+    "waiting-decision": "interview",
+    "watchlist": "saved",
+    "withdrawn": "closed"
+  },
+  "applicationTypes": [
+    "job-application",
+    "job-application-plan",
+    "job-candidate",
+    "job-lead",
+    "job-opportunity",
+    "opportunity"
+  ]
+}

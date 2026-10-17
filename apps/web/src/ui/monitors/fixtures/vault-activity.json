@@ -1,0 +1,1669 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-10-16T05:40:12+02:00",
+  "source": "vault git history",
+  "windowDays": 182,
+  "start": "2026-04-18",
+  "end": "2026-10-16",
+  "days": [
+    {
+      "date": "2026-04-18",
+      "notes": 1,
+      "areas": {
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-04-19",
+      "notes": 1,
+      "areas": {
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-04-20",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-04-21",
+      "notes": 13,
+      "areas": {
+        "(root)": 3,
+        "Learning": 3,
+        "Projects": 2,
+        "Events": 2,
+        "Health": 1,
+        "Career": 2
+      }
+    },
+    {
+      "date": "2026-04-22",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-04-23",
+      "notes": 13,
+      "areas": {
+        "(root)": 3,
+        "Learning": 4,
+        "Career": 1,
+        "Projects": 2,
+        "Events": 3
+      }
+    },
+    {
+      "date": "2026-04-24",
+      "notes": 13,
+      "areas": {
+        "Health": 3,
+        "(root)": 3,
+        "Learning": 2,
+        "Projects": 2,
+        "Career": 2,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-04-25",
+      "notes": 6,
+      "areas": {
+        "Career": 2,
+        "Projects": 1,
+        "(root)": 1,
+        "Learning": 1,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-04-26",
+      "notes": 3,
+      "areas": {
+        "Career": 1,
+        "Projects": 2
+      }
+    },
+    {
+      "date": "2026-04-27",
+      "notes": 11,
+      "areas": {
+        "Career": 2,
+        "Health": 2,
+        "Projects": 1,
+        "(root)": 2,
+        "Learning": 2,
+        "Events": 2
+      }
+    },
+    {
+      "date": "2026-04-28",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-04-29",
+      "notes": 14,
+      "areas": {
+        "(root)": 3,
+        "Career": 4,
+        "Projects": 2,
+        "Health": 2,
+        "Learning": 3
+      }
+    },
+    {
+      "date": "2026-04-30",
+      "notes": 7,
+      "areas": {
+        "Learning": 1,
+        "Health": 2,
+        "(root)": 1,
+        "Events": 2,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-05-01",
+      "notes": 7,
+      "areas": {
+        "Projects": 2,
+        "Events": 2,
+        "Health": 1,
+        "Career": 1,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-05-02",
+      "notes": 4,
+      "areas": {
+        "Projects": 1,
+        "Career": 1,
+        "Events": 2
+      }
+    },
+    {
+      "date": "2026-05-03",
+      "notes": 4,
+      "areas": {
+        "Projects": 1,
+        "Health": 1,
+        "(root)": 2
+      }
+    },
+    {
+      "date": "2026-05-04",
+      "notes": 8,
+      "areas": {
+        "(root)": 1,
+        "Health": 1,
+        "Projects": 3,
+        "Career": 2,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-05-05",
+      "notes": 4,
+      "areas": {
+        "Learning": 2,
+        "Career": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-05-06",
+      "notes": 5,
+      "areas": {
+        "Events": 3,
+        "Career": 1,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-05-07",
+      "notes": 11,
+      "areas": {
+        "Events": 5,
+        "Health": 1,
+        "(root)": 2,
+        "Learning": 3
+      }
+    },
+    {
+      "date": "2026-05-08",
+      "notes": 10,
+      "areas": {
+        "Events": 3,
+        "(root)": 3,
+        "Career": 1,
+        "Learning": 2,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-05-09",
+      "notes": 3,
+      "areas": {
+        "Career": 2,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-05-10",
+      "notes": 1,
+      "areas": {
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-05-11",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-05-12",
+      "notes": 2,
+      "areas": {
+        "(root)": 2
+      }
+    },
+    {
+      "date": "2026-05-13",
+      "notes": 8,
+      "areas": {
+        "Career": 2,
+        "Projects": 2,
+        "Health": 2,
+        "Learning": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-05-14",
+      "notes": 13,
+      "areas": {
+        "Career": 2,
+        "Events": 2,
+        "Projects": 2,
+        "Health": 3,
+        "Learning": 2,
+        "(root)": 2
+      }
+    },
+    {
+      "date": "2026-05-15",
+      "notes": 1,
+      "areas": {
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-05-16",
+      "notes": 6,
+      "areas": {
+        "Projects": 2,
+        "(root)": 2,
+        "Events": 2
+      }
+    },
+    {
+      "date": "2026-05-17",
+      "notes": 6,
+      "areas": {
+        "Projects": 2,
+        "(root)": 1,
+        "Career": 2,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-05-18",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-05-19",
+      "notes": 5,
+      "areas": {
+        "(root)": 2,
+        "Events": 2,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-05-20",
+      "notes": 3,
+      "areas": {
+        "Health": 1,
+        "Events": 2
+      }
+    },
+    {
+      "date": "2026-05-21",
+      "notes": 8,
+      "areas": {
+        "Career": 2,
+        "Learning": 3,
+        "Events": 1,
+        "(root)": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-05-22",
+      "notes": 1,
+      "areas": {
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-05-23",
+      "notes": 3,
+      "areas": {
+        "Learning": 2,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-05-24",
+      "notes": 3,
+      "areas": {
+        "Projects": 2,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-05-25",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-05-26",
+      "notes": 4,
+      "areas": {
+        "Career": 1,
+        "(root)": 2,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-05-27",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-05-28",
+      "notes": 1,
+      "areas": {
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-05-29",
+      "notes": 4,
+      "areas": {
+        "(root)": 1,
+        "Events": 1,
+        "Learning": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-05-30",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-05-31",
+      "notes": 4,
+      "areas": {
+        "Career": 1,
+        "Health": 1,
+        "Events": 1,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-06-01",
+      "notes": 2,
+      "areas": {
+        "Health": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-06-02",
+      "notes": 1,
+      "areas": {
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-06-03",
+      "notes": 3,
+      "areas": {
+        "Health": 1,
+        "Learning": 1,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-06-04",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-06-05",
+      "notes": 7,
+      "areas": {
+        "Health": 3,
+        "(root)": 2,
+        "Career": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-06-06",
+      "notes": 3,
+      "areas": {
+        "Health": 1,
+        "Career": 2
+      }
+    },
+    {
+      "date": "2026-06-07",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-06-08",
+      "notes": 7,
+      "areas": {
+        "Health": 1,
+        "Learning": 1,
+        "Events": 3,
+        "Career": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-06-09",
+      "notes": 9,
+      "areas": {
+        "Career": 2,
+        "(root)": 4,
+        "Health": 2,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-06-10",
+      "notes": 3,
+      "areas": {
+        "Health": 2,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-06-11",
+      "notes": 7,
+      "areas": {
+        "Projects": 6,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-06-12",
+      "notes": 9,
+      "areas": {
+        "Projects": 3,
+        "(root)": 1,
+        "Learning": 1,
+        "Career": 2,
+        "Health": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-06-13",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-06-14",
+      "notes": 3,
+      "areas": {
+        "Projects": 2,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-06-15",
+      "notes": 14,
+      "areas": {
+        "Projects": 5,
+        "Health": 2,
+        "(root)": 5,
+        "Events": 2
+      }
+    },
+    {
+      "date": "2026-06-16",
+      "notes": 5,
+      "areas": {
+        "Learning": 1,
+        "Events": 1,
+        "Health": 2,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-06-17",
+      "notes": 13,
+      "areas": {
+        "(root)": 5,
+        "Health": 1,
+        "Learning": 3,
+        "Career": 3,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-06-18",
+      "notes": 10,
+      "areas": {
+        "(root)": 3,
+        "Projects": 3,
+        "Learning": 3,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-06-19",
+      "notes": 7,
+      "areas": {
+        "(root)": 1,
+        "Projects": 3,
+        "Learning": 2,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-06-20",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-06-21",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-06-22",
+      "notes": 2,
+      "areas": {
+        "(root)": 1,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-06-23",
+      "notes": 4,
+      "areas": {
+        "Health": 2,
+        "Events": 1,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-06-24",
+      "notes": 11,
+      "areas": {
+        "Events": 3,
+        "Career": 3,
+        "(root)": 1,
+        "Learning": 3,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-06-25",
+      "notes": 4,
+      "areas": {
+        "Events": 1,
+        "Projects": 1,
+        "Health": 1,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-06-26",
+      "notes": 13,
+      "areas": {
+        "Projects": 2,
+        "Career": 4,
+        "Health": 2,
+        "Events": 4,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-06-27",
+      "notes": 6,
+      "areas": {
+        "Events": 3,
+        "Health": 1,
+        "Projects": 1,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-06-28",
+      "notes": 2,
+      "areas": {
+        "Learning": 2
+      }
+    },
+    {
+      "date": "2026-06-29",
+      "notes": 11,
+      "areas": {
+        "Learning": 2,
+        "Health": 3,
+        "Projects": 2,
+        "Events": 1,
+        "Career": 2,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-06-30",
+      "notes": 7,
+      "areas": {
+        "Events": 1,
+        "Health": 2,
+        "Career": 3,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-07-01",
+      "notes": 8,
+      "areas": {
+        "Learning": 3,
+        "(root)": 3,
+        "Career": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-07-02",
+      "notes": 2,
+      "areas": {
+        "Learning": 1,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-07-03",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-07-04",
+      "notes": 5,
+      "areas": {
+        "(root)": 1,
+        "Health": 1,
+        "Career": 2,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-07-05",
+      "notes": 1,
+      "areas": {
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-07-06",
+      "notes": 11,
+      "areas": {
+        "Projects": 1,
+        "Health": 6,
+        "Learning": 2,
+        "(root)": 2
+      }
+    },
+    {
+      "date": "2026-07-07",
+      "notes": 8,
+      "areas": {
+        "(root)": 2,
+        "Events": 2,
+        "Career": 2,
+        "Projects": 1,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-07-08",
+      "notes": 4,
+      "areas": {
+        "Career": 1,
+        "Learning": 1,
+        "(root)": 1,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-07-09",
+      "notes": 11,
+      "areas": {
+        "Learning": 3,
+        "Projects": 4,
+        "(root)": 2,
+        "Events": 2
+      }
+    },
+    {
+      "date": "2026-07-10",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-07-11",
+      "notes": 6,
+      "areas": {
+        "Projects": 2,
+        "Events": 1,
+        "Career": 1,
+        "Learning": 1,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-07-12",
+      "notes": 3,
+      "areas": {
+        "Health": 2,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-07-13",
+      "notes": 8,
+      "areas": {
+        "(root)": 1,
+        "Events": 2,
+        "Projects": 2,
+        "Career": 1,
+        "Health": 1,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-07-14",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-07-15",
+      "notes": 3,
+      "areas": {
+        "(root)": 1,
+        "Career": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-07-16",
+      "notes": 8,
+      "areas": {
+        "Projects": 1,
+        "Events": 2,
+        "(root)": 1,
+        "Health": 2,
+        "Career": 1,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-07-17",
+      "notes": 9,
+      "areas": {
+        "Learning": 3,
+        "Career": 2,
+        "(root)": 2,
+        "Events": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-07-18",
+      "notes": 2,
+      "areas": {
+        "(root)": 1,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-07-19",
+      "notes": 5,
+      "areas": {
+        "Events": 1,
+        "Career": 2,
+        "Learning": 1,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-07-20",
+      "notes": 6,
+      "areas": {
+        "Projects": 1,
+        "Health": 3,
+        "Career": 1,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-07-21",
+      "notes": 5,
+      "areas": {
+        "(root)": 2,
+        "Learning": 2,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-07-22",
+      "notes": 3,
+      "areas": {
+        "Career": 1,
+        "Projects": 2
+      }
+    },
+    {
+      "date": "2026-07-23",
+      "notes": 14,
+      "areas": {
+        "Learning": 3,
+        "Career": 3,
+        "Health": 3,
+        "Events": 3,
+        "(root)": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-07-24",
+      "notes": 2,
+      "areas": {
+        "Events": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-07-25",
+      "notes": 5,
+      "areas": {
+        "Health": 2,
+        "Career": 1,
+        "Events": 1,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-07-26",
+      "notes": 1,
+      "areas": {
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-07-27",
+      "notes": 9,
+      "areas": {
+        "Career": 2,
+        "Learning": 4,
+        "(root)": 2,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-07-28",
+      "notes": 13,
+      "areas": {
+        "Career": 3,
+        "Events": 1,
+        "(root)": 3,
+        "Health": 1,
+        "Learning": 2,
+        "Projects": 3
+      }
+    },
+    {
+      "date": "2026-07-29",
+      "notes": 1,
+      "areas": {
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-07-30",
+      "notes": 2,
+      "areas": {
+        "Health": 1,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-07-31",
+      "notes": 1,
+      "areas": {
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-08-01",
+      "notes": 3,
+      "areas": {
+        "Learning": 1,
+        "Events": 2
+      }
+    },
+    {
+      "date": "2026-08-02",
+      "notes": 6,
+      "areas": {
+        "Projects": 2,
+        "(root)": 1,
+        "Learning": 1,
+        "Events": 2
+      }
+    },
+    {
+      "date": "2026-08-03",
+      "notes": 5,
+      "areas": {
+        "Health": 1,
+        "Projects": 2,
+        "Career": 2
+      }
+    },
+    {
+      "date": "2026-08-04",
+      "notes": 3,
+      "areas": {
+        "Health": 1,
+        "Learning": 1,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-08-05",
+      "notes": 12,
+      "areas": {
+        "Projects": 5,
+        "Learning": 2,
+        "Health": 2,
+        "Career": 1,
+        "Events": 2
+      }
+    },
+    {
+      "date": "2026-08-06",
+      "notes": 13,
+      "areas": {
+        "Health": 4,
+        "Projects": 2,
+        "Career": 3,
+        "Learning": 1,
+        "Events": 2,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-08-07",
+      "notes": 6,
+      "areas": {
+        "Career": 2,
+        "Events": 1,
+        "Health": 2,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-08-08",
+      "notes": 2,
+      "areas": {
+        "Events": 1,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-08-09",
+      "notes": 4,
+      "areas": {
+        "Career": 2,
+        "(root)": 1,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-08-10",
+      "notes": 14,
+      "areas": {
+        "Health": 3,
+        "Career": 2,
+        "(root)": 3,
+        "Projects": 3,
+        "Events": 2,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-08-11",
+      "notes": 8,
+      "areas": {
+        "(root)": 2,
+        "Learning": 3,
+        "Events": 2,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-08-12",
+      "notes": 10,
+      "areas": {
+        "Projects": 1,
+        "Events": 2,
+        "(root)": 2,
+        "Career": 2,
+        "Health": 1,
+        "Learning": 2
+      }
+    },
+    {
+      "date": "2026-08-13",
+      "notes": 8,
+      "areas": {
+        "Career": 2,
+        "Health": 1,
+        "Learning": 2,
+        "Events": 2,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-08-14",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-08-15",
+      "notes": 4,
+      "areas": {
+        "Projects": 3,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-08-16",
+      "notes": 310,
+      "areas": {
+        "Projects": 52,
+        "(root)": 41,
+        "Career": 70,
+        "Learning": 52,
+        "Health": 52,
+        "Events": 43
+      }
+    },
+    {
+      "date": "2026-08-17",
+      "notes": 4,
+      "areas": {
+        "Health": 1,
+        "Events": 1,
+        "(root)": 2
+      }
+    },
+    {
+      "date": "2026-08-18",
+      "notes": 9,
+      "areas": {
+        "Projects": 4,
+        "Learning": 2,
+        "(root)": 1,
+        "Health": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-08-19",
+      "notes": 12,
+      "areas": {
+        "(root)": 4,
+        "Career": 1,
+        "Projects": 3,
+        "Health": 2,
+        "Events": 2
+      }
+    },
+    {
+      "date": "2026-08-20",
+      "notes": 6,
+      "areas": {
+        "Health": 2,
+        "Events": 3,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-08-21",
+      "notes": 12,
+      "areas": {
+        "(root)": 4,
+        "Health": 2,
+        "Projects": 2,
+        "Events": 2,
+        "Learning": 1,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-08-22",
+      "notes": 3,
+      "areas": {
+        "Career": 1,
+        "(root)": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-08-23",
+      "notes": 2,
+      "areas": {
+        "(root)": 1,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-08-24",
+      "notes": 10,
+      "areas": {
+        "Learning": 5,
+        "Events": 3,
+        "(root)": 1,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-08-25",
+      "notes": 7,
+      "areas": {
+        "Learning": 2,
+        "Projects": 2,
+        "Health": 1,
+        "Career": 1,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-08-26",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-08-27",
+      "notes": 3,
+      "areas": {
+        "Projects": 1,
+        "Career": 1,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-08-28",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-08-29",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-08-30",
+      "notes": 1,
+      "areas": {
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-08-31",
+      "notes": 14,
+      "areas": {
+        "Health": 3,
+        "Projects": 3,
+        "Career": 1,
+        "(root)": 5,
+        "Learning": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-09-01",
+      "notes": 12,
+      "areas": {
+        "Learning": 2,
+        "Career": 4,
+        "(root)": 1,
+        "Health": 2,
+        "Events": 2,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-09-02",
+      "notes": 5,
+      "areas": {
+        "Career": 2,
+        "Events": 1,
+        "(root)": 2
+      }
+    },
+    {
+      "date": "2026-09-03",
+      "notes": 13,
+      "areas": {
+        "(root)": 3,
+        "Career": 2,
+        "Projects": 3,
+        "Learning": 3,
+        "Health": 2
+      }
+    },
+    {
+      "date": "2026-09-04",
+      "notes": 1,
+      "areas": {
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-09-05",
+      "notes": 3,
+      "areas": {
+        "Learning": 1,
+        "Projects": 1,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-09-06",
+      "notes": 2,
+      "areas": {
+        "Learning": 1,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-09-07",
+      "notes": 6,
+      "areas": {
+        "(root)": 1,
+        "Projects": 2,
+        "Health": 1,
+        "Learning": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-09-08",
+      "notes": 2,
+      "areas": {
+        "Learning": 2
+      }
+    },
+    {
+      "date": "2026-09-09",
+      "notes": 4,
+      "areas": {
+        "Projects": 1,
+        "Events": 1,
+        "Learning": 1,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-09-10",
+      "notes": 1,
+      "areas": {
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-09-11",
+      "notes": 14,
+      "areas": {
+        "Projects": 3,
+        "Learning": 5,
+        "Events": 1,
+        "Health": 4,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-09-12",
+      "notes": 3,
+      "areas": {
+        "Health": 1,
+        "Projects": 2
+      }
+    },
+    {
+      "date": "2026-09-13",
+      "notes": 1,
+      "areas": {
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-09-14",
+      "notes": 8,
+      "areas": {
+        "Events": 1,
+        "Learning": 2,
+        "Health": 3,
+        "Career": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-09-15",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-09-16",
+      "notes": 6,
+      "areas": {
+        "Projects": 1,
+        "Events": 1,
+        "Learning": 2,
+        "(root)": 2
+      }
+    },
+    {
+      "date": "2026-09-17",
+      "notes": 4,
+      "areas": {
+        "Projects": 1,
+        "Learning": 1,
+        "(root)": 1,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-09-18",
+      "notes": 4,
+      "areas": {
+        "Health": 2,
+        "Projects": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-09-19",
+      "notes": 2,
+      "areas": {
+        "Events": 1,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-09-20",
+      "notes": 4,
+      "areas": {
+        "Events": 1,
+        "(root)": 2,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-09-21",
+      "notes": 1,
+      "areas": {
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-09-22",
+      "notes": 6,
+      "areas": {
+        "Projects": 1,
+        "Career": 2,
+        "Learning": 1,
+        "(root)": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-09-23",
+      "notes": 0,
+      "areas": {}
+    },
+    {
+      "date": "2026-09-24",
+      "notes": 13,
+      "areas": {
+        "Health": 5,
+        "Projects": 6,
+        "Events": 1,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-09-25",
+      "notes": 4,
+      "areas": {
+        "Projects": 2,
+        "Career": 2
+      }
+    },
+    {
+      "date": "2026-09-26",
+      "notes": 5,
+      "areas": {
+        "Career": 1,
+        "(root)": 2,
+        "Learning": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-09-27",
+      "notes": 5,
+      "areas": {
+        "Events": 1,
+        "Projects": 1,
+        "Learning": 1,
+        "(root)": 2
+      }
+    },
+    {
+      "date": "2026-09-28",
+      "notes": 3,
+      "areas": {
+        "(root)": 1,
+        "Projects": 1,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-09-29",
+      "notes": 8,
+      "areas": {
+        "Learning": 2,
+        "(root)": 2,
+        "Health": 1,
+        "Career": 2,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-09-30",
+      "notes": 1,
+      "areas": {
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-10-01",
+      "notes": 2,
+      "areas": {
+        "Career": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-10-02",
+      "notes": 2,
+      "areas": {
+        "Projects": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-10-03",
+      "notes": 1,
+      "areas": {
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-10-04",
+      "notes": 3,
+      "areas": {
+        "(root)": 2,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-10-05",
+      "notes": 3,
+      "areas": {
+        "Projects": 2,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-10-06",
+      "notes": 2,
+      "areas": {
+        "Health": 1,
+        "Learning": 1
+      }
+    },
+    {
+      "date": "2026-10-07",
+      "notes": 10,
+      "areas": {
+        "Career": 2,
+        "(root)": 1,
+        "Events": 1,
+        "Projects": 2,
+        "Learning": 3,
+        "Health": 1
+      }
+    },
+    {
+      "date": "2026-10-08",
+      "notes": 6,
+      "areas": {
+        "Health": 1,
+        "Career": 1,
+        "(root)": 2,
+        "Learning": 2
+      }
+    },
+    {
+      "date": "2026-10-09",
+      "notes": 2,
+      "areas": {
+        "(root)": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-10-10",
+      "notes": 5,
+      "areas": {
+        "Learning": 2,
+        "Health": 1,
+        "Events": 1,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-10-11",
+      "notes": 4,
+      "areas": {
+        "Learning": 2,
+        "Projects": 1,
+        "Events": 1
+      }
+    },
+    {
+      "date": "2026-10-12",
+      "notes": 11,
+      "areas": {
+        "Career": 1,
+        "Learning": 1,
+        "Health": 3,
+        "Events": 3,
+        "Projects": 2,
+        "(root)": 1
+      }
+    },
+    {
+      "date": "2026-10-13",
+      "notes": 9,
+      "areas": {
+        "Learning": 2,
+        "Events": 1,
+        "Health": 3,
+        "Career": 1,
+        "Projects": 2
+      }
+    },
+    {
+      "date": "2026-10-14",
+      "notes": 11,
+      "areas": {
+        "Events": 2,
+        "(root)": 3,
+        "Health": 3,
+        "Learning": 2,
+        "Career": 1
+      }
+    },
+    {
+      "date": "2026-10-15",
+      "notes": 3,
+      "areas": {
+        "Health": 2,
+        "Projects": 1
+      }
+    },
+    {
+      "date": "2026-10-16",
+      "notes": 5,
+      "areas": {
+        "Events": 1,
+        "Learning": 1,
+        "(root)": 1,
+        "Health": 2
+      }
+    }
+  ],
+  "currentStreak": 23,
+  "notesThisMonth": 79,
+  "areas30d": [
+    {
+      "area": "Projects",
+      "notes": 28
+    },
+    {
+      "area": "Health",
+      "notes": 27
+    },
+    {
+      "area": "(root)",
+      "notes": 24
+    },
+    {
+      "area": "Learning",
+      "notes": 23
+    },
+    {
+      "area": "Events",
+      "notes": 20
+    },
+    {
+      "area": "Career",
+      "notes": 17
+    }
+  ],
+  "excluded": [
+    "Automation/",
+    "Tools/",
+    ".obsidian/"
+  ]
+}

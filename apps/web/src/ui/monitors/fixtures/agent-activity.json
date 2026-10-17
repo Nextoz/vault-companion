@@ -1,0 +1,99 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-10-16T19:17:04+02:00",
+  "windowHours": 24,
+  "since": "2026-10-15T19:17:04+02:00",
+  "repo": "Nextoz/vault-companion",
+  "prs": {
+    "merged": [
+      {
+        "number": 208,
+        "title": "Synthetic change 208",
+        "mergedAt": "2026-10-16T17:52:10Z",
+        "additions": 654,
+        "deletions": 56,
+        "branch": "claude/monitor-card-4adec1",
+        "url": "https://github.com/Nextoz/vault-companion/pull/208"
+      },
+      {
+        "number": 207,
+        "title": "Synthetic change 207",
+        "mergedAt": "2026-10-16T17:13:58Z",
+        "additions": 149,
+        "deletions": 24,
+        "branch": "feat/ai-usage-compact",
+        "url": "https://github.com/Nextoz/vault-companion/pull/207"
+      },
+      {
+        "number": 206,
+        "title": "Synthetic change 206",
+        "mergedAt": "2026-10-16T14:53:23Z",
+        "additions": 3548,
+        "deletions": 160,
+        "branch": "feat/glm-workflow-leaderboard",
+        "url": "https://github.com/Nextoz/vault-companion/pull/206"
+      }
+    ],
+    "open": [
+      {
+        "number": 188,
+        "title": "Synthetic change 188",
+        "createdAt": "2026-10-11T11:00:02Z",
+        "isDraft": false,
+        "additions": 422,
+        "deletions": 9,
+        "branch": "tooling/process-guards",
+        "url": "https://github.com/Nextoz/vault-companion/pull/188"
+      },
+      {
+        "number": 127,
+        "title": "Synthetic change 127",
+        "createdAt": "2026-10-03T10:35:58Z",
+        "isDraft": false,
+        "additions": 41,
+        "deletions": 41,
+        "branch": "dependabot/npm_and_yarn/types/node-26.6.3",
+        "url": "https://github.com/Nextoz/vault-companion/pull/127"
+      }
+    ]
+  },
+  "ci": {
+    "workflow": "ci",
+    "runId": 38942983433,
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-10-16T17:52:13Z",
+    "headSha": "a22954ef63bafc7812b0efcf959892eafc5f75ed",
+    "url": "https://github.com/Nextoz/vault-companion/actions/runs/38942983433",
+    "deploy": {
+      "name": "deploy production",
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-10-16T17:58:42Z"
+    }
+  },
+  "spend": {
+    "date": "2026-10-16",
+    "scalewayEur": 3.2,
+    "deepseekUsd": 0.19,
+    "claudeWeekPercent": 14.0,
+    "relay": {
+      "requests": 79,
+      "promptTokens": 2224608,
+      "completionTokens": 207562,
+      "estimatedEur": 5.15,
+      "window": "since relay start"
+    }
+  },
+  "needsYou": {
+    "logUpdatedAt": "2026-10-16T18:40:00+02:00",
+    "stale": false,
+    "items": [
+      {
+        "at": "2026-10-16T18:40:00+02:00",
+        "text": "Synthetic action: pick between two layouts."
+      }
+    ]
+  },
+  "sourcesFailed": []
+}
