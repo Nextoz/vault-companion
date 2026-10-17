@@ -4,6 +4,7 @@ import { act, createElement, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRadar, getRadarNote, postRadarDecision } from '../api.ts';
+import { loadRenderer } from './NoteView.tsx';
 import { deriveRadar, radarDecisionCommand, ResearchRadar, type RadarIntent } from './ResearchRadar.tsx';
 
 vi.mock('../api.ts', () => ({ getRadar: vi.fn(), getRadarNote: vi.fn(), postRadarDecision: vi.fn() }));
@@ -111,6 +112,8 @@ describe('ResearchRadar component', () => {
       blobSha: 'b'.repeat(40), markdown: '# Synthetic StrictMode note',
     } });
     const root = createRoot(document.getElementById('root')!);
+    // PERF-D: the note renderer is a dynamic import now; warm it so the read below settles on microtasks.
+    await loadRenderer();
     await act(async () => {
       root.render(createElement(StrictMode, null,
         createElement(ResearchRadar, { accountKey: 'account', refreshKey: null, blocked: false })));

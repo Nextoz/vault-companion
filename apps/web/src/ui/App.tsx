@@ -1,5 +1,5 @@
 import type { AiBudgetResponse, AiUsageResponse, CompleteTaskCommand, LeaderboardResponse, TaskView } from '@vault-companion/contracts';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { getAiBudget, getAiUsage, getCalendarLinks, getLeaderboard, getSession, getTasks, type Fetched } from '../api.ts';
 import type { ActiveWorkItem } from '../active-work.ts';
 import { coalescedRead, type ReadReason } from '../coalescedRead.ts';
@@ -20,7 +20,6 @@ import { ActionsPanel } from './ActionsPanel.tsx';
 import { ActiveWorkCard } from './ActiveWorkCard.tsx';
 import { CalendarSheet } from './CalendarSheet.tsx';
 import { activeWorkCalendarKey, taskCalendarKey, type CalendarTarget } from './calendar-sheet.ts';
-import { Dashboard } from './Dashboard.tsx';
 import { HealthPanel } from './HealthPanel.tsx';
 import { EditSheet } from './EditSheet.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
@@ -53,6 +52,9 @@ import { TaskList } from './TaskList.tsx';
 import { TabBar, type Tab } from './TabBar.tsx';
 import { LogViewChips } from './LogViewChips.tsx';
 import { isLogView, type LogView } from '../log-view.ts';
+
+// Perf (docs/perf/2026-10-17-boards-performance.md): Boards and its monitors load on first open, not with Overview.
+const Dashboard = lazy(() => import('./Dashboard.tsx').then((m) => ({ default: m.Dashboard })));
 
 interface Toast {
   target: CompleteTaskCommand;
@@ -574,7 +576,7 @@ export function App({ queue, drafts, receipts }: { queue: PendingQueue; drafts: 
             {todayView === 'boards' && (
               <>
                 {/* After the first read settles: mounted earlier, its reads repeat as the account and checkedAt arrive. */}
-                {(checkedAt !== null || readFailed) && <Dashboard key={`dashboard:${accountKey}`} refreshKey={readKey} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} leaderboard={leaderboard} />}
+                {(checkedAt !== null || readFailed) && <Suspense fallback={<p className="muted" role="status">Loading…</p>}><Dashboard key={`dashboard:${accountKey}`} refreshKey={readKey} accountKey={accountKey} aiUsage={aiUsage} aiBudget={aiBudget} leaderboard={leaderboard} /></Suspense>}
                 <ScoutDiagnostics key={`scout-diagnostics:${accountKey}`} refreshKey={readKey} accountKey={accountKey} onOpenScouts={() => setTab('scouts')} />
               </>
             )}
