@@ -15,6 +15,7 @@ import {
 import {
   API_BASE,
   BRANCH,
+  COMMIT,
   createBenchHarness,
   createFakeGitHub,
   createVirtualClock,
@@ -177,6 +178,19 @@ describe('SP1: repeat reads issue real API requests', () => {
 
     expect(harness.fake.requests.filter((r) => r.kind === 'head')).toHaveLength(3);
     expect(harness.fake.requests.filter((r) => r.kind === 'blob')).toHaveLength(2);
+  });
+
+  it('resolves the head once per /api/game although it composes six reads, and afresh on the next request', async () => {
+    const harness = await createBenchHarness({ delays: ZERO });
+    const heads = () => harness.fake.requests.filter((r) => r.kind === 'head').length;
+
+    const res = await harness.request({ path: '/api/game' });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { revision: string }).revision).toBe(COMMIT);
+    expect(heads()).toBe(1);
+
+    await (await harness.request({ path: '/api/game' })).json();
+    expect(heads()).toBe(2);
   });
 });
 

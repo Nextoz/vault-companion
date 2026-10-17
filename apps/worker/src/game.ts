@@ -6,6 +6,7 @@ import {
   computeStepMilestones,
   describeAchievement,
   earnedByPhrase,
+  readOnlyAt,
   StoreUnavailable,
   StoreUnknownOutcome,
   userDate,
@@ -30,14 +31,18 @@ import {
   type TrainingResponse,
 } from '@vault-companion/contracts';
 
+/**
+ * Each reader gets a read-only view pinned to the commit this request resolved, so the whole projection costs one
+ * `head` lookup and every source reads the same revision.
+ */
 export interface GameDeps {
   readonly store: VaultStore;
-  readonly readTraining: () => Promise<TrainingResponse | ApiError>;
-  readonly readLearning: () => Promise<LearningResponse | ApiError>;
-  readonly readBooks: () => Promise<BooksResponse | ApiError>;
-  readonly readHistory: () => Promise<HistoryResponse | ApiError>;
-  readonly readRadar: () => Promise<RadarResponse | ApiError>;
-  readonly readHealthHistory: () => Promise<HealthHistoryResponse | ApiError>;
+  readonly readTraining: (at: VaultStore) => Promise<TrainingResponse | ApiError>;
+  readonly readLearning: (at: VaultStore) => Promise<LearningResponse | ApiError>;
+  readonly readBooks: (at: VaultStore) => Promise<BooksResponse | ApiError>;
+  readonly readHistory: (at: VaultStore) => Promise<HistoryResponse | ApiError>;
+  readonly readRadar: (at: VaultStore) => Promise<RadarResponse | ApiError>;
+  readonly readHealthHistory: (at: VaultStore) => Promise<HealthHistoryResponse | ApiError>;
   readonly now: () => Date;
   readonly timeZone: string;
 }
@@ -46,7 +51,8 @@ const UNAVAILABLE: ApiError = { code: 'upstream-unavailable', message: 'reader u
 const isError = (value: unknown): value is ApiError =>
   typeof value === 'object' && value !== null && 'code' in value && 'retryable' in value;
 /** One failing reader never rejects the batch: it becomes a named, unavailable source. */
-const settle = <T>(read: () => Promise<T | ApiError>): Promise<T | ApiError> => read().catch(() => UNAVAILABLE);
+const settle = <T>(read: (at: VaultStore) => Promise<T | ApiError>, at: VaultStore): Promise<T | ApiError> =>
+  read(at).catch(() => UNAVAILABLE);
 
 /** The wire Character: exactly the GAM1 fields. ADR-0064 additions travel in `feedback`, never here (strict schema). */
 function wireAchievement(a: AchievementResult): GameAchievement {
@@ -116,13 +122,14 @@ export function createGameService(deps: GameDeps) {
     async readGame(): Promise<GameResponse | ApiError> {
       try {
         const { commitSha } = await deps.store.head();
+        const at = readOnlyAt(deps.store, commitSha);
         const [training, learning, books, history, radar, health] = await Promise.all([
-          settle(deps.readTraining),
-          settle(deps.readLearning),
-          settle(deps.readBooks),
-          settle(deps.readHistory),
-          settle(deps.readRadar),
-          settle(deps.readHealthHistory),
+          settle(deps.readTraining, at),
+          settle(deps.readLearning, at),
+          settle(deps.readBooks, at),
+          settle(deps.readHistory, at),
+          settle(deps.readRadar, at),
+          settle(deps.readHealthHistory, at),
         ]);
         const unavailable: string[] = [];
         const records: GameRecord[] = [];
