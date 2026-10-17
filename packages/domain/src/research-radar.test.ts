@@ -431,6 +431,31 @@ tags:
     expect(out.warnings.join(' ')).toContain('explained read only 3 of 40 explanations before the read budget');
   });
 
+  it('reads the budgeted notes concurrently, with the same budget split as one-by-one reads', async () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 40; i += 1) files[`${IMPORTANT_DIR}/Note ${String(i).padStart(2, '0')}.md`] = important('2026-09-29', `Note ${i}`, `https://example.com/imp-${i}`);
+    for (let i = 0; i < 40; i += 1) files[`${EXPLAINED_DIR}/Expl ${String(i).padStart(2, '0')}.md`] = explained(`https://example.com/exp-${i}`);
+    const store = await InMemoryStore.create(files);
+    const original = store.readFile.bind(store);
+    const seen = { now: 0, max: 0, notes: 0 };
+    vi.spyOn(store, 'readFile').mockImplementation(async (p, at) => {
+      if ((p as string).endsWith('.md')) seen.notes += 1;
+      seen.now += 1;
+      seen.max = Math.max(seen.max, seen.now);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        return await original(p, at);
+      } finally {
+        seen.now -= 1;
+      }
+    });
+    const out = await buildResearchRadar({ store, now: () => NOW, timeZone: TZ });
+    expect(seen.max).toBeGreaterThan(1);
+    expect(seen.notes).toBe(16);
+    expect(out.sources.importantUpdates).toEqual({ state: 'degraded', count: 13 });
+    expect(out.sources.explained).toEqual({ state: 'degraded', count: 3 });
+  });
+
   it('prioritizes a current-window dated Important over many older dated files', async () => {
     const current = 'https://example.com/current-important';
     const files: Record<string, string> = {};

@@ -242,3 +242,35 @@ it('matches a decomposed (NFD) latestOutput to the stored NFC note (CodeRabbit #
   const store = await seed({ latestOutput: decomposed }, { [composed]: '# Findings\n' });
   expect(await service(store).readScoutOutput('city-events')).toMatchObject({ status: 'ok', path: composed });
 });
+
+/** Counts overlapping readFile calls; a one-by-one loop never overlaps, so `max` stays 1. */
+function trackConcurrentReads(store: InMemoryStore) {
+  const seen = { now: 0, max: 0 };
+  const original = store.readFile.bind(store);
+  vi.spyOn(store, 'readFile').mockImplementation(async (path, atCommit) => {
+    seen.now += 1;
+    seen.max = Math.max(seen.max, seen.now);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      return await original(path, atCommit);
+    } finally {
+      seen.now -= 1;
+    }
+  });
+  return seen;
+}
+
+it('reads the status files concurrently (at most six at once) and keeps them in path order', async () => {
+  const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  const files = Object.fromEntries(ids.map((id) => [`${SCOUT_STATUS_DIR}/${id}.json`, JSON.stringify({ ...healthy, scoutId: `scout-${id}` })]));
+  const store = await InMemoryStore.create({ ...files, [healthy.latestOutput]: '# Findings\n' });
+  const seen = trackConcurrentReads(store);
+  const result = await service(store).readScouts();
+  expect(seen.max).toBeGreaterThan(1);
+  expect(seen.max).toBeLessThanOrEqual(6);
+  expect(ScoutsResponse.parse(result).scouts.map((entry) => entry.file)).toEqual(ids.map((id) => `${SCOUT_STATUS_DIR}/${id}.json`));
+
+  seen.max = 0;
+  expect(await service(store).readScoutOutput('scout-g')).toMatchObject({ status: 'ok', path: healthy.latestOutput });
+  expect(seen.max).toBeGreaterThan(1);
+});

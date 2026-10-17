@@ -1,5 +1,6 @@
 import { SCOUT_STATUS_DIR, ScoutStatus, type ScoutsResponse, type ApiError, type LinkedNoteResponse } from '@vault-companion/contracts';
 import { readResolvedNote } from './linked-notes.ts';
+import { mapBounded, VAULT_READ_CONCURRENCY } from './bounded.ts';
 import { canReadScoutOutput, parseVaultPath } from './paths.ts';
 import { FileTooLarge, StoreUnavailable, StoreUnknownOutcome, type ListedFile, type VaultStore } from './store.ts';
 
@@ -55,8 +56,8 @@ async function readOutput(store: VaultStore, scoutId: string): Promise<LinkedNot
   try {
     // Resolve by the schema's ID, not a client-supplied filename. Ambiguous IDs fail closed.
     let match: ScoutStatus | undefined;
-    for (const listed of await statusFiles(store, x)) {
-      const entry = await readStatus(store, x, listed);
+    const entries = await mapBounded(await statusFiles(store, x), VAULT_READ_CONCURRENCY, (listed) => readStatus(store, x, listed));
+    for (const entry of entries) {
       if (entry.state !== 'ok' || entry.status.scoutId !== scoutId) continue;
       if (match) return refused('not-found', 'scout ID is ambiguous');
       match = entry.status;
@@ -91,8 +92,7 @@ export function createScoutService(deps: ScoutServiceDeps) {
     readScouts(): Promise<ScoutsResponse | ApiError> {
       return guarded(async () => {
         const { commitSha: x } = await deps.store.head();
-        const scouts: ScoutEntry[] = [];
-        for (const listed of await statusFiles(deps.store, x)) scouts.push(await readStatus(deps.store, x, listed));
+        const scouts = await mapBounded(await statusFiles(deps.store, x), VAULT_READ_CONCURRENCY, (listed) => readStatus(deps.store, x, listed));
         return { revision: x, now: (deps.now?.() ?? new Date()).toISOString(), scouts };
       });
     },

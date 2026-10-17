@@ -13,6 +13,7 @@ import {
   type RadarReadTarget,
   type RadarResponse,
 } from '@vault-companion/contracts';
+import { mapBounded, VAULT_READ_CONCURRENCY } from './bounded.ts';
 import { canReadRadarSource, isResearchLibraryPath, parseVaultPath } from './paths.ts';
 import {
   canonicalRadarUrl,
@@ -405,13 +406,18 @@ export async function readRadarDecisionHistory(
 
   const entries: RadarDecisionMonth[] = [];
   const textByMonth = new Map<string, string | null>();
-  for (const month of window.slice().reverse()) {
+  const months = window.slice().reverse();
+  // Read the listed months together; parse them oldest first, so a bad line still fails in append order.
+  const texts = await mapBounded(months, VAULT_READ_CONCURRENCY, (month) => {
     const listed = byMonth.get(month);
-    if (!listed) {
+    return listed ? readListedDecisionText(store, x, listed) : Promise.resolve(null);
+  });
+  for (const [index, month] of months.entries()) {
+    const text = texts[index]!;
+    if (text === null) {
       textByMonth.set(month, null);
       continue;
     }
-    const text = await readListedDecisionText(store, x, listed);
     textByMonth.set(month, text);
     entries.push({ month, lines: parseRadarDecisionLines(text) });
   }
@@ -565,7 +571,11 @@ function explanationOrder(candidates: readonly CandidateHint[]): (a: ListedFile,
   };
 }
 
-/** Reads the first `limit` files in the supplied deterministic order, leaving later files for the spare pass. */
+/**
+ * Reads the first `limit` files in the supplied deterministic order, leaving later files for the spare pass. Which
+ * files are read depends only on counts, so the budget is taken synchronously, before the first await: slices
+ * started together in one `Promise.all` consume it in call order, exactly as the old one-by-one loop did.
+ */
 async function readNoteSlice(
   store: VaultStore,
   x: string,
@@ -575,22 +585,19 @@ async function readNoteSlice(
   order: (a: ListedFile, b: ListedFile) => number,
 ): Promise<ReadNoteSlice> {
   const sorted = [...files].sort(order);
-  const notes: ReadNote[] = [];
-  let unreadable = 0;
-  let attempted = 0;
+  const toRead: ListedFile[] = [];
   const remaining: ListedFile[] = [];
   for (const listed of sorted) {
-    if (attempted >= limit || budget.remaining <= 0) {
+    if (toRead.length >= limit || budget.remaining <= 0) {
       remaining.push(listed);
       continue;
     }
     budget.remaining -= 1;
-    attempted += 1;
-    const note = await readAllowedNote(store, x, listed);
-    if (note) notes.push(note);
-    else unreadable += 1;
+    toRead.push(listed);
   }
-  return { notes, unreadable, attempted, remaining };
+  const read = await mapBounded(toRead, VAULT_READ_CONCURRENCY, (listed) => readAllowedNote(store, x, listed));
+  const notes = read.filter((note): note is ReadNote => note !== null);
+  return { notes, unreadable: read.length - notes.length, attempted: toRead.length, remaining };
 }
 
 function finishRead(reserved: ReadNoteSlice, spare: ReadNoteSlice): ReadNotesOutcome {
@@ -634,9 +641,13 @@ async function loadResearchRadar(deps: ResearchRadarServiceDeps): Promise<Resear
 
   const budget = { remaining: RADAR_NOTE_READ_BUDGET };
   const importantCompare = importantOrder(window, date);
-  const scoutReserved = await readNoteSlice(deps.store, x, scoutListed, budget, RADAR_READ_RESERVES.scout, byPath);
-  const briefReserved = await readNoteSlice(deps.store, x, briefListed, budget, RADAR_READ_RESERVES.brief, byPath);
-  const importantReserved = await readNoteSlice(deps.store, x, importantListed, budget, RADAR_READ_RESERVES.important, importantCompare);
+  // Each Promise.all takes the budget in argument order (see readNoteSlice); only the explanation slices wait, since
+  // their order depends on the reserved notes.
+  const [scoutReserved, briefReserved, importantReserved] = await Promise.all([
+    readNoteSlice(deps.store, x, scoutListed, budget, RADAR_READ_RESERVES.scout, byPath),
+    readNoteSlice(deps.store, x, briefListed, budget, RADAR_READ_RESERVES.brief, byPath),
+    readNoteSlice(deps.store, x, importantListed, budget, RADAR_READ_RESERVES.important, importantCompare),
+  ]);
   const explainedReserved = await readNoteSlice(
     deps.store,
     x,
@@ -645,17 +656,19 @@ async function loadResearchRadar(deps: ResearchRadarServiceDeps): Promise<Resear
     RADAR_READ_RESERVES.explained,
     explanationOrder(candidateHints(scoutReserved.notes, briefReserved.notes, importantReserved.notes)),
   );
-  const scoutSpare = await readNoteSlice(deps.store, x, scoutReserved.remaining, budget, Number.POSITIVE_INFINITY, byPath);
-  const briefSpare = await readNoteSlice(deps.store, x, briefReserved.remaining, budget, Number.POSITIVE_INFINITY, byPath);
-  const importantSpare = await readNoteSlice(deps.store, x, importantReserved.remaining, budget, Number.POSITIVE_INFINITY, importantCompare);
-  const explainedSpare = await readNoteSlice(
-    deps.store,
-    x,
-    explainedReserved.remaining,
-    budget,
-    Number.POSITIVE_INFINITY,
-    explanationOrder(candidateHints(scoutReserved.notes, briefReserved.notes, importantReserved.notes)),
-  );
+  const [scoutSpare, briefSpare, importantSpare, explainedSpare] = await Promise.all([
+    readNoteSlice(deps.store, x, scoutReserved.remaining, budget, Number.POSITIVE_INFINITY, byPath),
+    readNoteSlice(deps.store, x, briefReserved.remaining, budget, Number.POSITIVE_INFINITY, byPath),
+    readNoteSlice(deps.store, x, importantReserved.remaining, budget, Number.POSITIVE_INFINITY, importantCompare),
+    readNoteSlice(
+      deps.store,
+      x,
+      explainedReserved.remaining,
+      budget,
+      Number.POSITIVE_INFINITY,
+      explanationOrder(candidateHints(scoutReserved.notes, briefReserved.notes, importantReserved.notes)),
+    ),
+  ]);
   const scoutRead = finishRead(scoutReserved, scoutSpare);
   const briefRead = finishRead(briefReserved, briefSpare);
   const importantRead = finishRead(importantReserved, importantSpare);
