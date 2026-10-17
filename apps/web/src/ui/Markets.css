@@ -1,0 +1,21 @@
+/* W3b: the markets monitor (docs/mockups/2026-10-17/markets-barometer.html, option B). Indigo marks the card. Rows
+   are 44 px grid buttons — label, a 72 px spark slot, value — with hairlines between; the detail swaps in instantly,
+   nothing here animates. At 390 px the only fixed width is the 72 px middle column; the label ellipsises. */
+.markets .dash-card-head h2, .markets .monitor-chevron { color: var(--ios-indigo); }
+.markets-range { flex-shrink: 0; }
+.markets-range button { min-height: var(--tap); padding: 2px 10px; font-size: var(--t-footnote); }
+.markets-summary { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.markets-list { list-style: none; margin: 0; padding: 0; border-top: .5px solid var(--line); }
+.markets-item + .markets-item { border-top: .5px solid var(--line); }
+.markets-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 72px minmax(9.5em, auto); column-gap: 8px; align-items: center; min-height: var(--tap); padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
+.markets-row:active { box-shadow: var(--press-overlay); }
+.markets-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-tight); }
+.markets-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.markets-spark, .markets-mid { justify-self: center; }
+.markets-mid { font-size: var(--t-footnote); white-space: nowrap; }
+.markets-spark polyline { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.markets-value { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.markets-change { margin-left: 6px; }
+.markets-up { color: var(--done); }
+.markets-down { color: var(--danger); }
+.markets-detail { display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px; min-width: 0; }
