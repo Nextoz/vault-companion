@@ -137,7 +137,7 @@ export function creditBurn(
   if (!budget) return unavailable('AI budget could not be read.', budget, now, timeZone);
   const provider = budget.providers.find((entry) => entry.id === SCALEWAY_ID && entry.kind === 'money');
   if (!provider) return unavailable('No Scaleway voucher in the budget file.', budget, now, timeZone);
-  if (provider.resetsAt === null) return unavailable('The Scaleway voucher has no expiry date in the budget file.', budget, now, timeZone);
+  if (provider.resetsAt === null) return unavailable('Scaleway voucher has no expiry date.', budget, now, timeZone);
   const resetMs = Date.parse(provider.resetsAt);
   if (!Number.isFinite(resetMs) || resetMs <= now) return unavailable('The Scaleway voucher has expired.', budget, now, timeZone);
 
