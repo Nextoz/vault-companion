@@ -65,3 +65,14 @@ test('a refresh while Boards shows makes the Overview re-read once when it is sh
   await settle(page);
   expect(calls.filter((path) => path === '/api/morning')).toHaveLength(1);
 });
+
+// PERF-C: on a cold open every screen reads once, on mount; the first task read that applies must not re-read
+// them. /api/game is allowed up to 3: the Character read before and after the account arrives, plus the reward layer.
+test('a cold open reads the Today screens once', async ({ page }) => {
+  const calls = recordApi(page);
+  await page.goto('/');
+  await settle(page);
+  expect(calls.filter((path) => path === '/api/morning')).toHaveLength(1);
+  expect(calls.filter((path) => path === '/api/radar')).toHaveLength(1);
+  expect(calls.filter((path) => path === '/api/game').length).toBeLessThanOrEqual(3);
+});
