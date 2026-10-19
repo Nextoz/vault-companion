@@ -1,6 +1,6 @@
-import { JobRadarResponse, VaultActivityResponse } from '@vault-companion/contracts';
+import { AgentActivityResponse, JobRadarResponse, VaultActivityResponse } from '@vault-companion/contracts';
 import { describe, expect, it } from 'vitest';
-import { createJobRadarReadService, createVaultActivityReadService, JOB_RADAR_PATH, VAULT_ACTIVITY_PATH } from './monitor-files.ts';
+import { createAgentActivityReadService, createJobRadarReadService, createVaultActivityReadService, AGENT_ACTIVITY_PATH, JOB_RADAR_PATH, VAULT_ACTIVITY_PATH } from './monitor-files.ts';
 import { StoreUnavailable, type VaultStore } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
@@ -167,5 +167,109 @@ describe('readJobRadar (M5a)', () => {
       readFile: async () => null,
     } as unknown as VaultStore;
     await expect(readRadar(down)).resolves.toMatchObject({ code: 'upstream-unavailable', retryable: true });
+  });
+});
+
+// Synthetic values, real agent-activity schema (M2a): a one-PR slice of the fixture shape.
+const agentFile = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  schema: 1,
+  generatedAt: '2026-10-16T19:17:04+02:00',
+  windowHours: 24,
+  since: '2026-10-15T19:17:04+02:00',
+  repo: 'Nextoz/vault-companion',
+  prs: {
+    merged: [
+      {
+        number: 208,
+        title: 'Synthetic change 208',
+        mergedAt: '2026-10-16T17:52:10Z',
+        additions: 654,
+        deletions: 56,
+        branch: 'claude/monitor-card-4adec1',
+        url: 'https://github.com/Nextoz/vault-companion/pull/208',
+      },
+    ],
+    open: [
+      {
+        number: 188,
+        title: 'Synthetic change 188',
+        createdAt: '2026-10-11T11:00:02Z',
+        isDraft: false,
+        additions: 422,
+        deletions: 9,
+        branch: 'tooling/process-guards',
+        url: 'https://github.com/Nextoz/vault-companion/pull/188',
+      },
+    ],
+  },
+  ci: {
+    workflow: 'ci',
+    runId: 38942983433,
+    status: 'completed',
+    conclusion: 'success',
+    createdAt: '2026-10-16T17:52:13Z',
+    headSha: 'a22954ef63bafc7812b0efcf959892eafc5f75ed',
+    url: 'https://github.com/Nextoz/vault-companion/actions/runs/38942983433',
+    deploy: { name: 'deploy production', status: 'completed', conclusion: 'success', completedAt: '2026-10-16T17:58:42Z' },
+  },
+  spend: {
+    date: '2026-10-16',
+    scalewayEur: 3.2,
+    deepseekUsd: 0.19,
+    claudeWeekPercent: 14,
+    relay: { requests: 79, promptTokens: 2224608, completionTokens: 207562, estimatedEur: 5.15, window: 'since relay start' },
+  },
+  needsYou: {
+    logUpdatedAt: '2026-10-16T18:40:00+02:00',
+    stale: false,
+    items: [{ at: '2026-10-16T18:40:00+02:00', text: 'Synthetic action: pick between two layouts.' }],
+  },
+  sourcesFailed: [],
+  ...over,
+});
+
+const agentFileBytes = (over: Record<string, unknown> = {}): Uint8Array => new TextEncoder().encode(JSON.stringify(agentFile(over)));
+
+const readAgent = (store: VaultStore) => createAgentActivityReadService({ store }).readAgentActivity();
+
+describe('readAgentActivity (M2a)', () => {
+  it('projects the one agent file at the fixed path, and only that file', async () => {
+    const store = await InMemoryStore.create({
+      [AGENT_ACTIVITY_PATH]: agentFileBytes(),
+      'Automation/Monitors/decoy.json': agentFileBytes({ windowHours: 999 }),
+    });
+    const result = await readAgent(store);
+    expect(AgentActivityResponse.parse(result)).toEqual({
+      revision: await store.head().then((h) => h.commitSha),
+      ...agentFile(),
+    });
+  });
+
+  it('an absent file is a typed not-found, never a throw', async () => {
+    const store = await InMemoryStore.create({ 'Automation/Monitors/decoy.json': agentFileBytes() });
+    await expect(readAgent(store)).resolves.toMatchObject({ code: 'not-found', retryable: false });
+  });
+
+  it('invalid JSON and a wrong envelope are typed invalid errors, never a throw', async () => {
+    for (const raw of [
+      'not json at all',
+      JSON.stringify(agentFile({ schema: 2 })),
+      JSON.stringify(agentFile({ windowHours: 'many' })),
+      JSON.stringify(agentFile({ prs: { merged: [], open: [{ number: 188, title: 'x', createdAt: 'yesterday', isDraft: false, additions: null, deletions: null, branch: null, url: 'u' }] } })),
+      JSON.stringify(agentFile({ spend: { date: '16-10-2026', scalewayEur: null, deepseekUsd: null, claudeWeekPercent: null, relay: null } })),
+      JSON.stringify({ ...agentFile(), extra: true }),
+    ]) {
+      const store = await InMemoryStore.create({ [AGENT_ACTIVITY_PATH]: raw });
+      await expect(readAgent(store)).resolves.toMatchObject({ code: 'invalid', retryable: false });
+    }
+  });
+
+  it('a store outage is a retryable upstream-unavailable, never a throw', async () => {
+    const down = {
+      head: async () => { throw new StoreUnavailable('down'); },
+      listFiles: async () => [],
+      readFile: async () => null,
+    } as unknown as VaultStore;
+    await expect(readAgent(down)).resolves.toMatchObject({ code: 'upstream-unavailable', retryable: true });
   });
 });

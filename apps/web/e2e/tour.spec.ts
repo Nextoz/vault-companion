@@ -250,6 +250,21 @@ test('tour: photograph every screen on the mock app', async ({ page }) => {
     await panel.scrollIntoViewIfNeeded();
   });
 
+  await shot('Board - Agent activity', async () => {
+    // The Job radar above is still open from its own shot; closing it brings this card up into view.
+    await page.getByRole('region', { name: 'Job radar', exact: true }).getByRole('button', { name: 'Job radar', exact: true }).click();
+    const panel = page.getByRole('region', { name: 'Agent activity', exact: true });
+    await panel.scrollIntoViewIfNeeded();
+    await expect(panel.getByText(/PRs merged · /)).toBeVisible();
+  });
+
+  await shot('Board - Agent activity expanded', async () => {
+    const panel = page.getByRole('region', { name: 'Agent activity', exact: true });
+    await panel.getByRole('button', { name: 'Agent activity', exact: true }).click();
+    await expect(panel.locator('.aa-row')).toHaveCount(6);
+    await panel.scrollIntoViewIfNeeded();
+  });
+
   await shot('Board - AI model leaderboard', async () => {
     const panel = page.getByRole('region', { name: 'AI models', exact: true });
     await panel.evaluate(card => window.scrollBy(0, card.getBoundingClientRect().top - 100));

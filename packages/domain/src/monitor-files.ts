@@ -1,7 +1,7 @@
 // M6a: read-only projection of the vault activity (heatmap) JSON the vault-side PC script emits. The path is a
 // constant, the file is re-validated on every read, and no note count, area name or excluded prefix ever leaves
 // this module in an error or log.
-import { JobRadarFile, VaultActivityFile, type ApiError, type JobRadarResponse, type VaultActivityResponse } from '@vault-companion/contracts';
+import { AgentActivityFile, JobRadarFile, VaultActivityFile, type AgentActivityResponse, type ApiError, type JobRadarResponse, type VaultActivityResponse } from '@vault-companion/contracts';
 import { z } from 'zod';
 import { FileTooLarge, StoreUnavailable, StoreUnknownOutcome, type VaultPath, type VaultStore } from './store.ts';
 
@@ -10,6 +10,9 @@ export const VAULT_ACTIVITY_PATH = 'Automation/Monitors/vault-activity.json';
 
 /** M5a: the one fixed job radar file the vault-side writer emits. A constant, never client input. */
 export const JOB_RADAR_PATH = 'Automation/Monitors/job-radar.json';
+
+/** M2a: the one fixed agent activity file the vault-side writer emits. A constant, never client input. */
+export const AGENT_ACTIVITY_PATH = 'Automation/Monitors/agent-activity.json';
 
 /**
  * Read one fixed monitor file: listed at the head commit, read with a matching blob SHA, fatal-decoded as UTF-8,
@@ -68,6 +71,20 @@ export function createJobRadarReadService(deps: JobRadarReadDeps) {
   return {
     async readJobRadar(): Promise<JobRadarResponse | ApiError> {
       const result = await readMonitorFile(deps.store, JOB_RADAR_PATH, JobRadarFile, 'job radar file');
+      if ('code' in result) return result;
+      return { revision: result.revision, ...result.data };
+    },
+  };
+}
+
+export interface AgentActivityReadDeps {
+  readonly store: VaultStore;
+}
+
+export function createAgentActivityReadService(deps: AgentActivityReadDeps) {
+  return {
+    async readAgentActivity(): Promise<AgentActivityResponse | ApiError> {
+      const result = await readMonitorFile(deps.store, AGENT_ACTIVITY_PATH, AgentActivityFile, 'agent activity file');
       if ('code' in result) return result;
       return { revision: result.revision, ...result.data };
     },

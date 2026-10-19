@@ -84,3 +84,101 @@ export type JobRadarFile = z.infer<typeof JobRadarFile>;
 /** `Automation/Monitors/job-radar.json`, projected read-only, plus the commit the read was pinned to. */
 export const JobRadarResponse = JobRadarFile.extend({ revision: commitSha });
 export type JobRadarResponse = z.infer<typeof JobRadarResponse>;
+
+// M2a: wire contract for the agent activity JSON a vault-side PC script emits at one fixed path. The file is
+// re-validated on every read; no PR title, branch, token count or spend value is ever client input.
+
+/** One pull request merged inside the window. */
+export const AgentMergedPr = z.strictObject({
+  number: z.number().int(),
+  title: z.string(),
+  mergedAt: isoInstant,
+  additions: z.number().int().nullable(),
+  deletions: z.number().int().nullable(),
+  branch: z.string().nullable(),
+  url: z.string(),
+});
+export type AgentMergedPr = z.infer<typeof AgentMergedPr>;
+
+/** One pull request still open. */
+export const AgentOpenPr = z.strictObject({
+  number: z.number().int(),
+  title: z.string(),
+  createdAt: isoInstant,
+  isDraft: z.boolean(),
+  additions: z.number().int().nullable(),
+  deletions: z.number().int().nullable(),
+  branch: z.string().nullable(),
+  url: z.string(),
+});
+export type AgentOpenPr = z.infer<typeof AgentOpenPr>;
+
+/** The latest CI run on the default branch, with its deploy job. */
+export const AgentCi = z.strictObject({
+  workflow: z.string().nullable(),
+  runId: z.number().int().nullable(),
+  status: z.string().nullable(),
+  conclusion: z.string().nullable(),
+  createdAt: isoInstant.nullable(),
+  headSha: z.string().nullable(),
+  url: z.string().nullable(),
+  deploy: z
+    .strictObject({
+      name: z.string(),
+      status: z.string().nullable(),
+      conclusion: z.string().nullable(),
+      completedAt: isoInstant.nullable(),
+    })
+    .nullable(),
+});
+export type AgentCi = z.infer<typeof AgentCi>;
+
+/** Relay routing totals for the spend window. */
+export const AgentRelay = z.strictObject({
+  requests: z.number().int().nullable(),
+  promptTokens: z.number().int(),
+  completionTokens: z.number().int(),
+  estimatedEur: z.number(),
+  window: z.string(),
+});
+export type AgentRelay = z.infer<typeof AgentRelay>;
+
+/** One day of spend across vendors. */
+export const AgentSpend = z.strictObject({
+  date: isoDay,
+  scalewayEur: z.number().nullable(),
+  deepseekUsd: z.number().nullable(),
+  claudeWeekPercent: z.number().nullable(),
+  relay: AgentRelay.nullable(),
+});
+export type AgentSpend = z.infer<typeof AgentSpend>;
+
+/** Items the agents flagged as needing a human decision. */
+export const AgentNeedsYou = z.strictObject({
+  logUpdatedAt: isoInstant.nullable(),
+  stale: z.boolean(),
+  items: z.array(z.strictObject({ at: isoInstant, text: z.string() })).max(50),
+});
+export type AgentNeedsYou = z.infer<typeof AgentNeedsYou>;
+
+/** The file shape on disk (schema 1). Strict, like the other monitor files: an unknown key is a broken write. */
+export const AgentActivityFile = z.strictObject({
+  schema: z.literal(1),
+  generatedAt: isoInstant,
+  windowHours: z.number().int(),
+  since: isoInstant,
+  repo: z.string(),
+  prs: z.strictObject({
+    merged: z.array(AgentMergedPr).max(100),
+    open: z.array(AgentOpenPr).max(100),
+  }),
+  ci: AgentCi.nullable(),
+  spend: AgentSpend,
+  needsYou: AgentNeedsYou,
+  sourcesFailed: z.array(z.string()).max(10),
+});
+export type AgentActivityFile = z.infer<typeof AgentActivityFile>;
+
+/** `Automation/Monitors/agent-activity.json`, projected read-only, plus the commit the read was pinned to. */
+export const AgentActivityResponse = AgentActivityFile.extend({ revision: commitSha });
+export type AgentActivityResponse = z.infer<typeof AgentActivityResponse>;
