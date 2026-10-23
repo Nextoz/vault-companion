@@ -1,6 +1,6 @@
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
-import { createTrainingService, createLearningService, createBooksService, createActiveWorkService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createJobRadarReadService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createVaultActivityReadService, createWeatherService, DEFAULT_USER_TIME_ZONE, morningDigestPath, slotForCron, type VaultStore } from '@vault-companion/domain';
+import { createTrainingService, createLearningService, createBooksService, createActiveWorkService, createAgentActivityReadService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createJobRadarReadService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createVaultActivityReadService, createWeatherService, DEFAULT_USER_TIME_ZONE, morningDigestPath, slotForCron, type VaultStore } from '@vault-companion/domain';
 import { createInstallationTokenSource, GitHubContentsStore } from '@vault-companion/github';
 import { WEATHER_TIME_ZONE, type ApiError } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
@@ -187,16 +187,18 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...createAiBudgetReadService({ store }),
     ...createVaultActivityReadService({ store }),
     ...createJobRadarReadService({ store }),
+    ...createAgentActivityReadService({ store }),
     ...createAiUsageReadService({ store }),
     ...history,
     ...createGameService({
       store,
-      readTraining: () => training.readTraining(),
-      readLearning: () => learning.readLearning(),
-      readBooks: () => books.readBooks(),
-      readHistory: () => history.readHistory(),
-      readRadar: () => radar.readResearchRadar(),
-      readHealthHistory: () => health.readHealthHistory(),
+      // Each read runs on the request's pinned read-only view (one `head` per /api/game); the services are stateless.
+      readTraining: (at) => createTrainingService({ store: at }).readTraining(),
+      readLearning: (at) => createLearningService({ store: at }).readLearning(),
+      readBooks: (at) => createBooksService({ store: at }).readBooks(),
+      readHistory: (at) => createHistoryService({ store: at, now: () => new Date(), timeZone }).readHistory(),
+      readRadar: (at) => createResearchRadarService({ store: at, now: () => new Date(), timeZone }).readResearchRadar(),
+      readHealthHistory: (at) => createHealthService({ store: at, now: () => new Date(), timeZone }).readHealthHistory(),
       now: () => new Date(),
       timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE,
     }),

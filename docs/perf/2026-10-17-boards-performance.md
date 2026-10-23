@@ -110,5 +110,23 @@ and render 29.5 kB load when needed and are precached for offline. `markdown-it`
 | cold-open calls | 31 | 17 |
 | main JS (gzip) | 272.7 kB | 242.9 kB |
 
-Follow-ups not done: `/api/game` still calls `head` 7× per request (one per composed read; single-flight per
-request would remove 6 GitHub round trips), and the `insights.ts` Markdown split.
+### Fix 5 — one `head` per `/api/game`
+
+`/api/game` resolved the branch, then ran six reads that each resolved it again (7 `head` calls, the first one
+serial before the rest). It now hands each read `readOnlyAt(store, commit)` (`packages/domain/src/store.ts`): a view
+whose `head()` answers the commit the request already resolved, reads delegate, writes throw. Chosen over
+single-flight coalescing because it needs no shared in-flight state at all (nothing outlives the request, no
+staleness window), all six sources now read the same revision, and the view cannot be the base of a write. The read
+services themselves are unchanged; the composition builds them per request on the view (they are stateless).
+Bench: SP1 harness, same files and delays as Fix 1, cold isolate, 3 runs:
+
+| `/api/game` | before | after |
+| --- | --- | --- |
+| `head` requests | 7 | 1 |
+| cold (ms) | 814 / 630 / 667 | 676 / 554 / 535 |
+| warm (ms) | 386 / 378 / 396 | 267 / 274 / 273 |
+
+Guards: `sp-read-latency.test.ts` fails when `/api/game` issues more than one `head` (or caches it across
+requests); `game.test.ts` fails when the readers get the live store; `store.test.ts` covers the view.
+
+Follow-up not done: the `insights.ts` Markdown split.

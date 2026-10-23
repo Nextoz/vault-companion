@@ -86,12 +86,12 @@ function makeApp(store: VaultStore, override: Partial<GameDeps> = {}, wired = tr
     ...createCommandService({ store, now: () => NOW, timeZone: TIME_ZONE }),
     ...(wired ? createGameService({
       store,
-      readTraining: () => createTrainingService({ store }).readTraining(),
-      readLearning: () => createLearningService({ store }).readLearning(),
-      readBooks: () => createBooksService({ store }).readBooks(),
-      readHistory: () => createHistoryService({ store, now: () => NOW, timeZone: TIME_ZONE }).readHistory(),
-      readRadar: () => createResearchRadarService({ store, now: () => NOW, timeZone: TIME_ZONE }).readResearchRadar(),
-      readHealthHistory: () => createHealthService({ store, now: () => NOW, timeZone: TIME_ZONE }).readHealthHistory(),
+      readTraining: (at) => createTrainingService({ store: at }).readTraining(),
+      readLearning: (at) => createLearningService({ store: at }).readLearning(),
+      readBooks: (at) => createBooksService({ store: at }).readBooks(),
+      readHistory: (at) => createHistoryService({ store: at, now: () => NOW, timeZone: TIME_ZONE }).readHistory(),
+      readRadar: (at) => createResearchRadarService({ store: at, now: () => NOW, timeZone: TIME_ZONE }).readResearchRadar(),
+      readHealthHistory: (at) => createHealthService({ store: at, now: () => NOW, timeZone: TIME_ZONE }).readHealthHistory(),
       now: () => NOW,
       timeZone: TIME_ZONE,
       ...override,
@@ -233,6 +233,22 @@ describe('GET /api/game', () => {
   it('is deterministic across identical reads', async () => {
     const store = await InMemoryStore.create(await baseFiles());
     expect(JSON.stringify((await get(store)).body)).toBe(JSON.stringify((await get(store)).body));
+  });
+
+  it('resolves the head once and hands every reader a read-only view of that commit', async () => {
+    const store = await InMemoryStore.create(await baseFiles());
+    const head = vi.spyOn(store, 'head');
+    const seen: string[] = [];
+    const spy = (read: GameDeps['readTraining']): GameDeps['readTraining'] => async (at) => {
+      seen.push((await at.head()).commitSha);
+      expect(() => at.writeFile({} as never)).toThrow(/read-only/);
+      return read(at);
+    };
+    const pinned = (at: VaultStore) => createTrainingService({ store: at }).readTraining();
+    const { body } = await get(store, { readTraining: spy(pinned) });
+    expect(body!.unavailable).toEqual([]);
+    expect(head).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([(store as InMemoryStore).headCommit]);
   });
 
   it('requires authentication and reads nothing without a valid token', async () => {

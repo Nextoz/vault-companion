@@ -1,4 +1,4 @@
-import { AiBudgetResponse, AiUsageResponse, JobRadarResponse, MorningBriefResponse, VaultActivityResponse } from '@vault-companion/contracts';
+import { AgentActivityResponse, AiBudgetResponse, AiUsageResponse, JobRadarResponse, MorningBriefResponse, VaultActivityResponse } from '@vault-companion/contracts';
 import type { ApiError, Command, Receipt } from '@vault-companion/contracts';
 import { AI_USAGE_PATH, createAiUsageReadService } from '@vault-companion/domain';
 import { InMemoryStore } from '@vault-companion/domain/testing';
@@ -508,6 +508,104 @@ describe('GET /api/monitors/job-radar (M5a)', () => {
   });
 
   it('returns the radar and logs only the revision', async () => {
+    const res = await get(async () => sample());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(sample());
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+});
+
+describe('GET /api/monitors/agent-activity (M2a)', () => {
+  const sample = (): AgentActivityResponse => AgentActivityResponse.parse({
+    revision: '7'.repeat(40),
+    schema: 1,
+    generatedAt: '2026-10-16T19:17:04+02:00',
+    windowHours: 24,
+    since: '2026-10-15T19:17:04+02:00',
+    repo: `${SENTINEL}/vault-companion`,
+    prs: {
+      merged: [
+        {
+          number: 208,
+          title: `Synthetic change 208 ${SENTINEL}`,
+          mergedAt: '2026-10-16T17:52:10Z',
+          additions: 654,
+          deletions: 56,
+          branch: `${SENTINEL}/monitor-card-4adec1`,
+          url: `https://github.com/${SENTINEL}/vault-companion/pull/208`,
+        },
+      ],
+      open: [
+        {
+          number: 188,
+          title: `Synthetic change 188 ${SENTINEL}`,
+          createdAt: '2026-10-11T11:00:02Z',
+          isDraft: false,
+          additions: 422,
+          deletions: 9,
+          branch: `tooling/${SENTINEL}-guards`,
+          url: `https://github.com/${SENTINEL}/vault-companion/pull/188`,
+        },
+      ],
+    },
+    ci: {
+      workflow: 'ci',
+      runId: 38942983433,
+      status: 'completed',
+      conclusion: 'success',
+      createdAt: '2026-10-16T17:52:13Z',
+      headSha: 'a22954ef63bafc7812b0efcf959892eafc5f75ed',
+      url: `https://github.com/${SENTINEL}/vault-companion/actions/runs/38942983433`,
+      deploy: { name: 'deploy production', status: 'completed', conclusion: 'success', completedAt: '2026-10-16T17:58:42Z' },
+    },
+    spend: {
+      date: '2026-10-16',
+      scalewayEur: 3.2,
+      deepseekUsd: 0.19,
+      claudeWeekPercent: 14,
+      relay: { requests: 79, promptTokens: 2224608, completionTokens: 207562, estimatedEur: 5.15, window: `since ${SENTINEL} start` },
+    },
+    needsYou: {
+      logUpdatedAt: '2026-10-16T18:40:00+02:00',
+      stale: false,
+      items: [{ at: '2026-10-16T18:40:00+02:00', text: `Synthetic action: pick between two layouts. ${SENTINEL}` }],
+    },
+    sourcesFailed: [`${SENTINEL}-source`],
+  });
+
+  function app(readAgentActivity?: Services['readAgentActivity']) {
+    const services: Services = {
+      async readTasks() { return { code: 'upstream-unavailable', message: 'x', retryable: true }; },
+      async execute() { return receipt; },
+      ...(readAgentActivity ? { readAgentActivity } : {}),
+    };
+    return createApp({
+      verify: async (t) => (t === 'good' ? { ok: true, email: 'owner@example.com', accountKey: ACCOUNT } : { ok: false }),
+      appOrigin: ORIGIN,
+      services,
+      log: (r) => logs.push(r),
+    });
+  }
+  const get = (readAgentActivity?: Services['readAgentActivity']) =>
+    app(readAgentActivity).request('/api/monitors/agent-activity', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });
+
+  it('404s without a service, and logs nothing from the activity file', async () => {
+    const res = await get();
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(logs)).not.toContain(SENTINEL);
+  });
+
+  it.each([
+    [{ code: 'not-found', retryable: false }, 404],
+    [{ code: 'invalid', retryable: false }, 400],
+    [{ code: 'upstream-unavailable', retryable: true }, 503],
+  ] as const)('maps %o to %i', async (error, status) => {
+    const res = await get(async () => ({ ...error, message: 'm' }));
+    expect(res.status).toBe(status);
+    expect(logs.at(-1)).toMatchObject({ errorCode: error.code });
+  });
+
+  it('returns the activity file and logs only the revision', async () => {
     const res = await get(async () => sample());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(sample());

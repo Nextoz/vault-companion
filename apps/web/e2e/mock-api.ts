@@ -11,6 +11,7 @@ import {
   AiUsageResponse,
   VaultActivityResponse,
   JobRadarResponse,
+  AgentActivityResponse,
   ApiError,
   AskJevResponse,
   BookFollowUpRequest,
@@ -310,6 +311,7 @@ export const sampleGame = (unavailable: string[] = [], rich = false): GameRespon
 /** Synthetic values, the real producer schema (apps/web/src/ui/monitors/fixtures). */
 const vaultActivityFixture: object = JSON.parse(readFileSync(new URL('../src/ui/monitors/fixtures/vault-activity.json', import.meta.url), 'utf8'));
 const jobRadarFixture: object = JSON.parse(readFileSync(new URL('../src/ui/monitors/fixtures/job-radar.json', import.meta.url), 'utf8'));
+const agentActivityFixture: object = JSON.parse(readFileSync(new URL('../src/ui/monitors/fixtures/agent-activity.json', import.meta.url), 'utf8'));
 
 export class MockApi {
   // Public-market fixtures only; never contact a provider from a browser test.
@@ -600,6 +602,8 @@ export class MockApi {
       : this.#json(route, 200, this.power));
     await on('**/api/monitors/vault-activity', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, VaultActivityResponse.parse({ revision: 'a'.repeat(40), ...vaultActivityFixture })));
+    await on('**/api/monitors/agent-activity', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
+      : this.#json(route, 200, AgentActivityResponse.parse({ revision: 'a'.repeat(40), ...agentActivityFixture })));
     await on('**/api/monitors/job-radar', (route) => this.session === 'signed-out' ? route.fulfill({ status: 401, body: '' })
       : this.#json(route, 200, JobRadarResponse.parse({ revision: 'a'.repeat(40), ...jobRadarFixture })));
     await on('**/api/scouts', (route) => this.session === 'signed-out'
