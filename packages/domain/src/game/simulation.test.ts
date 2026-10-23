@@ -21,9 +21,9 @@ it('simulates twelve weeks of a synthetic default profile', () => {
     table.push({ week: week + 1, XP: c.xp, level: c.level, skills: c.professions.map(p => p.skill).join('/') });
   }
   console.log(['week | XP | level | skills (Athletics/Scholar/Lorekeeper/Quartermaster)', ...table.map(r => `${r.week} | ${r.XP} | ${r.level} | ${r.skills}`)].join('\n'));
-  expect(table.at(-1)!.level).toBeGreaterThanOrEqual(14);
-  expect(table.at(-1)!.level).toBeLessThanOrEqual(16);
+  expect(table.at(-1)!.level).toBeGreaterThanOrEqual(19);
+  expect(table.at(-1)!.level).toBeLessThanOrEqual(21);
   expect(journeymanWeek).toBeGreaterThanOrEqual(4);
   expect(journeymanWeek).toBeLessThanOrEqual(6);
-  expect(table.at(-1)!.XP).toBe(3296); // ADR-0064 criticals add about 13 % (2916 without)
+  expect(table.at(-1)!.XP).toBe(4626); // rules v3 (ADR-0067): dictation 40 base, tasks 5 with cap 10 (v2 was 3296)
 });

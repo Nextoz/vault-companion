@@ -4,14 +4,20 @@ import type { AchievementDefinition, CharacterConfig, Criterion } from './types.
 
 const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
-/** Per source: "Complete 10 tasks", "Log 3 different kinds of training", ... */
-const SOURCE_COPY: Readonly<Record<string, { count: (n: number) => string; variety: (n: number) => string; weeks: (n: number) => string; earned: string }>> = {
-  task: { count: n => `Complete ${plural(n, 'task')}.`, variety: n => `Complete ${plural(n, 'kind')} of task.`, weeks: n => `Complete a task every week for ${plural(n, 'week')} in a row.`, earned: 'Completing a task' },
-  training: { count: n => `Log ${plural(n, 'training session')}.`, variety: n => `Log ${n} different kinds of training.`, weeks: n => `Train at least once a week for ${plural(n, 'week')} in a row.`, earned: 'Logging a training session' },
-  learning: { count: n => `Log ${plural(n, 'learning session')}.`, variety: n => `Study ${n} different kinds of learning.`, weeks: n => `Study at least once a week for ${plural(n, 'week')} in a row.`, earned: 'Logging a learning session' },
-  library: { count: n => `Keep ${plural(n, 'note')} in the Library.`, variety: n => `Keep ${n} different notes in the Library.`, weeks: n => `Keep a note every week for ${plural(n, 'week')} in a row.`, earned: 'Keeping a note in the Library' },
-  reflection: { count: n => `Save ${plural(n, 'book reflection')}.`, variety: n => `Save reflections on ${plural(n, 'book')}.`, weeks: n => `Save a reflection every week for ${plural(n, 'week')} in a row.`, earned: 'Saving a book reflection' },
+/** Per source: "Complete 10 tasks", "Log 3 different kinds of training", ...; `verb` is the bare activity ("Train"). */
+const SOURCE_COPY: Readonly<Record<string, { count: (n: number) => string; variety: (n: number) => string; weeks: (n: number) => string; verb: string; earned: string }>> = {
+  task: { count: n => `Complete ${plural(n, 'task')}.`, variety: n => `Complete ${plural(n, 'kind')} of task.`, weeks: n => `Complete a task every week for ${plural(n, 'week')} in a row.`, verb: 'Complete a task', earned: 'Completing a task' },
+  quest: { count: n => `Finish ${plural(n, 'Active Work item')}.`, variety: n => `Finish ${n} different Active Work items.`, weeks: n => `Finish an Active Work item every week for ${plural(n, 'week')} in a row.`, verb: 'Finish an Active Work item', earned: 'Finishing an Active Work item' },
+  training: { count: n => `Log ${plural(n, 'training session')}.`, variety: n => `Log ${n} different kinds of training.`, weeks: n => `Train at least once a week for ${plural(n, 'week')} in a row.`, verb: 'Train', earned: 'Logging a training session' },
+  learning: { count: n => `Log ${plural(n, 'learning session')}.`, variety: n => `Study ${n} different kinds of learning.`, weeks: n => `Study at least once a week for ${plural(n, 'week')} in a row.`, verb: 'Study', earned: 'Logging a learning session' },
+  library: { count: n => `Keep ${plural(n, 'note')} in the Library.`, variety: n => `Keep ${n} different notes in the Library.`, weeks: n => `Keep a note every week for ${plural(n, 'week')} in a row.`, verb: 'Keep a Library note', earned: 'Keeping a note in the Library' },
+  reflection: { count: n => `Save ${plural(n, 'book reflection')}.`, variety: n => `Save reflections on ${plural(n, 'book')}.`, weeks: n => `Save a reflection every week for ${plural(n, 'week')} in a row.`, verb: 'Save a reflection', earned: 'Saving a book reflection' },
 };
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const list = (items: readonly string[], joiner = 'and'): string => items.length > 1 ? `${items.slice(0, -1).join(', ')} ${joiner} ${items.at(-1)}` : items.join('');
+const verbOf = (source: string): string => SOURCE_COPY[source]?.verb ?? `Log ${source}`;
+const lowerFirst = (text: string): string => `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
 
 const professionName = (config: CharacterConfig, id: string): string => config.professions.find(p => p.id === id)?.name ?? id;
 
@@ -30,7 +36,30 @@ function describeCriterion(criterion: Criterion, config: CharacterConfig): strin
     case 'overdue': return `Complete a task that was ${criterion.target} or more days overdue.`;
     case 'count': return copy?.count(criterion.target) ?? `Reach ${criterion.target}.`;
     case 'variety': return copy?.variety(criterion.target) ?? `Reach ${criterion.target} kinds.`;
-    case 'weeks': return copy?.weeks(criterion.target) ?? `Keep it up for ${plural(criterion.target, 'week')}.`;
+    case 'weeks': return (criterion.perWeek ?? 1) > 1
+      ? `${verbOf(criterion.source)} at least ${criterion.perWeek} times a week for ${plural(criterion.target, 'week')} in a row.`
+      : copy?.weeks(criterion.target) ?? `Keep it up for ${plural(criterion.target, 'week')}.`;
+    case 'run': return `${verbOf(criterion.source)} ${criterion.target} days in a row${criterion.rest ? ' (one rest day a week is fine)' : ''}.`;
+    case 'peak': {
+      const window = criterion.window === 'month' ? 'calendar month' : criterion.window;
+      return `${(copy?.count(criterion.target) ?? `Reach ${criterion.target}.`).slice(0, -1)} in one ${window}.`;
+    }
+    case 'weekends': return `${verbOf(criterion.source)} on both Saturday and Sunday of ${criterion.target === 1 ? 'a weekend' : `${criterion.target} weekends`}.`;
+    case 'distinct': return `${verbOf(criterion.source)} ${criterion.target} different ${criterion.field === 'topic' ? 'texts or topics' : `${criterion.field}s`}.`;
+    case 'months': {
+      const names = criterion.months.map(m => MONTHS[m - 1] ?? String(m));
+      if (criterion.months.length === 12 && criterion.target === 12) return `${verbOf(criterion.source)} in every month of the year.`;
+      return criterion.target >= criterion.months.length
+        ? `${verbOf(criterion.source)} in ${list(names)}.`
+        : `${verbOf(criterion.source)} in ${criterion.target} of ${list(names, 'or')}.`;
+    }
+    case 'together': {
+      const verbs = criterion.sources.map((s, i) => i === 0 ? verbOf(s) : lowerFirst(verbOf(s)));
+      return `${list(verbs)} on the same day${criterion.target === 1 ? '' : `, ${criterion.target} times`}.`;
+    }
+    case 'dayProfessions': return `Earn XP in ${criterion.target} professions in one day.`;
+    case 'fullWeeks': return criterion.target === 1 ? 'Earn XP on all 7 days of a week.' : `Earn XP on all 7 days of a week, ${criterion.target} times.`;
+    case 'points': return `Collect ${criterion.target} achievement points.`;
     case 'meta': {
       const required = criterion.requires.map(id => config.achievements.find(a => a.id === id));
       const skills = required.map(a => a?.criterion.kind === 'skill' ? a.criterion : null);

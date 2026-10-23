@@ -46,7 +46,7 @@ test('How XP works prints the live rules from the payload, and Back returns to t
   const dialog = page.getByRole('dialog', { name: 'Character' });
   await dialog.getByRole('button', { name: 'How XP works' }).click();
   await expect(dialog).toContainText('Where XP comes from');
-  await expect(dialog).toContainText('Athletics: 30 XP per entry, up to 2 a day');
+  await expect(dialog).toContainText('Athletics (training session): 30 XP per entry, up to 2 a day');
   await expect(dialog).toContainText('Level curve');
   await expect(dialog).toContainText('Rested XP');
 

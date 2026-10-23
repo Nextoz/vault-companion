@@ -40,4 +40,5 @@ export * from './game/catalogue.ts';
 export * from './game/engine.ts';
 export * from './game/describe.ts';
 export * from './game/step-milestones.ts';
+export * from './game/wire.ts';
 export * from './bounded.ts';

@@ -4,6 +4,10 @@ const single = (id: string, name: string, category: string, points: number, crit
 const chain = (id: string, name: string, category: string, thresholds: readonly number[], points: readonly number[], criterion: (target: number) => Criterion): AchievementDefinition[] => thresholds.map((target, index) => ({
   ...single(`${id}-${target}`, `${name} ${target}`, category, points[index]!, criterion(target), 'chain'), chain: id, tier: index + 1,
 }));
+/** A chain whose tiers carry their own names ("Hat Trick", "High Five", ...) instead of "Name 3", "Name 5". */
+const ladder = (id: string, category: string, tiers: readonly (readonly [target: number, name: string, points: number])[], criterion: (target: number) => Criterion): AchievementDefinition[] => tiers.map(([target, name, points], index) => ({
+  ...single(`${id}-${target}`, name, category, points, criterion(target), 'chain'), chain: id, tier: index + 1,
+}));
 const ranks = (profession: string): AchievementDefinition[] => [
   ['Journeyman', 75, 10], ['Expert', 150, 10], ['Artisan', 225, 25], ['Master', 300, 50],
 ].map(([name, target, points]) => single(`${profession}-rank-${target}`, `${name} ${profession.charAt(0).toUpperCase()}${profession.slice(1)}`, profession, Number(points), { kind: 'skill', profession, target: Number(target) }));
@@ -17,23 +21,43 @@ export const achievementCatalogue: readonly AchievementDefinition[] = [
   single('balanced-week', 'Balanced Week', 'general', 25, { kind: 'balanced', target: 4 }, 'hidden'),
   single('renaissance', 'Renaissance', 'general', 25, { kind: 'meta', requires: ['athletics', 'scholar', 'lorekeeper', 'quartermaster'].map(id => `${id}-rank-75`) }, 'meta'),
   single('jack-of-all-trades', 'Jack of All Trades', 'general', 50, { kind: 'meta', requires: ['athletics', 'scholar', 'lorekeeper', 'quartermaster'].map(id => `${id}-rank-150`) }, 'meta'),
+  // v3 (owner, 23 Oct 2026): more ways to earn, rewarding showing up and combining habits, never intensity.
+  ...ladder('mind-and-body', 'general', [[1, 'Mind and Body', 10], [5, 'Sound Mind, Sound Body', 25], [20, 'Warrior Poet', 50]], target => ({ kind: 'together', sources: ['training', 'learning'], target })),
+  single('triple-threat', 'Triple Threat', 'general', 10, { kind: 'dayProfessions', target: 3 }, 'hidden'),
+  ...ladder('full-week', 'general', [[1, 'Full Week', 10], [4, 'Unstoppable', 25]], target => ({ kind: 'fullWeeks', target })),
+  ...chain('achiever', 'Achiever', 'general', [100, 250, 500, 1000], [5, 10, 25, 50], target => ({ kind: 'points', target })),
   single('athletics-first', 'First Session', 'athletics', 5, { kind: 'count', source: 'training', target: 1 }),
-  ...chain('athletics-sessions', 'Sessions', 'athletics', [10, 25, 50, 100, 250], [5, 10, 10, 25, 50], target => ({ kind: 'count', source: 'training', target })),
+  ...chain('athletics-sessions', 'Sessions', 'athletics', [10, 25, 50, 100, 250, 500], [5, 10, 10, 25, 50, 50], target => ({ kind: 'count', source: 'training', target })),
   ...chain('athletics-variety', 'Variety', 'athletics', [3, 5], [10, 25], target => ({ kind: 'variety', source: 'training', target })),
   ...chain('athletics-rhythm', 'Weekly Rhythm', 'athletics', [4, 8, 12], [10, 25, 50], target => ({ kind: 'weeks', source: 'training', target })),
+  ...ladder('athletics-days', 'athletics', [[3, 'Hat Trick', 5], [5, 'High Five', 10], [7, 'Seven Straight', 25], [10, 'Iron Will', 50]], target => ({ kind: 'run', source: 'training', target })),
+  ...ladder('athletics-month', 'athletics', [[12, 'Iron Month', 10], [16, 'Steel Month', 25], [20, 'Mithril Month', 50]], target => ({ kind: 'peak', source: 'training', window: 'month', target })),
+  ...ladder('athletics-weekends', 'athletics', [[1, 'Weekend Warrior', 5], [5, 'Weekend Regular', 10], [10, 'Weekend Legend', 25]], target => ({ kind: 'weekends', source: 'training', target })),
+  single('into-the-dark', 'Into the Dark', 'athletics', 25, { kind: 'months', source: 'training', months: [12, 1, 2], target: 3 }),
+  single('year-round', 'Year-Round', 'athletics', 50, { kind: 'months', source: 'training', months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], target: 12 }),
   ...ranks('athletics'),
   single('scholar-first', 'First Session', 'scholar', 5, { kind: 'count', source: 'learning', target: 1 }),
-  ...chain('scholar-sessions', 'Sessions', 'scholar', [10, 25, 50, 100], [5, 10, 10, 25], target => ({ kind: 'count', source: 'learning', target })),
+  ...chain('scholar-sessions', 'Sessions', 'scholar', [10, 25, 50, 100, 250], [5, 10, 10, 25, 50], target => ({ kind: 'count', source: 'learning', target })),
   single('many-subjects', 'Many Subjects', 'scholar', 10, { kind: 'variety', source: 'learning', target: 3 }, 'counter'),
   single('deep-work', 'Deep Work', 'scholar', 10, { kind: 'minutes', source: 'learning', target: 45 }),
+  // The streaks the owner asked for on 9 Oct 2026: a daily run (one rest day per 7) and a 2-a-week rhythm.
+  ...chain('scholar-daily', 'Daily Scribe', 'scholar', [3, 7, 14, 30], [5, 10, 25, 50], target => ({ kind: 'run', source: 'learning', target, rest: true })),
+  ...chain('scholar-rhythm', "Scholar's Rhythm", 'scholar', [4, 8, 12], [10, 25, 50], target => ({ kind: 'weeks', source: 'learning', target, perWeek: 2 })),
+  ...ladder('scholar-week', 'scholar', [[3, 'Pen to Paper', 10], [5, "Scholar's Week", 25]], target => ({ kind: 'peak', source: 'learning', window: 'week', target })),
+  ...chain('bookworm', 'Bookworm', 'scholar', [5, 10, 25], [10, 25, 50], target => ({ kind: 'distinct', source: 'learning', field: 'topic', target })),
   ...ranks('scholar'),
   single('first-note', 'First Note Kept', 'lorekeeper', 5, { kind: 'count', source: 'library', target: 1 }),
   ...chain('lorekeeper-notes', 'Notes Kept', 'lorekeeper', [10, 25, 50, 100], [5, 10, 10, 25], target => ({ kind: 'count', source: 'library', target })),
   single('first-reflection', 'First Reflection', 'lorekeeper', 10, { kind: 'count', source: 'reflection', target: 1 }),
   ...chain('lorekeeper-reflections', 'Reflections', 'lorekeeper', [10], [25], target => ({ kind: 'count', source: 'reflection', target })),
   ...ranks('lorekeeper'),
-  ...chain('quartermaster-tasks', 'Tasks Completed', 'quartermaster', [10, 50, 100, 250, 500], [5, 10, 10, 25, 50], target => ({ kind: 'count', source: 'task', target })),
+  ...chain('quartermaster-tasks', 'Tasks Completed', 'quartermaster', [10, 50, 100, 250, 500, 1000], [5, 10, 10, 25, 50, 50], target => ({ kind: 'count', source: 'task', target })),
   single('clean-slate', 'Clean Slate', 'quartermaster', 10, { kind: 'overdue', source: 'task', target: 30 }),
+  ...ladder('quartermaster-day', 'quartermaster', [[10, 'Spring Cleaning', 10], [20, 'Clean Sweep', 25]], target => ({ kind: 'peak', source: 'task', window: 'day', target })),
+  single('busy-bee', 'Busy Bee', 'quartermaster', 10, { kind: 'peak', source: 'task', window: 'week', target: 30 }),
+  ...ladder('quartermaster-daily', 'quartermaster', [[7, 'Daily Chores', 10], [30, 'Creature of Habit', 25]], target => ({ kind: 'run', source: 'task', target, rest: true })),
+  single('quest-first', 'Quest Turn-in', 'quartermaster', 5, { kind: 'count', source: 'quest', target: 1 }),
+  ...chain('quests', 'Quests Completed', 'quartermaster', [5, 20, 50], [10, 25, 50], target => ({ kind: 'count', source: 'quest', target })),
   ...ranks('quartermaster'),
   single('founding-hero', 'Founding Hero', 'feats', 0, { kind: 'founding', target: 1 }, 'feat'),
   single('day-one', 'Day One', 'feats', 0, { kind: 'dayOne', target: 2 }, 'feat'),
@@ -87,6 +111,11 @@ export function catalogueErrors(config: import('./types.ts').CharacterConfig): s
     if ('source' in c && (!config.sources[c.source] || (!config.sources[c.source]!.enabled && !a.locked))) errors.push(`Unavailable source: ${a.id}`);
     if (c.kind === 'minutes' && !config.sources[c.source]?.minutes) errors.push(`Unavailable minutes: ${a.id}`);
     if (c.kind === 'overdue' && !config.sources[c.source]?.overdue) errors.push(`Unavailable overdue: ${a.id}`);
+    if (c.kind === 'together' && (c.sources.length < 2 || c.sources.some(s => !config.sources[s]?.enabled))) errors.push(`Unavailable sources: ${a.id}`);
+    if (c.kind === 'months' && (c.months.some(m => !Number.isInteger(m) || m < 1 || m > 12) || new Set(c.months).size !== c.months.length || c.target > c.months.length)) errors.push(`Unreachable months: ${a.id}`);
+    if (c.kind === 'dayProfessions' && c.target > config.professions.filter(p => earningProfessions.has(p.id)).length) errors.push(`Unreachable professions: ${a.id}`);
+    if (c.kind === 'weeks' && c.perWeek !== undefined && (!Number.isInteger(c.perWeek) || c.perWeek < 1)) errors.push(`Unreachable per week: ${a.id}`);
+    if (c.kind === 'points' && c.target > config.achievements.filter(x => x.type !== 'feat' && x.id !== a.id).reduce((sum, x) => sum + x.points, 0)) errors.push(`Unreachable points: ${a.id}`);
   }
   const visiting = new Set<string>();
   const visited = new Set<string>();

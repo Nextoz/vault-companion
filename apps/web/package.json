@@ -12,8 +12,9 @@
   },
   "dependencies": {
     "@vault-companion/contracts": "workspace:*",
-    "dompurify": "3.4.16",
-    "markdown-it": "15.0.2",
+    "@vault-companion/domain": "workspace:*",
+    "dompurify": "3.4.17",
+    "markdown-it": "15.0.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
@@ -29,6 +30,6 @@
     "jsdom": "30.1.2",
     "vite": "^8.3.3",
     "vitest": "^5.0.3",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   }
 }

@@ -4,6 +4,7 @@ import { stripFractions, type StripValue } from '../nav.ts';
 import { planToasts, seenKey, summaryText } from '../achievements.ts';
 import { getGame } from '../api.ts';
 import { bannerQuality, type Quality } from '../character-skin.ts';
+import { PredictionLedger, predictGame } from '../predict.ts';
 import type { QueueItem } from '../queue/queue.ts';
 import {
   achievementReward, celebratedIds, diffRewards, earnedByText, newlyEarnedIds, nextBaseline, skillText, withoutCelebrated, xpText,
@@ -64,7 +65,10 @@ function soundFor(step: Step): void {
   else if (step.kind === 'level') playReward('level');
 }
 
-/** Read again after a save, then once more if the read had not caught up with the commit yet. */
+/**
+ * Read again after a save, then once more if the read had not caught up with the commit yet. Since ADR-0067 this read
+ * only confirms: the celebration already played from the local prediction when the action was made.
+ */
 const SETTLE_MS = 600;
 const RETRY_MS = 2500;
 
@@ -90,8 +94,10 @@ function raiseMaxLevel(account: string, rulesVersion: number, level: number): vo
 
 /**
  * ADR-0064: the reward layer. Mounted once by App on every tab. On open it announces achievements this device has
- * not seen (GAM1-C behaviour, now as banners). After each queued action reaches GitHub it re-reads /api/game, diffs
- * it against the last complete read and plays the celebrations in order. Never takes focus; only the banner and the
+ * not seen (GAM1-C behaviour, now as banners). ADR-0067: the moment an action is queued it predicts the next read
+ * locally (`predict.ts`) and celebrates the difference at once; after the action reaches GitHub it re-reads
+ * /api/game and diffs it against what was already shown, so a correct prediction confirms silently and anything the
+ * prediction missed (a desktop edit, an older Worker) is still celebrated. Never takes focus; only the banner and the
  * level screen take a tap. Silent while signed out or when a read fails.
  *
  * Every account session is one generation: a sign-out or account switch clears the queue, the timers and the
@@ -111,6 +117,11 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter, onX
   const [stepKey, setStepKey] = useState(0);
   const generation = useRef(0);
   const baseline = useRef<GameResponse | null>(null);
+  /** What the screen has celebrated up to: the baseline plus the predicted records (ADR-0067). */
+  const shown = useRef<GameResponse | null>(null);
+  /** Predicted actions not yet visible in a read (`predict.ts`); `latest` is the last queue snapshot it saw. */
+  const ledger = useRef(new PredictionLedger());
+  const latest = useRef<readonly QueueItem[]>([]);
   const savedIds = useRef<Set<string> | null>(null);
   const pending = useRef<Step[]>([]);
   const showing = useRef(false);
@@ -150,6 +161,21 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter, onX
     return res.data;
   }, []);
 
+  /** Plays what changed from `before` to `after` and records it as seen. Drops and unchanged reads play nothing. */
+  const celebrate = useCallback((before: GameResponse, after: GameResponse, account: string) => {
+    const seen = readSeen(account) ?? [];
+    const rules = after.character.rulesVersion;
+    const events = withoutCelebrated(diffRewards(before, after, new Set(seen)), seen, readMaxLevel(account, rules));
+    addSeen(account, [...newlyEarnedIds(before, after), ...celebratedIds(events)]);
+    raiseMaxLevel(account, rules, after.character.level);
+    // D2: the "+XP" float flies to where the new value ends on the global XP strip.
+    const { level, levelXp, levelCost, restedXp } = after.character;
+    enqueue(toSteps(events).map((step) => (step.kind === 'pulse' && step.xp !== null ? { ...step, strip: { level, levelXp, levelCost, restedXp } } : step)));
+  }, [enqueue]);
+
+  /** The baseline extended with every still-predicted record; the baseline itself when it cannot be extended. */
+  const project = useCallback((base: GameResponse): GameResponse => predictGame(base, ledger.current.records(), new Date()) ?? base, []);
+
   useEffect(() => unlockAudioOnFirstTap(), []);
 
   // Open (and every account change): reset, take the baseline read, announce what this device has not seen.
@@ -161,6 +187,7 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter, onX
       // A partial open read becomes a provisional baseline; the first complete read replaces it without a diff, so
       // the first action after such an open is not celebrated (safe, and rare).
       baseline.current = nextBaseline(baseline.current, game).baseline;
+      shown.current = project(baseline.current);
       raiseMaxLevel(accountKey, game.character.rulesVersion, game.character.level);
       const plan = planToasts(game.character.achievements, game.stepMilestones, readSeen(accountKey));
       if (plan.kind === 'summary') enqueue([{ kind: 'summary', text: summaryText(plan.summary) }]);
@@ -181,35 +208,53 @@ export function RewardLayer({ accountKey, signedOut, items, onOpenCharacter, onX
       if (settle.current !== null) clearTimeout(settle.current);
       settle.current = null;
       baseline.current = null;
+      shown.current = null;
+      ledger.current.clear();
       savedIds.current = null;
       pending.current = [];
       showing.current = false;
       setCurrent(null);
     };
-  }, [active, accountKey, enqueue, read]);
+  }, [active, accountKey, enqueue, read, project]);
+
+  // ADR-0067: every action that newly appears unsaved is predicted and celebrated at once. Undo, a refusal or a local
+  // cancel lowers the shown state silently (a drop is never celebrated); a refused Undo restores it silently.
+  useEffect(() => {
+    latest.current = items;
+    if (!active) return;
+    const { changed, gain } = ledger.current.observe(items, accountKey, baseline.current?.timeZone ?? null);
+    const base = baseline.current;
+    if (!changed || base === null) return;
+    const after = predictGame(base, ledger.current.records(), new Date());
+    // Not predictable (older Worker, partial read, new rules): the confirming read celebrates instead.
+    if (after === null) return;
+    const before = shown.current ?? base;
+    shown.current = after;
+    if (gain) celebrate(before, after, accountKey);
+  }, [items, active, accountKey, celebrate]);
 
   const refresh = useCallback(async (gen: number, account: string, attempt: number) => {
     await openRead.current;
+    // Snapshot before the read: what had saved, and what a read had acknowledged, before this one started.
+    const savedBefore = ledger.current.savedSnapshot();
+    const acknowledgedBefore = new Set(latest.current.filter((i) => i.acknowledged).map((i) => i.operationId));
     const next = await read(gen);
     if (next === null) return;
     const before = baseline.current;
-    // The commit may not be visible yet: wait once, keeping the old baseline.
+    // The commit may not be visible yet: wait once, keeping the old baseline (and the predictions).
     if (before !== null && before.revision === next.revision && attempt === 0) {
       later(() => { if (generation.current === gen) void refresh(gen, account, 1); }, RETRY_MS);
       return;
     }
     const { baseline: kept, diff } = nextBaseline(before, next);
     baseline.current = kept;
-    if (!diff || before === null) return;
-    const seen = readSeen(account) ?? [];
-    const rules = next.character.rulesVersion;
-    const events = withoutCelebrated(diffRewards(before, next, new Set(seen)), seen, readMaxLevel(account, rules));
-    addSeen(account, [...newlyEarnedIds(before, next), ...celebratedIds(events)]);
-    raiseMaxLevel(account, rules, next.character.level);
-    // D2: the "+XP" float flies to where the new value ends on the global XP strip.
-    const { level, levelXp, levelCost, restedXp } = next.character;
-    enqueue(toSteps(events).map((step) => (step.kind === 'pulse' && step.xp !== null ? { ...step, strip: { level, levelXp, levelCost, restedXp } } : step)));
-  }, [read, later, enqueue]);
+    if (kept === next && before !== null && before.revision !== next.revision) ledger.current.settle(before, next, savedBefore, acknowledgedBefore);
+    const from = shown.current ?? before;
+    shown.current = project(kept);
+    // While an Undo is not in a read yet, a read may still show its target, which was celebrated when it was made.
+    if (!diff || from === null || ledger.current.quiet) return;
+    celebrate(from, shown.current, account);
+  }, [read, later, celebrate, project]);
 
   // Every action that newly reaches "saved" schedules one settled re-read (several saves coalesce into one).
   useEffect(() => {

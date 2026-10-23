@@ -139,6 +139,24 @@ describe('GET /api/game', () => {
     expect(body!.feedback!.achievements['long-way-back']).toBeUndefined();
   });
 
+  it('ADR-0067: sends the slim records it computed from, without note text, and the user time zone', async () => {
+    const store = await InMemoryStore.create(await baseFiles());
+    const { body } = await get(store);
+    expect(body!.timeZone).toBe(TIME_ZONE);
+    expect(body!.records).toContainEqual({ source: 'training', date: '2026-09-20', type: 'Group workout', duration: '30 min' });
+    expect(body!.records).toContainEqual({ source: 'learning', date: '2026-09-22', kind: 'dictation', minutes: '15', topic: 'weather' });
+    expect(JSON.stringify(body!.records)).not.toContain(SENTINEL);
+    expect(JSON.stringify(body!.records)).not.toContain(BOOK_SENTINEL);
+  });
+
+  it('ADR-0067: a finished Active Work item is a quest worth more than a to-do', async () => {
+    const done = '- [x] **Synthetic project:** shipped ✅ 2026-09-26';
+    const store = await InMemoryStore.create({ ...(await baseFiles()), 'Tasks/Active Work Now.md': `## Now\n\n\n## Dropped or done\n\n${done}\n` });
+    const { body } = await get(store);
+    expect(body!.records!.filter((r) => r.source === 'quest')).toEqual([{ source: 'quest', date: '2026-09-26', id: expect.stringContaining('active-work:') }]);
+    expect(body!.character.achievements.find((a) => a.id === 'quest-first')).toMatchObject({ earned: true, earnedDate: '2026-09-26' });
+  });
+
   it('an installed older client (pre-feedback schema, strict nested objects) parses the real payload', async () => {
     const store = await InMemoryStore.create(await baseFiles());
     const res = await makeApp(store, {}, true).request('/api/game', { headers: { 'Cf-Access-Jwt-Assertion': 'good' } });

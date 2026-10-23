@@ -34,16 +34,17 @@ describe('Character projection', () => {
 
   it('caps training, learning, kept notes, tasks and overdue bonuses independently', () => {
     expect(run(Array.from({ length: 3 }, () => training())).xp).toBe(60);
-    expect(run(Array.from({ length: 4 }, () => learning())).xp).toBe(75);
+    expect(run(Array.from({ length: 4 }, () => learning())).xp).toBe(150);
     expect(run(Array.from({ length: 6 }, (_, i) => ({ source: 'library', id: `${i}`, date: date(0) }))).xp).toBe(25);
-    expect(run(Array.from({ length: 6 }, (_, i) => task(`${i}`))).xp).toBe(21);
-    expect(run(Array.from({ length: 6 }, (_, i) => task(`${i}`, 6))).xp).toBe(15);
+    expect(run(Array.from({ length: 11 }, (_, i) => task(`${i}`))).xp).toBe(56);
+    expect(run(Array.from({ length: 11 }, (_, i) => task(`${i}`, 6))).xp).toBe(50);
+    expect(run(Array.from({ length: 4 }, (_, i) => ({ source: 'quest', id: `${i}`, date: date(0) }))).xp).toBe(60);
     expect(run([training(), training(), training(date(1))], date(1)).xp).toBe(90);
   });
 
   it('uses only full minutes steps with bounded bonuses and tolerant parsing', () => {
     for (const [duration, xp] of [['24:59', 30], ['25:00', 31], ['00:30:00', 32], ['120 min', 50], ['99999', 50], ['garbage', 30], ['1:99', 30], ['-10', 30]] as const) expect(run([training(date(0), 'Run', duration)]).xp).toBe(xp);
-    for (const [minutes, xp] of [['1', 15], ['2', 16], ['45', 30], ['NaN', 15], ['-10', 15]] as const) expect(run([learning(date(0), minutes)]).xp).toBe(xp);
+    for (const [minutes, xp] of [['1', 40], ['2', 41], ['45', 60], ['NaN', 40], ['-10', 40]] as const) expect(run([learning(date(0), minutes)]).xp).toBe(xp);
   });
 
   it('excludes health, distance, weight, split, score and time of day from XP', () => {
@@ -67,7 +68,7 @@ describe('Character projection', () => {
     expect(run([training()], date(1)).restedXp).toBe(0);
     expect(run([training()], date(2)).restedXp).toBe(15);
     expect(run([training()], date(100)).restedXp).toBe(150);
-    expect(run([training(), task('one', 0, date(2))], date(2))).toMatchObject({ xp: 34.5, restedXp: 13.5 });
+    expect(run([training(), task('one', 0, date(2))], date(2))).toMatchObject({ xp: 37.5, restedXp: 12.5 });
     const exhausted = run([training(), ...Array.from({ length: 6 }, (_, i) => training(date(11 + Math.floor(i / 2)), 'Run', '120'))], date(13));
     expect(exhausted).toMatchObject({ xp: 480, restedXp: 0 });
   });
@@ -184,6 +185,67 @@ describe('Character projection', () => {
   });
 });
 
+describe('rules v3 achievement kinds (ADR-0067)', () => {
+  const learn = (day: string, topic = ''): GameRecord => ({ source: 'learning', date: day, kind: 'Dictation', minutes: '', topic });
+  const earned = (records: readonly GameRecord[], id: string) => get(run(records, date(400)), id).earned;
+  const days = (offsets: readonly number[], make: (day: string) => GameRecord) => offsets.map(o => make(date(o)));
+
+  it('runs need consecutive days; a rest day keeps a learning run alive once per 7 days', () => {
+    expect(get(run(days([0, 1, 2], d => training(d)), date(2)), 'athletics-days-3')).toMatchObject({ earned: true, earnedDate: date(2) });
+    expect(earned(days([0, 1, 3, 4], d => training(d)), 'athletics-days-3')).toBe(false);
+    expect(earned(days([0, 1, 3], learn), 'scholar-daily-3')).toBe(true);
+    // A second rest day within the same 7 days breaks the run (0,1,_,3,_,5): best run stays 3.
+    expect(get(run(days([0, 1, 3, 5, 6, 7], learn), date(7)), 'scholar-daily-7').progress).toEqual({ current: 3, target: 7 });
+    expect(earned(days([0, 1, 2, 3, 5, 6, 7, 8], learn), 'scholar-daily-7')).toBe(true);
+  });
+
+  it('weekly rhythm with a per-week minimum counts only weeks that reach it', () => {
+    const twice = Array.from({ length: 4 }, (_, w) => [learn(date(4 + w * 7)), learn(date(6 + w * 7))]).flat();
+    expect(earned(twice, 'scholar-rhythm-4')).toBe(true);
+    expect(earned(twice.filter((_, i) => i !== 3), 'scholar-rhythm-4')).toBe(false);
+    expect(earned(twice, 'athletics-rhythm-4')).toBe(false);
+  });
+
+  it('peaks count every record in a day, week or month, not only capped awards', () => {
+    expect(earned(Array.from({ length: 10 }, (_, i) => task(`t${i}`, 0)), 'quartermaster-day-10')).toBe(true);
+    expect(earned(Array.from({ length: 9 }, (_, i) => task(`t${i}`, 0)), 'quartermaster-day-10')).toBe(false);
+    expect(earned(days([4, 5, 6], learn), 'scholar-week-3')).toBe(true);
+    expect(earned(days([2, 4, 5], learn), 'scholar-week-3')).toBe(false);
+    expect(earned(Array.from({ length: 12 }, (_, i) => training(date(i * 2))), 'athletics-month-12')).toBe(true);
+    expect(earned(Array.from({ length: 12 }, (_, i) => training(date(i * 3))), 'athletics-month-12')).toBe(false);
+  });
+
+  it('weekends need Saturday and Sunday of the same weekend', () => {
+    // 2026-01-03 is a Saturday.
+    expect(earned(days([2, 3], d => training(d)), 'athletics-weekends-1')).toBe(true);
+    expect(earned(days([3, 9], d => training(d)), 'athletics-weekends-1')).toBe(false);
+  });
+
+  it('distinct topics ignore case and blanks; months count any year', () => {
+    expect(earned(['A', 'b', 'C', 'd', 'E'].map((t, i) => learn(date(i), t)), 'bookworm-5')).toBe(true);
+    expect(earned(['A', 'a', 'B', 'C', 'D', ''].map((t, i) => learn(date(i), t)), 'bookworm-5')).toBe(false);
+    expect(earned([training('2025-12-20'), training('2026-01-20'), training('2026-02-20')], 'into-the-dark')).toBe(true);
+    expect(earned([training('2025-12-20'), training('2026-01-20'), training('2026-03-20')], 'into-the-dark')).toBe(false);
+  });
+
+  it('together, professions in one day and full weeks', () => {
+    expect(earned([training(), learn(date(0))], 'mind-and-body-1')).toBe(true);
+    expect(earned([training(), learn(date(1))], 'mind-and-body-1')).toBe(false);
+    expect(earned([training(), learn(date(0)), task('x', 0)], 'triple-threat')).toBe(true);
+    expect(earned([training(), learn(date(0)), task('x', 0, date(1))], 'triple-threat')).toBe(false);
+    // 2026-01-05 is a Monday: XP on all 7 days of that ISO week.
+    expect(earned(days([4, 5, 6, 7, 8, 9, 10], d => task(`t${d}`, 0, d)), 'full-week-1')).toBe(true);
+    expect(earned(days([4, 5, 6, 7, 8, 9, 11], d => task(`t${d}`, 0, d)), 'full-week-1')).toBe(false);
+  });
+
+  it('point achievements follow the earned total', () => {
+    const c = run(Array.from({ length: 25 }, (_, i) => training(date(i))), date(30));
+    expect(get(c, 'achiever-100').earned).toBe(true);
+    expect(get(c, 'achiever-1000')).toMatchObject({ earned: false, progress: { current: c.points.total, target: 1000 } });
+    expect(get(run([training()]), 'achiever-100').progress).toEqual({ current: 10, target: 100 });
+  });
+});
+
 describe('critical awards (ADR-0064)', () => {
   const tasks = (day: string, n: number): GameRecord[] => Array.from({ length: n }, (_, i) => task(`t-${day}-${i}`, 0, day));
   const days = Array.from({ length: 40 }, (_, i) => date(i));
@@ -194,7 +256,7 @@ describe('critical awards (ADR-0064)', () => {
     const c = computeCharacter(records, characterConfig, days.at(-1)!);
     expect(expected).toBeGreaterThan(0);
     expect(c.criticals).toBe(expected);
-    expect(c.xp).toBe(days.length * 5 * 3 + expected * 3);
+    expect(c.xp).toBe(days.length * 5 * 5 + expected * 5);
   });
 
   it('keeps critical slots stable when identities change or a record joins a day', () => {
@@ -211,14 +273,14 @@ describe('critical awards (ADR-0064)', () => {
     const day = days.find(d => isCritical(d, 'task', 1, 8))!;
     // Ten idle days before `day` fill the reserve; the critical doubles the base, rested adds half of the doubled base.
     const c = computeCharacter([task('warm', 0, '2025-12-01'), task('x', 0, day)], characterConfig, day);
-    const warm = isCritical('2025-12-01', 'task', 1, 8) ? 6 : 3;
-    expect(c.criticals).toBe(1 + (warm === 6 ? 1 : 0));
-    expect(c.xp).toBe(warm + 6 + 3);
+    const warm = isCritical('2025-12-01', 'task', 1, 8) ? 10 : 5;
+    expect(c.criticals).toBe(1 + (warm === 10 ? 1 : 0));
+    expect(c.xp).toBe(warm + 10 + 5);
   });
 
   it('never criticals an award beyond the daily cap', () => {
-    const capped = computeCharacter(days.flatMap(day => tasks(day, 9)), characterConfig, days.at(-1)!);
-    const atCap = computeCharacter(days.flatMap(day => tasks(day, 5)), characterConfig, days.at(-1)!);
+    const capped = computeCharacter(days.flatMap(day => tasks(day, 14)), characterConfig, days.at(-1)!);
+    const atCap = computeCharacter(days.flatMap(day => tasks(day, 10)), characterConfig, days.at(-1)!);
     expect(capped.criticals).toBe(atCap.criticals);
     expect(capped.xp).toBe(atCap.xp);
   });

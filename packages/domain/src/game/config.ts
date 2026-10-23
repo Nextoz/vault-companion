@@ -2,14 +2,17 @@ import { achievementCatalogue } from './catalogue.ts';
 import type { CharacterConfig } from './types.ts';
 
 export const characterConfig: CharacterConfig = {
-  rulesVersion: 2,
+  // v3 (owner, 23 Oct 2026): dictation (learning) pays like a gym session, tasks pay more with a higher cap, and a
+  // finished Active Work item is its own "quest" source.
+  rulesVersion: 3,
   professions: [{ id: 'athletics', name: 'Athletics' }, { id: 'scholar', name: 'Scholar' }, { id: 'lorekeeper', name: 'Lorekeeper' }, { id: 'quartermaster', name: 'Quartermaster' }],
   sources: {
     training: { profession: 'athletics', enabled: true, identityField: 'type', baseXp: 30, dailyCap: 2, minutes: { field: 'duration', format: 'duration', after: 20, step: 5, xp: 1, maxBonus: 20 } },
-    learning: { profession: 'scholar', enabled: true, identityField: 'kind', baseXp: 15, dailyCap: 3, minutes: { field: 'minutes', format: 'minutes', after: 0, step: 2, xp: 1, maxBonus: 15 } },
+    learning: { profession: 'scholar', enabled: true, identityField: 'kind', baseXp: 40, dailyCap: 3, minutes: { field: 'minutes', format: 'minutes', after: 0, step: 2, xp: 1, maxBonus: 20 } },
     library: { profession: 'lorekeeper', enabled: true, identityField: 'id', baseXp: 5, dailyCap: 5 },
     reflection: { profession: 'lorekeeper', enabled: true, identityField: 'id', baseXp: 25, dailyCap: 2 },
-    task: { profession: 'quartermaster', enabled: true, identityField: 'id', baseXp: 3, dailyCap: 5, overdue: { field: 'overdueDays', days: 7, xp: 2, dailyCap: 3 } },
+    task: { profession: 'quartermaster', enabled: true, identityField: 'id', baseXp: 5, dailyCap: 10, overdue: { field: 'overdueDays', days: 7, xp: 2, dailyCap: 3 } },
+    quest: { profession: 'quartermaster', enabled: true, identityField: 'id', baseXp: 20, dailyCap: 3 },
   },
   // Journey step milestones (owner decision 10 Oct 2026): achievements with points, never XP. Thresholds only here.
   steps: {

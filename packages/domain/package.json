@@ -5,12 +5,13 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./game": "./src/game/index.ts",
     "./testing": "./src/testing/in-memory-store.ts"
   },
   "dependencies": {
     "@vault-companion/contracts": "workspace:*",
     "@vault-companion/vault-markdown": "workspace:*",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@vault-companion/test-vault": "workspace:*"

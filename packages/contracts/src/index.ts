@@ -1540,6 +1540,23 @@ export const GameFeedback = z.strictObject({
 });
 export type GameFeedback = z.infer<typeof GameFeedback>;
 
+/**
+ * ADR-0067: one record as the engine reads it (no notes, scores or measurements). The phone adds a just-made action
+ * to these and runs the same engine, so XP shows the moment you tap instead of after the commit reaches GitHub.
+ */
+export const GameRecordWire = z.strictObject({
+  source: z.string(),
+  date: z.string(),
+  type: z.string().optional(),
+  duration: z.string().optional(),
+  kind: z.string().optional(),
+  minutes: z.string().optional(),
+  topic: z.string().optional(),
+  id: z.string().optional(),
+  overdueDays: z.number().optional(),
+});
+export type GameRecordWire = z.infer<typeof GameRecordWire>;
+
 export const GameResponse = z.strictObject({
   revision: commitSha,
   now: isoInstant,
@@ -1552,6 +1569,9 @@ export const GameResponse = z.strictObject({
   unavailable: z.array(z.string()),
   /** Optional so a new client still reads an older Worker during a rollout. */
   feedback: GameFeedback.optional(),
+  /** ADR-0067: the records the Character was computed from, and the zone their dates are in. Optional for rollout. */
+  records: z.array(GameRecordWire).optional(),
+  timeZone: z.string().optional(),
 });
 export type GameResponse = z.infer<typeof GameResponse>;
 export * from './dashboard.ts';
