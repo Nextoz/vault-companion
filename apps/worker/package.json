@@ -15,9 +15,9 @@
     "@vault-companion/github": "workspace:*",
     "@vault-companion/vault-markdown": "workspace:*",
     "hono": "^4.13.13",
-    "jose": "^6.2.12"
+    "jose": "^6.2.13"
   },
   "devDependencies": {
-    "wrangler": "4.148.0"
+    "wrangler": "4.151.3"
   }
 }
