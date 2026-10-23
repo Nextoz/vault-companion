@@ -1,0 +1,13 @@
+{
+  "task": "stuck1",
+  "clone": "C:\\Dev\\vault-companion-clones\\stuck1",
+  "tier": "scw",
+  "kind": "ui",
+  "state": "running",
+  "round": "first",
+  "started": "2026-10-11T04:00:00.0000000+02:00",
+  "updated": "2026-10-11T04:05:00.0000000+02:00",
+  "log": "C:\\Dev\\vault-companion-clones\\stuck1\\.agent\\run-stuck1.log",
+  "autoCheck": true,
+  "stuckNotified": true
+}

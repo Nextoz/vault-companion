@@ -9,7 +9,9 @@ param([string]$Focus = 'the first open item under "Next actions" in docs/checkpo
       # Unattended run: no permission prompts (safe actions auto-approved, risky ones blocked). Standing decisions live in .agent/owner-instructions.md.
       [switch]$Overnight,
       # The watcher passes this when it relaunches a Lead that exited (it is already running).
-      [switch]$NoWatcher)
+      [switch]$NoWatcher,
+      # -Overnight runs tools/preflight.ps1 first and refuses to start on a FAIL; this starts anyway.
+      [switch]$SkipPreflight)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $repo
@@ -30,6 +32,12 @@ if ($env:HERDR_ENV) {
     }
 } else { Write-Warning 'Not inside Herdr: workers launched with tools/agent-pane.sh will fail. Start Herdr first (run: herdr).' }
 git fetch -q origin
+# Overnight, a broken worker path is found now, while the owner is awake (2026-10-10: a hung Jev call and a UAC
+# prompt each stalled a night). The watcher's relaunch (-NoWatcher) skips it: the owner is asleep by then.
+if ($Overnight -and -not $NoWatcher -and -not $SkipPreflight) {
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'preflight.ps1')
+    if ($LASTEXITCODE -ne 0) { Write-Host 'Lead not started. Fix the FAIL lines above, or rerun with -SkipPreflight.'; exit 1 }
+}
 $prompt = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'lead-prompt.md') -Raw) -replace '\{FOCUS\}', $Focus
 $mode = if ($Overnight) { @('--permission-mode', 'auto') } else { @() }
 & claude --model claude-sonnet-5-5 --effort medium --name 'VC Lead' @mode $prompt
