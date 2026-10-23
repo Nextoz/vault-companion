@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./game": "./src/game/index.ts",
     "./testing": "./src/testing/in-memory-store.ts"
   },
   "dependencies": {

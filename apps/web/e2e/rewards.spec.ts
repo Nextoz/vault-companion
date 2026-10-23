@@ -1,6 +1,7 @@
 // ADR-0064: completing a task re-reads the Character and plays the celebrations in order. Synthetic mock data only.
 import { expect, test, type Page } from '@playwright/test';
 import { GameResponse } from '@vault-companion/contracts';
+import { characterConfig, computeCharacter, gameFeedback, wireCharacter } from '@vault-companion/domain/game';
 import { ACCOUNT, MockApi, sampleGame, taskView } from './mock-api.ts';
 import { goTo } from './nav.ts';
 import { seenKey } from '../src/achievements.ts';
@@ -67,6 +68,35 @@ test('a completed task plays Critical XP, the skill up, the achievement banner a
   await page.waitForTimeout(1000);
   // A single count, not a polling expect: a 5 s retry would outlast the banner's own 5 s and pass on a false banner.
   expect(await page.locator('.reward-banner').count()).toBe(0);
+});
+
+test('ADR-0067: XP and the achievement play the moment the task is ticked, before the save reaches the server', async ({ page }) => {
+  // A real engine read: nine synthetic tasks done today, so the tenth earns "Tasks Completed 10".
+  const records = Array.from({ length: 9 }, (_, i) => ({ source: 'task', date: '2026-09-24', id: `synthetic-${i}`, overdueDays: 0 }));
+  const character = computeCharacter(records, characterConfig, '2026-09-24');
+  const api = new MockApi();
+  api.game = GameResponse.parse({
+    ...sampleGame(), now: '2026-09-24T10:00:00Z', character: wireCharacter(character), feedback: gameFeedback(character, characterConfig),
+    records, timeZone: 'Europe/Copenhagen',
+  });
+  api.open = [taskView(10, 'Water the plants')];
+  api.commandMode = 'hold';
+  await page.clock.install({ time: new Date('2026-09-24T10:00:00Z') });
+  const earned = character.achievements.filter((a) => a.earned).map((a) => a.id);
+  await page.addInitScript(([key, ids]) => {
+    if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, JSON.stringify(ids));
+  }, [seenKey(ACCOUNT), earned] as const);
+  await api.install(page);
+  await page.goto('/');
+  await expect.poll(() => api.gameReads).toBeGreaterThan(0);
+  await goTo(page, 'Tasks');
+  await page.getByRole('button', { name: 'Complete: Water the plants' }).click();
+
+  await expect(page.locator('.reward-xp')).toHaveText(/^(Critical! )?\+(5|10) XP$/);
+  await expect(page.locator('.reward-banner')).toContainText('Tasks Completed 10');
+  // Still unsaved: the command is held in flight, so this came from the local prediction, not a re-read.
+  expect(api.heldCount).toBe(1);
+  expect(api.applied).toHaveLength(0);
 });
 
 test('a banner tap opens the Character', async ({ page }) => {

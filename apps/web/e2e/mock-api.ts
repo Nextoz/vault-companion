@@ -370,6 +370,8 @@ export class MockApi {
   gameReads = 0;
   /** ADR-0064: once any command was applied, /api/game answers this instead (the "after" read of a reward). */
   gameAfterCommand: GameResponse | null = null;
+  /** ADR-0067: serve this Character (with records, so the phone can predict) instead of the sample. */
+  game: GameResponse | null = null;
   /** READ1-A2: the Books/ read model (ADR-0062), one row per book note. */
   books: BookView[] = [];
   /** `refused` answers /api/books with a typed refusal instead of rows. */
@@ -810,7 +812,7 @@ export class MockApi {
     this.gameReads++;
     if (this.gameMode === 'error') return this.#json(route, 503, ApiError.parse({ code: 'upstream-unavailable', message: 'reader unavailable', retryable: true }));
     if (this.gameAfterCommand !== null && this.applied.length > 0) return this.#json(route, 200, this.gameAfterCommand);
-    return this.#json(route, 200, sampleGame(this.gameUnavailable, this.gameAchievements));
+    return this.#json(route, 200, this.game ?? sampleGame(this.gameUnavailable, this.gameAchievements));
   }
 
   #history(route: Route) {

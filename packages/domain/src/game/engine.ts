@@ -39,9 +39,33 @@ function fnv1a(text: string): number {
 export function isCritical(date: string, source: string, ordinal: number, every: number): boolean {
   return every > 0 && fnv1a(`${date}|${source}|${ordinal}`) % every === 0;
 }
-interface Row { date: string; day: number; source: string; identity: string; minutes: number; overdue: number; key: string; rule: SourceRule }
-interface SourceState { count: number; varieties: Set<string>; minutes: number; overdue: number; week: number | null; consecutive: number; bestWeeks: number }
-const initialSource = (): SourceState => ({ count: 0, varieties: new Set(), minutes: 0, overdue: 0, week: null, consecutive: 0, bestWeeks: 0 });
+interface Row { date: string; day: number; source: string; identity: string; minutes: number; overdue: number; key: string; rule: SourceRule; record: Readonly<Record<string, unknown>> }
+interface Run { last: number | null; length: number; best: number; restDay: number | null }
+interface SourceState {
+  count: number; varieties: Set<string>; minutes: number; overdue: number;
+  perDay: Map<number, number>; perWeek: Map<number, number>; perMonth: Map<number, number>; peak: { day: number; week: number; month: number };
+  /** Keyed by the per-week minimum: the last qualifying week, the current and the best consecutive run. */
+  weekRuns: Map<number, { last: number | null; consecutive: number; best: number }>;
+  run: Run; restRun: Run; weekendMasks: Map<number, number>; weekends: number; distinct: Map<string, Set<string>>; months: Set<number>;
+}
+const newRun = (): Run => ({ last: null, length: 0, best: 0, restDay: null });
+const initialSource = (): SourceState => ({
+  count: 0, varieties: new Set(), minutes: 0, overdue: 0, perDay: new Map(), perWeek: new Map(), perMonth: new Map(), peak: { day: 0, week: 0, month: 0 },
+  weekRuns: new Map(), run: newRun(), restRun: newRun(), weekendMasks: new Map(), weekends: 0, distinct: new Map(), months: new Set(),
+});
+const utc = (day: number): Date => new Date(day * DAY_MS);
+const monthIndex = (day: number): number => utc(day).getUTCFullYear() * 12 + utc(day).getUTCMonth();
+const bump = (counts: Map<number, number>, key: number): number => { const n = (counts.get(key) ?? 0) + 1; counts.set(key, n); return n; };
+/** A day continues a run when it follows the last one; with `rest`, a single missed day is allowed once per 7 days. */
+function extendRun(run: Run, day: number, rest: boolean): void {
+  if (run.last === day) return;
+  const gap = run.last === null ? Infinity : day - run.last;
+  if (gap === 1) run.length++;
+  else if (rest && gap === 2 && (run.restDay === null || day - 1 - run.restDay >= WEEK_DAYS)) { run.length++; run.restDay = day - 1; }
+  else { run.length = 1; run.restDay = null; }
+  run.last = day;
+  run.best = Math.max(run.best, run.length);
+}
 
 export function computeCharacter(records: readonly unknown[], config: CharacterConfig, today: string): Character {
   const endDay = calendarDay(today);
@@ -62,7 +86,7 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
     if (!rule.enabled) continue;
     const duration = rule.minutes ? minutes(record[rule.minutes.field], rule.minutes.format) : 0;
     // Only award-relevant fields participate: private text and excluded measurements never matter.
-    rows.push({ date: record['date'] as string, day, source, identity, minutes: duration, overdue, key: JSON.stringify([source, identity, duration, overdue]), rule });
+    rows.push({ date: record['date'] as string, day, source, identity, minutes: duration, overdue, key: JSON.stringify([source, identity, duration, overdue]), rule, record });
   }
   rows.sort((a, b) => a.day - b.day || compare(a.key, b.key));
   const xpByProfession = new Map(config.professions.map(p => [p.id, 0]));
@@ -88,6 +112,22 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
   let balanced = 0;
   const earlyProfessions = new Set<string>();
   const firstDay = currentDay;
+  // Per-criterion inputs the catalogue asks for, collected once so the loop only tracks what is needed.
+  const criteria = config.achievements.map(a => a.criterion);
+  const weekMinimums = new Set(criteria.flatMap(c => c.kind === 'weeks' ? [c.perWeek ?? 1] : []));
+  const distinctFields = new Set(criteria.flatMap(c => c.kind === 'distinct' ? [c.field] : []));
+  const togetherKey = (sources: readonly string[]): string => JSON.stringify([...sources].sort());
+  const togetherSets = new Map(criteria.flatMap(c => c.kind === 'together' ? [[togetherKey(c.sources), c.sources] as const] : []));
+  const togetherDays = new Map<string, number>();
+  let rowDay: number | null = null;
+  const daySources = new Set<string>();
+  const dayProfessions = new Set<string>();
+  let bestDayProfessions = 0;
+  let xpWeek: number | null = null;
+  const xpWeekDays = new Set<number>();
+  let fullWeeks = 0;
+  let earnedPoints = 0;
+  const pointsOf = new Map(config.achievements.map(a => [a.id, a.type === 'feat' ? 0 : a.points]));
   const advance = (day: number): void => {
     if (day === currentDay) return;
     const idle = Math.max(0, day - currentDay - (dayHasXp ? 1 : 0));
@@ -111,7 +151,16 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
       case 'variety': return state?.varieties.size ?? 0;
       case 'minutes': return state?.minutes ?? 0;
       case 'overdue': return state?.overdue ?? 0;
-      case 'weeks': return state?.bestWeeks ?? 0;
+      case 'weeks': return state?.weekRuns.get(criterion.perWeek ?? 1)?.best ?? 0;
+      case 'run': return (criterion.rest ? state?.restRun.best : state?.run.best) ?? 0;
+      case 'peak': return state?.peak[criterion.window] ?? 0;
+      case 'weekends': return state?.weekends ?? 0;
+      case 'distinct': return state?.distinct.get(criterion.field)?.size ?? 0;
+      case 'months': return criterion.months.filter(m => state?.months.has(m)).length;
+      case 'together': return togetherDays.get(togetherKey(criterion.sources)) ?? 0;
+      case 'dayProfessions': return bestDayProfessions;
+      case 'fullWeeks': return fullWeeks;
+      case 'points': return earnedPoints;
       case 'meta': return criterion.requires.filter(id => earned.has(id)).length;
     }
   };
@@ -125,6 +174,7 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
         if (!achievement.locked && !earned.has(achievement.id) && progress(achievement.criterion) >= target(achievement.criterion)) {
           earned.set(achievement.id, date);
           earnedBy.set(achievement.id, source);
+          earnedPoints += pointsOf.get(achievement.id) ?? 0;
           changed = true;
         }
       }
@@ -141,10 +191,42 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
     state.minutes = Math.max(state.minutes, row.minutes);
     state.overdue = Math.max(state.overdue, row.overdue);
     const week = isoWeek(row.day);
-    if (state.week !== week) {
-      state.consecutive = state.week !== null && week - state.week === WEEK_DAYS ? state.consecutive + 1 : 1;
-      state.bestWeeks = Math.max(state.bestWeeks, state.consecutive);
-      state.week = week;
+    if (rowDay !== row.day) { rowDay = row.day; daySources.clear(); dayProfessions.clear(); }
+    state.peak.day = Math.max(state.peak.day, bump(state.perDay, row.day));
+    const inWeek = bump(state.perWeek, week);
+    state.peak.week = Math.max(state.peak.week, inWeek);
+    state.peak.month = Math.max(state.peak.month, bump(state.perMonth, monthIndex(row.day)));
+    // A week qualifies the moment it reaches the minimum; consecutive means exactly 7 days after the last one.
+    for (const minimum of weekMinimums) {
+      if (inWeek !== minimum) continue;
+      const runState = state.weekRuns.get(minimum) ?? { last: null, consecutive: 0, best: 0 };
+      runState.consecutive = runState.last !== null && week - runState.last === WEEK_DAYS ? runState.consecutive + 1 : 1;
+      runState.best = Math.max(runState.best, runState.consecutive);
+      runState.last = week;
+      state.weekRuns.set(minimum, runState);
+    }
+    extendRun(state.run, row.day, false);
+    extendRun(state.restRun, row.day, true);
+    const weekday = row.day - week;
+    if (weekday >= 5) {
+      const before = state.weekendMasks.get(week) ?? 0;
+      const after = before | (weekday === 5 ? 1 : 2);
+      state.weekendMasks.set(week, after);
+      if (before !== 3 && after === 3) state.weekends++;
+    }
+    for (const field of distinctFields) {
+      const value = row.record[field];
+      if (typeof value !== 'string' || !value.trim()) continue;
+      const values = state.distinct.get(field) ?? new Set<string>();
+      values.add(value.trim().toLowerCase());
+      state.distinct.set(field, values);
+    }
+    state.months.add(utc(row.day).getUTCMonth() + 1);
+    if (!daySources.has(row.source)) {
+      daySources.add(row.source);
+      for (const [key, sources] of togetherSets) {
+        if (sources.includes(row.source) && sources.every(s => daySources.has(s))) togetherDays.set(key, (togetherDays.get(key) ?? 0) + 1);
+      }
     }
     const cap = daily.get(row.source) ?? { count: 0, overdue: 0 };
     daily.set(row.source, cap);
@@ -179,6 +261,10 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
       if (currentWeek !== week) { weekProfessions.clear(); currentWeek = week; }
       weekProfessions.add(profession);
       balanced = Math.max(balanced, weekProfessions.size);
+      dayProfessions.add(profession);
+      bestDayProfessions = Math.max(bestDayProfessions, dayProfessions.size);
+      if (xpWeek !== week) { xpWeekDays.clear(); xpWeek = week; }
+      if (!xpWeekDays.has(row.day)) { xpWeekDays.add(row.day); if (xpWeekDays.size === WEEK_DAYS) fullWeeks++; }
       if (row.day - firstDay < config.dayOneDays) earlyProfessions.add(profession);
     }
     evaluate(row.date, row.source);
@@ -190,6 +276,7 @@ export function computeCharacter(records: readonly unknown[], config: CharacterC
     return {
       id: a.id, name: a.type === 'hidden' && !earnedDate ? '???' : a.name, category: a.category, type: a.type, points: a.points,
       earned: earnedDate !== null, earnedDate, earnedBy: earnedBy.get(a.id) ?? null, visible, locked: a.locked ?? false, lockedReason: a.lockedReason ?? null, chain: a.chain ?? null, tier: a.tier ?? null,
+      // Week rhythms show no counter (it would visibly reset); every other progress here is a best-ever value.
       progress: a.criterion.kind === 'weeks' || a.type === 'hidden' || a.type === 'feat' ? null : { current: a.locked || !rows.length ? 0 : Math.min(target(a.criterion), progress(a.criterion)), target: target(a.criterion) },
     };
   });

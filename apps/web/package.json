@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@vault-companion/contracts": "workspace:*",
+    "@vault-companion/domain": "workspace:*",
     "dompurify": "3.4.16",
     "markdown-it": "15.0.2",
     "react": "^19.3.0",

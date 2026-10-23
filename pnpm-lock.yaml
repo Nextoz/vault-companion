@@ -187,6 +187,9 @@ importers:
       '@vault-companion/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@vault-companion/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       dompurify:
         specifier: 3.4.16
         version: 3.4.16

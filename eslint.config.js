@@ -44,8 +44,10 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            { group: ['@vault-companion/github', '@vault-companion/domain', '@vault-companion/vault-markdown'],
+            { group: ['@vault-companion/github', '@vault-companion/vault-markdown'],
               message: 'The web app talks to /api via contracts only.' },
+            // ADR-0067: the one exception is the pure game engine, for instant local XP.
+            { regex: '^@vault-companion/domain(?!/game$)', message: 'The web app talks to /api via contracts only (ADR-0067 allows only @vault-companion/domain/game).' },
           ],
         },
       ],

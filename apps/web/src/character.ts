@@ -159,6 +159,13 @@ export interface RuleSection {
 const professionName = (rules: GameRules, id: string): string =>
   rules.professions.find((p) => p.id === id)?.name ?? id;
 
+/** What one entry of a source is, so two sources of one profession (tasks and quests) read apart. */
+const SOURCE_ENTRY: Readonly<Record<string, string>> = {
+  training: 'training session', learning: 'learning session', library: 'kept note', reflection: 'book reflection', task: 'task', quest: 'finished Active Work item',
+};
+const ruleSourceLabel = (rules: GameRules, source: GameRules['sources'][number]): string =>
+  `${professionName(rules, source.profession)} (${SOURCE_ENTRY[source.id] ?? source.id})`;
+
 function sourceLine(rules: GameRules, source: GameRules['sources'][number]): string {
   const parts = [`${source.baseXp} XP per entry, up to ${source.dailyCap} a day`];
   if (source.minutes) {
@@ -170,7 +177,7 @@ function sourceLine(rules: GameRules, source: GameRules['sources'][number]): str
   if (source.overdue) {
     parts.push(`+${source.overdue.xp} XP when overdue by ${source.overdue.days}+ days, up to ${source.overdue.dailyCap} a day`);
   }
-  return `${professionName(rules, source.profession)}: ${parts.join('; ')}.`;
+  return `${ruleSourceLabel(rules, source)}: ${parts.join('; ')}.`;
 }
 
 /**
@@ -188,13 +195,13 @@ export function howXpWorks(rules: GameRules): RuleSection[] {
       heading: 'Where XP comes from',
       lines: [
         ...enabled.map((source) => sourceLine(rules, source)),
-        ...disabled.map((source) => `${professionName(rules, source.profession)}: not active.`),
+        ...disabled.map((source) => `${ruleSourceLabel(rules, source)}: not active.`),
       ],
     },
     {
       id: 'caps',
       heading: 'Daily caps',
-      lines: enabled.map((source) => `${professionName(rules, source.profession)}: ${source.dailyCap} entries a day.`),
+      lines: enabled.map((source) => `${ruleSourceLabel(rules, source)}: ${source.dailyCap} entries a day.`),
     },
     {
       id: 'levels',

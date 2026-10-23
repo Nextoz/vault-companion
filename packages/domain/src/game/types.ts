@@ -2,7 +2,7 @@
 export type GameRecord =
   | { readonly source: 'training'; readonly date: string; readonly type: string; readonly duration: string; readonly time?: string; readonly distance?: string; readonly weight?: string; readonly split?: string; readonly note?: string }
   | { readonly source: 'learning'; readonly date: string; readonly kind: string; readonly minutes: string; readonly score?: string; readonly detail?: string; readonly topic?: string; readonly note?: string }
-  | { readonly source: 'library' | 'reflection'; readonly date: string; readonly id: string }
+  | { readonly source: 'library' | 'reflection' | 'quest'; readonly date: string; readonly id: string }
   | { readonly source: 'task'; readonly date: string; readonly id: string; readonly overdueDays: number };
 
 export interface SourceRule {
@@ -16,7 +16,21 @@ export interface SourceRule {
 }
 export type Criterion =
   | { readonly kind: 'xp' | 'level' | 'rested' | 'gap' | 'balanced' | 'founding' | 'dayOne'; readonly target: number }
-  | { readonly kind: 'count' | 'variety' | 'minutes' | 'weeks' | 'overdue'; readonly source: string; readonly target: number }
+  | { readonly kind: 'count' | 'variety' | 'minutes' | 'overdue' | 'weekends'; readonly source: string; readonly target: number }
+  /** Consecutive ISO weeks with at least `perWeek` (default 1) records of the source. */
+  | { readonly kind: 'weeks'; readonly source: string; readonly target: number; readonly perWeek?: number }
+  /** Best run of consecutive days with the source; `rest` lets one missed day per 7 keep the run alive. */
+  | { readonly kind: 'run'; readonly source: string; readonly target: number; readonly rest?: boolean }
+  /** Most records of the source in one calendar day, ISO week or calendar month. */
+  | { readonly kind: 'peak'; readonly source: string; readonly window: 'day' | 'week' | 'month'; readonly target: number }
+  /** Distinct non-empty values of a record field (case-insensitive), e.g. learning topics. */
+  | { readonly kind: 'distinct'; readonly source: string; readonly field: string; readonly target: number }
+  /** How many of the listed calendar months (1-12, any year) have a record of the source. */
+  | { readonly kind: 'months'; readonly source: string; readonly months: readonly number[]; readonly target: number }
+  /** Days on which every listed source has a record. */
+  | { readonly kind: 'together'; readonly sources: readonly string[]; readonly target: number }
+  /** dayProfessions: most professions with XP in one day; fullWeeks: ISO weeks with XP on all 7 days; points: achievement points. */
+  | { readonly kind: 'dayProfessions' | 'fullWeeks' | 'points'; readonly target: number }
   | { readonly kind: 'skill'; readonly profession: string; readonly target: number }
   | { readonly kind: 'meta'; readonly requires: readonly string[] };
 export interface AchievementDefinition {
