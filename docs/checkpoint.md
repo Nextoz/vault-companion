@@ -1,3 +1,9 @@
+# HC4 ring slots — in progress (2026-10-28)
+
+- Released full scope (owner). Plan: `docs/briefs/HC4-plan.md`; brief `docs/briefs/HC4-ring-slots.md`; ADR-0068. Gate 3 (Access) done; deploy still needs ACTION NEEDED.
+- HC4-a1 merged: metric registry `ring-metrics.ts`, strict parser/canonical slot_start/month split `ring-slots.ts`, v1 helpers moved to `health-format.ts`.
+- Next: HC4-a2 (`ring-slot-file.ts`, `ring-daily.ts`, see plan "a2 delta"), then HC4-b (write path, high-risk, Opus diff review), HC4-c (read API), HC4-d (design A stacked strips, mockup in docs/mockups/2026-10-28/).
+- Open decisions noted in the plan: `generatedAt` freshness bound (replay of old bodies is harmless, no erase), negative `tempC` refused.
 # AI leaderboard — release verification
 
 - Branch `feat/glm-workflow-leaderboard` in isolated clone `glm-workflow-20261015`; original drafts preserved. Integrated main through `2de19209`.

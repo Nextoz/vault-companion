@@ -42,3 +42,6 @@ export * from './game/describe.ts';
 export * from './game/step-milestones.ts';
 export * from './game/wire.ts';
 export * from './bounded.ts';
+
+export * from './ring-metrics.ts';
+export * from './ring-slots.ts';
