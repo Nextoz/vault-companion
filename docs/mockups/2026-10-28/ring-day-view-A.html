@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ring day view - option A</title>
+<!-- HC4-d mockup, option A "stacked strips", picked by the owner 2026-10-28. Synthetic data only (ADR-0039).
+     Colours are the app's tokens (apps/web/src/tokens.css). Behaviour notes are at the bottom. -->
+<style>
+  :root { --bg:#000; --surface:#1c1c1e; --raised:#2c2c2e; --line:#38383a; --text:#fff; --muted:#8e8e93;
+          --accent:#0a84ff; --health:#64d2ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.35 -apple-system, "SF Pro Text", "Segoe UI", sans-serif; }
+  .screen { width:390px; margin:0 auto; padding:12px 16px 24px; }
+  .top { display:flex; justify-content:space-between; align-items:center; height:44px; }
+  .top a { color:var(--accent); text-decoration:none; font-size:17px; }
+  h1 { font-size:28px; margin:4px 0 2px; }
+  .daynav { display:flex; justify-content:space-between; align-items:center; margin:8px 0 12px; }
+  .daynav b { font-size:17px; } .daynav span { color:var(--health); font-size:15px; }
+  .card { background:var(--surface); border-radius:14px; padding:12px; margin-bottom:12px; }
+  .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .tiles { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .tiles b { display:block; font-size:20px; color:var(--health); }
+  .tiles small { color:var(--muted); font-size:12px; }
+  .strip { margin-bottom:6px; }
+  .strip-h { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:2px; }
+  .strip-h em { font-style:normal; color:var(--text); }
+  svg { display:block; width:100%; }
+  .axis { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:2px; }
+  .slot { display:grid; grid-template-columns:1fr 1fr; gap:4px 16px; font-size:14px; }
+  .slot div { display:flex; justify-content:space-between; border-bottom:.5px solid var(--line); padding:3px 0; }
+  .slot span { color:var(--muted); }
+  .note { color:var(--muted); font-size:12px; margin:6px 0 0; }
+  .legend { display:flex; gap:10px; font-size:11px; color:var(--muted); margin:2px 0 4px; }
+  .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="top"><a href="#">‹ Health</a><a href="#">Today</a></div>
+  <h1>Ring day</h1>
+  <div class="daynav"><span>‹ Tue 28</span><b>Wednesday 29 Oct</b><span>Thu 30 ›</span></div>
+
+  <div class="card">
+    <div class="label">Night 23:40 – 06:52</div>
+    <div class="tiles" style="margin-top:8px">
+      <div><b>7 h 12</b><small>asleep</small></div>
+      <div><b>54</b><small>resting HR</small></div>
+      <div><b>41 ms</b><small>HRV (unverified)</small></div>
+      <div><b>1 h 38</b><small>deep</small></div>
+      <div><b>36.2°</b><small>night temp</small></div>
+      <div><b>88 / 96</b><small>slots with data</small></div>
+    </div>
+  </div>
+
+  <div class="card" id="strips"></div>
+
+  <div class="card">
+    <div class="label">14:30 – 14:45 (selected slot)</div>
+    <div class="slot" id="slot" style="margin-top:6px"></div>
+    <p class="note">— = no reading. Fatigue, stress and HRV labels are unverified on this ring.</p>
+  </div>
+</div>
+
+<script>
+  // Synthetic, deterministic data: 96 fifteen-minute slots. Never real health values.
+  const N = 96, W = 358;
+  const rnd = (i, s) => { const x = Math.sin(i * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); };
+  const night = i => i < 28 || i >= 94, gap = i => i >= 60 && i < 64, half = i => i % 2 === 1;
+  const hr = [...Array(N)].map((_, i) => gap(i) ? null : Math.round(night(i) ? 52 + 6 * rnd(i, 1) : 64 + 28 * rnd(i, 2)));
+  const hrMin = hr.map((h, i) => h == null ? null : h - 3 - Math.round(4 * rnd(i, 9)));
+  const hrMax = hr.map((h, i) => h == null ? null : h + 3 + Math.round(6 * rnd(i, 10)));
+  const spo2 = hr.map((h, i) => h == null || half(i) ? null : Math.round(95 + 3 * rnd(i, 3)));
+  const steps = hr.map((h, i) => night(i) || h == null ? null : Math.round(rnd(i, 4) > .55 ? 420 * rnd(i, 5) : 0));
+  const sleep = hr.map((h, i) => night(i) ? (rnd(i, 6) > .7 ? 2 : rnd(i, 6) > .12 ? 1 : 0) : null);
+  const sys = spo2.map((v, i) => v == null ? null : Math.round(110 + 10 * rnd(i, 11)));
+  const dia = sys.map((v, i) => v == null ? null : Math.round(70 + 7 * rnd(i, 12)));
+  const stress = spo2.map((v, i) => v == null ? null : Math.round(15 + 45 * rnd(i, 8)));
+  const fatigue = spo2.map((v, i) => v == null ? null : Math.round(50 + 15 * rnd(i, 13)));
+  const hrv = spo2.map((v, i) => v == null ? null : Math.round(25 + 40 * rnd(i, 14)));
+  const temp = spo2.map((v, i) => v == null ? null : +(35.7 + .5 * rnd(i, 7) + (night(i) ? .3 : 0)).toFixed(1));
+  const SEL = 58, sx = (SEL + .5) * W / N;
+
+  const X = i => (i + .5) * W / N;
+  const Y = (v, h, lo, hi) => h - 3 - (v - lo) / (hi - lo) * (h - 6);
+  // Readings are joined only when they are at most 2 slots (30 min) apart: SpO2, BP, stress, fatigue, HRV and
+  // temperature arrive every 30 min, HR every slot. A longer gap breaks the line; missing is never drawn as 0.
+  function path(vals, h, lo, hi) {
+    let d = '', last = -99;
+    vals.forEach((v, i) => { if (v == null) return; d += (i - last <= 2 ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v, h, lo, hi).toFixed(1); last = i; });
+    return d;
+  }
+  const dots = (vals, h, lo, hi, c) => vals.map((v, i) => v == null ? '' : `<circle cx="${X(i).toFixed(1)}" cy="${Y(v, h, lo, hi).toFixed(1)}" r="1.4" fill="${c}"/>`).join('');
+  const line = (v, h, lo, hi, c, w = 1.6) => `<path d="${path(v, h, lo, hi)}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linejoin="round"/>` + (v.filter(x => x != null).length < 60 ? dots(v, h, lo, hi, c) : '');
+  function bandArea(lo, hi, h, a, b, c) {    // hr_min..hr_max band, broken at gaps
+    let out = '', seg = [];
+    const flush = () => { if (seg.length) { const top = seg.map(i => `${X(i).toFixed(1)},${Y(hi[i], h, a, b).toFixed(1)}`); const bot = seg.slice().reverse().map(i => `${X(i).toFixed(1)},${Y(lo[i], h, a, b).toFixed(1)}`); out += `<polygon points="${top.concat(bot).join(' ')}" fill="${c}"/>`; } seg = []; };
+    lo.forEach((v, i) => v == null ? flush() : seg.push(i)); flush(); return out;
+  }
+  const bars = (v, h, mx, c) => v.map((x, i) => x ? `<rect x="${(i * W / N + .4).toFixed(1)}" y="${(h - x / mx * h).toFixed(1)}" width="${(W / N - .8).toFixed(1)}" height="${(x / mx * h).toFixed(1)}" rx="1" fill="${c}"/>` : '').join('');
+  const SLEEP = ['#ff9f0a', '#7d7aff', '#2f6fe0'];
+  const stages = (v, h) => v.map((x, i) => x == null ? '' : `<rect x="${(i * W / N).toFixed(1)}" y="0" width="${(W / N + .2).toFixed(1)}" height="${h}" fill="${SLEEP[x]}"/>`).join('');
+  const grid = h => `<line x1="0" x2="${W}" y1="${h - .5}" y2="${h - .5}" stroke="#38383a" stroke-width=".5"/>`;
+  const scrub = h => `<line x1="${sx}" x2="${sx}" y1="0" y2="${h}" stroke="#fff" stroke-width="1" stroke-dasharray="3 2"/>`;
+  const strip = (name, val, h, inner) =>
+    `<div class="strip"><div class="strip-h"><span>${name}</span><em>${val}</em></div><svg viewBox="0 0 ${W} ${h}" height="${h}">${grid(h)}${inner}${scrub(h)}</svg></div>`;
+
+  document.getElementById('strips').innerHTML =
+    `<div class="legend"><span><i style="background:${SLEEP[2]}"></i>deep</span><span><i style="background:${SLEEP[1]}"></i>light</span><span><i style="background:${SLEEP[0]}"></i>awake</span></div>` +
+    strip('Sleep', '—', 12, stages(sleep, 12)) +
+    strip('Heart rate (avg, min–max band)', '78 bpm', 54, bandArea(hrMin, hrMax, 54, 40, 105, 'rgb(255 69 58 / .22)') + line(hr, 54, 40, 105, '#ff6961')) +
+    strip('SpO₂', '97 %', 26, line(spo2, 26, 90, 100, '#64d2ff')) +
+    strip('Steps', '212', 26, bars(steps, 26, 430, '#30d158')) +
+    strip('Blood pressure', '118 / 76', 30, line(sys, 30, 60, 130, '#ff375f') + line(dia, 30, 60, 130, '#ff8fa6')) +
+    strip('Stress (unverified)', '44', 22, line(stress, 22, 0, 80, '#bf5af2')) +
+    strip('Fatigue (unverified)', '31', 22, line(fatigue, 22, 30, 80, '#ffd60a')) +
+    strip('HRV (unverified)', '38 ms', 22, line(hrv, 22, 10, 80, '#7d7aff')) +
+    strip('Temperature', '36.1 °C', 22, line(temp, 22, 35.4, 36.6, '#ff9f0a')) +
+    `<div class="axis"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span><span>24</span></div>`;
+
+  document.getElementById('slot').innerHTML = [
+    ['Steps', '212'], ['Heart rate', '78'], ['HR min', '71'], ['HR max', '86'], ['SpO₂', '97 %'], ['Blood pressure', '118/76'],
+    ['Fatigue', '31'], ['Stress', '44'], ['HRV', '38 ms'], ['Temperature', '36.1 °C'], ['Light sleep', '—'], ['Deep sleep', '—'], ['Awake', '—'],
+  ].map(([k, v]) => `<div><span>${k}</span>${v}</div>`).join('');
+</script>
+
+<!-- Behaviour (HC4-d):
+  - One shared 00:00-24:00 axis for every strip; strips come from the metric registry (a new metric = a new strip).
+  - Tap or drag across the strips moves the dashed scrub line to that 15-minute slot; the "selected slot" card shows all values (— for null).
+  - Strip header shows the selected slot's value. Missing slots are gaps (never 0, never interpolated).
+  - Prev/next day steps over stored days; the night card is the derived daily row (ADR-0068).
+  - Neutral colours, no good/bad judgement; "unverified" on fatigue, stress and HRV until the labels are confirmed.
+-->
+</body>
+</html>

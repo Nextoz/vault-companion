@@ -137,7 +137,7 @@ values are a record keyed by the registry's payload key; the server always emits
 equals the registry. A new metric is then a registry entry only; the day view iterates `RING_METRICS`.
 
 ```ts
-export const RING_DAILY_CSV = 'Health/Data/Apple Health Vitals Daily.csv'; // if HC4-b has not added it
+// Paths: RING_SLOTS_DIR, ringSlotsPath(month), HEALTH_VITALS_DAILY_CSV (added by HC4-b).
 const slotStart = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00[+-]\d{2}:\d{2}$/); // canonical slot_start
 const count = z.number().int().nonnegative();
 /** One derived daily row (ADR-0068), cells verbatim; an empty cell is null. `date` = night date for sleep cells. */
@@ -174,7 +174,8 @@ export const RingDayResponse = z.strictObject({
   slots: z.array(RingSlot),             // stored slots of that calendar date only, ascending, no padding
   night: RingDailyRow.nullable(),       // the daily row whose date === date, else null
   prevDate: z.iso.date().nullable(),    // nearest earlier date with a stored slot (this month, else previous month file)
-  nextDate: z.iso.date().nullable(),    // nearest later date with a stored slot, never after today
+  nextDate: z.iso.date().nullable(),    // nearest later date with a stored slot (this month, else next month file if not
+                                        // after today's month), never after today
 });
 ```
 
