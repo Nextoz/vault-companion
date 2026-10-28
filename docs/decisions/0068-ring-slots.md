@@ -79,6 +79,14 @@ slot_start,steps,hr,hr_min,hr_max,spo2,bp_sys,bp_dia,fatigue,stress,hrv_ms,temp_
 - Absent file ⇒ created with the header (`expect: 'absent'`); an existing file with any other header ⇒ refused (409).
   At ~3,000 rows a month the file stays well under the 1 MB guard.
 
+**P2 amendment � rows a request uses are validated.** Merge indexes stored start cells and rejects invalid
+starts or duplicate instants; the header and every touched row are validated, including unchanged resends.
+Changed/new rows are individually validated before output (value rules, sleep sum and canonical start).
+Untouched cells are trusted from their original write and retained byte-for-byte, including tolerated offsets;
+a corrupt untouched cell does not block unrelated writes. Daily derivation validates only rows in the canonical
+local date window (sent/affected dates plus neighbours), widening and reloading if affected dates escape it.
+Write-plan results are memoised only within a write and by exact revision, so CAS retries compute afresh.
+
 **Derived daily row.** `Health/Data/Apple Health Vitals Daily.csv` (header as in the first draft:
 `date,weekday,sleep_start,sleep_end,light_min,deep_min,awake_min,resting_hr,avg_hr,min_spo2,avg_spo2,hrv_sdnn_ms,body_temp_c,hr_n,spo2_n,hrv_n,temp_n,sleep_n`)
 is computed from the **merged** slot files, never from the send alone, for every date the send touched (the Copenhagen

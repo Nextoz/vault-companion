@@ -24,7 +24,11 @@ export function joinRingLines(lines: readonly RingFileLine[], eol: string, final
 export const firstEol = (lines: readonly RingFileLine[]): string => lines.find((l) => l.end)?.end ?? '\n';
 const metricsOf = (version: number) => RING_METRICS.filter((m) => m.since <= version);
 const latestVersion = () => Math.max(...Object.values(RING_SCHEMAS));
-const emptyValues = () => Object.fromEntries(RING_METRICS.map((m) => [m.key, null])) as RingSlot['values'];
+function emptyValues(): RingSlot['values'] {
+  const values = {} as RingSlot['values'];
+  for (const m of RING_METRICS) values[m.key] = null;
+  return values;
+}
 
 /** A stored `slot_start`: ISO with offset, a real calendar date, on a 15-minute boundary; else null. */
 function parseStoredStart(start: string): number | null {
@@ -54,12 +58,13 @@ function parseStoredRow(raw: string, metrics: readonly RingMetric[]): RingSlot |
   }
   return { instant, values };
 }
-export function parseSlotFile(text: string): { ok: true; version: number; slots: RingSlot[] } | typeof ringStructureRefusal {
+export function parseSlotFile(text: string, useInstant?: (instant: number) => boolean): { ok: true; version: number; slots: RingSlot[] } | typeof ringStructureRefusal {
   const lines = ringFileLines(text), header = ringFileHeader(lines);
   const version = Object.values(RING_SCHEMAS).find((v) => ringSlotHeader(v) === header);
   if (version === undefined) return ringStructureRefusal;
   const metrics = metricsOf(version), slots: RingSlot[] = [], seen = new Set<number>();
   for (const { raw } of lines.slice(1)) {
+    if (useInstant && !useInstant(Date.parse(raw.slice(0, raw.indexOf(','))))) continue;
     const slot = parseStoredRow(raw, metrics);
     if (!slot || seen.has(slot.instant)) return ringStructureRefusal;
     seen.add(slot.instant); slots.push(slot);
@@ -79,31 +84,53 @@ function applySent(stored: RingSlot, sent: RingSlot, metrics: readonly RingMetri
 export function mergeSlotFile(existing: string | null, slots: readonly RingSlot[], version: number, tz: string): RingFileMerge {
   if (!Object.values(RING_SCHEMAS).includes(version)) return ringStructureRefusal;
   const target = latestVersion(), metrics = metricsOf(target), sentMetrics = metricsOf(version);
-  const parsed = existing === null ? { ok: true as const, version: target, slots: [] as RingSlot[] } : parseSlotFile(existing);
-  if (!parsed.ok) return parsed;
-  const lines = ringFileLines(existing ?? `${ringSlotHeader(target)}\n`), eol = firstEol(lines), final = lines.at(-1)!.end;
-  const rows = parsed.slots.map((slot, i) => ({ slot, ...lines[i + 1]! }));
-  const format = (slot: RingSlot) => [canonicalSlotStart(slot.instant, tz), ...metrics.map((m) => slot.values[m.key] ?? '')].join(',');
-  if (parsed.version < target) {
-    // Schema bump: new header once, untouched rows get empty trailing cells (only written if a value changes below).
-    lines[0]!.raw = `${lines[0]!.raw.startsWith(BOM) ? BOM : ''}${ringSlotHeader(target)}`;
-    for (const row of rows) row.raw += ','.repeat(metrics.length - metricsOf(parsed.version).length);
+  const lines = ringFileLines(existing ?? `${ringSlotHeader(target)}\n`), eol = firstEol(lines), final = lines.at(-1)?.end ?? '';
+  const storedVersion = Object.values(RING_SCHEMAS).find((v) => ringSlotHeader(v) === ringFileHeader(lines));
+  if (storedVersion === undefined) return ringStructureRefusal;
+  const storedMetrics = metricsOf(storedVersion);
+  const rows = new Map<number, RingFileLine & { instant: number; slot?: RingSlot; updated?: boolean }>();
+  for (const line of lines.slice(1)) {
+    const instant = parseStoredStart(line.raw.slice(0, line.raw.indexOf(',')));
+    if (instant === null || rows.has(instant)) return ringStructureRefusal;
+    rows.set(instant, { ...line, instant });
   }
+  const format = (slot: RingSlot) => [canonicalSlotStart(slot.instant, tz), ...metrics.map((m) => slot.values[m.key] ?? '')].join(',');
+  const originals = [...rows.values()];
+  const added: (RingFileLine & { instant: number })[] = [];
   let changed = existing === null;
   for (const sent of [...slots].sort((a, b) => a.instant - b.instant)) {
-    const row = rows.find((r) => r.slot.instant === sent.instant);
+    const row = rows.get(sent.instant);
     if (row) {
-      if (applySent(row.slot, sent, sentMetrics)) { row.raw = format(row.slot); changed = true; }
-      continue;
+      // Validate even an identical resend's touched row before deciding it is unchanged.
+      const stored = row.slot ?? parseStoredRow(row.raw, storedMetrics);
+      if (!stored) return ringStructureRefusal;
+      row.slot = stored;
+      if (!applySent(stored, sent, sentMetrics)) continue;
+      const raw = format(stored);
+      if (!parseStoredRow(raw, metrics)) return ringStructureRefusal;
+      row.raw = raw; row.updated = true; changed = true;
+    } else {
+      const slot = { instant: sent.instant, values: emptyValues() };
+      applySent(slot, sent, sentMetrics);
+      const raw = format(slot);
+      if (!parseStoredRow(raw, metrics)) return ringStructureRefusal;
+      const row = { instant: sent.instant, slot, raw, end: eol };
+      rows.set(sent.instant, row); added.push(row); changed = true;
     }
-    const slot = { instant: sent.instant, values: emptyValues() }, at = rows.findIndex((r) => r.slot.instant > sent.instant);
-    applySent(slot, sent, sentMetrics);
-    rows.splice(at < 0 ? rows.length : at, 0, { slot, raw: format(slot), end: eol });
-    changed = true;
   }
   if (!changed) return { ok: true, text: existing!, changed: false };
-  const text = joinRingLines([lines[0]!, ...rows], eol, final);
-  // The merged file must parse like any stored file (e.g. a partial sleep merge may exceed 15 min).
-  const validated = parseSlotFile(text);
-  return validated.ok ? { ok: true, text, changed: text !== existing } : validated;
+  if (storedVersion < target) {
+    lines[0]!.raw = `${lines[0]!.raw.startsWith(BOM) ? BOM : ''}${ringSlotHeader(target)}`;
+    for (const row of originals) if (!row.updated) row.raw += ','.repeat(metrics.length - storedMetrics.length);
+  }
+  // Preserve even unsorted existing order: insert before the first greater stored instant.
+  const merged: RingFileLine[] = [lines[0]!];
+  let next = 0;
+  for (const row of originals) {
+    while (next < added.length && added[next]!.instant < row.instant) merged.push(added[next++]!);
+    merged.push(row);
+  }
+  merged.push(...added.slice(next));
+  const text = joinRingLines(merged, eol, final);
+  return { ok: true, text, changed: text !== existing };
 }
