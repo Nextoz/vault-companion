@@ -68,10 +68,11 @@ describe('ring reads', () => {
     });
     expect(await readRingDay(deps(store), '2026-09-15')).toMatchObject({ status: 'ok', prevDate: '2026-08-31', nextDate: '2026-10-02' });
   });
-  it.each(['2026-09', '2026-10'])('refuses unparseable start cells anywhere in a used month (%s)', async (month) => {
+  // '1' and a date-only cell are accepted by bare Date.parse; the stored-start shape must refuse them too.
+  it.each([['2026-09', 'not-a-date'], ['2026-10', 'not-a-date'], ['2026-10', '1'], ['2026-10', '2026-10-02']])('refuses unparseable start cells anywhere in a used month (%s, %s)', async (month, cell) => {
     const store = await InMemoryStore.create({
       [ringSlotsPath('2026-10')]: csv('2026-10-25'),
-      [ringSlotsPath(month)]: `${csv('2026-10-25')}not-a-date,\n`,
+      [ringSlotsPath(month)]: `${csv('2026-10-25')}${cell},\n`,
     });
     expect(await readRingDay(deps(store), '2026-10-25')).toMatchObject({ status: 'unreadable', slots: [] });
   });

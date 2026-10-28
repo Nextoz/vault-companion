@@ -9,6 +9,7 @@ import { userDate } from './time.ts';
 type Deps = { store: VaultStore; now: () => Date; timeZone: string };
 type IndexedMonth = { header: string; dates: string[]; rows: { raw: string; start: string; instant: number }[] };
 class Unreadable extends Error {}
+const STORED_START = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00[+-]\d{2}:\d{2}$/;
 // Canonical dates depend only on zone and instant, even when a new revision changes values.
 // Bound retained entries to roughly three months; never cache row validation or file contents.
 const indexedDates = new Map<number, string>();
@@ -95,7 +96,8 @@ export async function readRingDay(deps: Deps, date: string): Promise<RingDayResp
         const dates = new Set<string>(), rows: IndexedMonth['rows'] = [];
         for (const raw of lines.slice(1)) {
           const comma = raw.indexOf(',');
-          const start = comma < 0 ? raw : raw.slice(0, comma), instant = Date.parse(start);
+          // The stored start shape first: bare Date.parse also accepts loose text (e.g. "1" is a date in 2001).
+          const start = comma < 0 ? raw : raw.slice(0, comma), instant = STORED_START.test(start) ? Date.parse(start) : NaN;
           if (!Number.isFinite(instant)) throw new Unreadable();
           const localDate = indexedDate(instant, deps.timeZone);
           if (localDate <= today) dates.add(localDate);
