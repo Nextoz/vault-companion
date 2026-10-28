@@ -259,9 +259,13 @@ describe('Health Ring card (HC4-d2)', () => {
     await click(row);
     await act(async () => { await vi.dynamicImportSettled(); });
     expect(sheetChunk.loaded).toBe(true);
-    // `loaded` flips when the import starts; the real sheet module (and its registry) can take seconds on a cold
-    // Windows CI runner, past waitFor's 1 s default (flaky on main twice): wait for the sheet's read, generously.
-    await act(async () => { await vi.waitFor(() => expect(getRingDay).toHaveBeenCalledWith(date), { timeout: 15_000 }); });
+    // On a slow runner the chunk resolves after the act above, and React queues the Suspense retry. Poll OUTSIDE act,
+    // flushing React with an empty act on each try: a waitFor inside act deadlocks, because act holds the queued
+    // render until its callback returns (the flake on main, reproduced with a delayed chunk).
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(getRingDay).toHaveBeenCalledWith(date);
+    }, { timeout: 15_000 });
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     const close = document.querySelector<HTMLButtonElement>('[role="dialog"] button')!;
     await click(close);
