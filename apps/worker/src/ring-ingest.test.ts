@@ -120,3 +120,17 @@ it('daily validates only rows in the needed canonical local dates', async () => 
   const nearby = await InMemoryStore.create({ [OCT]: old.join('\n').replace('2026-10-01', '2026-10-31') });
   expect(await service(nearby).ingestRing(body([slot()]))).toMatchObject({ ok: false, status: 409 });
 });
+
+it('refuses daily derivation when its date window does not converge within sixteen passes', async () => {
+  const store = await InMemoryStore.create({});
+  let call = 0;
+  // Eventually converge even without the guard, so removing it fails the assertion without hanging the test.
+  const affected = vi.spyOn(domain, 'affectedDates').mockImplementation(() => [
+    new Date(Date.parse('2026-11-01T12:00:00Z') + Math.min(call++, 17) * 3 * 86400000).toISOString().slice(0, 10),
+  ]);
+  try {
+    expect(await service(store).ingestRing(body([slot()]))).toEqual({ ok: false, status: 409, error: 'ring daily: write refused; resend' });
+    expect(affected).toHaveBeenCalledTimes(17);
+    expect(store.text(DAILY)).toBeNull();
+  } finally { affected.mockRestore(); }
+});

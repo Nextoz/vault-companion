@@ -10,6 +10,7 @@ export type RingIngestOutcome =
   | { ok: true; slots: number; months: string[]; days: string[] }
   | { ok: false; status: 400 | 409 | 422 | 503; error: string };
 const UNCHANGED = 'ring bytes unchanged';
+const MAX_DAILY_WINDOW_PASSES = 16;
 const refuse = (message: string) => ({ ok: false, code: 'refused:structure', message } as const);
 const hash = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), (b) => b.toString(16).padStart(2, '0')).join('');
 
@@ -73,7 +74,8 @@ export function createRingIngestService(deps: HealthIngestDeps) {
         let window = windowFor(days);
         const sources = new Map<string, string | null>();
         // Reload the expanded window at this attempt's revision if a night reaches another date.
-        for (;;) {
+        for (let pass = 0; ; pass++) {
+          if (pass === MAX_DAILY_WINDOW_PASSES) return refuse('ring daily window did not converge');
           slots = [];
           for (const month of [...new Set([...window].map((d) => d.slice(0, 7)))].sort()) {
             if (!sources.has(month)) sources.set(month, await read(s, ringSlotsPath(month) as VaultPath, at));

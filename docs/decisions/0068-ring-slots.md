@@ -84,7 +84,8 @@ starts or duplicate instants; the header and every touched row are validated, in
 Changed/new rows are individually validated before output (value rules, sleep sum and canonical start).
 Untouched cells are trusted from their original write and retained byte-for-byte, including tolerated offsets;
 a corrupt untouched cell does not block unrelated writes. Daily derivation validates only rows in the canonical
-local date window (sent/affected dates plus neighbours), widening and reloading if affected dates escape it.
+local date window (sent/affected dates plus neighbours), widening and reloading if affected dates escape it;
+non-convergence after 16 passes refuses the daily write. Schema bumps validate every row they rewrite.
 Write-plan results are memoised only within a write and by exact revision, so CAS retries compute afresh.
 
 **Derived daily row.** `Health/Data/Apple Health Vitals Daily.csv` (header as in the first draft:

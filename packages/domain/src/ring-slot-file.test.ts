@@ -158,3 +158,16 @@ it('equals the old merge on seeded random sparse, unsorted and overlapping sends
     expect(mergeSlotFile(text, sent, 1, tz)).toEqual(oldMergeSlotFile(text, sent, 1, tz));
   }
 });
+
+it('validates untouched rows rewritten by a schema bump before appending columns', () => {
+  const metric = RING_METRICS.at(-1)!, oldSince = metric.since;
+  const schemas = RING_SCHEMAS as Record<string, number>;
+  metric.since = 2; schemas['ring-slots/2'] = 2;
+  try {
+    const raw = row('2026-10-10T12:00:00+02:00').slice(0, -1);
+    for (const corrupt of [raw.slice(0, -1), `${raw},`, raw.replace(',072,', ',NaN,')]) {
+      const text = `${ringSlotHeader(1)}\n${corrupt}\n`;
+      expect(mergeSlotFile(text, [slot('2026-10-10T12:15:00+02:00')], 1, tz)).toEqual(ringStructureRefusal);
+    }
+  } finally { metric.since = oldSince; delete schemas['ring-slots/2']; }
+});

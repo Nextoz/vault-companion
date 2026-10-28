@@ -121,7 +121,11 @@ export function mergeSlotFile(existing: string | null, slots: readonly RingSlot[
   if (!changed) return { ok: true, text: existing!, changed: false };
   if (storedVersion < target) {
     lines[0]!.raw = `${lines[0]!.raw.startsWith(BOM) ? BOM : ''}${ringSlotHeader(target)}`;
-    for (const row of originals) if (!row.updated) row.raw += ','.repeat(metrics.length - storedMetrics.length);
+    for (const row of originals) if (!row.updated) {
+      // A schema bump rewrites these rows too: validate before appending columns.
+      if (!parseStoredRow(row.raw, storedMetrics)) return ringStructureRefusal;
+      row.raw += ','.repeat(metrics.length - storedMetrics.length);
+    }
   }
   // Preserve even unsorted existing order: insert before the first greater stored instant.
   const merged: RingFileLine[] = [lines[0]!];
