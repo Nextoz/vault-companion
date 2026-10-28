@@ -66,18 +66,3 @@ Automation: **App → PulseLoop → Is Closed → Run Ring Sync** (Run Immediate
 blocks for ring types are **not** needed.
 
 Every Worker failure has `ok: false` and an `error` string; success has no `error` key. Cloudflare Access refusals and network failures never reach the Worker and may stay silent. Judge delivery by the slot file commit time.
-
-## Ring Sync
-
-1. **Get ring data** (PulseLoop app action). Leave **Days** at its default **7** (range 1–28): the Worker accepts
-   only slots from the last 8 days and refuses the whole send otherwise.
-2. **Get Contents of URL** `https://app.karpov.dk/api/health/ring/ingest`, Method **POST**, three headers
-   `CF-Access-Client-Id`, `CF-Access-Client-Secret` (the same service token) and `Content-Type: application/json`;
-   Request Body **File** = the output of *Get ring data*. Send the JSON text as it is; do not rebuild it as a
-   Shortcuts dictionary (that retypes nulls and numbers).
-3. **Get Dictionary Value** `error` → **If** it *has any value* → **Show Notification** with it.
-
-Automation: **App → PulseLoop → Is Closed → Run Ring Sync** (Run Immediately). The earlier "Find Health Samples"
-blocks for ring types are **not** needed.
-
-Every Worker failure has `ok: false` and an `error` string; success has no `error` key. Cloudflare Access refusals and network failures never reach the Worker and may stay silent. Judge delivery by the slot file commit time.
