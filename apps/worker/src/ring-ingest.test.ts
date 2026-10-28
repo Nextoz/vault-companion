@@ -96,3 +96,41 @@ it.each([new Uint8Array([0xff]), new Uint8Array(1024 * 1024 + 1)])('refuses unsa
   const store = await InMemoryStore.create({ [NOV]: bytes });
   expect(await service(store).ingestRing(body([slot()]))).toMatchObject({ ok: false, status: 409 }); expect(store.writeCalls).toBe(0);
 });
+
+it('computes each slot and daily plan once per revision, recomputing after CAS changes', async () => {
+  const concurrent = csv(body([slot('2026-10-31T12:00:00+01:00')]));
+  const store = await InMemoryStore.create({}), original = store.writeFile.bind(store);
+  const slots = vi.spyOn(domain, 'mergeSlotFile'), daily = vi.spyOn(domain, 'deriveRingDaily');
+  let injected = false;
+  vi.spyOn(store, 'writeFile').mockImplementation(async (request: WriteRequest) => {
+    if (!injected && request.path === NOV) { injected = true; await store.commitFiles({ [OCT]: concurrent }); }
+    return original(request);
+  });
+  try {
+    expect((await service(store).ingestRing(body([slot()]))).ok).toBe(true);
+    expect(slots).toHaveBeenCalledTimes(2);
+    expect(daily).toHaveBeenCalledTimes(1);
+  } finally { slots.mockRestore(); daily.mockRestore(); }
+});
+it('daily validates only rows in the needed canonical local dates', async () => {
+  const old = csv(body([slot('2026-10-31T12:00:00+01:00')])).split('\n');
+  old[1] = old[1]!.replace('2026-10-31', '2026-10-01').replace(',60,', ',NaN,');
+  const store = await InMemoryStore.create({ [OCT]: old.join('\n') });
+  expect((await service(store).ingestRing(body([slot()]))).ok).toBe(true);
+  const nearby = await InMemoryStore.create({ [OCT]: old.join('\n').replace('2026-10-01', '2026-10-31') });
+  expect(await service(nearby).ingestRing(body([slot()]))).toMatchObject({ ok: false, status: 409 });
+});
+
+it('refuses daily derivation when its date window does not converge within sixteen passes', async () => {
+  const store = await InMemoryStore.create({});
+  let call = 0;
+  // Eventually converge even without the guard, so removing it fails the assertion without hanging the test.
+  const affected = vi.spyOn(domain, 'affectedDates').mockImplementation(() => [
+    new Date(Date.parse('2026-11-01T12:00:00Z') + Math.min(call++, 17) * 3 * 86400000).toISOString().slice(0, 10),
+  ]);
+  try {
+    expect(await service(store).ingestRing(body([slot()]))).toEqual({ ok: false, status: 409, error: 'ring daily: write refused; resend' });
+    expect(affected).toHaveBeenCalledTimes(17);
+    expect(store.text(DAILY)).toBeNull();
+  } finally { affected.mockRestore(); }
+});

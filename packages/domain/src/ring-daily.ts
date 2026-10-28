@@ -1,10 +1,22 @@
-import { formatNumber, wallClockDate, weekday } from './health-format.ts';
+import { formatNumber, weekday } from './health-format.ts';
 import { RING_DAILY_HEADER, RING_METRICS, type RingDailyAgg, type RingKey } from './ring-metrics.ts';
 import { canonicalSlotStart, type RingSlot } from './ring-slots.ts';
 import { firstEol, joinRingLines, ringFileHeader, ringFileLines, ringStructureRefusal, type RingFileMerge } from './ring-slot-file.ts';
 
 const SLOT_MS = 15 * 60_000, SESSION_GAP_MS = 75 * 60_000, DAY_MS = 86_400_000;
 const NIGHT_CUT_HOURS = 3;
+const localClocks = new Map<string, number>();
+// Shift the local clock, rather than the instant, across DST boundaries.
+function wallClockDate(ms: number, tz: string, shiftHours: number): string {
+  const key = `${tz}|${ms}`;
+  let local = localClocks.get(key);
+  if (local === undefined) {
+    local = Date.parse(`${canonicalSlotStart(ms, tz).slice(0, 19)}Z`);
+    if (localClocks.size >= 4096) localClocks.clear();
+    localClocks.set(key, local);
+  }
+  return new Date(local + shiftHours * 3_600_000).toISOString().slice(0, 10);
+}
 export type RingNightSession = { start: number; end: number; date: string; slots: RingSlot[] };
 const byInstant = (a: RingSlot, b: RingSlot) => a.instant - b.instant;
 /** A sleep slot has light + deep + awake minutes (the registry's `sleep` sum group) > 0. */
