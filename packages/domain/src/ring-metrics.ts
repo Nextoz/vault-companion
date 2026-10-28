@@ -1,5 +1,10 @@
 export type RingKey = 'steps' | 'hr' | 'hrMin' | 'hrMax' | 'spo2' | 'bpSys' | 'bpDia' | 'fatigue' | 'stress' | 'hrvMs' | 'tempC' | 'sleepLightMin' | 'sleepDeepMin' | 'sleepAwakeMin';
-export type RingValueRule = { kind: 'int'; min: 0; max?: number } | { kind: 'decimal'; decimals: 2; min: 0 };
+export type RingValueRule = { kind: 'int'; min: 0; max?: number } | { kind: 'decimal'; decimals: 2; min: 0; max?: number };
+/** A non-null value obeys its registry rule (sent payloads and stored cells alike). */
+export function ringValueValid(rule: RingValueRule, v: number): boolean {
+  if (!Number.isFinite(v) || v < rule.min || (rule.max !== undefined && v > rule.max)) return false;
+  return rule.kind === 'int' ? Number.isInteger(v) : Number(v.toFixed(rule.decimals)) === v;
+}
 export interface RingDailyAgg {
   column: string; scope: 'day' | 'night'; fn: 'mean' | 'min' | 'median' | 'sum' | 'count'; decimals: 0 | 1; minCount?: number;
 }
