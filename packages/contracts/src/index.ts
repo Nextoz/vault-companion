@@ -1398,6 +1398,29 @@ export const HealthMetric = z.strictObject({
 });
 export type HealthMetric = z.infer<typeof HealthMetric>;
 
+const slotStart = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00[+-]\d{2}:\d{2}$/);
+const ringCount = z.number().int().nonnegative();
+export const RingDailyRow = z.strictObject({
+  date: z.iso.date(), sleepStart: slotStart.nullable(), sleepEnd: slotStart.nullable(),
+  lightMin: ringCount.nullable(), deepMin: ringCount.nullable(), awakeMin: ringCount.nullable(),
+  restingHr: z.number().nullable(), avgHr: z.number().nullable(), minSpo2: z.number().nullable(), avgSpo2: z.number().nullable(),
+  hrvSdnnMs: z.number().nullable(), bodyTempC: z.number().nullable(),
+  hrN: ringCount, spo2N: ringCount, hrvN: ringCount, tempN: ringCount, sleepN: ringCount,
+});
+export type RingDailyRow = z.infer<typeof RingDailyRow>;
+export const RingVitals = z.strictObject({
+  status: HealthStatus, row: RingDailyRow.nullable(),
+  daySlots: z.union([z.literal(92), z.literal(96), z.literal(100)]).nullable(), staleDays: ringCount.nullable(),
+});
+export type RingVitals = z.infer<typeof RingVitals>;
+export const RingSlot = z.strictObject({ start: slotStart, values: z.record(z.string(), z.number().nullable()) });
+export type RingSlot = z.infer<typeof RingSlot>;
+export const RingDayResponse = z.strictObject({
+  revision: commitSha, now: isoInstant, today: z.iso.date(), date: z.iso.date(), status: HealthStatus,
+  dayStart: slotStart, dayEnd: slotStart, daySlots: z.union([z.literal(92), z.literal(96), z.literal(100)]),
+  slots: z.array(RingSlot), night: RingDailyRow.nullable(), prevDate: z.iso.date().nullable(), nextDate: z.iso.date().nullable(),
+});
+export type RingDayResponse = z.infer<typeof RingDayResponse>;
 export const HealthResponse = z.strictObject({
   revision: commitSha,
   /** Server time: staleness never depends on the phone clock. */
@@ -1408,6 +1431,7 @@ export const HealthResponse = z.strictObject({
   /** Yesterday minus the shown day, in whole days; present only when `status` is `ok`. */
   staleDays: z.number().int().nonnegative().optional(),
   metrics: z.array(HealthMetric),
+  vitals: RingVitals.optional(),
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
 

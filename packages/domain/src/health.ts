@@ -11,6 +11,7 @@ import {
   type HealthResponse,
 } from '@vault-companion/contracts';
 import { isStructurallySafePath } from './paths.ts';
+import { readRingDay, readRingVitals } from './ring-read.ts';
 import { DEFAULT_USER_TIME_ZONE, userDate } from './time.ts';
 import { FileTooLarge, StoreUnavailable, StoreUnknownOutcome, type VaultPath, type VaultStore } from './store.ts';
 
@@ -187,7 +188,8 @@ async function readSource(deps: Required<Pick<HealthServiceDeps, 'store' | 'now'
 async function readHealth(deps: Required<Pick<HealthServiceDeps, 'store' | 'now' | 'timeZone'>>): Promise<HealthResponse | ApiError> {
   try {
     const source = await readSource(deps);
-    const base = { revision: source.revision, now: source.now };
+    const vitals = await readRingVitals(deps, source.revision, new Date(source.now));
+    const base = { revision: source.revision, now: source.now, vitals };
     if (source.status !== 'ok') return { ...base, status: source.status, metrics: [] };
     const { at, rows } = source;
 
@@ -243,6 +245,9 @@ async function readHealthHistory(deps: Required<Pick<HealthServiceDeps, 'store' 
 export function createHealthService(deps: HealthServiceDeps) {
   const resolved = { store: deps.store, now: deps.now ?? (() => new Date()), timeZone: deps.timeZone ?? DEFAULT_USER_TIME_ZONE };
   return {
+    readRingDay(date: string) {
+      return readRingDay(resolved, date);
+    },
     readHealth(): Promise<HealthResponse | ApiError> {
       return readHealth(resolved);
     },
