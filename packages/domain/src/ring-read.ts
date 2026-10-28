@@ -7,7 +7,25 @@ import { FileTooLarge, StoreUnavailable, StoreUnknownOutcome, type VaultPath, ty
 import { userDate } from './time.ts';
 
 type Deps = { store: VaultStore; now: () => Date; timeZone: string };
+type IndexedMonth = { header: string; dates: string[]; rows: { raw: string; start: string; instant: number }[] };
 class Unreadable extends Error {}
+const STORED_START = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00[+-]\d{2}:\d{2}$/;
+// Canonical dates depend only on zone and instant, even when a new revision changes values.
+// Bound retained entries to roughly three months; never cache row validation or file contents.
+const indexedDates = new Map<number, string>();
+let indexedTimeZone: string | undefined;
+function indexedDate(instant: number, timeZone: string): string {
+  if (indexedTimeZone !== timeZone) {
+    indexedDates.clear();
+    indexedTimeZone = timeZone;
+  }
+  const cached = indexedDates.get(instant);
+  if (cached !== undefined) return cached;
+  const date = canonicalSlotStart(instant, timeZone).slice(0, 10);
+  if (indexedDates.size === 8192) indexedDates.clear();
+  indexedDates.set(instant, date);
+  return date;
+}
 const shiftDay = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 export function validRingDate(date: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
@@ -67,25 +85,43 @@ export async function readRingDay(deps: Deps, date: string): Promise<RingDayResp
     const base = { revision, now: at.toISOString(), today, date, ...ringDayBounds(date, deps.timeZone) };
     try {
       const month = date.slice(0, 7);
-      const load = async (m: string): Promise<RingSlot[]> => {
+      const load = async (m: string): Promise<IndexedMonth> => {
         const text = await readText(deps.store, revision, ringSlotsPath(m));
-        if (text === null) return [];
-        const parsed = parseSlotFile(text);
-        if (!parsed.ok) throw new Unreadable();
-        const lines = ringFileLines(text);
-        return parsed.slots.map((s, i) => ({ start: lines[i + 1]!.raw.split(',')[0]!, values: s.values }));
+        if (text === null) return { header: '', dates: [], rows: [] };
+        // Match ringFileLines' mixed-EOL and final-newline semantics without match objects.
+        const lines = text.split(/\r\n|\r|\n/);
+        if (lines.at(-1) === '') lines.pop();
+        const header = ringFileHeader(lines.length ? [{ raw: lines[0]!, end: '' }] : []);
+        if (header === undefined || !parseSlotFile(header).ok) throw new Unreadable();
+        const dates = new Set<string>(), rows: IndexedMonth['rows'] = [];
+        for (const raw of lines.slice(1)) {
+          const comma = raw.indexOf(',');
+          // The stored start shape first: bare Date.parse also accepts loose text (e.g. "1" is a date in 2001).
+          const start = comma < 0 ? raw : raw.slice(0, comma), instant = STORED_START.test(start) ? Date.parse(start) : NaN;
+          if (!Number.isFinite(instant)) throw new Unreadable();
+          const localDate = indexedDate(instant, deps.timeZone);
+          if (localDate <= today) dates.add(localDate);
+          if (localDate === date) rows.push({ raw, start, instant });
+        }
+        return { header, dates: [...dates].sort(), rows };
       };
       const slots = await load(month);
-      const dates = (rows: RingSlot[]) => rows.map((s) => canonicalSlotStart(Date.parse(s.start), deps.timeZone).slice(0, 10)).filter((d) => d <= today).sort();
-      const here = dates(slots);
+      const here = slots.dates;
       let prevDate = here.filter((d) => d < date).at(-1) ?? null;
       let nextDate = here.find((d) => d > date) ?? null;
-      if (!prevDate) prevDate = dates(await load(shiftDay(`${month}-01`, -1).slice(0, 7))).filter((d) => d < date).at(-1) ?? null;
+      if (!prevDate) prevDate = (await load(shiftDay(`${month}-01`, -1).slice(0, 7))).dates.filter((d) => d < date).at(-1) ?? null;
       const nextMonth = shiftDay(`${month}-01`, 32).slice(0, 7);
-      if (!nextDate && nextMonth <= today.slice(0, 7)) nextDate = dates(await load(nextMonth)).find((d) => d > date) ?? null;
+      if (!nextDate && nextMonth <= today.slice(0, 7)) nextDate = (await load(nextMonth)).dates.find((d) => d > date) ?? null;
       const daily = await readText(deps.store, revision, HEALTH_VITALS_DAILY_CSV);
       const night = daily === null ? null : parseRingDaily(daily).find((r) => r.date === date) ?? null;
-      const day = slots.filter((s) => canonicalSlotStart(Date.parse(s.start), deps.timeZone).slice(0, 10) === date).sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+      const selected = slots.rows.sort((a, b) => a.instant - b.instant);
+      const day: RingSlot[] = [];
+      if (selected.length) {
+        // Reuse the stored-row rules, including duplicate-instant rejection, only for this day.
+        const parsed = parseSlotFile(`${slots.header}\n${selected.map((s) => s.raw).join('\n')}`);
+        if (!parsed.ok) throw new Unreadable();
+        day.push(...parsed.slots.map((s, i) => ({ start: selected[i]!.start, values: s.values })));
+      }
       return { ...base, status: day.length ? 'ok' : 'missing', slots: day, night, prevDate, nextDate };
     } catch (e) {
       if (e instanceof Unreadable) return { ...base, status: 'unreadable', slots: [], night: null, prevDate: null, nextDate: null };
