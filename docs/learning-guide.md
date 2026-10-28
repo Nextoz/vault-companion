@@ -108,3 +108,20 @@ Files: `apps/web/src/queue/queue.ts` · `apps/web/src/queue/classify.ts` · `app
 Be able to answer: What happens to a capture typed offline when the session has expired? Why can't Undo simply
 delete a pending completion that was already sent once? How does the app avoid showing a saved completion as open
 again after a stale read?
+
+## 9. One registry drives storage, API and view (ring slots, ADR-0068)
+
+Every ring metric is one entry in a pure, import-free registry: CSV column, payload key, unit, chart and strip. The
+slot-file parser and writer, the derived daily row, the read API (which always emits every key, `null` kept) and the
+day view all iterate it, so a new metric is a registry entry plus a schema bump. Slots are 15-minute Copenhagen
+buckets in one file per month; a day has 92, 96 or 100 of them. Missing slots stay absent: never padded, never 0.
+Decision: the web imports the registry through the narrow `domain/ring-metrics` subpath (not all of `domain`), only
+from the lazy day sheet, to keep the boundary and the bundle small.
+Trace: Shortcut `POST /api/health/ring/ingest` → `parseRingPayload` → `mergeSlotFile` per month (CAS write) →
+`deriveRingDaily` → daily CSV; read: `GET /api/health/ring?date=` → `readRingDay` → `RingDaySheet`.
+
+Files: `packages/domain/src/ring-metrics.ts` · `packages/domain/src/ring-slot-file.ts` ·
+`apps/worker/src/ring-ingest.ts` · `packages/domain/src/ring-read.ts` · `apps/web/src/ui/ring-day.ts`
+
+Be able to answer: Why does a 25-hour day need the x position from elapsed time, not the clock hour? Why can a resent
+body never erase a stored value? Why does reading the next month stop at today's month?
