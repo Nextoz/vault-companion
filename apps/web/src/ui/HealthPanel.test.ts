@@ -266,4 +266,25 @@ describe('Health Ring card (HC4-d2)', () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(row);
   });
+
+  it('contains a rejected sheet import and keeps the Health panel usable', async () => {
+    vi.resetModules();
+    vi.doMock('../api.ts', () => ({ getHealth, getHealthHistory, getRingDay }));
+    vi.doMock('./RingDaySheet.tsx', () => { throw new Error('synthetic chunk failure'); });
+    const { HealthPanel: IsolatedPanel } = await import('./HealthPanel.tsx');
+    vi.mocked(getHealth).mockResolvedValue({ kind: 'ok', data: health({ vitals: vitals() }) });
+    const caught = vi.fn();
+    root = createRoot(document.getElementById('root')!, { onCaughtError: caught });
+    await act(async () => root!.render(createElement(IsolatedPanel, { refreshKey: 0 })));
+    const row = document.querySelector<HTMLButtonElement>('.ring-summary-row')!;
+    await click(row);
+    await act(async () => { await vi.dynamicImportSettled(); });
+    expect(caught).toHaveBeenCalledTimes(1);
+    expect(text()).toContain('Ring day could not be opened. Reload to try again.');
+    expect(document.querySelectorAll('.health-tile')).toHaveLength(4);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(row.disabled).toBe(true);
+    await click(button('History'));
+    expect(button('History').getAttribute('aria-expanded')).toBe('true');
+  });
 });

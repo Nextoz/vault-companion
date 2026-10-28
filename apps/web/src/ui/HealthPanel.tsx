@@ -1,7 +1,7 @@
 // Health daily card (HC2): read-only projection of the one fixed Apple Health export. No scores, no diagnosis, no
 // colour judgement; values and sparklines are shown verbatim, with gaps left as gaps.
 import type { HealthMetric, HealthMetricKey, HealthResponse } from '@vault-companion/contracts';
-import { lazy, Suspense, useId, useState } from 'react';
+import { Component, lazy, Suspense, useId, useState, type ReactNode } from 'react';
 import { getHealth } from '../api.ts';
 import './Dashboard.css';
 import { HealthHistory } from './HealthHistory.tsx';
@@ -103,8 +103,16 @@ function HealthFreshness({ health }: { health: HealthResponse }) {
   );
 }
 
+class RingSheetBoundary extends Component<{ children: ReactNode; onError: () => void }, { failed: boolean }> {
+  override state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  override componentDidCatch() { this.props.onError(); }
+  override render() { return this.state.failed ? null : this.props.children; }
+}
+
 function RingSection({ vitals, now }: { vitals: NonNullable<HealthResponse['vitals']>; now: string }) {
   const [open, setOpen] = useState(false);
+  const [sheetFailed, setSheetFailed] = useState(false);
   const row = vitals.row;
   const date = row?.date ?? ringToday.format(new Date(now));
   const asleep = row?.lightMin == null || row.deepMin == null ? null : row.lightMin + row.deepMin;
@@ -117,7 +125,7 @@ function RingSection({ vitals, now }: { vitals: NonNullable<HealthResponse['vita
   return (
     <section className="ring-summary" aria-label="Ring">
       {vitals.status === 'unreadable' ? <p className="ring-note">Ring data could not be read</p> : (
-        <button type="button" className="ring-summary-row" onClick={() => setOpen(true)}>
+        <button type="button" className="ring-summary-row" onClick={() => setOpen(true)} disabled={sheetFailed}>
           {vitals.status === 'missing' ? 'No ring data yet' : (
             <>
               <span className="ring-label">Ring · {date}</span>
@@ -129,7 +137,12 @@ function RingSection({ vitals, now }: { vitals: NonNullable<HealthResponse['vita
           )}
         </button>
       )}
-      {open && <Suspense fallback={null}><RingDaySheet date={date} onClose={() => setOpen(false)} /></Suspense>}
+      {sheetFailed && <p className="ring-note" role="status">Ring day could not be opened. Reload to try again.</p>}
+      {open && (
+        <RingSheetBoundary onError={() => { setOpen(false); setSheetFailed(true); }}>
+          <Suspense fallback={null}><RingDaySheet date={date} onClose={() => setOpen(false)} /></Suspense>
+        </RingSheetBoundary>
+      )}
     </section>
   );
 }
