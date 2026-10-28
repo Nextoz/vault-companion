@@ -1,7 +1,7 @@
 import { HEALTH_VITALS_DAILY_CSV, ringSlotsPath } from '@vault-companion/contracts';
 import {
   affectedDates, canonicalSlotStart, canWrite, DEFAULT_USER_TIME_ZONE, deriveRingDaily, executeWrite, FileTooLarge,
-  mergeDailyFile, mergeSlotFile, parseRingPayload, parseSlotFile, parseVaultPath, splitByMonth,
+  mergeDailyFile, mergeSlotFile, parseRingPayload, parseSlotFile, parseVaultPath, ringStructureRefusal, splitByMonth,
   StoreUnavailable, StoreUnknownOutcome, type HealthIngestDeps, type RingFileMerge, type RingSlot,
   type VaultPath, type VaultStore, type WritePlan,
 } from '@vault-companion/domain';
@@ -75,7 +75,8 @@ export function createRingIngestService(deps: HealthIngestDeps) {
         const sources = new Map<string, string | null>();
         // Reload the expanded window at this attempt's revision if a night reaches another date.
         for (let pass = 0; ; pass++) {
-          if (pass === MAX_DAILY_WINDOW_PASSES) return refuse('ring daily window did not converge');
+          // A window that keeps widening means the stored structure is not what the daily rules expect.
+          if (pass === MAX_DAILY_WINDOW_PASSES) return ringStructureRefusal;
           slots = [];
           for (const month of [...new Set([...window].map((d) => d.slice(0, 7)))].sort()) {
             if (!sources.has(month)) sources.set(month, await read(s, ringSlotsPath(month) as VaultPath, at));
