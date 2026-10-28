@@ -561,7 +561,9 @@ export function createApp(deps: AppDeps) {
     const meta = c.get('logMeta');
     if (isApiError(result)) {
       meta.errorCode = result.code;
-      return c.json({ error: result.message }, statusFor(result.code) as 400);
+      // HC4 contract: a malformed or future date is 400 { error }; anything else keeps the ApiError shape.
+      if (result.code === 'invalid') return c.json({ error: result.message }, 400);
+      return c.json(result, statusFor(result.code) as 400);
     }
     meta.commitSha = result.revision;
     return c.json(result);

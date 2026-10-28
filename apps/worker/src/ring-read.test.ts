@@ -46,7 +46,8 @@ describe('ring routes', () => {
     expect(RingDayResponse.parse(await missing.json()).status).toBe('missing');
     expect((await stack(store, false).app.request('/api/health/ring', { headers })).status).toBe(404);
     head.mockRejectedValue(new StoreUnavailable('private-synthetic'));
-    expect((await app.request('/api/health/ring?date=2026-10-28', { headers })).status).toBe(503);
+    const down = await app.request('/api/health/ring?date=2026-10-28', { headers });
+    expect(down.status).toBe(503); expect(await down.json()).toMatchObject({ code: 'upstream-unavailable', retryable: true });
     expect(logs.at(-1)?.errorCode).toBe('upstream-unavailable'); expect(JSON.stringify(logs)).not.toContain('private-synthetic');
   });
   it.each(['ok', 'missing', 'unreadable', 'outage', 'future', 'bad-row'])('vitals %s leaves v1 fields unchanged', async (mode) => {
