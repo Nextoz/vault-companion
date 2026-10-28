@@ -61,9 +61,9 @@ describe('ring routes', () => {
       vi.spyOn(store, 'readFile').mockImplementation((path, rev) => path === HEALTH_VITALS_DAILY_CSV ? Promise.reject(new StoreUnavailable('private')) : read(path, rev));
     }
     const res = await stack(store).app.request('/api/health', { headers }); expect(res.status).toBe(200);
-    const { vitals, revision: _revision, ...rest } = HealthResponse.parse(await res.json());
-    const { vitals: _vitals, revision: _baseRevision, ...expected } = HealthResponse.parse(baseline);
-    expect(rest).toEqual(expected);
+    const body = HealthResponse.parse(await res.json()), vitals = body.vitals;
+    // v1 fields are unchanged; only vitals (and the revision of the fixture commit) differ.
+    expect({ ...body, vitals: undefined, revision: '' }).toEqual({ ...HealthResponse.parse(baseline), vitals: undefined, revision: '' });
     expect(vitals?.status).toBe(mode === 'future' ? 'missing' : ['outage', 'bad-row'].includes(mode) ? 'unreadable' : mode);
     if (mode === 'ok') expect(vitals).toMatchObject({ row: { date: '2026-10-25', sleepStart: null, restingHr: 60 }, daySlots: 100, staleDays: 3 });
     else expect(vitals).toMatchObject({ row: null, daySlots: null, staleDays: null });
