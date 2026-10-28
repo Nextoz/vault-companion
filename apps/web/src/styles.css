@@ -1400,6 +1400,16 @@ body:has(.reward-banner) .toast {
   .reading-current, .tasks, .action-list, .triage-card, .dash-card) {
   background-image: var(--card-sheen);
 }
+.ring-summary { margin-top: 12px; }
+.ring-summary-row {
+  display: block; width: 100%; text-align: left; color: var(--text);
+  background: var(--surface); border: 0; border-radius: 14px; padding: 12px; cursor: pointer;
+}
+.ring-summary-row:focus-visible { outline: 2px solid var(--hue-health); outline-offset: 2px; }
+.ring-summary-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+.ring-summary-tiles b { display: block; font-size: 20px; color: var(--hue-health); }
+.ring-summary-tiles small { color: var(--muted); font-size: 12px; }
+.ring-summary-row > .ring-note { display: block; }
 .ring-day {
   --ring-hr: var(--danger-on-raised); --ring-spo2: var(--ios-cyan); --ring-steps: var(--ios-green);
   --ring-bp_sys: var(--ios-pink); --ring-bp_dia: var(--ios-pink);

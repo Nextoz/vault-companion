@@ -1,12 +1,14 @@
 // Health daily card (HC2): read-only projection of the one fixed Apple Health export. No scores, no diagnosis, no
 // colour judgement; values and sparklines are shown verbatim, with gaps left as gaps.
 import type { HealthMetric, HealthMetricKey, HealthResponse } from '@vault-companion/contracts';
-import { useId, useState } from 'react';
+import { lazy, Suspense, useId, useState } from 'react';
 import { getHealth } from '../api.ts';
 import './Dashboard.css';
 import { HealthHistory } from './HealthHistory.tsx';
 import { CopyNote, useLastCopy } from './useLastCopy.tsx';
 
+const RingDaySheet = lazy(() => import('./RingDaySheet.tsx').then((m) => ({ default: m.RingDaySheet })));
+const ringToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' });
 const stepNumber = new Intl.NumberFormat('en-US');
 const healthDay = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -101,6 +103,37 @@ function HealthFreshness({ health }: { health: HealthResponse }) {
   );
 }
 
+function RingSection({ vitals, now }: { vitals: NonNullable<HealthResponse['vitals']>; now: string }) {
+  const [open, setOpen] = useState(false);
+  const row = vitals.row;
+  const date = row?.date ?? ringToday.format(new Date(now));
+  const asleep = row?.lightMin == null || row.deepMin == null ? null : row.lightMin + row.deepMin;
+  const tiles = [
+    ['asleep', asleep === null ? '—' : `${Math.floor(asleep / 60)} h ${asleep % 60}`],
+    ['resting HR', row?.restingHr ?? '—'],
+    ['HRV (unverified)', row?.hrvSdnnMs == null ? '—' : `${row.hrvSdnnMs} ms`],
+    ['night temp', row?.bodyTempC == null ? '—' : `${row.bodyTempC}°`],
+  ];
+  return (
+    <section className="ring-summary" aria-label="Ring">
+      {vitals.status === 'unreadable' ? <p className="ring-note">Ring data could not be read</p> : (
+        <button type="button" className="ring-summary-row" onClick={() => setOpen(true)}>
+          {vitals.status === 'missing' ? 'No ring data yet' : (
+            <>
+              <span className="ring-label">Ring · {date}</span>
+              <span className="ring-summary-tiles">
+                {tiles.map(([label, value]) => <span key={label}><b>{value}</b><small>{label}</small></span>)}
+              </span>
+              {(vitals.staleDays ?? 0) > 1 && <span className="ring-note">{vitals.staleDays} days old</span>}
+            </>
+          )}
+        </button>
+      )}
+      {open && <Suspense fallback={null}><RingDaySheet date={date} onClose={() => setOpen(false)} /></Suspense>}
+    </section>
+  );
+}
+
 export function HealthPanel({ refreshKey, accountKey = null }: {
   refreshKey: number | null; accountKey?: string | null;
 }) {
@@ -138,6 +171,7 @@ export function HealthPanel({ refreshKey, accountKey = null }: {
           {view.failed && <button type="button" className="link" onClick={() => setRetryKey((previous) => previous + 1)}>Retry health</button>}
         </>
       )}
+      {health?.vitals && <RingSection vitals={health.vitals} now={health.now} />}
       {showHistory && <HealthHistory />}
     </article>
   );
