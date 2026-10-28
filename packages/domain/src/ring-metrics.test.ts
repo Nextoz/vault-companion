@@ -8,4 +8,7 @@ describe('ring registry', () => {
     expect(new Set(RING_METRICS.map((m) => m.key)).size).toBe(14);
     expect(RING_METRICS.filter((m) => m.labelUnverified).map((m) => m.key)).toEqual(['fatigue', 'stress', 'hrvMs']);
   });
+  it('groups strips like design A', () => {
+    expect([...new Set(RING_METRICS.map((m) => m.strip))]).toEqual(['steps', 'hr', 'spo2', 'bp', 'fatigue', 'stress', 'hrv_ms', 'temp_c', 'sleep']);
+  });
 });

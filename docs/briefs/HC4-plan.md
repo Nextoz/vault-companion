@@ -125,3 +125,62 @@ Handoff <= 15 lines: files, line count, any ADR ambiguity hit (do not guess: sto
 version header else refusal `refused:structure`, malformed stored row -> refusal; absent -> header + rows);
 `ring-daily.ts` (+test) per ADR **Derived daily row** (sessions, night, day values, `affectedDates`, row formatting
 with `roundHalfEven`, `mergeDailyFile` like v1 `mergeCsv`). Same acceptance pattern with the two new test files.
+
+---
+
+## HC4-c/d API contract
+
+Lead decision 2026-10-28 (ADR-0068 **Read** leaves the shape open). Zod in `packages/contracts/src/index.ts`, after
+`HealthHistoryResponse`; types via `z.infer`. Contracts cannot import `domain` (domain depends on contracts), so slot
+values are a record keyed by the registry's payload key; the server always emits **every** `RING_METRICS` key
+(`null` when the cell is empty or the column predates the file's schema), and `ring-read.test.ts` asserts the key set
+equals the registry. A new metric is then a registry entry only; the day view iterates `RING_METRICS`.
+
+```ts
+export const RING_DAILY_CSV = 'Health/Data/Apple Health Vitals Daily.csv'; // if HC4-b has not added it
+const slotStart = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00[+-]\d{2}:\d{2}$/); // canonical slot_start
+const count = z.number().int().nonnegative();
+/** One derived daily row (ADR-0068), cells verbatim; an empty cell is null. `date` = night date for sleep cells. */
+export const RingDailyRow = z.strictObject({
+  date: z.iso.date(),
+  sleepStart: slotStart.nullable(), sleepEnd: slotStart.nullable(),
+  lightMin: count.nullable(), deepMin: count.nullable(), awakeMin: count.nullable(),
+  restingHr: z.number().nullable(), avgHr: z.number().nullable(),
+  minSpo2: z.number().nullable(), avgSpo2: z.number().nullable(),
+  hrvSdnnMs: z.number().nullable(), bodyTempC: z.number().nullable(),
+  hrN: count, spo2N: count, hrvN: count, tempN: count, sleepN: count,
+});
+/** `vitals` on GET /api/health: newest daily row at or before today (Copenhagen). */
+export const RingVitals = z.strictObject({
+  status: HealthStatus,                 // missing = no daily file or no row; unreadable = guard/parse failure
+  row: RingDailyRow.nullable(),         // non-null only when status is ok
+  daySlots: z.union([z.literal(92), z.literal(96), z.literal(100)]).nullable(), // slots in row.date (DST aware)
+  staleDays: count.nullable(),          // today minus row.date
+});
+// HealthResponse gains: vitals: RingVitals.optional()  (optional: cached v1 copies still parse)
+
+export const RingSlot = z.strictObject({
+  start: slotStart,                                        // as stored; the instant is Date.parse(start)
+  values: z.record(z.string(), z.number().nullable()),     // every RING_METRICS key, null kept as null
+});
+/** GET /api/health/ring?date=YYYY-MM-DD (date required; malformed or after today -> 400 { error }). */
+export const RingDayResponse = z.strictObject({
+  revision: commitSha, now: isoInstant,
+  today: z.iso.date(),                  // Copenhagen; drives "Today" and disables "next" past it
+  date: z.iso.date(),
+  status: HealthStatus,                 // missing = no month file or no slot on that date
+  dayStart: slotStart, dayEnd: slotStart, // local 00:00 of date and of date+1: the axis spans 23/24/25 h
+  daySlots: z.union([z.literal(92), z.literal(96), z.literal(100)]),
+  slots: z.array(RingSlot),             // stored slots of that calendar date only, ascending, no padding
+  night: RingDailyRow.nullable(),       // the daily row whose date === date, else null
+  prevDate: z.iso.date().nullable(),    // nearest earlier date with a stored slot (this month, else previous month file)
+  nextDate: z.iso.date().nullable(),    // nearest later date with a stored slot, never after today
+});
+```
+
+Rules: missing slots are absent from `slots` (the client draws gaps); the server never fills, pads or interpolates.
+Reads use names built from the validated date only (month file, at most the adjacent month file for prev/next, and
+the daily file), ADR-0039 guards; logs carry commit SHA and error code only. Day view join rule (HC4-d, owner
+2026-10-28): `hr`/`hrMin`/`hrMax`/`steps` join adjacent slots only; every other line/dots metric joins readings at
+most 2 slots apart; a longer gap breaks the line. Stress and fatigue share `strip: 'score'` in the a1 registry but
+are separate strips in design A: HC4-d1 sets their `strip` to `'stress'`/`'fatigue'` (view-only field).
