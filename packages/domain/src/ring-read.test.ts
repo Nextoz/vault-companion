@@ -46,6 +46,47 @@ describe('ring reads', () => {
     expect(body).toMatchObject({ prevDate: '2026-10-01', nextDate: '2026-10-03' });
     expect(list).toHaveBeenCalledTimes(2); // requested month and daily file only
   });
+  it('validates metric cells only on the requested canonical date', async () => {
+    const corrupt = row('2026-10-24').replace('424242', 'broken');
+    const store = await InMemoryStore.create({ [ringSlotsPath('2026-10')]: `${ringSlotHeader(1)}\n${corrupt}\n${row('2026-10-25')}\n` });
+    expect(await readRingDay(deps(store), '2026-10-25')).toMatchObject({ status: 'ok', prevDate: '2026-10-24', slots: [{ start: '2026-10-25T12:00:00+01:00' }] });
+    expect(await readRingDay(deps(store), '2026-10-24')).toMatchObject({ status: 'unreadable', slots: [], prevDate: null, nextDate: null });
+  });
+  it('selects and navigates by canonical dates while preserving non-canonical stored offsets', async () => {
+    const shifted = row('2026-10-25').replace('T12:00:00+01:00', 'T23:00:00+00:00');
+    const store = await InMemoryStore.create({ [ringSlotsPath('2026-10')]: `${ringSlotHeader(1)}\n${shifted}\n${row('2026-10-25')}\n` });
+    expect(await readRingDay(deps(store), '2026-10-25')).toMatchObject({ status: 'ok', nextDate: '2026-10-26', slots: [{ start: '2026-10-25T12:00:00+01:00' }] });
+    expect(await readRingDay(deps(store), '2026-10-26')).toMatchObject({ status: 'ok', prevDate: '2026-10-25', slots: [{ start: '2026-10-25T23:00:00+00:00' }] });
+    // The same instant belongs to a different day in another zone, including after a warm read.
+    expect(await readRingDay({ ...deps(store), timeZone: 'UTC' }, '2026-10-26')).toMatchObject({ status: 'missing', slots: [] });
+  });
+  it('uses adjacent month start cells for navigation without validating their metrics', async () => {
+    const store = await InMemoryStore.create({
+      [ringSlotsPath('2026-08')]: csv('2026-08-29', '2026-08-31').replaceAll('424242', 'broken'),
+      [ringSlotsPath('2026-09')]: csv('2026-09-15'),
+      [ringSlotsPath('2026-10')]: csv('2026-10-28', '2026-10-02', '2026-10-29').replaceAll('424242', 'broken'),
+    });
+    expect(await readRingDay(deps(store), '2026-09-15')).toMatchObject({ status: 'ok', prevDate: '2026-08-31', nextDate: '2026-10-02' });
+  });
+  it.each(['2026-09', '2026-10'])('refuses unparseable start cells anywhere in a used month (%s)', async (month) => {
+    const store = await InMemoryStore.create({
+      [ringSlotsPath('2026-10')]: csv('2026-10-25'),
+      [ringSlotsPath(month)]: `${csv('2026-10-25')}not-a-date,\n`,
+    });
+    expect(await readRingDay(deps(store), '2026-10-25')).toMatchObject({ status: 'unreadable', slots: [] });
+  });
+  it.each(['duplicate', 'start', 'columns', 'sum'])('retains selected-row %s validation', async (guard) => {
+    const valid = row('2026-10-25');
+    const cells = valid.split(',');
+    for (const key of ['sleepLightMin', 'sleepDeepMin']) cells[RING_METRICS.findIndex((m) => m.key === key) + 1] = '15';
+    const bad = guard === 'duplicate' ? `${valid}\n${valid}` : guard === 'start' ? valid.replace('12:00:00', '12:01:00') : guard === 'columns' ? `${valid},` : cells.join(',');
+    const store = await InMemoryStore.create({ [ringSlotsPath('2026-10')]: `${ringSlotHeader(1)}\n${bad}\n` });
+    expect(await readRingDay(deps(store), '2026-10-25')).toMatchObject({ status: 'unreadable', slots: [] });
+  });
+  it('preserves BOM, mixed line endings and an absent final newline', async () => {
+    const store = await InMemoryStore.create({ [ringSlotsPath('2026-10')]: `\uFEFF${ringSlotHeader(1)}\r\n${row('2026-10-24')}\r${row('2026-10-25')}\n${row('2026-10-26')}` });
+    expect(await readRingDay(deps(store), '2026-10-25')).toMatchObject({ status: 'ok', prevDate: '2026-10-24', nextDate: '2026-10-26' });
+  });
   it('never walks beyond adjacent months and does not inspect a future month', async () => {
     const store = await InMemoryStore.create({ [ringSlotsPath('2026-08')]: csv('2026-08-01'), [ringSlotsPath('2026-11')]: 'bad' });
     const list = vi.spyOn(store, 'listFiles');
