@@ -1,3 +1,4 @@
+import type { RingIngestOutcome } from './ring-ingest.ts';
 // HTTP layer: authentication, request guards, validation and mapping to application services.
 // No domain logic lives here (docs/architecture.md).
 import {
@@ -137,6 +138,7 @@ export interface Services {
   readHealthHistory?(): Promise<HealthHistoryResponse | ApiError>;
   /** Health sample ingest (HC3a). Optional: without it the route answers 404. */
   ingestHealth?(body: string): Promise<HealthIngestOutcome>;
+  ingestRing?(body: string): Promise<RingIngestOutcome>;
   /** Calendar links read (ADR-0052). Optional: without it the route answers 404. */
   readCalendarLinks?(): Promise<CalendarLinksResponse | ApiError>;
   /** Calendar event create plus links-file write (ADR-0048/0052). Optional: without it the route answers 404. */
@@ -220,7 +222,7 @@ export function createApp(deps: AppDeps) {
 
   app.use('/api/*', async (c, next) => {
     // The ingest route has its own scoped service-token verifier; only that exact POST skips user auth.
-    if (c.req.method === 'POST' && c.req.path === '/api/health/ingest') {
+    if (c.req.method === 'POST' && (c.req.path === '/api/health/ingest' || c.req.path === '/api/health/ring/ingest')) {
       await next();
       return;
     }
@@ -591,6 +593,29 @@ export function createApp(deps: AppDeps) {
     return c.json({ ok: true, days: [...result.days] });
   });
 
+  app.post('/api/health/ring/ingest', async (c) => {
+    const ingest = deps.services.ingestRing;
+    const verifyIngest = deps.verifyIngest;
+    if (!ingest || !verifyIngest) return c.json({ ok: false, error: 'not found' }, 404);
+    const identity = await verifyIngest(c.req.header('Cf-Access-Jwt-Assertion'));
+    if (!identity.ok) {
+      c.get('logMeta').errorCode = `ring-ingest:auth:${identity.reason}`;
+      return c.json({ ok: false, error: 'sign in required' }, 401);
+    }
+
+    const text = await c.req.text();
+    if (new TextEncoder().encode(text).length > MAX_HEALTH_INGEST_BYTES) {
+      return c.json({ ok: false, error: 'body too large' }, 413);
+    }
+    const result = await ingest(text);
+    const meta = c.get('logMeta');
+    if (!result.ok) {
+      meta.errorCode = `ring-ingest:${result.status}`;
+      return c.json({ ok: false, error: result.error }, result.status as 400);
+    }
+    return c.json(result);
+  });
+
   // Inbox notes (ADR-0022). Logs carry neither note text, titles nor paths.
   app.get('/api/notes', async (c) => {
     const read = deps.services.listNotes;
@@ -955,6 +980,9 @@ export function createApp(deps: AppDeps) {
 
   app.notFound((c) => c.json(err('invalid', 'not found'), 404));
   app.onError((e, c) => {
+    if (c.req.method === 'POST' && c.req.path === '/api/health/ring/ingest') {
+      return c.json({ ok: false, error: 'ring ingest unavailable; resend' }, 503);
+    }
     const meta = c.get('logMeta');
     if (meta) {
       meta.errorClass = e instanceof Error ? e.name : 'unknown';

@@ -1,3 +1,4 @@
+import { createRingIngestService } from './ring-ingest.ts';
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
 import { createTrainingService, createLearningService, createBooksService, createActiveWorkService, createAgentActivityReadService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createJobRadarReadService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createVaultActivityReadService, createWeatherService, DEFAULT_USER_TIME_ZONE, morningDigestPath, slotForCron, type VaultStore } from '@vault-companion/domain';
@@ -181,6 +182,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...radar,
     ...createScoutService({ store }),
     ...health,
+    ...(env.HEALTH_INGEST_AUD ? createRingIngestService({ store, now: () => new Date(), timeZone }) : {}),
     ...(env.HEALTH_INGEST_AUD ? createHealthIngestService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }) : {}),
     ...createMorningService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createMorningBriefReadService({ store }),
