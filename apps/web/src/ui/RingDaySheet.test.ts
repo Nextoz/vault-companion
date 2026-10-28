@@ -79,7 +79,7 @@ it('renders daily night values and sleep stages, and breaks the min-max band at 
   vi.mocked(getRingDay).mockResolvedValue({ kind: 'ok', data: day });
   await act(async () => root.render(createElement(RingDaySheet, { date: day.date, onClose: vi.fn() })));
   expect(document.querySelector('.ring-label')?.textContent).toBe('Night 23:00 – 06:00');
-  expect(document.querySelector('.ring-tiles')?.textContent).toContain('7 h 0asleep54resting HR41 msHRV (unverified)2 h 0deep36.2°night temp3 / 96');
+  expect(document.querySelector('.ring-tiles')?.textContent).toContain('7 h 0asleep54resting HR41 msHRV (unverified)2 h 0deep36.2°temp (day avg)3 / 96');
   expect(document.querySelector('.ring-strip')?.querySelectorAll('rect')).toHaveLength(2);
   expect(document.querySelectorAll('polygon')).toHaveLength(2);
 });

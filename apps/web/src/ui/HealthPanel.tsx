@@ -120,7 +120,7 @@ function RingSection({ vitals, now }: { vitals: NonNullable<HealthResponse['vita
     ['asleep', asleep === null ? '—' : `${Math.floor(asleep / 60)} h ${asleep % 60}`],
     ['resting HR', row?.restingHr ?? '—'],
     ['HRV (unverified)', row?.hrvSdnnMs == null ? '—' : `${row.hrvSdnnMs} ms`],
-    ['night temp', row?.bodyTempC == null ? '—' : `${row.bodyTempC}°`],
+    ['temp (day avg)', row?.bodyTempC == null ? '—' : `${row.bodyTempC}°`],
   ];
   return (
     <section className="ring-summary" aria-label="Ring">
