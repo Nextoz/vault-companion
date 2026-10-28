@@ -1400,3 +1400,36 @@ body:has(.reward-banner) .toast {
   .reading-current, .tasks, .action-list, .triage-card, .dash-card) {
   background-image: var(--card-sheen);
 }
+.ring-day {
+  --ring-hr: var(--danger-on-raised); --ring-spo2: var(--ios-cyan); --ring-steps: var(--ios-green);
+  --ring-bp_sys: var(--ios-pink); --ring-bp_dia: var(--ios-pink);
+  --ring-stress: var(--ios-purple); --ring-fatigue: var(--ios-yellow); --ring-hrv_ms: var(--ios-indigo);
+  --ring-temp_c: var(--ios-orange); --ring-sleep_light_min: var(--ios-indigo);
+  --ring-sleep_deep_min: var(--ios-blue); --ring-sleep_awake_min: var(--ios-orange);
+  max-width: 430px; background: var(--bg); gap: 0; font-size: 15px; line-height: 1.35;
+}
+.ring-day h1 { font-size: 28px; margin: 4px 0 2px; }
+.ring-top, .ring-nav { display: flex; align-items: center; justify-content: space-between; }
+.ring-top { min-height: 44px; }
+.ring-nav { margin: 8px 0 12px; gap: 6px; }
+.ring-nav button { color: var(--hue-health); }
+.ring-card { background: var(--surface); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+.ring-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.ring-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; }
+.ring-tiles b { display: block; font-size: 20px; color: var(--hue-health); }
+.ring-tiles small, .ring-note { color: var(--muted); font-size: 12px; }
+.ring-strip { margin-bottom: 6px; }
+.ring-strip-heading { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 2px; gap: 8px; }
+.ring-strip-heading em { font-style: normal; color: var(--text); text-align: right; }
+.ring-strip svg { display: block; width: 100%; touch-action: pan-y; }
+.ring-axis { position: relative; height: 16px; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.ring-axis span { position: absolute; transform: translateX(-50%); }
+.ring-axis span:first-child { transform: none; }
+.ring-axis span:last-child { transform: translateX(-100%); }
+.ring-values { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 14px; margin-top: 6px; }
+.ring-values div { display: flex; justify-content: space-between; gap: 4px; border-bottom: .5px solid var(--line); padding: 3px 0; }
+.ring-values span { color: var(--muted); }
+.ring-values b { font-weight: normal; white-space: nowrap; }
+.ring-note { margin: 6px 0 0; }
+.ring-legend { display: flex; gap: 10px; font-size: 11px; color: var(--muted); margin: 2px 0 4px; }
+.ring-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; }
