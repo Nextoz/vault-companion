@@ -1,7 +1,6 @@
 import type { RingDayResponse, RingSlot } from '@vault-companion/contracts';
 // ADR-0068: the ring registry is confined to this deferred sheet and its layout helpers.
-// eslint-disable-next-line no-restricted-imports
-import { RING_METRICS, type RingMetric } from '@vault-companion/domain';
+import { RING_METRICS, type RingMetric } from '@vault-companion/domain/ring-metrics';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { getRingDay, type Fetched } from '../api.ts';
 import { groupStrips, hourTicks, lineSegments, metricLabel, metricValue, SLOT_MS, slotX } from './ring-day.ts';
@@ -66,7 +65,13 @@ export function RingDaySheet({ date: initialDate, onClose }: { date: string; onC
   }, []);
   useEffect(() => {
     let live = true; setRead(null); setSelected(0);
-    void getRingDay(date).then(result => { if (live) setRead(result); });
+    void getRingDay(date).then(result => {
+      if (!live) return;
+      setRead(result);
+      // Start on the newest stored slot (design A), not on an empty 00:00.
+      const last = result.kind === 'ok' ? result.data.slots.at(-1) : undefined;
+      if (last && result.kind === 'ok') setSelected(Math.round((Date.parse(last.start) - Date.parse(result.data.dayStart)) / SLOT_MS));
+    });
     return () => { live = false; };
   }, [date]);
   const day = read?.kind === 'ok' ? read.data : null, night = day?.night;

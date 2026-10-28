@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./game": "./src/game/index.ts",
+    "./ring-metrics": "./src/ring-metrics.ts",
     "./testing": "./src/testing/in-memory-store.ts"
   },
   "dependencies": {

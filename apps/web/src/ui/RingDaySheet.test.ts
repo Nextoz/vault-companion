@@ -27,7 +27,8 @@ it.each(['missing', 'unreadable'])('%s renders a plain status without charts', a
 it('shows all registry values, unverified labels, latest strip values, night empties, and shared selection', async () => {
   await render(); expect(getRingDay).toHaveBeenCalledWith('2026-10-20');
   expect(document.querySelectorAll('[data-metric]')).toHaveLength(14);
-  expect(document.querySelector('[data-metric="hr"] b')?.textContent).toBe('50 bpm');
+  // Opens on the newest stored slot (00:15), not on 00:00.
+  expect(document.querySelector('[data-metric="hr"] b')?.textContent).toBe('70 bpm');
   expect(document.querySelector('[data-metric="tempC"] b')?.textContent).toBe('—');
   for (const key of ['stress', 'fatigue', 'hrvMs']) expect(document.querySelector(`[data-metric="${key}"]`)?.textContent).toContain('(unverified)');
   expect(document.querySelector('.ring-tiles')?.textContent).toContain('—asleep');
@@ -35,9 +36,9 @@ it('shows all registry values, unverified labels, latest strip values, night emp
   expect(document.querySelectorAll('.ring-strip')[3]?.querySelector('rect')?.getAttribute('height')).toBe('0');
   expect(document.querySelectorAll('.ring-strip-heading')[1]?.textContent).toContain('70 bpm');
   const slider = document.querySelector('svg')!;
-  await act(async () => { slider.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); });
-  expect(document.querySelector('[data-metric="hr"] b')?.textContent).toBe('70 bpm');
-  expect([...document.querySelectorAll('svg')].every(s => s.getAttribute('aria-valuenow') === '1')).toBe(true);
+  await act(async () => { slider.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })); });
+  expect(document.querySelector('[data-metric="hr"] b')?.textContent).toBe('50 bpm');
+  expect([...document.querySelectorAll('svg')].every(s => s.getAttribute('aria-valuenow') === '0')).toBe(true);
   const next = [...document.querySelectorAll('button')].find(b => b.textContent?.includes('Next'))!; expect(next.disabled).toBe(true);
   await act(async () => { [...document.querySelectorAll('button')].find(b => b.textContent?.includes('Sun 18'))!.click(); });
   expect(getRingDay).toHaveBeenLastCalledWith('2026-10-18');
@@ -60,7 +61,7 @@ it('captures a drag, clamps selection outside the strip, and stops on release or
     const event = new dom.window.MouseEvent(type, { clientX, bubbles: true });
     Object.defineProperty(event, 'pointerId', { value: 7 }); slider.dispatchEvent(event);
   });
-  await pointer('pointermove', 4); expect(slider.getAttribute('aria-valuenow')).toBe('0');
+  await pointer('pointermove', 4); expect(slider.getAttribute('aria-valuenow')).toBe('1');
   await pointer('pointerdown', 1); expect(capture).toHaveBeenCalledWith(7);
   await pointer('pointermove', 5); expect(slider.getAttribute('aria-valuenow')).toBe('5');
   await pointer('pointermove', -10); expect(slider.getAttribute('aria-valuenow')).toBe('0');

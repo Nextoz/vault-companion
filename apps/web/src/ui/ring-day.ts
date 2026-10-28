@@ -1,7 +1,6 @@
 import type { RingSlot } from '@vault-companion/contracts';
 // ADR-0068: registry metadata drives the deferred ring view without a second metric list.
-// eslint-disable-next-line no-restricted-imports
-import { RING_METRICS, type RingMetric } from '@vault-companion/domain';
+import { RING_METRICS, type RingMetric } from '@vault-companion/domain/ring-metrics';
 
 export const STRIP_ORDER = ['sleep', 'hr', 'spo2', 'steps', 'bp', 'stress', 'fatigue', 'hrv_ms', 'temp_c'] as const;
 export const SLOT_MS = 15 * 60_000;

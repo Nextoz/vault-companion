@@ -46,8 +46,8 @@ export default tseslint.config(
           patterns: [
             { group: ['@vault-companion/github', '@vault-companion/vault-markdown'],
               message: 'The web app talks to /api via contracts only.' },
-            // ADR-0067: the one exception is the pure game engine, for instant local XP.
-            { regex: '^@vault-companion/domain(?!/game$)', message: 'The web app talks to /api via contracts only (ADR-0067 allows only @vault-companion/domain/game).' },
+            // ADR-0067: the pure game engine, for instant local XP. ADR-0068: the import-free ring metric registry.
+            { regex: '^@vault-companion/domain(?!/(game|ring-metrics)$)', message: 'The web app talks to /api via contracts only (ADR-0067/0068 allow only @vault-companion/domain/game and /ring-metrics).' },
           ],
         },
       ],
