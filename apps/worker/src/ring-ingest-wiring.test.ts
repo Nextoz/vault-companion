@@ -9,6 +9,9 @@ import { createRingIngestService } from './ring-ingest.ts';
 
 const PATH = '/api/health/ring/ingest', sentinel = 980 + 7;
 const now = () => new Date('2026-11-02T12:00:00+01:00');
+// Random ids, timings and hex hashes can contain the sentinel's digits by chance (a flaky CI failure on main); every
+// other log field is checked.
+const logged = (calls: unknown[][]) => JSON.stringify(calls.map(([record]) => ({ ...(record as object), requestId: '', durationMs: 0, operationId: '', pathHash: '', commitSha: '' })));
 const payload = (start = '2026-11-01T12:00:00+01:00') => JSON.stringify({ schema: 'ring-slots/1', device: 'synthetic', generatedAt: now().toISOString(), slots: [{ start, ...Object.fromEntries(RING_METRICS.map((m) => [m.key, null])), hr: sentinel }] });
 
 it.each([400, 401, 404, 409, 413, 422, 503, 200])('returns the ring response contract for %i without logging values', async (status) => {
@@ -24,7 +27,7 @@ it.each([400, 401, 404, 409, 413, 422, 503, 200])('returns the ring response con
   if (status === 200) { expect(json).toEqual({ ok: true, slots: 1, months: ['2026-11'], days: ['2026-11-01'] }); expect(json).not.toHaveProperty('error'); }
   else { expect(json).toEqual({ ok: false, error: expect.any(String) }); expect(JSON.stringify(json)).not.toContain(String(sentinel)); }
   if ([401, 404, 413].includes(status)) expect(ingest).not.toHaveBeenCalled();
-  expect(JSON.stringify(log.mock.calls)).not.toContain(String(sentinel));
+  expect(logged(log.mock.calls)).not.toContain(String(sentinel));
   expect(store.commitMessages().join()).not.toContain(String(sentinel));
   if (status === 200) expect(store.text(HEALTH_VITALS_DAILY_CSV)).toContain(String(sentinel));
 });

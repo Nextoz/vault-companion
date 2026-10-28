@@ -202,7 +202,7 @@ describe('Health Ring card (HC4-d2)', () => {
     expect(button('History').getAttribute('aria-expanded')).toBe('false');
     expect(document.querySelector('.ring-label')?.textContent).toBe('Ring · 2026-09-29');
     expect([...document.querySelectorAll('.ring-summary-tiles > span')].map(el => el.textContent))
-      .toEqual(['7 h 12asleep', '54resting HR', '41 msHRV (unverified)', '36.2°night temp']);
+      .toEqual(['7 h 12asleep', '54resting HR', '41 msHRV (unverified)', '36.2°temp (day avg)']);
     expect(getRingDay).not.toHaveBeenCalled();
     expect(sheetChunk.loaded).toBe(false);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -259,7 +259,8 @@ describe('Health Ring card (HC4-d2)', () => {
     await click(row);
     await act(async () => { await vi.dynamicImportSettled(); });
     expect(sheetChunk.loaded).toBe(true);
-    expect(getRingDay).toHaveBeenCalledWith(date);
+    // The lazy chunk can resolve a render later on a slow runner (flaky on CI main): wait for the sheet's read.
+    await act(async () => { await vi.waitFor(() => expect(getRingDay).toHaveBeenCalledWith(date)); });
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     const close = document.querySelector<HTMLButtonElement>('[role="dialog"] button')!;
     await click(close);

@@ -78,7 +78,7 @@ export function RingDaySheet({ date: initialDate, onClose }: { date: string; onC
   const start = day ? new Date(Date.parse(day.dayStart) + selected * SLOT_MS) : null;
   const slot: RingSlot | undefined = day?.slots.find(s => Date.parse(s.start) === start?.getTime());
   const selectedTime = (delta: number) => start ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit' }).format(start.getTime() + delta) : '—';
-  const tiles = [[night?.lightMin != null && night.deepMin != null ? duration(night.lightMin + night.deepMin) : '—', 'asleep'], [night?.restingHr ?? '—', 'resting HR'], [night?.hrvSdnnMs == null ? '—' : `${night.hrvSdnnMs} ms`, 'HRV (unverified)'], [duration(night?.deepMin), 'deep'], [night?.bodyTempC == null ? '—' : `${night.bodyTempC}°`, 'night temp'], [day ? `${day.slots.filter(s => Object.values(s.values).some(v => v != null)).length} / ${day.daySlots}` : '—', 'slots with data']];
+  const tiles = [[night?.lightMin != null && night.deepMin != null ? duration(night.lightMin + night.deepMin) : '—', 'asleep'], [night?.restingHr ?? '—', 'resting HR'], [night?.hrvSdnnMs == null ? '—' : `${night.hrvSdnnMs} ms`, 'HRV (unverified)'], [duration(night?.deepMin), 'deep'], [night?.bodyTempC == null ? '—' : `${night.bodyTempC}°`, 'temp (day avg)'], [day ? `${day.slots.filter(s => Object.values(s.values).some(v => v != null)).length} / ${day.daySlots}` : '—', 'slots with data']];
   return <div className="sheet-backdrop" role="presentation"><section className="sheet ring-day" role="dialog" aria-modal="true" aria-label="Ring day" ref={dialog}
     onKeyDown={e => {
       if (e.key === 'Escape') onClose();
