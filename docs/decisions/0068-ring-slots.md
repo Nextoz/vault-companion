@@ -89,7 +89,7 @@ month's file when a night crosses a month boundary:
   session while consecutive sleep-slot starts are ≤ 75 min apart (at most 4 empty slots, 60 min, between them); the
   night is the session with the longest `sleep_end − sleep_start` among those whose night date is that date (tie:
   the later one). `sleep_start` = its first slot's start,
-  `sleep_end` = its last slot's start + 15 min; stage minutes are the sums over that session's slots. No session ⇒
+  `sleep_end` = its last slot's start + 15 min (both cells in the canonical `slot_start` form `YYYY-MM-DDTHH:MM:00+HH:MM`, empty without a session); stage minutes are the sums over that session's slots. No session ⇒
   the sleep cells stay empty; a session with no deep minutes ⇒ `deep_min` 0. The night's slots (for `resting_hr`)
   are all slots with a start in [`sleep_start`, `sleep_end`); `sleep_n` = the session's sleep slots.
 - Day values use the Copenhagen calendar date (00:00–24:00, 92 or 100 slots on DST days), not the 03:00 cut:
