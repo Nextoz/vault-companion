@@ -21,6 +21,7 @@ import {
   HistoryResponse,
   HealthHistoryResponse,
   HealthResponse,
+  RingDayResponse,
   LINKED_NOTE_HEADER,
   LinkedNoteResponse,
   NOTE_HEADER,
@@ -315,6 +316,7 @@ export const getHealth = () => getJson('/api/health', HealthResponse);
 
 /** Health history view (HC3b): the same fixed export, other than the card's shown day and baseline. */
 export const getHealthHistory = () => getJson('/api/health/history', HealthHistoryResponse);
+export const getRingDay = (date: string) => getJson(`/api/health/ring?date=${encodeURIComponent(date)}`, RingDayResponse);
 
 /** Precise device location only after explicit foreground consent, sent as a bounded same-origin JSON POST. */
 export async function postWeatherLocation(location: WeatherLocationRequest, accountKey: string): Promise<Fetched<WeatherResponse>> {

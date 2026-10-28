@@ -124,7 +124,9 @@ with `null` kept as `null`, plus the derived night. `GET /api/health` adds a `vi
 (with the slot min–max band) and SpO₂ line, steps bars, a sleep-stage band, and BP, stress, fatigue, HRV and
 temperature as small series on one shared time axis; a selected slot shows all its values. Missing slots are gaps, never
 interpolated or drawn as 0. Neutral colours only; no good/bad judgement, no thresholds. Fatigue, stress and HRV carry
-an "unverified label" note until the owner confirms the fork's mapping.
+an "unverified label" note until the owner confirms the fork's mapping. The web day view reads the registry through
+the import-free subpath `@vault-companion/domain/ring-metrics` (the second web exception after ADR-0067's `/game`),
+imported only by the lazy day sheet; the rest of `domain` stays out of the web bundle.
 
 **Privacy.** Health values never reach logs, error text, response diagnostics (slot counts and key names only),
 commit messages, AI models including Jev, or fixtures. Tests build synthetic slots in code (ADR-0039); real App

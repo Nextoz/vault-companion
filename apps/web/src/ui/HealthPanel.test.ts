@@ -1,13 +1,18 @@
-import { HealthHistoryResponse, HealthResponse, type HealthMetric } from '@vault-companion/contracts';
+import { HealthHistoryResponse, HealthResponse, RingDayResponse, type HealthMetric, type RingDailyRow } from '@vault-companion/contracts';
 import { JSDOM } from 'jsdom';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getHealth, getHealthHistory } from '../api.ts';
+import { getHealth, getHealthHistory, getRingDay } from '../api.ts';
 import { lastCopies } from '../lastCopy.ts';
 import { formatHealthValue, formatMove, healthSegments, HealthPanel } from './HealthPanel.tsx';
 
-vi.mock('../api.ts', () => ({ getHealth: vi.fn(), getHealthHistory: vi.fn() }));
+vi.mock('../api.ts', () => ({ getHealth: vi.fn(), getHealthHistory: vi.fn(), getRingDay: vi.fn() }));
+const sheetChunk = vi.hoisted(() => ({ loaded: false }));
+vi.mock('./RingDaySheet.tsx', async (original) => {
+  sheetChunk.loaded = true;
+  return original();
+});
 
 const NOW = '2026-09-30T12:00:00Z';
 const series = [10, 12, null, 14, 16];
@@ -27,6 +32,18 @@ const health = (over: Record<string, unknown> = {}) => HealthResponse.parse({
   ],
   ...over,
 });
+
+const night: RingDailyRow = {
+  date: '2026-09-29', sleepStart: null, sleepEnd: null, lightMin: 334, deepMin: 98, awakeMin: null,
+  restingHr: 54, avgHr: null, minSpo2: null, avgSpo2: null, hrvSdnnMs: 41, bodyTempC: 36.2,
+  hrN: 1, spo2N: 0, hrvN: 1, tempN: 1, sleepN: 2,
+};
+const vitals = (over: Record<string, unknown> = {}) => ({ status: 'ok', row: night, daySlots: 96, staleDays: 0, ...over });
+const mockRingDay = (date: string) => vi.mocked(getRingDay).mockResolvedValue({ kind: 'ok', data: RingDayResponse.parse({
+  revision: 'a'.repeat(40), now: NOW, today: date, date, status: 'missing',
+  dayStart: `${date}T00:00:00+02:00`, dayEnd: `${date}T00:00:00+02:00`, daySlots: 96,
+  slots: [], night: null, prevDate: null, nextDate: null,
+}) });
 
 let dom: JSDOM;
 let root: Root | null = null;
@@ -171,5 +188,103 @@ describe('Health board (HC2)', () => {
     expect(document.querySelector('[aria-label="Health history"]')).not.toBeNull();
     expect(button('History').getAttribute('aria-expanded')).toBe('true');
     expect(text()).toContain('Range median');
+  });
+});
+
+describe('Health Ring card (HC4-d2)', () => {
+  it('shows four night tiles and leaves v1 metrics, layout and history unchanged', async () => {
+    await renderHealth();
+    const v1 = document.querySelector('.health-tiles')!.outerHTML;
+    await act(async () => root!.unmount()); root = null;
+    await renderHealth(health({ vitals: vitals() }));
+    expect(document.querySelector('.health-tiles')!.outerHTML).toBe(v1);
+    expect(document.querySelector('.dash-health > .health-tiles')).not.toBeNull();
+    expect(button('History').getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelector('.ring-label')?.textContent).toBe('Ring · 2026-09-29');
+    expect([...document.querySelectorAll('.ring-summary-tiles > span')].map(el => el.textContent))
+      .toEqual(['7 h 12asleep', '54resting HR', '41 msHRV (unverified)', '36.2°night temp']);
+    expect(getRingDay).not.toHaveBeenCalled();
+    expect(sheetChunk.loaded).toBe(false);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    vi.mocked(getHealthHistory).mockResolvedValue({ kind: 'ok', data: HealthHistoryResponse.parse({
+      revision: 'a'.repeat(40), now: NOW, status: 'ok', days: [],
+    }) });
+    await click(button('History'));
+    expect(getHealthHistory).toHaveBeenCalledTimes(1);
+    expect(button('History').getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelector('[aria-label="Health history"]')).not.toBeNull();
+  });
+
+  it.each(['lightMin', 'deepMin'])('uses em dashes for null readings, including %s', async key => {
+    await renderHealth(health({ vitals: vitals({ row: { ...night, [key]: null, restingHr: null, hrvSdnnMs: null, bodyTempC: null } }) }));
+    expect([...document.querySelectorAll('.ring-summary-tiles b')].map(el => el.textContent)).toEqual(['—', '—', '—', '—']);
+    expect(document.querySelector('.ring-summary')?.textContent).toContain('HRV (unverified)');
+  });
+
+  it.each([0, 1, 2])('shows a plain age note only after one stale day (%s)', async staleDays => {
+    await renderHealth(health({ vitals: vitals({ staleDays }) }));
+    const note = document.querySelector('.ring-summary .ring-note');
+    if (staleDays > 1) {
+      expect(note?.textContent).toBe('2 days old');
+      expect(note?.className).toBe('ring-note');
+    } else expect(note).toBeNull();
+  });
+
+  it('shows no Ring section for an old cached response without vitals', async () => {
+    await renderHealth();
+    expect(document.querySelector('[aria-label="Ring"]')).toBeNull();
+    expect(text()).not.toContain('Ring');
+  });
+
+  it('shows unreadable data as a plain line without a button', async () => {
+    await renderHealth(health({ vitals: vitals({ status: 'unreadable', row: null }) }));
+    const section = document.querySelector('[aria-label="Ring"]')!;
+    expect(section.textContent).toBe('Ring data could not be read');
+    expect(section.querySelector('button')).toBeNull();
+    await click(section);
+    expect(getRingDay).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['ok', '2026-09-29', '2026-09-30T23:30:00Z'],
+    ['missing', '2026-10-01', '2026-09-30T23:30:00Z'],
+    ['missing', '2026-10-30', '2026-10-29T23:30:00Z'],
+  ])('opens %s lazily on %s and restores focus on close', async (status, date, now) => {
+    mockRingDay(date);
+    await renderHealth(health({ now, vitals: vitals({ status, row: status === 'ok' ? night : null }) }));
+    const row = document.querySelector<HTMLButtonElement>('.ring-summary-row')!;
+    if (status === 'missing') expect(row.textContent).toBe('No ring data yet');
+    expect(getRingDay).not.toHaveBeenCalled();
+    row.focus();
+    await click(row);
+    await act(async () => { await vi.dynamicImportSettled(); });
+    expect(sheetChunk.loaded).toBe(true);
+    expect(getRingDay).toHaveBeenCalledWith(date);
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    const close = document.querySelector<HTMLButtonElement>('[role="dialog"] button')!;
+    await click(close);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(row);
+  });
+
+  it('contains a rejected sheet import and keeps the Health panel usable', async () => {
+    vi.resetModules();
+    vi.doMock('../api.ts', () => ({ getHealth, getHealthHistory, getRingDay }));
+    vi.doMock('./RingDaySheet.tsx', () => { throw new Error('synthetic chunk failure'); });
+    const { HealthPanel: IsolatedPanel } = await import('./HealthPanel.tsx');
+    vi.mocked(getHealth).mockResolvedValue({ kind: 'ok', data: health({ vitals: vitals() }) });
+    const caught = vi.fn();
+    root = createRoot(document.getElementById('root')!, { onCaughtError: caught });
+    await act(async () => root!.render(createElement(IsolatedPanel, { refreshKey: 0 })));
+    const row = document.querySelector<HTMLButtonElement>('.ring-summary-row')!;
+    await click(row);
+    await act(async () => { await vi.dynamicImportSettled(); });
+    expect(caught).toHaveBeenCalledTimes(1);
+    expect(text()).toContain('Ring day could not be opened. Reload to try again.');
+    expect(document.querySelectorAll('.health-tile')).toHaveLength(4);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(row.disabled).toBe(true);
+    await click(button('History'));
+    expect(button('History').getAttribute('aria-expanded')).toBe('true');
   });
 });

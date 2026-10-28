@@ -1,9 +1,13 @@
-# HC4 ring slots — in progress (2026-10-28)
+# HC4 ring slots — built, awaiting deploy (2026-10-28)
 
 - Released full scope (owner). Plan: `docs/briefs/HC4-plan.md`; brief `docs/briefs/HC4-ring-slots.md`; ADR-0068. Gate 3 (Access) done; deploy still needs ACTION NEEDED.
+- HC4-d merged (this PR, d1+d2): lazy "Ring day" sheet (`RingDaySheet.tsx`, `ring-day.ts`; design A, DST-aware axis, join rule, newest slot selected) and a Ring section on the Health card from `vitals`. The web reads the registry only via `@vault-companion/domain/ring-metrics` (ADR-0068 amendment; lint exception next to ADR-0067 `/game`).
+- HC4-c merged (#232): `GET /api/health/ring?date=` + `vitals` on `/api/health` (`packages/domain/src/ring-read.ts`); prev/next read at most one adjacent month file per direction. HC4-b merged (#231): `POST /api/health/ring/ingest` (`apps/worker/src/ring-ingest.ts`, same service token as v1 ingest).
+- Before/at deploy: measure ingest CPU in workerd (plan risk, not yet measured); phone check of the day view; the ring Shortcut section in `docs/health-shortcut.md`.
+- Known, pre-existing: `e2e/leaderboard.spec.ts` [iphone-15-webkit] focus restore fails on main too (not HC4). The real-stack Undo-race spec is flaky. Workers and handoff-check never run lint: the Lead's acceptance run found lint/CSS-token failures on hc4-c and hc4-d.
 - HC4-a2 merged: `ring-slot-file.ts` (slot-file parse/merge, header upgrade only on a changing write, empty file refused) and `ring-daily.ts` (sessions, night, aggregates from the registry, `affectedDates` incl. the night before and re-dated sessions, `mergeDailyFile`); Opus review fixed a per-slot Intl formatter CPU blowup (formatters cached per zone).
 - HC4-a1 merged: metric registry `ring-metrics.ts`, strict parser/canonical slot_start/month split `ring-slots.ts`, v1 helpers moved to `health-format.ts`.
-- Next: HC4-b (write path, high-risk, Opus diff review), HC4-c (read API), HC4-d (design A stacked strips, mockup in docs/mockups/2026-10-28/; briefs `docs/briefs/HC4-d-brief.md`, the registry strip split is already done). HC4-b must load the slot file of every month an affected date falls in (can include the day before the first sent date) and measure CPU in workerd. Jev triage returned unparsable on hc4-a2 (all findings auto-skipped): check `Tools/jev.ps1` before trusting automatic triage.
+- Next: owner deploy approval, then the steps above; the queue after HC4 is unranked (LAS spec awaits the owner). Jev triage returned unparsable on hc4-a2 (all findings auto-skipped): check `Tools/jev.ps1` before trusting automatic triage.
 - Open decisions noted in the plan: `generatedAt` freshness bound (replay of old bodies is harmless, no erase), negative `tempC` refused.
 # AI leaderboard — release verification
 
