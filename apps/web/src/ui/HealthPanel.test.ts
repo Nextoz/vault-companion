@@ -259,14 +259,19 @@ describe('Health Ring card (HC4-d2)', () => {
     await click(row);
     await act(async () => { await vi.dynamicImportSettled(); });
     expect(sheetChunk.loaded).toBe(true);
-    // The lazy chunk can resolve a render later on a slow runner (flaky on CI main): wait for the sheet's read.
-    await act(async () => { await vi.waitFor(() => expect(getRingDay).toHaveBeenCalledWith(date)); });
+    // On a slow runner the chunk resolves after the act above, and React queues the Suspense retry. Poll OUTSIDE act,
+    // flushing React with an empty act on each try: a waitFor inside act deadlocks, because act holds the queued
+    // render until its callback returns (the flake on main, reproduced with a delayed chunk).
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(getRingDay).toHaveBeenCalledWith(date);
+    }, { timeout: 15_000 });
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     const close = document.querySelector<HTMLButtonElement>('[role="dialog"] button')!;
     await click(close);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(row);
-  });
+  }, 20_000);
 
   it('contains a rejected sheet import and keeps the Health panel usable', async () => {
     vi.resetModules();
