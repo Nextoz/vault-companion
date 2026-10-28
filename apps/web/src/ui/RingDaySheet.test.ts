@@ -13,6 +13,7 @@ let dom: JSDOM, root: Root;
 beforeEach(() => {
   dom = new JSDOM('<div id="root"></div>');
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true })) Object.defineProperty(globalThis, key, { value, configurable: true });
+  Object.assign(dom.window.SVGElement.prototype, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => false), releasePointerCapture: vi.fn() });
   root = createRoot(document.getElementById('root')!);
 });
 afterEach(async () => { await act(async () => root.unmount()); dom.window.close(); vi.clearAllMocks(); });
@@ -47,6 +48,28 @@ it('maps a tap to an absent slot, showing em dashes for every metric', async () 
   await act(async () => { slider.dispatchEvent(new dom.window.MouseEvent('pointerdown', { clientX: 2.5, bubbles: true })); });
   expect([...document.querySelectorAll('[data-metric] b')].every(b => b.textContent === '—')).toBe(true);
   expect(slider.getAttribute('aria-valuenow')).toBe('2');
+});
+it('captures a drag, clamps selection outside the strip, and stops on release or cancellation', async () => {
+  await render(); const slider = document.querySelector('svg')!;
+  vi.spyOn(slider, 'getBoundingClientRect').mockReturnValue({ left: 0, width: 96 } as DOMRect);
+  let captured = false;
+  const capture = vi.spyOn(slider, 'setPointerCapture').mockImplementation(() => { captured = true; });
+  vi.spyOn(slider, 'hasPointerCapture').mockImplementation(() => captured);
+  const release = vi.spyOn(slider, 'releasePointerCapture').mockImplementation(() => { captured = false; });
+  const pointer = async (type: string, clientX: number) => act(async () => {
+    const event = new dom.window.MouseEvent(type, { clientX, bubbles: true });
+    Object.defineProperty(event, 'pointerId', { value: 7 }); slider.dispatchEvent(event);
+  });
+  await pointer('pointermove', 4); expect(slider.getAttribute('aria-valuenow')).toBe('0');
+  await pointer('pointerdown', 1); expect(capture).toHaveBeenCalledWith(7);
+  await pointer('pointermove', 5); expect(slider.getAttribute('aria-valuenow')).toBe('5');
+  await pointer('pointermove', -10); expect(slider.getAttribute('aria-valuenow')).toBe('0');
+  await pointer('pointermove', 110); expect(slider.getAttribute('aria-valuenow')).toBe('95');
+  await pointer('pointerup', 110); expect(release).toHaveBeenCalledWith(7);
+  await pointer('pointermove', 6); expect(slider.getAttribute('aria-valuenow')).toBe('95');
+  await pointer('pointerdown', 1); await pointer('pointercancel', 1);
+  expect(release).toHaveBeenCalledTimes(2);
+  await pointer('pointermove', 6); expect(slider.getAttribute('aria-valuenow')).toBe('1');
 });
 it('renders daily night values and sleep stages, and breaks the min-max band at missing slots', async () => {
   const day = data(); day.night = { date: day.date, sleepStart: '2026-10-19T23:00:00+02:00', sleepEnd: '2026-10-20T06:00:00+02:00', lightMin: 300, deepMin: 120, awakeMin: 15, restingHr: 54, avgHr: null, minSpo2: null, avgSpo2: null, hrvSdnnMs: 41, bodyTempC: 36.2, hrN: 2, spo2N: 0, hrvN: 1, tempN: 1, sleepN: 2 };

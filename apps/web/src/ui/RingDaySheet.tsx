@@ -2,7 +2,7 @@ import type { RingDayResponse, RingSlot } from '@vault-companion/contracts';
 // ADR-0068: the ring registry is confined to this deferred sheet and its layout helpers.
 // eslint-disable-next-line no-restricted-imports
 import { RING_METRICS, type RingMetric } from '@vault-companion/domain';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { getRingDay, type Fetched } from '../api.ts';
 import { groupStrips, hourTicks, lineSegments, metricLabel, metricValue, SLOT_MS, slotX } from './ring-day.ts';
 
@@ -26,12 +26,21 @@ function Strip({ day, name, metrics, selected, onSelect }: {
   const shown = metrics.filter(m => !m.chart.startsWith('band-'));
   const low = metrics.find(m => m.chart === 'band-low'), high = metrics.find(m => m.chart === 'band-high');
   const bands = low && high ? lineSegments(day.slots.filter(s => s.values[high.key] != null), low) : [];
+  const selectAt = (e: PointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    onSelect(Math.max(0, Math.min(day.daySlots - 1, Math.floor((e.clientX - r.left) / r.width * day.daySlots))));
+  };
+  const release = (e: PointerEvent<SVGSVGElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  };
   return <div className="ring-strip">
     <div className="ring-strip-heading"><span>{name === 'hr' ? 'Heart rate (avg, min–max band)' : name === 'bp' ? 'Blood pressure' : stage ? 'Sleep' : metricLabel(metrics[0]!)}{metrics.some(m => m.labelUnverified) && ' (unverified)'}</span>
       <em>{shown.map(m => metricValue(latest(m), m)).join(' / ')}</em></div>
     <svg viewBox={`0 0 358 ${h}`} height={h} role="slider" tabIndex={0} aria-label={`${name} slot`} aria-valuemin={0} aria-valuemax={day.daySlots - 1} aria-valuenow={selected}
       onKeyDown={e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); onSelect(Math.max(0, Math.min(day.daySlots - 1, selected + (e.key === 'ArrowRight' ? 1 : -1)))); } }}
-      onPointerDown={e => { const r = e.currentTarget.getBoundingClientRect(); onSelect(Math.max(0, Math.min(day.daySlots - 1, Math.floor((e.clientX - r.left) / r.width * day.daySlots)))); }}>
+      onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); selectAt(e); }}
+      onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) selectAt(e); }}
+      onPointerUp={release} onPointerCancel={release}>
       <line x1="0" x2="358" y1={h - .5} y2={h - .5} stroke="var(--line)" />
       {bands.map((seg, i) => <polygon key={i} fill={colour(low!)} opacity=".22" points={[...seg.map(p => `${x(p.start)},${y(day.slots.find(s => s.start === p.start)!.values[high!.key]!)}`), ...seg.toReversed().map(p => `${x(p.start)},${y(p.value)}`)].join(' ')} />)}
       {shown.map(m => <g key={m.key} fill={colour(m)} stroke={colour(m)}>
