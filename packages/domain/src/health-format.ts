@@ -1,6 +1,8 @@
 /** Calendar date of the Copenhagen wall-clock time shifted by `shiftHours` (not absolute time). */
+const wallClockFormatters = new Map<string, Intl.DateTimeFormat>();
 export function wallClockDate(ms: number, timeZone: string, shiftHours: number): string {
-  const parts = new Intl.DateTimeFormat('en-GB', {
+  // One formatter per zone: building one costs ~100 us and ring derivations call this per slot.
+  const format = wallClockFormatters.get(timeZone) ?? new Intl.DateTimeFormat('en-GB', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
@@ -10,7 +12,9 @@ export function wallClockDate(ms: number, timeZone: string, shiftHours: number):
     second: '2-digit',
     fractionalSecondDigits: 3,
     hourCycle: 'h23',
-  }).formatToParts(new Date(ms));
+  });
+  wallClockFormatters.set(timeZone, format);
+  const parts = format.formatToParts(new Date(ms));
   const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value ?? '0');
   const shifted = new Date(
     Date.UTC(value('year'), value('month') - 1, value('day'), value('hour') + shiftHours, value('minute'), value('second'), value('fractionalSecond')),

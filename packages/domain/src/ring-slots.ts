@@ -1,12 +1,16 @@
 import { bodyShape, parseIso } from './health-ingest.ts';
-import { RING_METRICS, RING_SCHEMAS, type RingKey } from './ring-metrics.ts';
+import { RING_METRICS, RING_SCHEMAS, ringValueValid, type RingKey } from './ring-metrics.ts';
 import { DEFAULT_USER_TIME_ZONE } from './time.ts';
 
 export type RingSlot = { instant: number; values: Record<RingKey, number | null> };
 type ParseResult = { ok: true; version: number; slots: RingSlot[] } | { ok: false; status: 400 | 422; error: string };
 const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
+// Building an Intl formatter costs ~100 us; a month file has ~3,000 slots, so reuse one per zone.
+const formatters = new Map<string, Intl.DateTimeFormat>();
 export function canonicalSlotStart(instant: number, tz = DEFAULT_USER_TIME_ZONE): string {
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(instant);
+  const format = formatters.get(tz) ?? new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+  formatters.set(tz, format);
+  const parts = format.formatToParts(instant);
   const part = (name: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === name)!.value;
   const local = `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}:00`;
   const offset = Math.round((Date.parse(`${local.slice(0, -2)}${part('second')}Z`) - Math.floor(instant / 1000) * 1000) / 60000);
@@ -51,8 +55,8 @@ export function parseRingPayload(body: string, now: Date, timeZone = DEFAULT_USE
     const values = {} as RingSlot['values'];
     const sums = new Map<string, number>();
     for (const m of metrics) {
-      const v = slot[m.key], rule = m.value;
-      if (v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < rule.min || (rule.kind === 'int' ? !Number.isInteger(v) || (rule.max !== undefined && v > rule.max) : Number(v.toFixed(rule.decimals)) !== v))) return bad(400, m.key);
+      const v = slot[m.key];
+      if (v !== null && (typeof v !== 'number' || !ringValueValid(m.value, v))) return bad(400, m.key);
       values[m.key] = v as number | null;
       if (m.sumGroup) {
         const sum = (sums.get(m.sumGroup.id) ?? 0) + (values[m.key] ?? 0);
