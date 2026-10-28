@@ -7,7 +7,38 @@ type ParseResult = { ok: true; version: number; slots: RingSlot[] } | { ok: fals
 const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 // Building an Intl formatter costs ~100 us; a month file has ~3,000 slots, so reuse one per zone.
 const formatters = new Map<string, Intl.DateTimeFormat>();
+/** The zone's UTC offset in minutes at `instant`, from Intl (~5 us a call). */
+function intlOffset(instant: number, tz: string): number {
+  const format = formatters.get(tz) ?? new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+  formatters.set(tz, format);
+  const parts = format.formatToParts(instant);
+  const part = (name: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === name)!.value;
+  const local = Date.parse(`${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}:${part('second')}Z`);
+  return Math.round((local - Math.floor(instant / 1000) * 1000) / 60000);
+}
+// Workers Free allows 10 ms CPU a request and a ring send touches thousands of slots, so Intl runs at most twice per
+// UTC day: an offset changes at most once a day, so equal offsets at both ends of a UTC day hold for all of it. A day
+// with a transition (two a year) uses Intl per call. Output is identical (ring-slots.test.ts compares every slot of
+// two years, DST included, with the Intl path).
+const DAY = 86_400_000, dayOffsets = new Map<string, number | null>();
+function offsetMinutes(instant: number, tz: string): number {
+  const day = Math.floor(instant / DAY), key = `${tz}|${day}`;
+  let cached = dayOffsets.get(key);
+  if (cached === undefined) {
+    const start = intlOffset(day * DAY, tz);
+    cached = start === intlOffset(day * DAY + DAY - 1, tz) ? start : null;
+    if (dayOffsets.size > 4096) dayOffsets.clear();
+    dayOffsets.set(key, cached);
+  }
+  return cached ?? intlOffset(instant, tz);
+}
 export function canonicalSlotStart(instant: number, tz = DEFAULT_USER_TIME_ZONE): string {
+  const offset = offsetMinutes(instant, tz), abs = Math.abs(offset);
+  const local = new Date(Math.floor(instant / 60_000) * 60_000 + offset * 60_000).toISOString().slice(0, 16);
+  return `${local}:00${offset < 0 ? '-' : '+'}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+}
+/** The original Intl-only formatting, verbatim, kept as the test oracle for `canonicalSlotStart`. */
+export function canonicalSlotStartIntl(instant: number, tz = DEFAULT_USER_TIME_ZONE): string {
   const format = formatters.get(tz) ?? new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
   formatters.set(tz, format);
   const parts = format.formatToParts(instant);

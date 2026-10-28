@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { RING_METRICS } from './ring-metrics.ts';
-import { canonicalSlotStart, parseRingPayload, slotMonth, splitByMonth } from './ring-slots.ts';
+import { canonicalSlotStart, canonicalSlotStartIntl, parseRingPayload, slotMonth, splitByMonth } from './ring-slots.ts';
 const now = new Date('2026-11-01T12:00:00+01:00');
+
+it('cached canonicalSlotStart equals the Intl original for every slot of two years and odd-offset zones', () => {
+  const from = Date.parse('2025-01-01T00:00:00Z'), to = Date.parse('2027-01-01T00:00:00Z'), mismatches: string[] = [];
+  for (let t = from; t < to; t += 900_000) {
+    const fast = canonicalSlotStart(t, 'Europe/Copenhagen'), slow = canonicalSlotStartIntl(t, 'Europe/Copenhagen');
+    if (fast !== slow) mismatches.push(`${t} ${fast} ${slow}`);
+  }
+  // Half-hour and 45-minute offsets, southern-hemisphere DST, a 30-minute DST shift, and a zone with no DST.
+  for (const tz of ['Australia/Lord_Howe', 'Pacific/Chatham', 'America/St_Johns', 'Asia/Kathmandu', 'UTC']) {
+    for (let t = from; t < to; t += 3 * 900_000 + 60_000) {
+      if (canonicalSlotStart(t, tz) !== canonicalSlotStartIntl(t, tz)) mismatches.push(`${tz} ${t}`);
+    }
+  }
+  expect(mismatches.slice(0, 5)).toEqual([]);
+});
 const slot = (start = '2026-11-01T10:15:00+01:00', patch: Record<string, unknown> = {}): Record<string, unknown> =>
   ({ ...Object.fromEntries(RING_METRICS.map((m) => [m.key, null])), start, hr: 987, ...patch });
 const payload = (slots: unknown[] = [slot()], patch: Record<string, unknown> = {}) =>
