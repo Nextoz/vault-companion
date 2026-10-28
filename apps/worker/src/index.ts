@@ -6,6 +6,7 @@ import { WEATHER_TIME_ZONE, type ApiError } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createApp } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
+import { createRingIngestService } from './ring-ingest.ts';
 import { createGameService } from './game.ts';
 import { createLeaderboardSource } from './leaderboard.ts';
 import { createLeaderboardStorage, type LeaderboardKv } from './leaderboard-storage.ts';
@@ -181,6 +182,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...radar,
     ...createScoutService({ store }),
     ...health,
+    ...(env.HEALTH_INGEST_AUD ? createRingIngestService({ store, now: () => new Date(), timeZone }) : {}),
     ...(env.HEALTH_INGEST_AUD ? createHealthIngestService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }) : {}),
     ...createMorningService({ store, now: () => new Date(), timeZone: env.USER_TIME_ZONE ?? DEFAULT_USER_TIME_ZONE }),
     ...createMorningBriefReadService({ store }),

@@ -1,5 +1,5 @@
 // Path policy: docs/vault-contract.md §1. Every path passes here before an adapter sees it.
-import { BOOKS_DIR, canonicalBookTitle, LEARNING_PATH, RADAR_APPLIED_PATH, RADAR_DECISIONS_DIR, READING_QUEUE_PATH, SCOUT_STATUS_DIR, TRAINING_PATH } from '@vault-companion/contracts';
+import { HEALTH_VITALS_DAILY_CSV, RING_SLOTS_DIR, BOOKS_DIR, canonicalBookTitle, LEARNING_PATH, RADAR_APPLIED_PATH, RADAR_DECISIONS_DIR, READING_QUEUE_PATH, SCOUT_STATUS_DIR, TRAINING_PATH } from '@vault-companion/contracts';
 import type { VaultPath } from './store.ts';
 
 export const TODO_LIST_PATH = 'Tasks/To-Do List.md';
@@ -69,6 +69,9 @@ export function isStructurallySafePath(raw: string): boolean {
   return raw.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..' && seg === seg.trim());
 }
 
+const isRingFile = (path: string): boolean => path === HEALTH_VITALS_DAILY_CSV ||
+  new RegExp(`^${RING_SLOTS_DIR}/Ring Slots [0-9]{4}-(0[1-9]|1[0-2])\\.csv$`).test(path);
+
 /** Validate and NFC-normalise a note or read-only scout status path. */
 export function parseVaultPath(raw: string): VaultPath | null {
   if (!isStructurallySafePath(raw)) return null;
@@ -80,7 +83,7 @@ export function parseVaultPath(raw: string): VaultPath | null {
   const radar = isRadarDecisionPath(path) || isRadarAppliedPath(path);
   const morningBrief = path === MORNING_BRIEF_PATH;
   const calendarLinks = path === CALENDAR_LINKS_PATH;
-  if (!path.endsWith('.md') && !scoutStatus && !triage && !radar && !morningBrief && !calendarLinks) return null;
+  if (!path.endsWith('.md') && !scoutStatus && !triage && !radar && !morningBrief && !calendarLinks && !isRingFile(path)) return null;
   return path as VaultPath;
 }
 
@@ -116,6 +119,7 @@ export function isBookNotePath(raw: string): boolean {
 }
 
 export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
+  if (isRingFile(path)) return true;
   if (isBookNotePath(path)) return true;
   if (path === FEEDBACK_BACKLOG_PATH) return kind === 'update';
   if (isTriageDecisionPath(path)) return true;
