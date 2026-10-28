@@ -54,8 +54,10 @@ field and a line (for example an unexpected unit), tell the Lead the field name 
 
 ## Ring Sync
 
-1. **Get ring data** (PulseLoop app action). Leave **Days** at its default **7** (range 1–28): the Worker accepts
-   only slots from the last 8 days and refuses the whole send otherwise.
+1. **Get ring data** (PulseLoop app action). Set **Days** to **2** for the automation (it runs every time PulseLoop
+   closes, so two days always overlap the last send and keep each request small for the Workers Free CPU budget).
+   To catch up after more than a day without syncing, run it once by hand with **7**; never more than 7: the Worker
+   accepts only slots from the last 8 days and refuses the whole send otherwise.
 2. **Get Contents of URL** `https://app.karpov.dk/api/health/ring/ingest`, Method **POST**, three headers
    `CF-Access-Client-Id`, `CF-Access-Client-Secret` (the same service token) and `Content-Type: application/json`;
    Request Body **File** = the output of *Get ring data*. Send the JSON text as it is; do not rebuild it as a
