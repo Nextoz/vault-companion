@@ -48,6 +48,13 @@ it('refuses duplicate instants, bad cell counts, invalid sleep sums and excess d
   }
   for (const body of [`${raw}\n${raw}`, `${raw},`, raw.replace(':00:00+', ':07:00+')]) expect(parseSlotFile(`${ringSlotHeader(1)}\n${body}`)).toMatchObject({ ok: false });
 });
+it('refuses partial sleep merges whose combined stage minutes exceed fifteen', () => {
+  const stored = slot('2026-10-10T12:00:00+02:00', null), sent = slot('2026-10-10T12:00:00+02:00', null);
+  stored.values.sleepLightMin = 8; sent.values.sleepDeepMin = 8;
+  const existing = textOf(mergeSlotFile(null, [stored], 1, tz));
+  expect(parseSlotFile(textOf(mergeSlotFile(null, [sent], 1, tz)))).toMatchObject({ ok: true });
+  expect(mergeSlotFile(existing, [sent], 1, tz)).toMatchObject({ ok: false, code: 'refused:structure' });
+});
 it('upgrades a known old header once after a registry schema bump', () => {
   const metric = RING_METRICS.at(-1)!, oldSince = metric.since;
   const schemas = RING_SCHEMAS as Record<string, number>;

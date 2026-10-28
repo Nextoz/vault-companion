@@ -61,5 +61,7 @@ export function mergeSlotFile(existing: string | null, slots: readonly RingSlot[
   const output = [lines[0]!, ...rows];
   output.forEach((line, i) => { if (i === output.length - 1) line.end = final; else if (!line.end) line.end = eol; });
   const text = output.map((l) => l.raw + l.end).join('');
+  const validated = parseSlotFile(text);
+  if (!validated.ok) return validated;
   return { ok: true, text, changed: text !== existing };
 }
