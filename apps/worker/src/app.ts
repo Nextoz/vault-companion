@@ -1,4 +1,3 @@
-import type { RingIngestOutcome } from './ring-ingest.ts';
 // HTTP layer: authentication, request guards, validation and mapping to application services.
 // No domain logic lives here (docs/architecture.md).
 import {
@@ -70,6 +69,7 @@ import {
 } from '@vault-companion/domain';
 import type { Identity, ServiceTokenIdentity } from './auth.ts';
 import { diagnosticDetail, hashPath, sanitize, type LogSink } from './log.ts';
+import type { RingIngestOutcome } from './ring-ingest.ts';
 
 export interface Services {
   readTasks(known: readonly string[]): Promise<TasksResponse | ApiError>;
@@ -980,14 +980,15 @@ export function createApp(deps: AppDeps) {
 
   app.notFound((c) => c.json(err('invalid', 'not found'), 404));
   app.onError((e, c) => {
-    if (c.req.method === 'POST' && c.req.path === '/api/health/ring/ingest') {
-      return c.json({ ok: false, error: 'ring ingest unavailable; resend' }, 503);
-    }
     const meta = c.get('logMeta');
     if (meta) {
       meta.errorClass = e instanceof Error ? e.name : 'unknown';
       const detail = diagnosticDetail(e);
       if (detail) meta.errorDetail = detail;
+    }
+    // The ring Shortcut reads `{ ok, error }`, not the ApiError shape.
+    if (c.req.method === 'POST' && c.req.path === '/api/health/ring/ingest') {
+      return c.json({ ok: false, error: 'ring ingest unavailable; resend' }, 503);
     }
     return c.json(err('upstream-unavailable', 'internal error', true), 503); // commands.md: 503 (R11)
   });

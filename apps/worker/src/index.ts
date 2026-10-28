@@ -1,4 +1,3 @@
-import { createRingIngestService } from './ring-ingest.ts';
 // Cloudflare Workers entry: composes the production app from environment bindings.
 // Refuses to serve if auth is not Access or any binding is missing (docs/security.md).
 import { createTrainingService, createLearningService, createBooksService, createActiveWorkService, createAgentActivityReadService, createAiBudgetReadService, createAiUsageReadService, createCalendarLinksService, createCommandService, createHealthService, createHealthIngestService, createHistoryService, createJobRadarReadService, createLinkedNoteService, createMorningBriefReadService, createMorningService, createNotesService, createResearchRadarService, createScoutService, createTriageService, createVaultActivityReadService, createWeatherService, DEFAULT_USER_TIME_ZONE, morningDigestPath, slotForCron, type VaultStore } from '@vault-companion/domain';
@@ -7,6 +6,7 @@ import { WEATHER_TIME_ZONE, type ApiError } from '@vault-companion/contracts';
 import { createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
 import { createApp } from './app.ts';
 import { createDashboardService } from './dashboard.ts';
+import { createRingIngestService } from './ring-ingest.ts';
 import { createGameService } from './game.ts';
 import { createLeaderboardSource } from './leaderboard.ts';
 import { createLeaderboardStorage, type LeaderboardKv } from './leaderboard-storage.ts';
