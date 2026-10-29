@@ -138,7 +138,7 @@ export function mergeDailyFile(existing: string | null, rows: ReadonlyMap<string
     lines[0]!.raw = `${lines[0]!.raw.startsWith('\uFEFF') ? '\uFEFF' : ''}${RING_DAILY_HEADER}`;
     for (const line of lines.slice(1)) if (!updated.has(dateOf(line) ?? '')) {
       if (!dateOf(line) || line.raw.split(',').length !== previousColumns) return ringStructureRefusal;
-      line.raw += ',,,';
+      line.raw += ','.repeat(RING_DAILY_HEADER.split(',').length - previousColumns);
     }
   }
   const text = joinRingLines(lines, eol, final);
