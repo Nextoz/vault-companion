@@ -39,4 +39,5 @@ export const RING_SCHEMAS: Readonly<Record<string, number>> = { 'ring-slots/1': 
 export function ringSlotHeader(version: number): string {
   return ['slot_start', ...RING_METRICS.filter((m) => m.since <= version).map((m) => m.column)].join(',');
 }
-export const RING_DAILY_HEADER = 'date,weekday,sleep_start,sleep_end,light_min,deep_min,awake_min,resting_hr,avg_hr,min_spo2,avg_spo2,hrv_sdnn_ms,body_temp_c,hr_n,spo2_n,hrv_n,temp_n,sleep_n';
+export const RING_DAILY_HEADER_V1 = 'date,weekday,sleep_start,sleep_end,light_min,deep_min,awake_min,resting_hr,avg_hr,min_spo2,avg_spo2,hrv_sdnn_ms,body_temp_c,hr_n,spo2_n,hrv_n,temp_n,sleep_n';
+export const RING_DAILY_HEADER = `${RING_DAILY_HEADER_V1},slots_n,longest_gap_min,sleep_mask`;

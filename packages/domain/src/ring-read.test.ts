@@ -1,7 +1,7 @@
 import { HEALTH_VITALS_DAILY_CSV, RingDayResponse, ringSlotsPath } from '@vault-companion/contracts';
 import { describe, expect, it, vi } from 'vitest';
-import { RING_METRICS, ringSlotHeader } from './ring-metrics.ts';
-import { readRingDay, ringDayBounds } from './ring-read.ts';
+import { RING_DAILY_HEADER, RING_DAILY_HEADER_V1, RING_METRICS, ringSlotHeader } from './ring-metrics.ts';
+import { parseRingDaily, readRingDay, readRingVitals, ringDayBounds } from './ring-read.ts';
 import { FileTooLarge, StoreUnavailable, StoreUnknownOutcome } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
 
@@ -9,6 +9,16 @@ const row = (date: string) => `${date}T12:00:00+01:00,${RING_METRICS.map((m) => 
 const csv = (...dates: string[]) => `${ringSlotHeader(1)}\n${dates.map(row).join('\n')}\n`;
 const deps = (store: InMemoryStore) => ({ store, now: () => new Date('2026-10-28T12:00:00Z'), timeZone: 'Europe/Copenhagen' });
 describe('ring reads', () => {
+  it.each([RING_DAILY_HEADER_V1, RING_DAILY_HEADER])('keeps vitals readable with daily header %s', async (header) => {
+    const legacy = '2026-10-25,Sun,,,,,,,72,,,,,1,0,0,0,0';
+    const text = `${header}\n${legacy}${header === RING_DAILY_HEADER ? ',1,720,' + '-'.repeat(48) + '0' + '-'.repeat(51) : ''}\n`;
+    const store = await InMemoryStore.create({ [HEALTH_VITALS_DAILY_CSV]: text });
+    expect(await readRingVitals(deps(store), store.headCommit, deps(store).now())).toMatchObject({ status: 'ok', row: { date: '2026-10-25', avgHr: 72 }, daySlots: 100 });
+    expect(parseRingDaily(text)[0]).not.toHaveProperty('sleepMask');
+    expect(() => parseRingDaily(text.replace(header, 'unknown'))).toThrow();
+    expect(() => parseRingDaily(text.replace(legacy, `${legacy},`))).toThrow();
+    expect(store.writeCalls).toBe(0);
+  });
   it.each([['2026-03-29', 92], ['2026-10-25', 100], ['2026-10-24', 96]])('bounds for %s', (date, count) => {
     const b = ringDayBounds(date, 'Europe/Copenhagen');
     expect(b.daySlots).toBe(count);

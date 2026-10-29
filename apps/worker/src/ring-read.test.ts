@@ -1,5 +1,5 @@
 import { HEALTH_DAILY_CSV, HEALTH_VITALS_DAILY_CSV, HealthResponse, RingDayResponse, ringSlotsPath } from '@vault-companion/contracts';
-import { createCommandService, createHealthService, RING_DAILY_HEADER, RING_METRICS, ringSlotHeader, StoreUnavailable } from '@vault-companion/domain';
+import { createCommandService, createHealthService, RING_DAILY_HEADER_V1, RING_METRICS, ringSlotHeader, StoreUnavailable } from '@vault-companion/domain';
 import { InMemoryStore } from '@vault-companion/domain/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.ts';
@@ -27,7 +27,7 @@ describe('ring routes', () => {
   it('returns guarded slots and the exact night, with private data absent from logs', async () => {
     const store = await InMemoryStore.create({
       [ringSlotsPath('2026-10')]: `${ringSlotHeader(1)}\n2026-10-28T12:00:00+01:00,${RING_METRICS.map((m) => m.key === 'hr' ? '424242' : '').join(',')}\n`,
-      [HEALTH_VITALS_DAILY_CSV]: `${RING_DAILY_HEADER}\n${daily('2026-10-28')}\n`,
+      [HEALTH_VITALS_DAILY_CSV]: `${RING_DAILY_HEADER_V1}\n${daily('2026-10-28')}\n`,
     });
     const { app, logs } = stack(store), res = await app.request('/api/health/ring?date=2026-10-28', { headers });
     expect(res.status).toBe(200); expect(res.headers.get('Cache-Control')).toBe('no-store');
@@ -54,7 +54,7 @@ describe('ring routes', () => {
     const v1 = { [HEALTH_DAILY_CSV]: 'date,steps,headphone_min,first_move,last_move\n2026-10-27,5000,30,10:00,22:00\n' };
     const baselineStore = await InMemoryStore.create(v1);
     const baseline = await createHealthService({ store: baselineStore, now }).readHealth();
-    const text = mode === 'unreadable' ? 'bad' : `${RING_DAILY_HEADER}\n${daily(mode === 'future' ? '2026-10-29' : '2026-10-25')}\n${mode === 'ok' ? daily('2026-10-29') + '\n' : mode === 'bad-row' ? 'bad\n' : ''}`;
+    const text = mode === 'unreadable' ? 'bad' : `${RING_DAILY_HEADER_V1}\n${daily(mode === 'future' ? '2026-10-29' : '2026-10-25')}\n${mode === 'ok' ? daily('2026-10-29') + '\n' : mode === 'bad-row' ? 'bad\n' : ''}`;
     const store = await InMemoryStore.create({ ...v1, ...(mode === 'missing' ? {} : { [HEALTH_VITALS_DAILY_CSV]: text }) });
     if (mode === 'outage') {
       const read = store.readFile.bind(store);

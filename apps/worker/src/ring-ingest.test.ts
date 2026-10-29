@@ -34,6 +34,18 @@ it('creates both months oldest first then daily; exact retry writes nothing; tra
   expect((await service(store).ingestRing(body())).ok).toBe(true);
   expect(store.headCommit).toBe(head); expect(store.writeCalls).toBe(3);
 });
+it('leaves a V1 daily resend uncommitted and upgrades only a changing send', async () => {
+  const payload = body([slot('2026-11-01T12:00:00+01:00', { sleepLightMin: null })]);
+  const daily = `${domain.RING_DAILY_HEADER_V1}\n2026-11-01,Sun,,,,,,,60,,,,,1,0,0,0,0\n`;
+  const store = await InMemoryStore.create({ [NOV]: csv(payload), [DAILY]: daily });
+  const head = store.headCommit;
+  expect((await service(store).ingestRing(payload)).ok).toBe(true);
+  expect(store.text(DAILY)).toBe(daily);
+  expect(store.headCommit).toBe(head); expect(store.writeCalls).toBe(0);
+  expect((await service(store).ingestRing(body([slot('2026-11-01T12:00:00+01:00', { hr: 72, sleepLightMin: null })]))).ok).toBe(true);
+  expect(store.text(DAILY)).toBe(`${domain.RING_DAILY_HEADER}\n2026-11-01,Sun,,,,,,,72,,,,,1,0,0,0,0,1,720,${'-'.repeat(48)}0${'-'.repeat(47)}\n`);
+  expect(store.writeCalls).toBe(2);
+});
 it.each([2, 3])('repairs only missing writes after write %i fails', async (failAt) => {
   const store = await InMemoryStore.create({}), write = vi.spyOn(store, 'writeFile');
   store.writeFaults.push(...Array.from({ length: failAt - 1 }, () => 'normal' as const), 'unavailable');
