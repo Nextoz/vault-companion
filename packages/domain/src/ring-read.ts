@@ -46,7 +46,8 @@ async function readText(store: VaultStore, revision: string, path: string): Prom
 export function parseRingDaily(text: string): RingDailyRow[] {
   return parseRingDailyFull(text).map(({ row }) => row);
 }
-export function parseRingDailyFull(text: string, tz = 'Europe/Copenhagen'): RingDailyFull[] {
+/** Without `tz` (vitals, day view) the analysis-only columns are neither parsed nor validated. */
+export function parseRingDailyFull(text: string, tz?: string): RingDailyFull[] {
   const lines = ringFileLines(text);
   const header = ringFileHeader(lines);
   if (header !== RING_DAILY_HEADER && header !== RING_DAILY_HEADER_V1) throw new Unreadable();
@@ -61,6 +62,8 @@ export function parseRingDailyFull(text: string, tz = 'Europe/Copenhagen'): Ring
     });
     const parsed = RingDailyRow.safeParse(value);
     if (!parsed.success || seen.has(parsed.data.date)) throw new Unreadable();
+    seen.add(parsed.data.date);
+    if (tz === undefined) return { row: parsed.data, slotsN: null, longestGapMin: null, sleepMask: null };
     const count = (name: string) => {
       const cell = cells[columns.indexOf(name)];
       if (cell === undefined || cell === '') return null;
@@ -69,7 +72,6 @@ export function parseRingDailyFull(text: string, tz = 'Europe/Copenhagen'): Ring
     };
     const sleepMask = cells[columns.indexOf('sleep_mask')] || null;
     if (sleepMask !== null && (!/^[01-]+$/.test(sleepMask) || sleepMask.length !== ringDayBounds(parsed.data.date, tz).daySlots)) throw new Unreadable();
-    seen.add(parsed.data.date);
     return { row: parsed.data, slotsN: count('slots_n'), longestGapMin: count('longest_gap_min'), sleepMask };
   });
 }

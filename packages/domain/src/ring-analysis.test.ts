@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { HEALTH_VITALS_DAILY_CSV, RingAnalysisResponse } from '@vault-companion/contracts';
 import { analyseRing, type RingDailyFull } from './ring-analysis.ts';
-import { parseRingDailyFull, readRingAnalysis, ringDayBounds } from './ring-read.ts';
+import { parseRingDaily, parseRingDailyFull, readRingAnalysis, ringDayBounds } from './ring-read.ts';
 import { RING_DAILY_HEADER, RING_DAILY_HEADER_V1 } from './ring-metrics.ts';
 import { FileTooLarge } from './store.ts';
 import { InMemoryStore } from './testing/in-memory-store.ts';
@@ -91,7 +91,9 @@ describe('ring analysis', () => {
       const bad = await InMemoryStore.create({ [HEALTH_VITALS_DAILY_CSV]: `${RING_DAILY_HEADER}\n${legacy},${cells}\n` });
       expect(await readRingAnalysis(deps(bad))).toMatchObject({ status: 'unreadable', nights: [], coverage: { days: [], nightsMissed: null } });
     }
-    expect(parseRingDailyFull(`${RING_DAILY_HEADER}\n${legacy},,,\n`)[0]).toMatchObject({ slotsN: null, longestGapMin: null, sleepMask: null });
+    expect(parseRingDailyFull(`${RING_DAILY_HEADER}\n${legacy},,,\n`, 'Europe/Copenhagen')[0]).toMatchObject({ slotsN: null, longestGapMin: null, sleepMask: null });
+    // Vitals and the day view never validate analysis-only columns: a bad mask must not blank the Ring card.
+    expect(parseRingDaily(`${RING_DAILY_HEADER}\n${legacy},1,0,${'x'.repeat(96)}\n`)).toHaveLength(1);
     expect(await readRingAnalysis(deps(await InMemoryStore.create({})))).toMatchObject({ status: 'missing', firstDate: null, nights: [] });
   });
 });
