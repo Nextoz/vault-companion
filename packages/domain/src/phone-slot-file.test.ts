@@ -54,6 +54,8 @@ it('upgrades a known old header only on a changing write, once', () => {
     expect(upgraded).toBe(`${BOM}${phoneSlotHeader(2)}\r\n${row(a)}\r\n${row(b, { steps: '72' })}`);
     expect(mergePhoneSlotFile(upgraded, [slot(b)], 1, tz)).toEqual({ ok: true, text: upgraded, changed: false });
     expect(textOf(mergePhoneSlotFile(upgraded, [slot(a, { in_bed_min: 5 })], 2, tz))).toContain(row(a, { steps: '72', in_bed_min: '5' }));
+    // The upgrade rewrites untouched rows too, so a malformed one is refused rather than padded.
+    expect(mergePhoneSlotFile(`${phoneSlotHeader(1)}\n${row(a, { steps: '-1' }, 1)}\n`, [slot(b)], 1, tz)).toMatchObject({ ok: false, code: 'refused:structure' });
   } finally { metric.since = oldSince; delete schemas['phone-slots/2']; }
 });
 it('refuses unknown headers, schemas and malformed touched rows', () => {
