@@ -1,4 +1,4 @@
-import { HEALTH_DAILY_CSV, HEALTH_VITALS_DAILY_CSV, HealthResponse, RingDayResponse, ringSlotsPath } from '@vault-companion/contracts';
+import { HEALTH_DAILY_CSV, HEALTH_VITALS_DAILY_CSV, HealthResponse, RingAnalysisResponse, RingDayResponse, ringSlotsPath } from '@vault-companion/contracts';
 import { createCommandService, createHealthService, RING_DAILY_HEADER_V1, RING_METRICS, ringSlotHeader, StoreUnavailable } from '@vault-companion/domain';
 import { InMemoryStore } from '@vault-companion/domain/testing';
 import { describe, expect, it, vi } from 'vitest';
@@ -18,6 +18,20 @@ function stack(store: InMemoryStore, wired = true) {
   return { app, logs };
 }
 describe('ring routes', () => {
+  it('serves authenticated analysis from one daily read with no values in logs', async () => {
+    const store = await InMemoryStore.create({ [HEALTH_VITALS_DAILY_CSV]: `${RING_DAILY_HEADER_V1}\n${daily('2026-10-28')}\n` });
+    const { app, logs } = stack(store), read = vi.spyOn(store, 'readFile'), head = vi.spyOn(store, 'head');
+    expect((await app.request('/api/health/ring/analysis')).status).toBe(401); expect(head).not.toHaveBeenCalled();
+    const res = await app.request('/api/health/ring/analysis', { headers });
+    expect(res.status).toBe(200); expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect(RingAnalysisResponse.parse(await res.json())).toMatchObject({ status: 'ok', firstDate: '2026-10-28', coverage: { days: [{ dataHours: null }] } });
+    expect(read.mock.calls.map(([path, revision]) => [path, revision])).toEqual([[HEALTH_VITALS_DAILY_CSV, store.headCommit]]);
+    expect(logs.at(-1)).toMatchObject({ commitSha: store.headCommit }); expect(JSON.stringify(logs)).not.toMatch(/424242|Health\/Data|2026-10-28/);
+    expect((await stack(store, false).app.request('/api/health/ring/analysis', { headers })).status).toBe(404);
+    head.mockRejectedValue(new StoreUnavailable('private-synthetic'));
+    expect((await app.request('/api/health/ring/analysis', { headers })).status).toBe(503);
+    expect(logs.at(-1)?.errorCode).toBe('upstream-unavailable'); expect(store.writeCalls).toBe(0);
+  });
   it('returns unreadable for a corrupt month without exposing file text', async () => {
     const store = await InMemoryStore.create({ [ringSlotsPath('2026-10')]: 'private-synthetic' });
     const { app, logs } = stack(store), res = await app.request('/api/health/ring?date=2026-10-28', { headers });

@@ -1,4 +1,5 @@
-import { HEALTH_VITALS_DAILY_CSV, RingDailyRow, ringSlotsPath, type ApiError, type RingDayResponse, type RingSlot, type RingVitals } from '@vault-companion/contracts';
+import { HEALTH_VITALS_DAILY_CSV, RingDailyRow, ringSlotsPath, type ApiError, type RingAnalysisResponse, type RingDayResponse, type RingSlot, type RingVitals } from '@vault-companion/contracts';
+import { analyseRing, ringDayBounds, type RingDailyFull } from './ring-analysis.ts';
 import { isStructurallySafePath } from './paths.ts';
 import { RING_DAILY_HEADER, RING_DAILY_HEADER_V1 } from './ring-metrics.ts';
 import { parseSlotFile, ringFileHeader, ringFileLines } from './ring-slot-file.ts';
@@ -30,16 +31,7 @@ const shiftDay = (date: string, n: number) => new Date(Date.parse(`${date}T00:00
 export function validRingDate(date: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
 }
-export function ringDayBounds(date: string, tz: string) {
-  const midnight = (day: string) => {
-    const utc = Date.parse(`${day}T00:00:00Z`);
-    let instant = utc;
-    for (let i = 0; i < 3; i++) instant += utc - Date.parse(`${canonicalSlotStart(instant, tz).slice(0, 19)}Z`);
-    return instant;
-  };
-  const start = midnight(date), end = midnight(shiftDay(date, 1));
-  return { dayStart: canonicalSlotStart(start, tz), dayEnd: canonicalSlotStart(end, tz), daySlots: (end - start) / 900000 as 92 | 96 | 100 };
-}
+export { ringDayBounds } from './ring-analysis.ts';
 /** Fixed names, pinned tree/blob identity and byte fidelity, matching the health reader. */
 async function readText(store: VaultStore, revision: string, path: string): Promise<string | null> {
   if (!isStructurallySafePath(path)) throw new Unreadable();
@@ -52,6 +44,10 @@ async function readText(store: VaultStore, revision: string, path: string): Prom
   } catch (e) { if (e instanceof FileTooLarge) throw new Unreadable(); throw e; }
 }
 export function parseRingDaily(text: string): RingDailyRow[] {
+  return parseRingDailyFull(text).map(({ row }) => row);
+}
+/** Without `tz` (vitals, day view) the analysis-only columns are neither parsed nor validated. */
+export function parseRingDailyFull(text: string, tz?: string): RingDailyFull[] {
   const lines = ringFileLines(text);
   const header = ringFileHeader(lines);
   if (header !== RING_DAILY_HEADER && header !== RING_DAILY_HEADER_V1) throw new Unreadable();
@@ -66,7 +62,17 @@ export function parseRingDaily(text: string): RingDailyRow[] {
     });
     const parsed = RingDailyRow.safeParse(value);
     if (!parsed.success || seen.has(parsed.data.date)) throw new Unreadable();
-    seen.add(parsed.data.date); return parsed.data;
+    seen.add(parsed.data.date);
+    if (tz === undefined) return { row: parsed.data, slotsN: null, longestGapMin: null, sleepMask: null };
+    const count = (name: string) => {
+      const cell = cells[columns.indexOf(name)];
+      if (cell === undefined || cell === '') return null;
+      if (!/^\d+$/.test(cell) || !Number.isSafeInteger(Number(cell))) throw new Unreadable();
+      return Number(cell);
+    };
+    const sleepMask = cells[columns.indexOf('sleep_mask')] || null;
+    if (sleepMask !== null && (!/^[01-]+$/.test(sleepMask) || sleepMask.length !== ringDayBounds(parsed.data.date, tz).daySlots)) throw new Unreadable();
+    return { row: parsed.data, slotsN: count('slots_n'), longestGapMin: count('longest_gap_min'), sleepMask };
   });
 }
 const emptyVitals = (status: 'missing' | 'unreadable'): RingVitals => ({ status, row: null, daySlots: null, staleDays: null });
@@ -126,6 +132,24 @@ export async function readRingDay(deps: Deps, date: string): Promise<RingDayResp
       return { ...base, status: day.length ? 'ok' : 'missing', slots: day, night, prevDate, nextDate };
     } catch (e) {
       if (e instanceof Unreadable) return { ...base, status: 'unreadable', slots: [], night: null, prevDate: null, nextDate: null };
+      throw e;
+    }
+  } catch (e) {
+    if (e instanceof StoreUnavailable || e instanceof StoreUnknownOutcome || e instanceof FileTooLarge) return { code: 'upstream-unavailable', message: 'GitHub is not reachable right now', retryable: true };
+    throw e;
+  }
+}
+
+export async function readRingAnalysis(deps: Deps): Promise<RingAnalysisResponse | ApiError> {
+  const at = deps.now(), today = userDate(at, deps.timeZone);
+  try {
+    const { commitSha: revision } = await deps.store.head();
+    const base = { revision, now: at.toISOString(), today };
+    try {
+      const text = await readText(deps.store, revision, HEALTH_VITALS_DAILY_CSV);
+      return { ...base, ...analyseRing(text === null ? [] : parseRingDailyFull(text, deps.timeZone), today, deps.timeZone) };
+    } catch (e) {
+      if (e instanceof Unreadable) return { ...base, ...analyseRing([], today, deps.timeZone), status: 'unreadable' };
       throw e;
     }
   } catch (e) {
