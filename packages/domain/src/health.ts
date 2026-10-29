@@ -11,7 +11,7 @@ import {
   type HealthResponse,
 } from '@vault-companion/contracts';
 import { isStructurallySafePath } from './paths.ts';
-import { readRingDay, readRingVitals } from './ring-read.ts';
+import { readRingAnalysis, readRingDay, readRingVitals } from './ring-read.ts';
 import { DEFAULT_USER_TIME_ZONE, userDate } from './time.ts';
 import { FileTooLarge, StoreUnavailable, StoreUnknownOutcome, type VaultPath, type VaultStore } from './store.ts';
 
@@ -245,6 +245,7 @@ async function readHealthHistory(deps: Required<Pick<HealthServiceDeps, 'store' 
 export function createHealthService(deps: HealthServiceDeps) {
   const resolved = { store: deps.store, now: deps.now ?? (() => new Date()), timeZone: deps.timeZone ?? DEFAULT_USER_TIME_ZONE };
   return {
+    readRingAnalysis() { return readRingAnalysis(resolved); },
     readRingDay(date: string) {
       return readRingDay(resolved, date);
     },

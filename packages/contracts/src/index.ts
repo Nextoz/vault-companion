@@ -1421,6 +1421,21 @@ export const RingDayResponse = z.strictObject({
   slots: z.array(RingSlot), night: RingDailyRow.nullable(), prevDate: z.iso.date().nullable(), nextDate: z.iso.date().nullable(),
 });
 export type RingDayResponse = z.infer<typeof RingDayResponse>;
+const ringClock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const ringSpread = z.strictObject({ midpointSdMin: ringCount.nullable(), durationSdMin: ringCount.nullable() }).nullable();
+export const RingAnalysisResponse = z.strictObject({
+  revision: commitSha, now: isoInstant, today: z.iso.date(), status: HealthStatus,
+  firstDate: z.iso.date().nullable(), lastDate: z.iso.date().nullable(),
+  coverage: z.strictObject({ days: z.array(z.strictObject({
+    date: z.iso.date(), dataHours: z.number().nonnegative().nullable(), longestGapMin: ringCount.nullable(),
+    metricHours: z.strictObject({ hr: z.number().nullable(), spo2: z.number().nullable(), hrv: z.number().nullable(), temp: z.number().nullable(), sleep: z.number().nullable() }),
+  })), nightsMissed: ringCount.nullable() }),
+  nights: z.array(z.strictObject({ date: z.iso.date(), bedtime: ringClock.nullable(), wake: ringClock.nullable(), midpoint: ringClock.nullable(), sleepMin: ringCount.nullable(), awakeMin: ringCount.nullable() })),
+  spread7: ringSpread, spread14: ringSpread,
+  sri7: z.strictObject({ share: z.number().min(0).max(1).nullable(), n: ringCount.nullable() }).nullable(),
+  socialJetlag: z.strictObject({ shiftMin: z.number().int().nullable(), weekendNights: ringCount.nullable(), weekdayNights: ringCount.nullable() }).nullable(),
+});
+export type RingAnalysisResponse = z.infer<typeof RingAnalysisResponse>;
 export const HealthResponse = z.strictObject({
   revision: commitSha,
   /** Server time: staleness never depends on the phone clock. */
