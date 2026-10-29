@@ -36,6 +36,13 @@ it('unions headphone and in-bed overlap minutes while averaging sound in energy 
   expect(slots).toHaveLength(1);
   expect(slots[0]!.values).toMatchObject({ headphone_min: 15, headphone_db: 77.03, in_bed_min: 15, steps: null });
 });
+it('omits slots with no contributing values instead of returning all-null rows', () => {
+  expect(aggregate([
+    sample('headphone', at('09:00'), at('09:00'), 60),
+    sample('inBed', at('09:15'), at('09:15'), 0),
+    { ...sample('inBed', at('09:30'), at('09:45'), 0), inBed: false },
+  ])).toEqual([]);
+});
 it('drops slot starts before from plus an hour and keeps the current partial slot', () => {
   const slots = aggregate([
     sample('steps', at('09:00'), at('09:00'), 1), sample('steps', at('09:15'), at('09:15'), 2),

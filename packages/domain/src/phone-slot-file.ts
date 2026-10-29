@@ -34,7 +34,9 @@ function parseStoredCell(cell: string, metric: PhoneMetric): number | null | und
     && (rule.max === undefined || value <= rule.max)
     && Number(value.toFixed(rule.decimals)) === value ? value : undefined;
 }
-const columnsOf = (metrics: readonly PhoneMetric[]) => metrics.flatMap((m) => m.columns.map((column, i) => ({ column, metric: i === 0 ? m : { ...m, value: { kind: 'decimal' as const, decimals: 1, min: 0 as const, max: 15 } } })));
+const columnsOf = (metrics: readonly PhoneMetric[]) => metrics.flatMap((m) => m.columns.map((column, i) => ({ column, metric: i === 0 ? m : {
+  ...m, value: { kind: 'decimal' as const, decimals: m.daily.find((a) => a.column === column)!.decimals, min: 0 as const, max: 15 },
+} })));
 function parseStoredRow(raw: string, metrics: readonly PhoneMetric[]): PhoneSlot | null {
   const [start = '', ...cells] = raw.split(','), instant = parseStoredStart(start), columns = columnsOf(metrics);
   if (instant === null || cells.length !== columns.length) return null;

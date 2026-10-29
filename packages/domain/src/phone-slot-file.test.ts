@@ -32,6 +32,17 @@ it('fill keeps a stored nonempty cell while filling empty cells', () => {
   expect(mergePhoneSlotFile(filled, [slot(a, { steps: 99, distance_km: 9 })], 1, tz, 'fill')).toEqual({ ok: true, text: filled, changed: false });
   expect(textOf(mergePhoneSlotFile(text, [slot(a, { steps: 99 })], 1, tz, 'replace'))).toContain(row(a, { steps: '99' }));
 });
+it('reads headphone-minute precision from registry metadata and retains the slot duration cap', () => {
+  const metric = PHONE_METRICS.find((m) => m.key === 'headphone')! as PhoneMetric;
+  const rule = metric.daily.find((d) => d.column === 'headphone_min')!, decimals = rule.decimals;
+  rule.decimals = 2;
+  try {
+    expect(textOf(mergePhoneSlotFile(null, [slot(a, { headphone_min: 1.23 })], 1, tz))).toContain(row(a, { headphone_min: '1.23' }));
+    for (const headphone_min of [1.234, 15.01]) {
+      expect(mergePhoneSlotFile(null, [slot(a, { headphone_min })], 1, tz)).toMatchObject({ ok: false, code: 'refused:structure' });
+    }
+  } finally { rule.decimals = decimals; }
+});
 it('upgrades a known old header only on a changing write, once', () => {
   const metric = PHONE_METRICS.at(-1)! as PhoneMetric, oldSince = metric.since, schemas = PHONE_SCHEMAS as Record<string, number>;
   metric.since = 2; schemas['phone-slots/2'] = 2;
