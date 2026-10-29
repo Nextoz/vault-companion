@@ -267,8 +267,11 @@ function isLocalMidnight(instant: Date, timeZone: string): boolean {
   return value('hour') === '00' && value('minute') === '00' && value('second') === '00' && value('fractionalSecond') === '000';
 }
 
+const hourFormatters = new Map<string, Intl.DateTimeFormat>();
 function localHour(ms: number, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ms));
+  const format = hourFormatters.get(timeZone) ?? new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' });
+  hourFormatters.set(timeZone, format);
+  const parts = format.formatToParts(new Date(ms));
   return Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
 }
 

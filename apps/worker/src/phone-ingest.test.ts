@@ -150,5 +150,5 @@ it('maximal three-day synthetic body with every registry type stays within a gen
     if (i) times.push(elapsed);
   }
   const median = times.sort((a, b) => a - b)[2]!;
-  console.info(`phone ingest median warm ms: ${median.toFixed(1)}`); expect(median).toBeLessThan(3000);
+  console.info(`phone ingest median warm ms: ${median.toFixed(1)}`); expect(median).toBeLessThan(250); // uncached Intl formatters measured ~340 ms
 }, 30000);

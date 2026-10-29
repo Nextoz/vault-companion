@@ -1,4 +1,16 @@
-# HC6 phone health v2 — HC6-a1 + a2 merged, HC6-b next (2026-10-29)
+# HC6 phone health v2 — HC6-a1, a2, b merged, HC6-c next (2026-10-29)
+
+- HC6-b (codex sol-medium, `-Reviewer both`, one fix round, Opus review): `apps/worker/src/phone-ingest.ts` wraps the
+  v1 service (non-2 `schemaVersion` -> untouched v1 path); v2 = structural preflight of every month at head, then
+  sequential `executeWrite`s oldest month first (`phone-slots:<YYYY-MM>:<hash of path+bytes>`), then the v1 daily CSV
+  via exported `planHealthDaily` (same aggregation, op ID `health-ingest:<body hash>`). Errors name the file kind only.
+  `paths.ts` allows exactly `Health/Data/Phone/Phone Slots YYYY-MM.csv`. Skipped: "omitted Distance clears daily"
+  (= v1 semantics). **CPU:** v1 daily aggregation built an `Intl.DateTimeFormat` per sample (`userDate`, `localHour`);
+  Lead cached them per zone (also speeds live v1): maximal 3-day body (3,337 lines, 14 types) ~342 -> ~44 ms warm
+  on the laptop (parse ~20 ms is now the largest part). Still not proven under Workers Free 10 ms, same as ring:
+  read real CPU after the first v2 sends; if over, the brief's fallback is a 2-day window, then parser speed.
+- Unrelated: a 3.5 GB stale `typescript-language-server`/tsserver (started 2026-10-28 19:56) held most RAM; the auto
+  mode classifier denied stopping it.
 
 - HC6-a2 (codex sol-medium; CodeRabbit + intent review, one fix round): pure `phone-slots.ts` (`aggregatePhoneSlots`,
   `splitPhoneSlotsByMonth`; registry-driven, BigInt largest-remainder pro-rata allocated before the `from + 1 h` cut,
@@ -21,7 +33,7 @@
 - Unverified (probe Shortcut first): Find Health Samples with a variable type + source filter; type names/units.
 - Open owner question: switch Steps headline/baseline/XP to combined later? (HC6 keeps phone steps.)
 - HC5 slice c: owner asked (ACTION NEEDED 2026-10-29) whether to build the Ring-card UI at all.
-- Next: HC6-b (ingest v2 write path, high risk, `-Reviewer both`), backend, overnight-safe.
+- Next: HC6-c (Activity Daily, combined steps; touches ring ingest), backend, overnight-safe.
 
 # HC5 ring analysis — slices a + b merged, slice c next (2026-10-29)
 

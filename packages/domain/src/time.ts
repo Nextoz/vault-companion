@@ -5,16 +5,21 @@ export const DEFAULT_USER_TIME_ZONE = 'Europe/Copenhagen';
 const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
 const BACKDATED_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
 
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+
 /** Calendar date (YYYY-MM-DD) of `instant` in the user's IANA zone. The device offset is irrelevant. */
 export function userDate(instant: string | Date, timeZone: string): string {
   const date = typeof instant === 'string' ? new Date(instant) : instant;
   if (Number.isNaN(date.getTime())) throw new RangeError('invalid instant');
-  const parts = new Intl.DateTimeFormat('en-CA', {
+  // One formatter per zone: building one costs ~100 us and health ingest calls this per sample.
+  const format = dateFormatters.get(timeZone) ?? new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).formatToParts(date);
+  });
+  dateFormatters.set(timeZone, format);
+  const parts = format.formatToParts(date);
   const get = (type: string) => parts.find((p) => p.type === type)?.value;
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
