@@ -5,7 +5,7 @@ import {
   type HealthIngestDeps, type HealthIngestOutcome, type HealthSamples, type Planned, type WritePlan,
 } from '@vault-companion/domain';
 
-export type PhoneIngestOutcome = HealthIngestOutcome | { ok: true; days: readonly string[]; slots: number; months: string[] };
+export type PhoneIngestOutcome = HealthIngestOutcome | { ok: true; days: readonly string[]; slots: number; months: string[]; commitSha: string };
 const UNCHANGED = 'phone bytes unchanged';
 const refuse = (message: string) => ({ ok: false, code: 'refused:structure', message } as const);
 const hash = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -29,7 +29,7 @@ export function createPhoneIngestService(deps: HealthIngestDeps) {
     if (!daily.ok) return daily;
     const slots = aggregatePhoneSlots(parsed.samples, parsed.from, parsed.sentAt, tz);
     const grouped = splitPhoneSlotsByMonth(slots, tz), months = [...grouped.keys()].sort();
-    let kind = 'phone slots';
+    let kind = 'phone slots', commitSha = '';
     const failure = (status: 409 | 503): PhoneIngestOutcome => ({ ok: false, status, error: `${kind}: write ${status === 503 ? 'unavailable' : 'refused'}; resend` });
     // Cache by immutable commit only; a CAS retry must read and merge at its new commit.
     function cached<E>(plan: WritePlan<E>): WritePlan<E> {
@@ -68,7 +68,8 @@ export function createPhoneIngestService(deps: HealthIngestDeps) {
         if (!p.ok) return p.message === UNCHANGED ? null : failure(409);
         const payloadHash = bodyHash ?? await hash(`${p.path}\n${new TextDecoder().decode(p.bytes)}`);
         const result = await executeWrite(store, { baseRevision: revision, payloadHash, operationId: `${prefix}:${payloadHash.slice(0, 32)}` }, plan);
-        if (result.ok || result.message === UNCHANGED) return null;
+        if (result.ok) { commitSha = result.commitSha; return null; }
+        if (result.message === UNCHANGED) return null;
         return failure(result.code === 'upstream-unavailable' || result.code === 'conflict:stale' ? 503 : 409);
       }
       for (const [i, month] of months.entries()) {
@@ -77,6 +78,7 @@ export function createPhoneIngestService(deps: HealthIngestDeps) {
       }
       kind = 'health daily';
       const plan = cached({ ...daily.plan, async compute(s, at) {
+        commitSha = at;
         const p = await daily.plan.compute(s, at);
         if (!p.ok) return p;
         const current = await s.readFile(p.path, at);
@@ -84,7 +86,7 @@ export function createPhoneIngestService(deps: HealthIngestDeps) {
         return p;
       } });
       const failed = await write(plan, 'health-ingest', await hash(body));
-      return failed ?? { ok: true, days: daily.days, slots: slots.length, months };
+      return failed ?? { ok: true, days: daily.days, slots: slots.length, months, commitSha };
     } catch (e) {
       // Adapter exceptions can contain source data. Expose only the file kind, never exception text.
       return failure(e instanceof FileTooLarge ? 409 : 503);

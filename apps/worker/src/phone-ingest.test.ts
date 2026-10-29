@@ -35,7 +35,7 @@ it('golden: maps converted samples through all seven v1 fields and preserves v1 
 it('writes oldest month first, with CAS and exact hash trailers; resend makes no commit', async () => {
   const store = await seed(), write = vi.spyOn(store, 'writeFile');
   const payload = body([line(), line('Steps', 20, 'count', '2026-10-31T23:45:00+01:00', '2026-11-01T00:00:00+01:00')].join('\n'));
-  expect(await service(store).ingestHealth(payload)).toEqual({ ok: true, slots: 2, months: ['2026-10', '2026-11'], days: ['2026-10-31', '2026-11-01'] });
+  expect(await service(store).ingestHealth(payload)).toEqual({ ok: true, slots: 2, months: ['2026-10', '2026-11'], days: ['2026-10-31', '2026-11-01'], commitSha: store.headCommit });
   expect(write.mock.calls.map(([r]) => r.path)).toEqual([OCT, NOV, DAILY]);
   for (const [i, [r]] of write.mock.calls.entries()) {
     const h = await digest(r.path === DAILY ? payload : `${r.path}\n${new TextDecoder().decode(r.bytes)}`);
@@ -119,6 +119,14 @@ it('route returns v2 success and failures without leaking sentinels or sources t
   try {
     const ok = await post(body()); expect(ok.status).toBe(200);
     expect(await ok.json()).toEqual({ ok: true, days: ['2026-11-01'], slots: 1, months: ['2026-11'] });
+    expect(log.mock.calls.at(-1)?.[0].commitSha).toBe(store.headCommit);
+    // Repair only slots while daily bytes are already correct, then perform a full no-op resend.
+    await store.commitFiles({ [NOV]: null }); const count = store.writeCalls;
+    expect((await post(body())).status).toBe(200); expect(store.writeCalls).toBe(count + 1);
+    const repaired = store.headCommit;
+    expect(log.mock.calls.at(-1)?.[0].commitSha).toBe(repaired);
+    expect((await post(body())).status).toBe(200); expect(store.headCommit).toBe(repaired);
+    expect(log.mock.calls.at(-1)?.[0].commitSha).toBe(repaired);
     const bad = await post(body(line('Steps', 9876, 'count', start, end, `PulseLoop${source}`)));
     expect(bad.status).toBe(422); const error = await bad.json(); expect(error).toEqual({ ok: false, error: 'line 1 Steps source' });
     const observed = JSON.stringify([log.mock.calls, consoleLog.mock.calls, consoleError.mock.calls, error]);

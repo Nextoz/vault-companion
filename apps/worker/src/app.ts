@@ -617,8 +617,8 @@ export function createApp(deps: AppDeps) {
       meta.errorCode = `health-ingest:${result.status}`;
       return c.json({ ok: false, error: result.error }, result.status as 400);
     }
-    if ('slots' in result) return c.json({ ok: true, days: [...result.days], slots: result.slots, months: result.months });
     meta.commitSha = result.commitSha;
+    if ('slots' in result) return c.json({ ok: true, days: [...result.days], slots: result.slots, months: result.months });
     return c.json({ ok: true, days: [...result.days] });
   });
 
