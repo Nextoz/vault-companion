@@ -1,3 +1,14 @@
+# HC6 phone health v2 — brief + ADR-0070 (proposed) merged, HC6-a1 next (2026-10-29)
+
+- Opus subagent wrote `docs/briefs/HC6-phone-health-v2.md` and ADR-0070: v2 body on the same `/api/health/ingest`
+  (`schemaVersion: 2`, `samples` lines), `phone-metrics.ts` registry, Phone Slots month files, v1 daily CSV rebuilt
+  byte-identical, combined steps = per-slot max(phone, ring) in `Health/Data/Activity Daily.csv`, backfill via a
+  repo script into the local vault checkout (owner runs). Slices a1, a2, b (high risk), c, d, e.
+- Unverified (probe Shortcut first): Find Health Samples with a variable type + source filter; type names/units.
+- Open owner question: switch Steps headline/baseline/XP to combined later? (HC6 keeps phone steps.)
+- HC5 slice c: owner asked (ACTION NEEDED 2026-10-29) whether to build the Ring-card UI at all.
+- Next: HC6-a1 (registry + v2 line parser), backend, overnight-safe.
+
 # HC5 ring analysis — slices a + b merged, slice c next (2026-10-29)
 
 - Owner released HC5 candidates #7 (coverage) and #2 (sleep timing + regularity) only; brief `docs/briefs/HC5-ring-analysis.md`, ADR-0069. Other HC5 candidates and LAS stay unreleased.

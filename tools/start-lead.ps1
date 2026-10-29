@@ -9,7 +9,9 @@ param([string]$Focus = 'the first open item under "Next actions" in docs/checkpo
       # Unattended run: no permission prompts (safe actions auto-approved, risky ones blocked). Standing decisions live in .agent/owner-instructions.md.
       [switch]$Overnight,
       # The watcher passes this when it relaunches a Lead that exited (it is already running).
-      [switch]$NoWatcher)
+      [switch]$NoWatcher,
+      # Lead model. Default Sonnet 5.5; .agent/lead-model.txt (one model id) overrides it, so watcher relaunches keep the choice.
+      [string]$Model)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $repo
@@ -32,4 +34,8 @@ if ($env:HERDR_ENV) {
 git fetch -q origin
 $prompt = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'lead-prompt.md') -Raw) -replace '\{FOCUS\}', $Focus
 $mode = if ($Overnight) { @('--permission-mode', 'auto') } else { @() }
-& claude --model claude-sonnet-5-5 --effort medium --name 'VC Lead' @mode $prompt
+if (-not $Model) {
+    $modelFile = Join-Path $repo '.agent/lead-model.txt'
+    $Model = if (Test-Path -LiteralPath $modelFile) { (Get-Content -LiteralPath $modelFile -Raw).Trim() } else { 'claude-sonnet-5-5' }
+}
+& claude --model $Model --effort medium --name 'VC Lead' @mode $prompt
