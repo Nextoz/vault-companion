@@ -1,5 +1,5 @@
 import { formatNumber, weekday } from './health-format.ts';
-import { RING_DAILY_HEADER, RING_METRICS, type RingDailyAgg, type RingKey } from './ring-metrics.ts';
+import { RING_DAILY_HEADER, RING_DAILY_HEADER_V1, RING_METRICS, type RingDailyAgg, type RingKey } from './ring-metrics.ts';
 import { canonicalSlotStart, type RingSlot } from './ring-slots.ts';
 import { firstEol, joinRingLines, ringFileHeader, ringFileLines, ringStructureRefusal, type RingFileMerge } from './ring-slot-file.ts';
 
@@ -75,6 +75,25 @@ export function ringAggregate(agg: RingDailyAgg, values: readonly number[]): num
   }
 }
 const valuesOf = (slots: readonly RingSlot[], key: RingKey) => slots.map((s) => s.values[key]).filter((v): v is number => v != null);
+/** Full calendar grid in instant order, including both occurrences of a repeated DST hour. */
+function coverage(day: readonly RingSlot[], date: string, tz: string): Record<string, string> {
+  if (!day.length) return {};
+  const midnight = (utc: number) => {
+    let instant = utc;
+    for (let i = 0; i < 3; i++) instant += utc - Date.parse(`${canonicalSlotStart(instant, tz).slice(0, 19)}Z`);
+    return instant;
+  };
+  const utc = Date.parse(`${date}T00:00:00Z`), end = midnight(utc + DAY_MS);
+  const readings = new Map(day.filter((s) => RING_METRICS.some((m) => s.values[m.key] != null)).map((s) => [s.instant, s]));
+  let mask = '', gap = 0, longest = 0;
+  for (let instant = midnight(utc); instant < end; instant += SLOT_MS) {
+    const s = readings.get(instant);
+    mask += !s ? '-' : (s.values.sleepLightMin ?? 0) > 0 || (s.values.sleepDeepMin ?? 0) > 0 ? '1' : '0';
+    gap = s ? 0 : gap + 1;
+    longest = Math.max(longest, gap);
+  }
+  return { slots_n: String(readings.size), longest_gap_min: String(longest * 15), sleep_mask: mask };
+}
 export function deriveRingDaily(slots: readonly RingSlot[], dates: readonly string[], tz: string): Map<string, string> {
   const rows = new Map<string, string>(), sessions = ringNightSessions(slots, tz), byDate = slotsByDate(slots, dates, tz);
   for (const date of dates) {
@@ -83,6 +102,7 @@ export function deriveRingDaily(slots: readonly RingSlot[], dates: readonly stri
     // Night scope: every slot in [sleep_start, sleep_end), sleep slot or not; null without a session.
     const nightSlots = night ? slots.filter((s) => s.instant >= night.start && s.instant < night.end) : null;
     const cells: Record<string, string> = {
+      ...coverage(day, date, tz),
       date, weekday: weekday(date), sleep_n: String(night?.slots.length ?? 0),
       sleep_start: night ? canonicalSlotStart(night.start, tz) : '', sleep_end: night ? canonicalSlotStart(night.end, tz) : '',
     };
@@ -96,13 +116,29 @@ export function deriveRingDaily(slots: readonly RingSlot[], dates: readonly stri
 }
 export function mergeDailyFile(existing: string | null, rows: ReadonlyMap<string, string>): RingFileMerge {
   const lines = ringFileLines(existing ?? `${RING_DAILY_HEADER}\n`);
-  if (ringFileHeader(lines) !== RING_DAILY_HEADER) return ringStructureRefusal;
+  const header = ringFileHeader(lines), upgrading = header === RING_DAILY_HEADER_V1;
+  if (!upgrading && header !== RING_DAILY_HEADER) return ringStructureRefusal;
+  const previousColumns = RING_DAILY_HEADER_V1.split(',').length, updated = new Set<string>();
+  let changed = existing === null;
   const eol = firstEol(lines), final = lines.at(-1)!.end, dateOf = (l: { raw: string }) => /^(\d{4}-\d{2}-\d{2}),/.exec(l.raw)?.[1];
   for (const [date, raw] of [...rows].sort(([a], [b]) => a.localeCompare(b))) {
     const at = lines.findIndex((l, i) => i > 0 && dateOf(l) === date);
-    if (at >= 0) { lines[at]!.raw = raw; continue; }
+    if (at >= 0) {
+      const comparable = upgrading ? raw.split(',').slice(0, previousColumns).join(',') : raw;
+      if (lines[at]!.raw === comparable) continue;
+      lines[at]!.raw = raw; updated.add(date); changed = true; continue;
+    }
     const next = lines.findIndex((l, i) => i > 0 && (dateOf(l) ?? '') > date);
     lines.splice(next < 0 ? lines.length : next, 0, { raw, end: eol });
+    updated.add(date); changed = true;
+  }
+  if (!changed) return { ok: true, text: existing!, changed: false };
+  if (upgrading) {
+    lines[0]!.raw = `${lines[0]!.raw.startsWith('\uFEFF') ? '\uFEFF' : ''}${RING_DAILY_HEADER}`;
+    for (const line of lines.slice(1)) if (!updated.has(dateOf(line) ?? '')) {
+      if (!dateOf(line) || line.raw.split(',').length !== previousColumns) return ringStructureRefusal;
+      line.raw += ',,,';
+    }
   }
   const text = joinRingLines(lines, eol, final);
   return { ok: true, text, changed: text !== existing };

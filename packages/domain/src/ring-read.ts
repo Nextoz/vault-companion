@@ -1,6 +1,6 @@
 import { HEALTH_VITALS_DAILY_CSV, RingDailyRow, ringSlotsPath, type ApiError, type RingDayResponse, type RingSlot, type RingVitals } from '@vault-companion/contracts';
 import { isStructurallySafePath } from './paths.ts';
-import { RING_DAILY_HEADER } from './ring-metrics.ts';
+import { RING_DAILY_HEADER, RING_DAILY_HEADER_V1 } from './ring-metrics.ts';
 import { parseSlotFile, ringFileHeader, ringFileLines } from './ring-slot-file.ts';
 import { canonicalSlotStart } from './ring-slots.ts';
 import { FileTooLarge, StoreUnavailable, StoreUnknownOutcome, type VaultPath, type VaultStore } from './store.ts';
@@ -53,13 +53,14 @@ async function readText(store: VaultStore, revision: string, path: string): Prom
 }
 export function parseRingDaily(text: string): RingDailyRow[] {
   const lines = ringFileLines(text);
-  if (ringFileHeader(lines) !== RING_DAILY_HEADER) throw new Unreadable();
-  const columns = RING_DAILY_HEADER.split(','), seen = new Set<string>();
+  const header = ringFileHeader(lines);
+  if (header !== RING_DAILY_HEADER && header !== RING_DAILY_HEADER_V1) throw new Unreadable();
+  const columns = header.split(','), seen = new Set<string>(), previousColumns = RING_DAILY_HEADER_V1.split(',').length;
   return lines.slice(1).map(({ raw }) => {
     const cells = raw.split(','), value: Record<string, unknown> = {};
     if (cells.length !== columns.length) throw new Unreadable();
     columns.forEach((column, i) => {
-      if (column === 'weekday') return;
+      if (column === 'weekday' || i >= previousColumns) return;
       const key = column.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()), cell = cells[i]!;
       value[key] = column === 'date' ? cell : cell === '' ? null : ['sleep_start', 'sleep_end'].includes(column) ? cell : /^\d+(?:\.\d+)?$/.test(cell) ? Number(cell) : NaN;
     });

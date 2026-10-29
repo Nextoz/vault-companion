@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { affectedDates, deriveRingDaily, mergeDailyFile, ringNightSessions } from './ring-daily.ts';
-import { RING_DAILY_HEADER, RING_METRICS } from './ring-metrics.ts';
+import { RING_DAILY_HEADER, RING_DAILY_HEADER_V1, RING_METRICS } from './ring-metrics.ts';
 import { type RingSlot } from './ring-slots.ts';
 const tz = 'Europe/Copenhagen', BOM = String.fromCharCode(0xfeff);
 const slot = (start: string, values: Partial<RingSlot['values']> = {}): RingSlot => ({ instant: Date.parse(start), values: { ...Object.fromEntries(RING_METRICS.map((m) => [m.key, null])), ...values } as RingSlot['values'] });
@@ -53,12 +53,35 @@ it('affects the night of a sent non-sleep slot and the former night of a session
 });
 it('writes a date whose only data is its night', () => {
   const slots = ['00:15', '01:00'].map((t) => asleep(`2026-11-02T${t}:00+01:00`));
-  expect(cells(slots)).toMatchObject({ sleep_start: '2026-11-02T00:15:00+01:00', light_min: '30', hr_n: '0', avg_hr: '' });
+  expect(cells(slots)).toMatchObject({ sleep_start: '2026-11-02T00:15:00+01:00', light_min: '30', hr_n: '0', avg_hr: '', slots_n: '', longest_gap_min: '', sleep_mask: '' });
+});
+it('counts any reading, distinguishes sleep from awake, and includes boundary and internal gaps', () => {
+  const slots = [slot('2026-11-01T00:30:00+01:00', { steps: 0 }), slot('2026-11-01T00:45:00+01:00', { sleepLightMin: 1 }), slot('2026-11-01T01:00:00+01:00', { sleepDeepMin: 1 }), slot('2026-11-01T01:15:00+01:00', { sleepAwakeMin: 15 }), slot('2026-11-01T01:30:00+01:00', { sleepLightMin: 0 }), slot('2026-11-01T12:00:00+01:00')];
+  expect(cells(slots)).toMatchObject({ slots_n: '5', longest_gap_min: '1335', sleep_mask: `--01100${'-'.repeat(89)}` });
+  slots.push(slot('2026-11-01T23:45:00+01:00', { hr: 60 }));
+  expect(cells(slots).longest_gap_min).toBe('1320');
+  expect(cells([slot('2026-11-01T23:45:00+01:00', { hr: 60 })]).longest_gap_min).toBe('1425');
+  expect(cells([slot('2026-11-01T12:00:00+01:00')])).toMatchObject({ slots_n: '0', longest_gap_min: '1440', sleep_mask: '-'.repeat(96) });
 });
 it.each([['2026-03-29', '2026-03-29T00:00:00+01:00', 92], ['2026-10-25', '2026-10-25T00:00:00+02:00', 100]] as const)('uses calendar day across DST %s', (date, start, count) => {
   const base = Date.parse(start), slots = Array.from({ length: count }, (_, i) => slot(new Date(base + i * 900000).toISOString(), { hr: 72 }));
   slots.push(slot(new Date(base - 900000).toISOString(), { hr: 987 }), slot(new Date(base + count * 900000).toISOString(), { hr: 987 }));
-  expect(cells(slots, date)).toMatchObject({ hr_n: String(count), avg_hr: '72' });
+  expect(cells(slots, date)).toMatchObject({ hr_n: String(count), avg_hr: '72', slots_n: String(count), longest_gap_min: '0', sleep_mask: '0'.repeat(count) });
+  // One reading during the transition, with every other slot missing, retains instant ordering.
+  expect(cells([slot(new Date(base + 12 * 900000).toISOString(), { sleepDeepMin: 15 })], date)).toMatchObject({ slots_n: '1', longest_gap_min: String((count - 13) * 15), sleep_mask: `${'-'.repeat(12)}1${'-'.repeat(count - 13)}` });
+});
+it('upgrades V1 only on a changed value, pads untouched rows and preserves golden bytes', () => {
+  const oldRow = '2026-10-31,Sat,,,,,,,60,,,,,1,0,0,0,0';
+  const current = '2026-11-01,Sun,,,,,,,72,,,,,1,0,0,0,0';
+  const old = `${BOM}${RING_DAILY_HEADER_V1}\r\n${oldRow}\r${current}`;
+  const rows = deriveRingDaily([slot('2026-11-01T12:00:00+01:00', { hr: 72 })], ['2026-11-01'], tz);
+  expect(rows.get('2026-11-01')!.split(',').slice(0, 18).join(',')).toBe(current);
+  expect(mergeDailyFile(old, rows)).toEqual({ ok: true, changed: false, text: old });
+  const changed = deriveRingDaily([slot('2026-11-01T12:00:00+01:00', { hr: 73 })], ['2026-11-01'], tz);
+  expect(mergeDailyFile(old, changed)).toEqual({ ok: true, changed: true, text: `${BOM}${RING_DAILY_HEADER}\r\n${oldRow},,,\r2026-11-01,Sun,,,,,,,73,,,,,1,0,0,0,0,1,720,${'-'.repeat(48)}0${'-'.repeat(47)}` });
+  const added = new Map([['2026-11-02', '2026-11-02,Mon,,,,,,,60,,,,,1,0,0,0,0,1,720,' + '-'.repeat(48) + '0' + '-'.repeat(47)]]);
+  expect(mergeDailyFile(old, added)).toEqual({ ok: true, changed: true, text: `${BOM}${RING_DAILY_HEADER}\r\n${oldRow},,,\r${current},,,\r\n${added.get('2026-11-02')}` });
+  expect(mergeDailyFile(`${RING_DAILY_HEADER_V1}\n2026-10-31,broken\n`, changed)).toMatchObject({ ok: false, code: 'refused:structure' });
 });
 it('merges daily rows with exact untouched bytes, idempotence, ordered insert and missing-date survival', () => {
   const old = `${BOM}${RING_DAILY_HEADER}\r\n2026-10-31,synthetic\r\n2026-11-02,older`, rows = deriveRingDaily([slot('2026-11-01T12:00:00+01:00', { hr: 72 })], ['2026-11-01', '2026-11-02'], tz);
