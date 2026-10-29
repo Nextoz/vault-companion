@@ -70,6 +70,19 @@ it.each([['2026-03-29', '2026-03-29T00:00:00+01:00', 92], ['2026-10-25', '2026-1
   // One reading during the transition, with every other slot missing, retains instant ordering.
   expect(cells([slot(new Date(base + 12 * 900000).toISOString(), { sleepDeepMin: 15 })], date)).toMatchObject({ slots_n: '1', longest_gap_min: String((count - 13) * 15), sleep_mask: `${'-'.repeat(12)}1${'-'.repeat(count - 13)}` });
 });
+it('retains both occurrences of the fall-back hour in instant order', () => {
+  const slots = [slot('2026-10-25T02:00:00+01:00', { hr: 60 }), slot('2026-10-25T02:00:00+02:00', { sleepLightMin: 15 })];
+  expect(cells(slots, '2026-10-25')).toMatchObject({ slots_n: '2', longest_gap_min: '1305', sleep_mask: `${'-'.repeat(8)}1---0${'-'.repeat(87)}` });
+});
+it.each(['', ',extra', ',,,'])('refuses malformed V1 row width before padding or replacing (%s)', (suffix) => {
+  const legacy = '2026-11-01,Sun,,,,,,,72,,,,,1,0,0,0,0';
+  const malformed = suffix ? legacy + suffix : legacy.slice(0, legacy.lastIndexOf(','));
+  const old = `${RING_DAILY_HEADER_V1}\n${malformed}\n`;
+  for (const date of ['2026-11-01', '2026-11-02']) {
+    const rows = deriveRingDaily([slot(`${date}T12:00:00+01:00`, { hr: 73 })], [date], tz);
+    expect(mergeDailyFile(old, rows)).toMatchObject({ ok: false, code: 'refused:structure' });
+  }
+});
 it('upgrades V1 only on a changed value, pads untouched rows and preserves golden bytes', () => {
   const oldRow = '2026-10-31,Sat,,,,,,,60,,,,,1,0,0,0,0';
   const current = '2026-11-01,Sun,,,,,,,72,,,,,1,0,0,0,0';

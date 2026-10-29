@@ -124,6 +124,7 @@ export function mergeDailyFile(existing: string | null, rows: ReadonlyMap<string
   for (const [date, raw] of [...rows].sort(([a], [b]) => a.localeCompare(b))) {
     const at = lines.findIndex((l, i) => i > 0 && dateOf(l) === date);
     if (at >= 0) {
+      if (upgrading && lines[at]!.raw.split(',').length !== previousColumns) return ringStructureRefusal;
       const comparable = upgrading ? raw.split(',').slice(0, previousColumns).join(',') : raw;
       if (lines[at]!.raw === comparable) continue;
       lines[at]!.raw = raw; updated.add(date); changed = true; continue;
