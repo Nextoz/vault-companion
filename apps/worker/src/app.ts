@@ -67,11 +67,11 @@ import {
   type CalendarEventCreateResponse,
   type CalendarEventRemoveResponse,
   type CalendarLinksResponse,
-  type HealthIngestOutcome,
 } from '@vault-companion/domain';
 import type { Identity, ServiceTokenIdentity } from './auth.ts';
 import { diagnosticDetail, hashPath, sanitize, type LogSink } from './log.ts';
 import type { RingIngestOutcome } from './ring-ingest.ts';
+import type { PhoneIngestOutcome } from './phone-ingest.ts';
 
 export interface Services {
   readTasks(known: readonly string[]): Promise<TasksResponse | ApiError>;
@@ -141,7 +141,7 @@ export interface Services {
   /** Health history view (HC3b). Read-only. Optional: without it the route answers 404. */
   readHealthHistory?(): Promise<HealthHistoryResponse | ApiError>;
   /** Health sample ingest (HC3a). Optional: without it the route answers 404. */
-  ingestHealth?(body: string): Promise<HealthIngestOutcome>;
+  ingestHealth?(body: string): Promise<PhoneIngestOutcome>;
   ingestRing?(body: string): Promise<RingIngestOutcome>;
   /** Calendar links read (ADR-0052). Optional: without it the route answers 404. */
   readCalendarLinks?(): Promise<CalendarLinksResponse | ApiError>;
@@ -617,6 +617,7 @@ export function createApp(deps: AppDeps) {
       meta.errorCode = `health-ingest:${result.status}`;
       return c.json({ ok: false, error: result.error }, result.status as 400);
     }
+    if ('slots' in result) return c.json({ ok: true, days: [...result.days], slots: result.slots, months: result.months });
     meta.commitSha = result.commitSha;
     return c.json({ ok: true, days: [...result.days] });
   });

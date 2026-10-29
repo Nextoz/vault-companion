@@ -13,6 +13,7 @@ Any change here is consequential: update the golden tests and record an ADR.
 | Active Work | `Tasks/Active Work Now.md` | read, capture, edit, review, exact Undo (ADR-0019) |
 | Training log | `Health/Training Log.md` | read, insert or edit one session row (B12), exact Undo; update only, never create (ADR-0025) |
 | Ring slots | `Health/Data/Ring/Ring Slots YYYY-MM.csv` (valid month only) | read; create/update by CAS, non-null slot merge, unchanged bytes skipped (ADR-0068) |
+| Phone slots | `Health/Data/Phone/Phone Slots YYYY-MM.csv` (valid month only) | read; create/update by CAS, current registry header, replace non-null cells only, unchanged bytes skipped (ADR-0070) |
 | Ring daily vitals | `Health/Data/Apple Health Vitals Daily.csv` | read; create/update by CAS, derive affected dates from stored slots at the write commit (ADR-0068) |
 | Reading books | `Books/<Title>.md` for a sanitised `<Title>` (trimmed, 1–80 chars, no `/ \ : * ? " < > |`, no leading dot); `Books/Reading Queue.md` is never read for writes and never changed | list (read); create (`StartBook`), append one `## Progress` line (`LogReading`) or one dated `## Reflections` entry (`SaveReflection`), exact Undo (a create's Undo deletes); per [ADR-0062](decisions/0062-reading-book-notes.md) |
 | Event triage | `Events/Triage/feed.json`, `applied.json`, `Decisions/YYYY-MM.jsonl` | read; create/append **only** decision JSONL, per [ADR-0024](decisions/0024-event-triage.md) |

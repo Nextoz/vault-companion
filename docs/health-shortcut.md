@@ -3,7 +3,22 @@
 The iPhone Shortcut that sends Health samples to `POST /api/health/ingest`. The contract is fixed: the Worker adapts
 to the Shortcut. No health value is ever stored in this repository.
 
-## Once
+## Version 2 (ADR-0070)
+
+Send to the same endpoint with the same service token. The JSON body has exactly `schemaVersion: 2`, `from`,
+`sentAt` (ISO dates with explicit offsets), and `samples` (one newline-separated string). Each sample line has
+six pipe-separated fields: `TypeName|StartISO|EndISO|Value|Unit|SourceName`. Use type names and units from
+`packages/domain/src/phone-metrics.ts`; values use a decimal point. Sleep uses `In Bed` and an empty unit.
+Filter out PulseLoop sources in Find Health Samples; the server also refuses any such line (422).
+
+The server converts samples once, writes 15-minute phone slots by Copenhagen month (oldest first, replacing only
+sent non-null cells), then updates Apple Health Daily using the existing v1 aggregation. Activity Daily is a
+separate slice. Success is `{ok:true,days:[…],slots:n,months:[…]}`. Failure is `{ok:false,error:…}` with status
+400/422 for input, 409 for stored structure, or 503 for an unavailable/conflicting write. Re-send the same body
+after a partial failure: unchanged files make no commit and the missing write is repaired. Values and source names
+are never included in v2 errors or logs. Version 1 continues to use the steps below unchanged.
+
+## Once (version 1)
 
 1. Cloudflare → Access → Service tokens: `vault-companion-health-shortcut` exists (done). Keep its Client ID and
    Client Secret in the password manager.

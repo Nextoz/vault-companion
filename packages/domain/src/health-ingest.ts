@@ -55,7 +55,7 @@ interface SleepSample {
   readonly inBed: boolean;
 }
 
-interface Samples {
+export interface HealthSamples {
   readonly steps: readonly NumericSample[];
   readonly distance: readonly NumericSample[];
   readonly flights: readonly NumericSample[];
@@ -214,7 +214,7 @@ function parseSleepField(text: string): { ok: true; samples: SleepSample[] } | {
   return { ok: true, samples };
 }
 
-function parseSamples(fields: Payload['fields']): { ok: true; samples: Samples } | { ok: false; status: 400; error: string } {
+function parseSamples(fields: Payload['fields']): { ok: true; samples: HealthSamples } | { ok: false; status: 400; error: string } {
   const steps = parseNumericField('steps', fields.steps, true);
   if (!steps.ok) return { ok: false, status: 400, error: steps.error };
   const distance = parseNumericField('distance', fields.distance, false);
@@ -302,6 +302,10 @@ function aggregate(payload: Payload, timeZone: string): { ok: true; aggs: Readon
   const parsed = parseSamples(payload.fields);
   if (!parsed.ok) return { ok: false, status: 400, error: parsed.error };
   const { samples } = parsed;
+  return aggregateSamples(payload, samples, timeZone);
+}
+
+function aggregateSamples(payload: Pick<Payload, 'from' | 'sentAt'>, samples: HealthSamples, timeZone: string): ReturnType<typeof aggregate> {
   if (samples.steps.length === 0) return { ok: false, status: 422, error: 'Health was locked: no step samples' };
 
   const aggs = new Map<string, DayAgg>();
@@ -432,7 +436,7 @@ async function sha256Hex(text: string): Promise<string> {
   return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function planFor(payload: Payload, aggs: ReadonlyMap<string, DayAgg>, days: readonly string[], timeZone: string): WritePlan<Effect> {
+function planFor(aggs: ReadonlyMap<string, DayAgg>, days: readonly string[], timeZone: string): WritePlan<Effect> {
   return {
     message: 'health: ingest daily rows',
     async compute(store, atCommit): Promise<Planned<Effect>> {
@@ -475,6 +479,13 @@ function executeFailure(message: string, code: string): HealthIngestOutcome {
   return err(409, message);
 }
 
+/** Share the v1 aggregation and CAS-time merge without serializing converted samples again. */
+export function planHealthDaily(from: Date, sentAt: Date, samples: HealthSamples, timeZone: string) {
+  const result = aggregateSamples({ from, sentAt }, samples, timeZone);
+  if (!result.ok) return result;
+  return { ok: true as const, days: result.days, plan: planFor(result.aggs, result.days, timeZone) };
+}
+
 export function createHealthIngestService(deps: HealthIngestDeps) {
   const now = deps.now ?? (() => new Date());
   const timeZone = deps.timeZone ?? DEFAULT_USER_TIME_ZONE;
@@ -489,7 +500,7 @@ export function createHealthIngestService(deps: HealthIngestDeps) {
       const result = aggregate(payload, timeZone);
       if (!result.ok) return err(result.status, `${result.error} (${bodyShape(body)})`);
       const { aggs, days } = result;
-      const plan = planFor(payload, aggs, days, timeZone);
+      const plan = planFor(aggs, days, timeZone);
 
       let revision: string;
       try {
