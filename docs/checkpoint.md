@@ -1,4 +1,12 @@
-# HC6 phone health v2 — HC6-a1 merged, HC6-a2 next (2026-10-29)
+# HC6 phone health v2 — HC6-a1 + a2 merged, HC6-b next (2026-10-29)
+
+- HC6-a2 (codex sol-medium; CodeRabbit + intent review, one fix round): pure `phone-slots.ts` (`aggregatePhoneSlots`,
+  `splitPhoneSlotsByMonth`; registry-driven, BigInt largest-remainder pro-rata allocated before the `from + 1 h` cut,
+  `last` ties -> larger value, headphone dB = duration-weighted energy mean over overlapping samples, minutes = union)
+  and `phone-slot-file.ts` (`mergePhoneSlotFile`, replace/fill; touched rows validated; a header upgrade validates
+  and pads untouched rows, refuses a malformed one). Only ring change: `splitByMonth` generic. Lead added the
+  upgrade-guard test (verified to fail without the guard); intent findings "handoff missing" / "generalise ring line
+  helpers" skipped as false (`.agent/` is ignored; helpers are structural already).
 
 - HC6-a1 (codex sol-medium, CodeRabbit clean, intent review timed out): `phone-metrics.ts` registry (both headers
   built from it, == ADR literals; `phoneSlotHeader(n)`/`activityDailyHeader(n)` append `since: n` entries) and
@@ -13,7 +21,7 @@
 - Unverified (probe Shortcut first): Find Health Samples with a variable type + source filter; type names/units.
 - Open owner question: switch Steps headline/baseline/XP to combined later? (HC6 keeps phone steps.)
 - HC5 slice c: owner asked (ACTION NEEDED 2026-10-29) whether to build the Ring-card UI at all.
-- Next: HC6-a2 (slot aggregation + slot file, pure), backend, overnight-safe.
+- Next: HC6-b (ingest v2 write path, high risk, `-Reviewer both`), backend, overnight-safe.
 
 # HC5 ring analysis — slices a + b merged, slice c next (2026-10-29)
 

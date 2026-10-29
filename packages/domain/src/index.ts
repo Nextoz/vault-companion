@@ -49,3 +49,5 @@ export * from './ring-slot-file.ts';
 export * from './ring-daily.ts';
 export * from './phone-metrics.ts';
 export * from './phone-samples.ts';
+export * from './phone-slots.ts';
+export * from './phone-slot-file.ts';
