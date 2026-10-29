@@ -1,4 +1,10 @@
-# HC6 phone health v2 — brief + ADR-0070 (proposed) merged, HC6-a1 next (2026-10-29)
+# HC6 phone health v2 — HC6-a1 merged, HC6-a2 next (2026-10-29)
+
+- HC6-a1 (codex sol-medium, CodeRabbit clean, intent review timed out): `phone-metrics.ts` registry (both headers
+  built from it, == ADR literals; `phoneSlotHeader(n)`/`activityDailyHeader(n)` append `since: n` entries) and
+  `phone-samples.ts` `parsePhoneV2`. Worker's strict choices: extra body keys refused; exact type/unit match, no trim;
+  explicit-offset ISO only; values plain unsigned decimals, exact rational conversion rounded half up once; Sleep line
+  needs empty unit, only exact `In Bed` kept (`value 0, inBed: true`); errors `line N <Type> <field>` only.
 
 - Opus subagent wrote `docs/briefs/HC6-phone-health-v2.md` and ADR-0070: v2 body on the same `/api/health/ingest`
   (`schemaVersion: 2`, `samples` lines), `phone-metrics.ts` registry, Phone Slots month files, v1 daily CSV rebuilt
@@ -7,7 +13,7 @@
 - Unverified (probe Shortcut first): Find Health Samples with a variable type + source filter; type names/units.
 - Open owner question: switch Steps headline/baseline/XP to combined later? (HC6 keeps phone steps.)
 - HC5 slice c: owner asked (ACTION NEEDED 2026-10-29) whether to build the Ring-card UI at all.
-- Next: HC6-a1 (registry + v2 line parser), backend, overnight-safe.
+- Next: HC6-a2 (slot aggregation + slot file, pure), backend, overnight-safe.
 
 # HC5 ring analysis — slices a + b merged, slice c next (2026-10-29)
 
