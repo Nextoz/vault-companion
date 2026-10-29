@@ -49,8 +49,8 @@ export function canonicalSlotStartIntl(instant: number, tz = DEFAULT_USER_TIME_Z
   return `${local}${offset < 0 ? '-' : '+'}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
 }
 export const slotMonth = (instant: number, tz = DEFAULT_USER_TIME_ZONE): string => canonicalSlotStart(instant, tz).slice(0, 7);
-export function splitByMonth(slots: readonly RingSlot[], tz = DEFAULT_USER_TIME_ZONE): Map<string, RingSlot[]> {
-  const months = new Map<string, RingSlot[]>();
+export function splitByMonth<T extends { instant: number }>(slots: readonly T[], tz = DEFAULT_USER_TIME_ZONE): Map<string, T[]> {
+  const months = new Map<string, T[]>();
   for (const slot of [...slots].sort((a, b) => a.instant - b.instant)) {
     const month = slotMonth(slot.instant, tz);
     if (!months.has(month)) months.set(month, []);
