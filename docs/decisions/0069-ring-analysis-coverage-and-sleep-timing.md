@@ -1,7 +1,7 @@
 # ADR-0069 — Ring analysis: coverage and sleep timing (HC5)
 
-Status: **Proposed**. Candidates #7 and #2 released by the owner on 2026-10-28.
-Extends ADR-0068's derived daily schema and read surface; no implementation is authorized by this draft.
+Status: **Accepted** (Lead, 2026-10-29), within candidates #7 and #2 released by the owner on 2026-10-28.
+Extends ADR-0068's derived daily schema and read surface. Other HC5 candidates stay unreleased.
 
 ## Context
 
@@ -24,9 +24,10 @@ Append `slots_n`, `longest_gap_min` and `sleep_mask` to `RING_DAILY_HEADER` in
 `slots_n` counts slots with any non-null value on that Copenhagen calendar date. `longest_gap_min` is the
 longest run of slots without any value inside that date, multiplied by 15 minutes, including boundary gaps.
 `sleep_mask` has one character per slot in instant order: normally 96, or 92/100 on DST dates.
-`1` means asleep (positive light or deep sleep minutes); otherwise `0` requires an explicit awake-state
-signal (positive awake-stage minutes). `-` means no sleep-state reading, including slots with other metric
-data. Zero sleep minutes alone do not establish an awake state.
+`1` means asleep (positive light or deep sleep minutes); `0` means awake: the slot has at least one reading
+(the ring was worn) but no light or deep minutes, because the ring app records stages only inside a sleep
+session it detected; `-` means no reading of any metric in that slot. (Lead decision: an awake-stage-only
+`0` would leave every daytime slot `-`, so the index could never compare the full 24 hours.)
 Ingest computes these fields from the merged slots the daily step already loads, with no extra reads.
 The mask describes the calendar date, not the selected night session; ADR-0068's night selection stays intact.
 
@@ -47,7 +48,7 @@ Weekly values require 7 consecutive nights with data; the 14-night spread requir
 
 Compute the Sleep Regularity Index from consecutive calendar dates' `sleep_mask` values: the share
 of eligible slot pairs 24 hours apart with the same sleep/wake state, with `n` (eligible pairs) shown.
-Exclude pairs containing `-`, even when other metrics are present; do not infer sleep/wake state from stage totals alone. Weekly SRI requires
+Exclude pairs containing `-` (no reading at all); do not infer sleep/wake state from nightly stage totals. Weekly SRI requires
 7 consecutive nights with data and eligible pairs; an empty denominator yields no value.
 Show weekday versus weekend midpoint shift as the weekend mean midpoint minus the weekday mean midpoint,
 using Copenhagen night dates (Saturday/Sunday are weekend). Require 14 nights with data, including at
