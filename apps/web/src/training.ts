@@ -68,7 +68,7 @@ export interface TrainingDraft {
   weight: string;
   weightWas: string | null;
   /** Empty when the read's split is not a known workout; the sheet then requires a choice before saving. */
-  split: '' | 'Bicep' | 'Tricep' | 'Legs' | 'Group';
+  split: '' | 'Bicep' | 'Tricep' | 'Legs' | 'Swim' | 'Group';
   className: string;
   note: string;
 }
@@ -85,8 +85,8 @@ export function rowToDraft(row: TrainingRow): TrainingDraft {
   const duration = numberWithUnit(row.duration, 'min');
   const weight = numberWithUnit(row.weight, 'kg');
   const group = row.split.startsWith('Group: ') ? row.split.slice('Group: '.length) : null;
-  const split = row.split === 'Bicep' || row.split === 'Tricep' || row.split === 'Legs' || group !== null
-    ? (group !== null ? 'Group' : (row.split as 'Bicep' | 'Tricep' | 'Legs'))
+  const split = row.split === 'Bicep' || row.split === 'Tricep' || row.split === 'Legs' || row.split === 'Swim' || group !== null
+    ? (group !== null ? 'Group' : (row.split as 'Bicep' | 'Tricep' | 'Legs' | 'Swim'))
     : '';
   return {
     type: row.type === 'Run' ? 'Run' : 'Gym',

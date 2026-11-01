@@ -1,3 +1,9 @@
+# Swim workout option — release candidate (2026-11-01)
+
+- Owner requested Swim beside Bicep/Tricep in the existing Gym workout selector, with merge and deployment.
+- Adds the Swim split to validation, Markdown formatting types, selection and edit prefilling; existing duration, note, queue and Undo behavior stay in place.
+- Next: finish checks, merge the focused PR, verify the automatic production deployment.
+
 # HC6 phone health v2 — HC6-a1 + a2 merged, HC6-b next (2026-10-29)
 
 - HC6-a2 (codex sol-medium; CodeRabbit + intent review, one fix round): pure `phone-slots.ts` (`aggregatePhoneSlots`,
