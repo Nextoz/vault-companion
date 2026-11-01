@@ -23,6 +23,19 @@ const legacyRun = '| 2026-09-25 | 09:00 | Run | 5.2 km | 28 min | | | Legacy |';
 const legacyRow: kernel.TrainingRow = { date: '2026-09-25', time: '09:00', type: 'Run', distance: '5.2 km', duration: '28 min', weight: '', split: '', note: 'Legacy' };
 const editedLegacyRun = '| 2026-09-25 | 09:00 | Run | 5.2 km | 30 min | | | Legacy |';
 
+it('logs and edits Swim in the existing Gym row, with exact Undo', () => {
+  const swim: kernel.TrainingSession = { type: 'Gym', split: 'Swim', when: '2026-09-28T18:00:00+02:00', duration: 30 };
+  const swimLine = '| 2026-09-28 | 18:00 | Gym | | 30 min | | Swim | |';
+  const logged = kernel.insertTrainingRow(fixture, swim);
+  expect(logged).toMatchObject({ ok: true, text: fixture.replace(legacy, swimLine + '\n' + legacy) });
+  if (!logged.ok) throw new Error(logged.code);
+  expect(kernel.undoTraining(logged.text, logged.text, fixture, logged.effect)).toMatchObject({ text: fixture });
+  const edited = kernel.editTrainingRow(fixture, todayRow, { ...swim, when: '2026-09-28T19:00:00+02:00' });
+  expect(edited).toMatchObject({ ok: true, text: fixture.replace(today, '| 2026-09-28 | 19:00 | Gym | | 30 min | | Swim | |') });
+  if (!edited.ok) throw new Error(edited.code);
+  expect(kernel.undoTraining(edited.text, edited.text, fixture, edited.effect)).toMatchObject({ text: fixture });
+});
+
 it.each([
   ['backtick fence', '## Sessions\n```md\n' + header + '```'],
   ['tilde fence', '## Sessions\n~~~~~md\n' + header + '~~~~~'],

@@ -20,6 +20,10 @@ it.each([{ split: 'Back' }, { weight: 29.9 }, { weight: 250.1 }, { distance: 2 }
   expect(TrainingSession.safeParse({ type: 'Gym', when: run.when, split: 'Bicep', duration: 60, ...changes }).success).toBe(false);
 });
 const gym = { type: 'Gym', when: run.when, split: 'Bicep', duration: 60 } as const;
+it('accepts Swim as a Gym workout with the existing duration and optional weight', () => {
+  expect(TrainingSession.parse({ ...gym, split: 'Swim', note: 'Easy swim' })).toEqual({ ...gym, split: 'Swim', note: 'Easy swim' });
+  expect(TrainingSession.safeParse({ ...gym, split: 'Swim', className: 'Pool' }).success).toBe(false);
+});
 it('accepts Group with a class name, trimming it', () => {
   expect(TrainingSession.safeParse({ ...gym, split: 'Group', className: 'Functional Express' }).success).toBe(true);
   const parsed = TrainingSession.safeParse({ ...gym, split: 'Group', className: '  Functional Express  ' });

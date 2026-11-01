@@ -91,6 +91,16 @@ describe('Group training (B11)', () => {
 });
 
 describe('edit mode (B12)', () => {
+  it('prefills and saves Swim from the workout selector', async () => {
+    const { root, enqueue } = await mount({ row: { date: '2026-09-20', time: '08:00', type: 'Gym', distance: '', duration: '30 min', weight: '', split: 'Swim', note: '' } });
+    const workout = label('Workout')!.querySelector('select')!;
+    expect(workout.value).toBe('Swim');
+    expect([...workout.options].map((o) => o.value)).toContain('Swim');
+    await setValue(inputOf('Duration (min)'), '35');
+    await act(async () => { button('Save changes')!.click(); });
+    expect(enqueue.mock.calls[0]![0].payload.session).toMatchObject({ type: 'Gym', split: 'Swim', duration: 35 });
+    await act(async () => root.unmount());
+  });
   it('keeps an edited row’s empty time empty and waits for one before saving', async () => {
     const { root } = await mount({ row: { date: '2026-09-20', time: '', type: 'Run', distance: '5.2 km', duration: '45 min', weight: '', split: '', note: '' } });
     expect(inputOf('When').value).toBe('');
