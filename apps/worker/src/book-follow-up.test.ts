@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createApp } from './app.ts';
 import { BOOK_FOLLOW_UP_SYSTEM, BOOK_FOLLOW_UP_TIMEOUT_MS, createBookFollowUpService } from './book-follow-up.ts';
 import type { LogRecord } from './log.ts';
-import { createScalewayChat, type ChatOutcome, type ChatRequest } from './scaleway-chat.ts';
+import { createClaudeChat, type ChatOutcome, type ChatRequest } from './claude-chat.ts';
 
 const ACCOUNT = 'a'.repeat(64);
 const TITLE = 'Synthetic Private Title';
@@ -42,7 +42,7 @@ it('returns a trimmed question, sends ONLY the selected reflection, and never wr
   expect(res.status).toBe(200);
   expect(res.headers.get('Cache-Control')).toBe('no-store');
   expect(BookFollowUpResponse.parse(await res.json())).toEqual({ question: QUESTION });
-  expect(h.chat).toHaveBeenCalledExactlyOnceWith({ model: 'glm-5.2', system: BOOK_FOLLOW_UP_SYSTEM, user: FIRST, responseFormat: 'text', timeoutMs: BOOK_FOLLOW_UP_TIMEOUT_MS });
+  expect(h.chat).toHaveBeenCalledExactlyOnceWith({ model: 'claude-opus-5-5', system: BOOK_FOLLOW_UP_SYSTEM, user: FIRST, timeoutMs: BOOK_FOLLOW_UP_TIMEOUT_MS });
   const prompt = JSON.stringify(h.chat.mock.calls);
   expect(prompt).not.toContain(TITLE);
   expect(prompt).not.toContain(OTHER);
@@ -141,7 +141,7 @@ it('guards authentication, origin, account, JSON and selection-only body before 
   expect(h.chat).not.toHaveBeenCalled();
 });
 
-it('the real Scaleway client sends plain text mode for follow-ups and aborts at 30 seconds', async () => {
+it('the real Claude client sends only the reflection for follow-ups and aborts at 30 seconds', async () => {
   let body: Record<string, unknown> | undefined;
   let aborted = false;
   const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (_url, init) => {
@@ -149,13 +149,13 @@ it('the real Scaleway client sends plain text mode for follow-ups and aborts at 
     return new Promise<Response>((_resolve, reject) => init!.signal!.addEventListener('abort', () => { aborted = true; reject(new Error('timeout')); }));
   });
   const h = await setup();
-  const service = createBookFollowUpService({ readBooks: createBooksService({ store: h.store }).readBooks, chat: createScalewayChat({ apiKey: 'synthetic-key', fetch, timeoutMs: 60_000 }) });
+  const service = createBookFollowUpService({ readBooks: createBooksService({ store: h.store }).readBooks, chat: createClaudeChat({ apiKey: 'synthetic-key', fetch, timeoutMs: 60_000 }) });
   vi.useFakeTimers();
   const result = service.followUp(request);
   await vi.advanceTimersByTimeAsync(0);
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(body).not.toHaveProperty('response_format');
-  expect(body).toMatchObject({ model: 'glm-5.2', messages: [{ role: 'system', content: BOOK_FOLLOW_UP_SYSTEM }, { role: 'user', content: FIRST }] });
+  expect(body).toMatchObject({ model: 'claude-opus-5-5', system: BOOK_FOLLOW_UP_SYSTEM, messages: [{ role: 'user', content: FIRST }] });
   await vi.advanceTimersByTimeAsync(BOOK_FOLLOW_UP_TIMEOUT_MS);
   expect(await result).toMatchObject({ code: 'follow-up-unavailable' });
   expect(aborted).toBe(true);

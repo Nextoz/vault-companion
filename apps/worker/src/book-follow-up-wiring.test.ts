@@ -10,7 +10,7 @@ vi.mock('@vault-companion/domain', async (importOriginal) => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-it.each([false, true])('production routes use SCALEWAY_API_KEY when configured=%s', async (configured) => {
+it.each([false, true])('production routes use ANTHROPIC_API_KEY when configured=%s', async (configured) => {
   const printed: unknown[][] = [];
   vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { printed.push(args); });
   const reflection = 'SENTINEL-SAVED synthetic reflection';
@@ -23,14 +23,14 @@ it.each([false, true])('production routes use SCALEWAY_API_KEY when configured=%
     AUTH_MODE: 'access', ACCESS_TEAM_DOMAIN: 'https://team.cloudflareaccess.com', ACCESS_AUD: 'aud',
     ALLOWED_EMAILS: 'owner@example.com', APP_ORIGIN: 'https://vc.example.com',
     GITHUB_APP_ID: '1', GITHUB_APP_PRIVATE_KEY: 'synthetic-pem', GITHUB_INSTALLATION_ID: '2', VAULT_OWNER: 'o', VAULT_REPO: 'r',
-    ...(configured ? { SCALEWAY_API_KEY: 'SENTINEL-KEY' } : {}),
+    ...(configured ? { ANTHROPIC_API_KEY: 'SENTINEL-KEY' } : {}),
   };
   const pair = await generateKeyPair('RS256');
   const jwk = await exportJWK(pair.publicKey);
   const keys = createLocalJWKSet({ keys: [{ ...jwk, kid: 'test', alg: 'RS256' }] });
   const token = await new SignJWT({ email: 'owner@example.com' }).setProtectedHeader({ alg: 'RS256', kid: 'test' })
     .setIssuer(env.ACCESS_TEAM_DOMAIN).setAudience(env.ACCESS_AUD).setSubject('owner').setIssuedAt().setExpirationTime('1h').sign(pair.privateKey);
-  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: 'What changed?' } }] }), { status: 200 }));
+  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(JSON.stringify({ id: 'msg_synthetic', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'text', text: 'What changed?' }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
   const app = createProductionApp(env, keys, fetch);
   const session = await app.request('/api/session', { headers: { 'Cf-Access-Jwt-Assertion': token } });
   const { accountKey } = await session.json() as { accountKey: string };
@@ -43,10 +43,11 @@ it.each([false, true])('production routes use SCALEWAY_API_KEY when configured=%
     expect(await response.json()).toEqual({ question: 'What changed?' });
     expect(fetch).toHaveBeenCalledTimes(1);
     const [url, init] = fetch.mock.calls[0]!;
-    expect(url).toBe('https://api.scaleway.ai/v1/chat/completions');
-    expect(new Headers(init!.headers).get('Authorization')).toBe('Bearer SENTINEL-KEY');
+    expect(String(url)).toBe('https://api.anthropic.com/v1/messages');
+    const sent = new Headers(init!.headers);
+    expect(sent.get('x-api-key') ?? sent.get('authorization')).toContain('SENTINEL-KEY');
     const body = JSON.parse(init!.body as string) as unknown;
-    expect(body).toMatchObject({ model: 'glm-5.2', messages: [{ role: 'system', content: BOOK_FOLLOW_UP_SYSTEM }, { role: 'user', content: reflection }] });
+    expect(body).toMatchObject({ model: 'claude-opus-5-5', system: BOOK_FOLLOW_UP_SYSTEM, messages: [{ role: 'user', content: reflection }] });
     expect(body).not.toHaveProperty('response_format');
     expect(JSON.stringify(body)).not.toContain(title);
     expect(JSON.stringify(body)).not.toContain('SENTINEL-OTHER');

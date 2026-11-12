@@ -118,8 +118,8 @@ describe('wrangler.jsonc', () => {
     expect('GEMINI_API_KEY' in vars).toBe(false);
     expect(secrets).not.toContain('GEMINI_API_KEY');
     expect(required).not.toContain('GEMINI_API_KEY');
-    expect('SCALEWAY_API_KEY' in vars).toBe(false);
-    expect(secrets).not.toContain('SCALEWAY_API_KEY');
-    expect(required).not.toContain('SCALEWAY_API_KEY');
+    expect('ANTHROPIC_API_KEY' in vars).toBe(false);
+    expect(secrets).not.toContain('ANTHROPIC_API_KEY');
+    expect(required).not.toContain('ANTHROPIC_API_KEY');
   });
 });

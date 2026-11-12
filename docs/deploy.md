@@ -195,6 +195,10 @@ without it, and the cron then logs `gemini-key-missing` and writes nothing. Add 
 pnpm exec wrangler secret put GEMINI_API_KEY
 ```
 
+The Morning Brief writer and the Reading "Challenge me" question use the Claude API (ADR-0071) and need the optional
+secret `ANTHROPIC_API_KEY`, set the same way (`pnpm exec wrangler secret put ANTHROPIC_API_KEY`). Without it the
+brief ships as the deterministic fallback and the follow-up route answers `follow-up-unavailable`. `SCALEWAY_API_KEY`is no longer read (`pnpm exec wrangler secret delete SCALEWAY_API_KEY`).
+
 (It prompts for the value; never put it in a file in a repository.) Check a run with `pnpm exec wrangler tail` around
 04:30 UTC: one `cron:research-explainer` record per run, with only status, operation ID and commit SHA. A run can be
 triggered locally with `wrangler dev --test-scheduled` and `curl "http://localhost:8787/__scheduled?cron=30+4+*+*+*"`

@@ -586,7 +586,7 @@ export const ErrorCode = z.enum([
   'jev-rate-limited',
   /** ADR-0057: TypeSafe answered in a shape this app cannot read. */
   'jev-bad-answer',
-  /** ADR-0063: no Scaleway key, failed call or timeout. */
+  /** ADR-0063/0071: no Claude key, failed call or timeout. */
   'follow-up-unavailable',
   'follow-up-rate-limited',
   'follow-up-bad-output',

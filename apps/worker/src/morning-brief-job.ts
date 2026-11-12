@@ -21,7 +21,7 @@ import {
 import { diagnosticDetail, sanitize, type LogSink } from './log.ts';
 import { renderBriefEmail, type BriefMailer } from './morning-brief-email.ts';
 import type { MorningBriefCandidates } from './morning-brief-gather.ts';
-import { writeBrief, type ScalewayChat } from './scaleway-chat.ts';
+import { writeBrief, type ModelChat } from './claude-chat.ts';
 
 export const BRIEF_ROUTE = 'cron:morning-brief';
 /** ADR-0046/0055: 04:30/05:30 UTC cover Copenhagen 06:31 across DST; 31 6 UTC is the catch-up (07:31 summer / 07:31 winter, Workers Free allows 5 crons per account). */
@@ -50,8 +50,8 @@ function localHour(instant: Date, timeZone: string): number {
 export interface BriefJobDeps {
   readonly store: VaultStore;
   readonly gather: (day: string) => Promise<MorningBriefCandidates>;
-  /** Absent when SCALEWAY_API_KEY is unset; the job then writes the deterministic fallback. */
-  readonly chat?: ScalewayChat;
+  /** Absent when ANTHROPIC_API_KEY is unset; the job then writes the deterministic fallback. */
+  readonly chat?: ModelChat;
   /** Absent when the `send_email` binding or its from/to secrets are unset; the job then writes without emailing. */
   readonly mailer?: BriefMailer;
   readonly now: () => Date;

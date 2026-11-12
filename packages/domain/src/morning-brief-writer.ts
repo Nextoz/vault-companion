@@ -1,4 +1,4 @@
-// Morning Brief writer (MB1b): a model on Scaleway SELECTS from gathered candidates and PHRASES a short brief; this
+// Morning Brief writer (MB1b): a model (Claude, ADR-0071) SELECTS from gathered candidates and PHRASES a short brief; this
 // module is pure (no I/O, no Worker/React imports). The prompt carries derived labels and flags only — never raw
 // metric values, series, or non-candidate text. Parsing validates against the candidate ids/blocks and never throws.
 

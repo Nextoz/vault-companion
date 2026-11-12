@@ -13,7 +13,7 @@ import type { LogRecord } from './log.ts';
 import type { MorningBriefCandidates } from './morning-brief-gather.ts';
 import type { BriefEmail, BriefMailer } from './morning-brief-email.ts';
 import { BRIEF_CRONS, runBriefJob } from './morning-brief-job.ts';
-import type { ScalewayChat } from './scaleway-chat.ts';
+import type { ModelChat } from './claude-chat.ts';
 
 const DATE = '2026-06-15';
 const NOW = `${DATE}T04:30:05Z`;
@@ -49,7 +49,7 @@ const seedFile: BriefFile = {
   },
 };
 
-const modelChat: ScalewayChat = {
+const modelChat: ModelChat = {
   chat: async () => ({
     kind: 'ok',
     text: JSON.stringify({
@@ -63,7 +63,7 @@ const modelChat: ScalewayChat = {
 
 async function run(
   store: InMemoryStore,
-  opts: { cron?: string; now?: string; chat?: ScalewayChat; mailer?: BriefMailer; gather?: (day: string) => Promise<MorningBriefCandidates>; anyHour?: boolean; subrequests?: () => number; budget?: number } = {},
+  opts: { cron?: string; now?: string; chat?: ModelChat; mailer?: BriefMailer; gather?: (day: string) => Promise<MorningBriefCandidates>; anyHour?: boolean; subrequests?: () => number; budget?: number } = {},
 ) {
   const logs: LogRecord[] = [];
   await runBriefJob(opts.cron ?? BRIEF_CRONS.summer, {
@@ -308,7 +308,7 @@ const meeting = (title: string, hour: number, end: number) => ({ title,
 it.each([false, true])('writes three sorted meetings with clashes; model=%s', async (model) => {
   const store = await InMemoryStore.create({});
   let prompt = '';
-  const chat: ScalewayChat = { chat: async ({ user }) => { prompt = user; return { kind: 'ok', text: JSON.stringify({
+  const chat: ModelChat = { chat: async ({ user }) => { prompt = user; return { kind: 'ok', text: JSON.stringify({
     dayLine: 'An open day with an open block.', todos: [{ id: 0, firstStep: 'Start.' }], encouragement: 'Go.' }) }; } };
   const logs = await run(store, { ...(model ? { chat } : {}), gather: async () => candidates({
     events: [meeting('SYNTHETIC-C', 14, 15), meeting('SYNTHETIC-B', 10, 12), meeting('SYNTHETIC-A', 9, 11)],

@@ -1,5 +1,6 @@
 # ADR-0045 — Morning Brief writer model on Scaleway (EU)
 
+Provider choice superseded by ADR-0071 (2026-11-12, Claude); the rest stands.
 Status: draft (Lead, 2026-10-02) under the owner's MB backlog item; consequential because private health, mood, mail
 and calendar data leaves the Worker for a third-party inference API.
 

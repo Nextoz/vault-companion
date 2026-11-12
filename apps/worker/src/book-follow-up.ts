@@ -1,16 +1,16 @@
-// ADR-0063: one saved reflection leaves to Scaleway; titles and other entries never enter the prompt.
+// ADR-0063/0071: one saved reflection leaves to Claude (Anthropic); titles and other entries never enter the prompt.
 import { BookFollowUpResponse, canonicalBookTitle, type ApiError, type BookFollowUpRequest, type BooksResponse } from '@vault-companion/contracts';
-import type { ScalewayChat } from './scaleway-chat.ts';
+import { CLAUDE_MODEL, type ModelChat } from './claude-chat.ts';
 
-export const BOOK_FOLLOW_UP_MODEL = 'glm-5.2';
+export const BOOK_FOLLOW_UP_MODEL = CLAUDE_MODEL;
 export const BOOK_FOLLOW_UP_SYSTEM = 'ask one short follow-up question, one line, in the language of the text';
 export const BOOK_FOLLOW_UP_TIMEOUT_MS = 30_000;
 
 export interface BookFollowUpRateLimit { allow(): boolean }
 export interface BookFollowUpDeps {
   readonly readBooks: () => Promise<BooksResponse | ApiError>;
-  /** Absent when SCALEWAY_API_KEY is unset. */
-  readonly chat?: ScalewayChat | undefined;
+  /** Absent when ANTHROPIC_API_KEY is unset. */
+  readonly chat?: ModelChat | undefined;
   readonly rateLimit?: BookFollowUpRateLimit;
   readonly now?: () => number;
 }
@@ -51,7 +51,7 @@ export function createBookFollowUpService(deps: BookFollowUpDeps) {
       if (!rateLimit.allow()) return error('follow-up-rate-limited', 'You have used today’s five follow-up questions. Try again tomorrow.');
 
       try {
-        const outcome = await deps.chat.chat({ model: BOOK_FOLLOW_UP_MODEL, system: BOOK_FOLLOW_UP_SYSTEM, user: reflection.text, responseFormat: 'text', timeoutMs: BOOK_FOLLOW_UP_TIMEOUT_MS });
+        const outcome = await deps.chat.chat({ model: BOOK_FOLLOW_UP_MODEL, system: BOOK_FOLLOW_UP_SYSTEM, user: reflection.text, timeoutMs: BOOK_FOLLOW_UP_TIMEOUT_MS });
         if (outcome.kind !== 'ok') return error('follow-up-unavailable', 'Follow-up questions are not available right now.', true);
         const parsed = BookFollowUpResponse.safeParse({ question: outcome.text.trim() });
         if (!parsed.success) return error('follow-up-bad-output', 'The AI did not return one short question.');
