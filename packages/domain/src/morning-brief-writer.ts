@@ -100,9 +100,7 @@ function windowLine(window: WeatherRunWindow): string {
 /** System rules plus a user message of derived labels/flags, block times, and candidate todo text+due. */
 export function buildWriterPrompt(input: WriterInput): { system: string; user: string } {
   const stateLines = input.state.flags.map((flag) => `- ${FLAG_LABEL[flag.key]} ${flag.compare} its 30-day median`);
-  if (input.state.mood) {
-    stateLines.push(`- mood ${input.state.mood.mood}, energy ${input.state.mood.energy}, sleep ${input.state.mood.sleep}`);
-  }
+  // ADR-0071: the check-in's mood, energy and sleep numbers stay in the vault; only the derived low flag is sent.
   if (input.state.low) stateLines.push('- state is low');
 
   const user = [

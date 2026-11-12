@@ -3,7 +3,7 @@
 Status: draft (daytime session, 2026-11-12). Owner instruction in chat, 2026-11-12: "I need to stop using scaleway
 all together. so use claude instead". Supersedes the provider choice in ADR-0045 and ADR-0063; everything else in
 those two ADRs (data minimisation, validation, fallback, rate limit, no logging) is unchanged.
-High-risk (outbound private text, new secret): owner confirms the data flow below before merge.
+High-risk (outbound private text, new secret). The owner chose the data flow below on 2026-11-12.
 
 ## Context
 Two production calls went to Scaleway Generative APIs: the Morning Brief writer (`deepseek-v4-flash-0731`, ADR-0045)
@@ -29,12 +29,13 @@ ended on 2026-10-31, and the owner is leaving Scaleway.
 ADR-0045 rejected US providers because the brief prompt carries private state. That is reversed here on the owner's
 instruction. What now reaches Anthropic (United States):
 - Morning Brief: the day, meeting count and first start time, free-block times, up to five to-do texts with due dates,
-  derived state flags in plain words ("steps below its 30-day median"), **the mood, energy and sleep numbers of the
-  latest check-in**, the run window and a training count. No raw health rows, series, mail bodies or calendar titles.
+  derived state flags in plain words ("steps below its 30-day median", "state is low"), the run window and a training
+  count. No raw health rows, series, mail bodies or calendar titles.
 - Challenge me: the text of the one reflection the owner tapped. No title, no other entries.
 
-Open choice for the owner: keep the mood, energy and sleep numbers in the prompt, or drop that one line and send only
-the derived flags (`buildWriterPrompt` in `packages/domain/src/morning-brief-writer.ts`).
+**Mood numbers removed (owner, 2026-11-12: "Drop the numbers").** Under Scaleway the prompt also carried the mood,
+energy and sleep numbers of the latest check-in. That line is gone from `buildWriterPrompt`; the check-in reaches the
+model only as the derived `state is low` flag, and a test fails if the words mood, energy or sleep appear in the prompt.
 
 ## Alternatives
 - Another EU host for an open model: keeps EU jurisdiction, but it is a new account and key, and the owner asked for
