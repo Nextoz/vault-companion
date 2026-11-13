@@ -137,7 +137,11 @@ it('route returns v2 success and failures without leaking sentinels or sources t
     expect(log.mock.calls.at(-1)?.[0].commitSha).toBe(repaired);
     const bad = await post(body(line('Steps', 9876, 'count', start, end, `PulseLoop${source}`)));
     expect(bad.status).toBe(422); const error = await bad.json(); expect(error).toEqual({ ok: false, error: 'line 1 Steps source' });
-    const observed = JSON.stringify([log.mock.calls, consoleLog.mock.calls, consoleError.mock.calls, error]);
+    // Request ids and commit SHAs are random hex and can contain a sentinel such as 987 by chance (failed once on
+    // main, 2026-11-13); they are identifiers, not payload, so they are removed before the leak check.
+    const observed = JSON.stringify([log.mock.calls, consoleLog.mock.calls, consoleError.mock.calls, error])
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{40}/g, '<id>');
+    expect(observed).toContain('<id>');
     for (const secret of ['987', '9876', source, 'PulseLoop']) expect(observed).not.toContain(secret);
   } finally { consoleLog.mockRestore(); consoleError.mockRestore(); }
 });
