@@ -1371,6 +1371,8 @@ export type BooksResponse = z.infer<typeof BooksResponse>;
 
 /** The only health source. A constant: no client-supplied path is ever accepted. */
 export const HEALTH_DAILY_CSV = 'Health/Data/Apple Health Daily.csv';
+export const PHONE_SLOTS_DIR = 'Health/Data/Phone';
+export const phoneSlotsPath = (month: string): string => `${PHONE_SLOTS_DIR}/Phone Slots ${month}.csv`;
 export const RING_SLOTS_DIR = 'Health/Data/Ring';
 export const ringSlotsPath = (month: string): string => `${RING_SLOTS_DIR}/Ring Slots ${month}.csv`;
 export const HEALTH_VITALS_DAILY_CSV = 'Health/Data/Apple Health Vitals Daily.csv';
