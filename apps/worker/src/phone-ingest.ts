@@ -57,12 +57,25 @@ export function createPhoneIngestService(deps: HealthIngestDeps) {
           return { ok: true, path, expect, bytes: new TextEncoder().encode(merged.text), effect: null };
         } });
       });
-      // Whole-request structure refusal, including a malformed later month, before the first write.
+      const dailyPlan = cached({ ...daily.plan, async compute(s, at) {
+        commitSha = at;
+        const p = await daily.plan.compute(s, at);
+        if (!p.ok) return p;
+        const current = await s.readFile(p.path, at);
+        if (current && current.bytes.length === p.bytes.length && current.bytes.every((b, i) => b === p.bytes[i])) return refuse(UNCHANGED);
+        return p;
+      } });
+      // Whole-request structure refusal before the first write: a malformed later month, and the daily file too.
+      // Without the daily check a bad or missing daily CSV would commit the month files and then refuse every resend.
       const initial = (await store.head()).commitSha;
       for (const plan of plans) {
         const p = await plan.compute(store, initial);
         if (!p.ok && p.message !== UNCHANGED) return failure(409);
       }
+      kind = 'health daily';
+      const dailyAtStart = await dailyPlan.compute(store, initial);
+      if (!dailyAtStart.ok && dailyAtStart.message !== UNCHANGED) return failure(409);
+      kind = 'phone slots';
       async function write<E>(plan: WritePlan<E>, prefix: string, bodyHash?: string) {
         const revision = (await store.head()).commitSha, p = await plan.compute(store, revision);
         if (!p.ok) return p.message === UNCHANGED ? null : failure(409);
@@ -77,15 +90,7 @@ export function createPhoneIngestService(deps: HealthIngestDeps) {
         if (failed) return failed;
       }
       kind = 'health daily';
-      const plan = cached({ ...daily.plan, async compute(s, at) {
-        commitSha = at;
-        const p = await daily.plan.compute(s, at);
-        if (!p.ok) return p;
-        const current = await s.readFile(p.path, at);
-        if (current && current.bytes.length === p.bytes.length && current.bytes.every((b, i) => b === p.bytes[i])) return refuse(UNCHANGED);
-        return p;
-      } });
-      const failed = await write(plan, 'health-ingest', await hash(body));
+      const failed = await write(dailyPlan, 'health-ingest', await hash(body));
       return failed ?? { ok: true, days: daily.days, slots: slots.length, months, commitSha };
     } catch (e) {
       // Adapter exceptions can contain source data. Expose only the file kind, never exception text.

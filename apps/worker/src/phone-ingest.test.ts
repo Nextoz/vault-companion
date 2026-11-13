@@ -73,6 +73,14 @@ it('preflights a wrong later header before writing either month', async () => {
   expect(await service(store).ingestHealth(payload)).toEqual({ ok: false, status: 409, error: 'phone slots: write refused; resend' });
   expect(store.writeCalls).toBe(0); expect(store.text(OCT)).toBeNull();
 });
+it.each([['a wrong header', 'wrong header\n'], ['no file', null]])('preflights the daily file (%s) before writing any month', async (_name, daily) => {
+  const store = await InMemoryStore.create(daily === null ? { 'Health/Data/placeholder.md': 'x' } : { [DAILY]: daily });
+  const payload = body([line(), line('Steps', 20, 'count', '2026-10-31T12:00:00+01:00', '2026-10-31T12:05:00+01:00')].join('\n'));
+  for (let resend = 0; resend < 2; resend++) {
+    expect(await service(store).ingestHealth(payload)).toEqual({ ok: false, status: 409, error: 'health daily: write refused; resend' });
+    expect(store.writeCalls).toBe(0); expect(store.text(OCT)).toBeNull(); expect(store.text(NOV)).toBeNull();
+  }
+});
 it.each(['slots', 'daily'])('re-reads the %s plan at a moved CAS commit', async (kind) => {
   const store = await seed(), original = store.writeFile.bind(store); let injected = false;
   const extra = { instant: Date.parse(start), values: { distance_km: 1 } };
@@ -133,7 +141,7 @@ it('route returns v2 success and failures without leaking sentinels or sources t
     for (const secret of ['987', '9876', source, 'PulseLoop']) expect(observed).not.toContain(secret);
   } finally { consoleLog.mockRestore(); consoleError.mockRestore(); }
 });
-it('maximal three-day synthetic body with every registry type stays within a generous CPU bound', async () => {
+it('maximal three-day synthetic body with every registry type builds date formatters per zone, not per sample', async () => {
   const from = Date.parse('2026-10-30T00:00:00+01:00'), lines: string[] = [];
   for (const metric of PHONE_METRICS) {
     const interval = ['steps', 'distance', 'activeEnergy'].includes(metric.key) ? 5 : 60;
@@ -149,6 +157,10 @@ it('maximal three-day synthetic body with every registry type stays within a gen
     expect(result).toMatchObject({ ok: true, months: ['2026-10', '2026-11'] }); expect(store.writeCalls).toBe(3);
     if (i) times.push(elapsed);
   }
+  // The regression this guards (uncached Intl formatters, ~340 ms) is counted, not timed: a warm run of these ~3,300
+  // lines built 9 formatters on 2026-11-13. A wall-clock bound failed under load (207 ms median at 0.4 GB free RAM).
+  const built = vi.spyOn(Intl, 'DateTimeFormat');
+  try { expect((await service(await seed()).ingestHealth(payload)).ok).toBe(true); expect(built.mock.calls.length).toBeLessThan(lines.length / 100); } finally { built.mockRestore(); }
   const median = times.sort((a, b) => a - b)[2]!;
-  console.info(`phone ingest median warm ms: ${median.toFixed(1)}`); expect(median).toBeLessThan(250); // uncached Intl formatters measured ~340 ms
+  console.info(`phone ingest median warm ms: ${median.toFixed(1)}`); // information only; Workers CPU is measured in production logs
 }, 30000);
