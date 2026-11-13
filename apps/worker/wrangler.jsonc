@@ -32,7 +32,7 @@
   // two UTC slots whose local Copenhagen hour is 06:31 across DST; `31 6` is the catch-up (Workers Free: 5 cron triggers per account, so no more).
   // A separate minute keeps its own invocation (and subrequest budget). Must equal EXPLAINER_CRONS and BRIEF_CRONS
   // together (config.test.ts).
-  // Optional keys GEMINI_API_KEY and SCALEWAY_API_KEY are Worker secrets only (`wrangler secret put`,
+  // Optional keys GEMINI_API_KEY and ANTHROPIC_API_KEY are Worker secrets only (`wrangler secret put`,
   // docs/deploy.md), not in `secrets.required`.
   "triggers": {
     "crons": ["30 4 * * *", "30 6 * * *", "31 4 * * *", "31 5 * * *", "31 6 * * *"],

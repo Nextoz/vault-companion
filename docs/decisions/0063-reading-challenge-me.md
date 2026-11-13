@@ -1,5 +1,6 @@
 # ADR-0063 — Reading "Challenge me": one optional AI follow-up question (READ1-B)
 
+Provider, model and secret superseded by ADR-0071 (2026-11-12, Claude); the rest stands.
 Status: accepted (Lead, 2026-10-11; owner approved the data flow in chat on 2026-10-11, see `.agent/owner-instructions.md`).
 High-risk (outbound private text): `-Reviewer both`.
 

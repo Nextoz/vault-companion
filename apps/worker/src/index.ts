@@ -24,7 +24,7 @@ import { createCalendarService } from './calendar-service.ts';
 import { createWeekRunwayService } from './week-runway.ts';
 import { createAccessVerifier, createServiceTokenVerifier } from './auth.ts';
 import { createGeminiExplainer } from './gemini.ts';
-import { createScalewayChat } from './scaleway-chat.ts';
+import { createClaudeChat } from './claude-chat.ts';
 import { createJevService } from './jev.ts';
 import { BOOK_FOLLOW_UP_TIMEOUT_MS, createBookFollowUpService } from './book-follow-up.ts';
 import { gatherCandidates } from './morning-brief-gather.ts';
@@ -58,7 +58,7 @@ export interface Env {
   /** ADR-0029: only the research-explainer cron uses it; optional so the API never depends on it. Never logged. */
   GEMINI_API_KEY?: string;
   /** ADR-0045/0046: only the morning-brief cron uses it; optional, so an unset key falls back. Never logged. */
-  SCALEWAY_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
   /** MB1d: Workers `send_email` binding; optional, so an absent binding simply skips the email. */
   BRIEF_EMAIL?: BriefEmailBinding;
   /** MB1d: owner from/to addresses; optional secrets, never logged or committed. Email requires both. */
@@ -176,7 +176,7 @@ export function createProductionApp(env: Env, keys?: JWTVerifyGetKey, fetchImpl:
     ...books,
     ...createBookFollowUpService({
       readBooks: books.readBooks,
-      ...(env.SCALEWAY_API_KEY ? { chat: createScalewayChat({ apiKey: env.SCALEWAY_API_KEY, fetch: fetchImpl, timeoutMs: BOOK_FOLLOW_UP_TIMEOUT_MS }) } : {}),
+      ...(env.ANTHROPIC_API_KEY ? { chat: createClaudeChat({ apiKey: env.ANTHROPIC_API_KEY, fetch: fetchImpl, timeoutMs: BOOK_FOLLOW_UP_TIMEOUT_MS }) } : {}),
       now: () => Date.now(),
     }),
     ...triage,
@@ -369,7 +369,7 @@ export async function runScheduled(cron: string, env: Env, fetchImpl: typeof fet
       await runBriefJob(cron, {
         store,
         gather,
-        ...(env.SCALEWAY_API_KEY ? { chat: createScalewayChat({ apiKey: env.SCALEWAY_API_KEY, fetch: counted }) } : {}),
+        ...(env.ANTHROPIC_API_KEY ? { chat: createClaudeChat({ apiKey: env.ANTHROPIC_API_KEY, fetch: counted }) } : {}),
         ...(env.BRIEF_EMAIL && env.BRIEF_EMAIL_FROM && env.BRIEF_EMAIL_TO
           ? { mailer: cloudflareMailer(env.BRIEF_EMAIL, env.BRIEF_EMAIL_FROM, env.BRIEF_EMAIL_TO, async (f, t, raw) => {
             const { EmailMessage } = await import('cloudflare:email');

@@ -68,7 +68,9 @@ describe('buildWriterPrompt', () => {
     const { system, user } = buildWriterPrompt(makeInput());
     expect(system).toBe(WRITER_SYSTEM_PROMPT);
     expect(user).toContain('steps below its 30-day median');
-    expect(user).toContain('mood -3, energy 1, sleep 7');
+    // ADR-0071: check-in numbers never leave; a low check-in reaches the model only as the derived flag.
+    expect(user).toContain('- state is low');
+    for (const word of ['mood', 'energy', 'sleep']) expect(user).not.toContain(word);
     expect(user).not.toContain('987654');
     expect(user).not.toContain('8000');
   });

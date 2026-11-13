@@ -1,5 +1,5 @@
 // ADR-0055 reproduction: one Morning Brief cron invocation on Workers Free must stay inside the 50-subrequest limit
-// (and the code's own 45 budget) with a realistic vault, Google mail/calendar, Scaleway and weather all available.
+// (and the code's own 45 budget) with a realistic vault, Google mail/calendar, Claude and weather all available.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { exportPKCS8, generateKeyPair } from 'jose';
 import { runScheduled, type Env } from './index.ts';
@@ -168,10 +168,11 @@ function createFakeFetch(files: Record<string, string>) {
       call.kind = 'weather';
       return json(200, weatherBody());
     }
-    if (url.hostname === 'api.scaleway.ai') {
-      call.kind = 'scaleway';
+    if (url.hostname === 'api.anthropic.com') {
+      call.kind = 'claude';
       return json(200, {
-        choices: [{ message: { content: JSON.stringify({ dayLine: 'A synthetic day.', gaps: [], todos: [], encouragement: 'Synthetic.' }) } }],
+        id: 'msg_synthetic', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 },
+        content: [{ type: 'text', text: JSON.stringify({ dayLine: 'A synthetic day.', gaps: [], todos: [], encouragement: 'Synthetic.' }) }],
       });
     }
     return json(404, { message: `unexpected ${url.href}` });
@@ -212,7 +213,7 @@ describe('Morning Brief cron subrequest budget (ADR-0055)', () => {
       VAULT_REPO: 'r',
       VAULT_BRANCH: 'main',
       USER_TIME_ZONE: 'Europe/Copenhagen',
-      SCALEWAY_API_KEY: 'synthetic',
+      ANTHROPIC_API_KEY: 'synthetic',
       GOOGLE_CLIENT_ID: 'synthetic-client',
       GOOGLE_CLIENT_SECRET: 'synthetic-secret',
       GOOGLE_REFRESH_TOKEN: 'synthetic-refresh',
@@ -224,7 +225,7 @@ describe('Morning Brief cron subrequest budget (ADR-0055)', () => {
     console.log('morning-brief subrequests', counts, `total=${fake.calls.length}`);
     expect(fake.calls.length).toBeLessThanOrEqual(45);
     expect(fake.calls.some((call) => call.kind === 'github-write')).toBe(true);
-    expect(fake.calls.some((call) => call.kind === 'scaleway')).toBe(true);
+    expect(fake.calls.some((call) => call.kind === 'claude')).toBe(true);
     const moodReads = fake.calls.filter((call) => {
       if (call.kind !== 'github-contents') return false;
       const after = call.url.split('/contents/')[1]?.split('?')[0] ?? '';
