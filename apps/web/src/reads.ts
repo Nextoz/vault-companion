@@ -54,9 +54,16 @@ export interface RenderedRead {
  * Whether a read may stay on screen next to the queue snapshot. The snapshot's receipts and watermark are loaded
  * together, so a receipt missing from the snapshot is covered by a watermark at least this new. A read checked
  * against an older one may predate the evicted commits: it is not renderable, and must be re-read.
+ *
+ * B14: a read that is at the watermark's commit, or reports it included, contains it whatever version it was checked
+ * against. Acknowledging a rendered read moves the watermark to that read's revision (queue.ts, O1), and the snapshot
+ * reaches the screen before the read is re-stamped (or a newer read is already on screen); without this the task list
+ * was torn down for that moment and the page scrolled to the top.
  */
 export function renderable(read: RenderedRead, watermark: Watermark | null): boolean {
-  return read.watermarkVersion >= (watermark?.version ?? 0);
+  if (read.watermarkVersion >= (watermark?.version ?? 0)) return true;
+  // Not after a history reset: that watermark is satisfied by every read, and only its version retires old screens.
+  return watermark !== null && watermark.commitSha !== RESET_WATERMARK && satisfiesWatermark(read.data, watermark);
 }
 
 export type ReadOutcome =

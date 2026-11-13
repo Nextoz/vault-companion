@@ -938,6 +938,18 @@ describe('G3-1 — a shared durable read watermark protects receipts evicted by 
     expect(renderable(rendered.read, a.queue.getSnapshot().watermark)).toBe(false);
   });
 
+  it('B14: the read whose own acknowledgement moved the watermark stays renderable before it is re-stamped', async () => {
+    const a = await openTab();
+    await completeAll(a, N);
+    const read = { data: allDone(), watermarkVersion: a.queue.getSnapshot().watermark?.version ?? 0 };
+    const version = await a.queue.acknowledge(read.data);
+    expect(version).not.toBeNull();
+    expect(read.watermarkVersion).toBeLessThan(version!); // the stamp is now behind the snapshot's watermark
+    expect(renderable(read, a.queue.getSnapshot().watermark)).toBe(true);
+    // An older screen that does not contain the watermark commit is still retired.
+    expect(renderable({ data: readAt(REV, [], {}), watermarkVersion: 0 }, a.queue.getSnapshot().watermark)).toBe(false);
+  });
+
   it('acknowledging sets the watermark in the same transaction; "Clear saved" then evicts under it (O1)', async () => {
     const a = await openTab();
     const b = await openTab();
