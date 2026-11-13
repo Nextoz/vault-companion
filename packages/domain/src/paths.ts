@@ -71,6 +71,7 @@ export function isStructurallySafePath(raw: string): boolean {
 
 const isRingFile = (path: string): boolean => path === HEALTH_VITALS_DAILY_CSV ||
   new RegExp(`^${RING_SLOTS_DIR}/Ring Slots [0-9]{4}-(0[1-9]|1[0-2])\\.csv$`).test(path);
+const isPhoneFile = (path: string): boolean => /^Health\/Data\/Phone\/Phone Slots [0-9]{4}-(0[1-9]|1[0-2])\.csv$/.test(path);
 
 /** Validate and NFC-normalise a note or read-only scout status path. */
 export function parseVaultPath(raw: string): VaultPath | null {
@@ -83,7 +84,7 @@ export function parseVaultPath(raw: string): VaultPath | null {
   const radar = isRadarDecisionPath(path) || isRadarAppliedPath(path);
   const morningBrief = path === MORNING_BRIEF_PATH;
   const calendarLinks = path === CALENDAR_LINKS_PATH;
-  if (!path.endsWith('.md') && !scoutStatus && !triage && !radar && !morningBrief && !calendarLinks && !isRingFile(path)) return null;
+  if (!path.endsWith('.md') && !scoutStatus && !triage && !radar && !morningBrief && !calendarLinks && !isRingFile(path) && !isPhoneFile(path)) return null;
   return path as VaultPath;
 }
 
@@ -119,6 +120,7 @@ export function isBookNotePath(raw: string): boolean {
 }
 
 export function canWrite(path: VaultPath, kind: 'create' | 'update'): boolean {
+  if (isPhoneFile(path)) return true;
   if (isRingFile(path)) return true;
   if (isBookNotePath(path)) return true;
   if (path === FEEDBACK_BACKLOG_PATH) return kind === 'update';
