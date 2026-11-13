@@ -60,7 +60,7 @@ export function TrainingSheet({ queue, accountKey, baseRevision, onClose, edit }
     <label>When<input type="datetime-local" required value={when} onChange={(e) => setWhen(e.target.value)} /></label>
     {type === 'Run' ? <><label>Distance (km)<input type="text" inputMode="decimal" required value={distance} onChange={(e) => setDistance(e.target.value)} /></label>
       {draft?.distanceWas && distance === '' && <p className="muted small">Was: {draft.distanceWas}</p>}</> : <>
-      <label>Workout<select value={split} onChange={(e) => setSplit(e.target.value as typeof split)}><option value="" disabled>Choose a workout</option>{(['Bicep', 'Tricep', 'Legs', 'Group'] as const).map((s) => <option key={s} value={s}>{s === 'Group' ? 'Group training' : s}</option>)}</select></label>
+      <label>Workout<select value={split} onChange={(e) => setSplit(e.target.value as typeof split)}><option value="" disabled>Choose a workout</option>{(['Bicep', 'Tricep', 'Legs', 'Swim', 'Group'] as const).map((s) => <option key={s} value={s}>{s === 'Group' ? 'Group training' : s}</option>)}</select></label>
       {split === 'Group' && <>
         <label>Class name<input type="text" required maxLength={60} value={className} onChange={(e) => setClassName(e.target.value)} /></label>
         {suggestions.length > 0 && <div className="class-suggestions" role="group" aria-label="Class name suggestions">

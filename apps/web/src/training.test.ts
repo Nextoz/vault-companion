@@ -30,6 +30,11 @@ it('suggests Group class names newest-first, distinct case-sensitively, capped a
 });
 
 describe('rowToDraft (B12)', () => {
+  it('keeps Swim selected when editing and displays the workout summary', () => {
+    const row = { ...base, type: 'Gym', split: 'Swim', distance: '', duration: '30 min' };
+    expect(rowToDraft(row)).toMatchObject({ type: 'Gym', split: 'Swim', duration: '30' });
+    expect(trainingSummary(row)).toBe('Swim · 30 min');
+  });
   it('turns canonical cells into the sheet draft', () => {
     expect(rowToDraft({ date: '2026-09-28', time: '10:00', type: 'Run', distance: '5.2 km', duration: '28 min', weight: '', split: '', note: 'Easy loop' }))
       .toEqual({ type: 'Run', when: '2026-09-28T10:00', distance: '5.2', distanceWas: null, duration: '28', durationWas: null, weight: '', weightWas: null, split: '', className: '', note: 'Easy loop' });

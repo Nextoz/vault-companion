@@ -50,3 +50,9 @@ separator, legacy row styles). No row values in logs.
 ## Not included
 
 Editing or deleting past rows, charts, trends, streaks, targets, reminders.
+
+## Swim workout option (2026-11-01)
+
+The Gym workout selector additionally supports `Swim`, beside Bicep/Tricep/Legs/Group. It uses the existing
+Gym session fields and validation, with `Swim` in the Split cell. Log, edit, and exact Undo use the existing
+commands and mutation path; no new activity type, distance field, or write target is introduced.

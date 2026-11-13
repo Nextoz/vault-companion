@@ -7,7 +7,7 @@ export const TRAINING_HEADER = '| Date | Time | Type | Distance | Duration | Wei
 export type TrainingRow = { date: string; time: string; type: string; distance: string; duration: string; weight: string; split: string; note: string };
 export type TrainingEffect = { kind: 'training'; op: 'logged' | 'edited' | 'undone'; lineText: string };
 export type TrainingSession = { when: string; duration: number; note?: string | undefined } & (
-  { type: 'Run'; distance: number } | { type: 'Gym'; split: 'Bicep' | 'Tricep' | 'Legs' | 'Group'; className?: string | undefined; weight?: number | undefined }
+  { type: 'Run'; distance: number } | { type: 'Gym'; split: 'Bicep' | 'Tricep' | 'Legs' | 'Swim' | 'Group'; className?: string | undefined; weight?: number | undefined }
 );
 const missing = () => refuse('refused:training-table-missing', 'Training log table not found — fix it in Obsidian');
 

@@ -1,3 +1,9 @@
+# Swim workout option — release candidate (2026-11-01)
+
+- Owner requested Swim beside Bicep/Tricep in the existing Gym workout selector, with merge and deployment.
+- Adds the Swim split to validation, Markdown formatting types, selection and edit prefilling; existing duration, note, queue and Undo behavior stay in place.
+- Next: finish checks, merge the focused PR, verify the automatic production deployment.
+
 # HC6 phone health v2 — HC6-a1, a2, b merged, HC6-c next (2026-10-29)
 
 - HC6-b (codex sol-medium, `-Reviewer both`, one fix round, Opus review): `apps/worker/src/phone-ingest.ts` wraps the
@@ -9,6 +15,9 @@
   Lead cached them per zone (also speeds live v1): maximal 3-day body (3,337 lines, 14 types) ~342 -> ~44 ms warm
   on the laptop (parse ~20 ms is now the largest part). Still not proven under Workers Free 10 ms, same as ring:
   read real CPU after the first v2 sends; if over, the brief's fallback is a 2-day window, then parser speed.
+- Review fixes (daytime session, 2026-11-13): the preflight now also computes the daily plan at the initial commit, so
+  a bad or missing `Apple Health Daily.csv` refuses before any month file is written; the 250 ms wall-clock CPU test
+  is replaced by a formatter-construction count (9 for 3,337 lines). Workers CPU for v2 is still unmeasured.
 - Unrelated: a 3.5 GB stale `typescript-language-server`/tsserver (started 2026-10-28 19:56) held most RAM; the auto
   mode classifier denied stopping it.
 
